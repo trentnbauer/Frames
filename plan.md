@@ -137,9 +137,32 @@ FilmCalc's shape plus a thin storage-and-vision backend:
 
 - Node / TypeScript
 - SQLite (plenty at personal volume; Postgres only if outgrown)
-- Vision tagging via BYO API key (FilmCalc "Add with AI" pattern)
+- Vision tagging via BYO API key (FilmCalc "Add with AI" pattern) — see
+  **Vision providers** below
 - Docker stack behind a Cloudflare Tunnel
 - Repo / host namespaced (`frames-app`, `frames.<domain>`) to avoid collisions
+
+---
+
+## Vision providers
+
+Auto-tagging isn't locked to one vendor. A provider is one of:
+
+- **OpenAI** — BYO API key, hosted.
+- **Anthropic** — BYO API key, hosted.
+- **Self-hosted** — any endpoint speaking the OpenAI-compatible
+  `/chat/completions` shape: Ollama, LM Studio, llama.cpp server, etc. No API
+  key required (or an arbitrary one, since local servers rarely check) — just
+  a base URL and a model name. This is what makes tagging free and private if
+  you'd rather not send scans to a hosted API at all.
+
+You can save **multiple provider profiles** at once (e.g. "OpenAI GPT-4o" and
+"Local Ollama llava"), each with its own type / base-URL / key / model, and
+pick which one is **active** for auto-tagging in Settings. Switching the
+active profile only affects photos tagged *after* the switch — it never
+retags or touches existing `ai_suggested` tags. Comparing providers side by
+side (running two profiles against the same frame) is a possible v2 addition,
+not v1 — v1 is one active profile at a time, freely swappable.
 
 ---
 
@@ -151,7 +174,9 @@ FilmCalc's shape plus a thin storage-and-vision backend:
 - [ ] Filename parser (best-effort city / camera / lens / film / season)
 - [ ] Upload form: city / camera / lens / film_stock (pre-filled from filename
       parse, editable) + tags, filled out at upload time
-- [ ] Vision auto-tag on ingest (BYO key), tags stored as `ai_suggested`
+- [ ] Vision auto-tag on ingest, tags stored as `ai_suggested`; provider is
+      OpenAI / Anthropic / self-hosted (OpenAI-compatible endpoint), multiple
+      saved profiles with one active at a time
 - [ ] Photo grid with tag filter
 - [ ] Tag editor: accept / dismiss / add, plus per-photo-tag note
 - [ ] Ideas: create / edit (title, notes, light_pref, status)
