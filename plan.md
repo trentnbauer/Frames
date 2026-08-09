@@ -156,13 +156,16 @@ Auto-tagging isn't locked to one vendor. A provider is one of:
   a base URL and a model name. This is what makes tagging free and private if
   you'd rather not send scans to a hosted API at all.
 
-You can save **multiple provider profiles** at once (e.g. "OpenAI GPT-4o" and
-"Local Ollama llava"), each with its own type / base-URL / key / model, and
-pick which one is **active** for auto-tagging in Settings. Switching the
-active profile only affects photos tagged *after* the switch — it never
-retags or touches existing `ai_suggested` tags. Comparing providers side by
-side (running two profiles against the same frame) is a possible v2 addition,
-not v1 — v1 is one active profile at a time, freely swappable.
+You can save **multiple provider profiles** at once (e.g. "OpenAI GPT-4o",
+"Claude", "Local Ollama llava", "Local LM Studio moondream"), each with its
+own type / base-URL / key / model and an independent **on/off toggle** — not
+one "active" pick. Every *enabled* profile runs against each photo on ingest;
+their suggestions are merged (deduped by slug) into that photo's
+`ai_suggested` tags. Want four AIs voting on every frame? Turn on four
+profiles. Toggling a profile off only affects photos tagged *after* the
+switch — it never retags or removes tags already suggested while it was on.
+More providers enabled means more API calls (and cost, for hosted ones) per
+upload — that trade-off is yours to make, not the app's to gate.
 
 ---
 
@@ -174,9 +177,10 @@ not v1 — v1 is one active profile at a time, freely swappable.
 - [ ] Filename parser (best-effort city / camera / lens / film / season)
 - [ ] Upload form: city / camera / lens / film_stock (pre-filled from filename
       parse, editable) + tags, filled out at upload time
-- [ ] Vision auto-tag on ingest, tags stored as `ai_suggested`; provider is
-      OpenAI / Anthropic / self-hosted (OpenAI-compatible endpoint), multiple
-      saved profiles with one active at a time
+- [ ] Vision auto-tag on ingest, tags stored as `ai_suggested`; multiple
+      provider profiles (OpenAI / Anthropic / self-hosted OpenAI-compatible
+      endpoint), each independently toggled on/off, all enabled ones run per
+      photo with suggestions merged
 - [ ] Photo grid with tag filter
 - [ ] Tag editor: accept / dismiss / add, plus per-photo-tag note
 - [ ] Ideas: create / edit (title, notes, light_pref, status)
