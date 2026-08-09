@@ -19,7 +19,11 @@ shot and find the projects hiding in them, then know what to go shoot next.
    and generates two smaller **derivatives** — a tiny *thumbnail* for the grid and
    a mid-size *display* version for viewing a single frame. The app only ever
    serves derivatives; the heavy original is touched only at export. (A 25MB scan
-   never gets sent to the browser for display.)
+   never gets sent to the browser for display.) Alongside the file(s), a short
+   **upload form** captures **city, camera, lens, film stock** — pre-filled from
+   a best-effort filename parse, all editable — plus any **tags** you already
+   know you want, so structured context doesn't depend on remembering to fix it
+   later in the tag editor.
 2. **Auto-tag.** A vision model tags each frame on ingest (bring-your-own API
    key). Tags arrive as *suggestions*, visually distinct from confirmed ones.
 3. **Filter by tag.** Tap `signage`, see every frame that matches. This alone is
@@ -48,6 +52,27 @@ that thinks for you and closes the loop.
 
 ---
 
+## Combo suggestions
+
+A third nudge, sharper than either half of the core loop alone: Frames
+cross-joins your **structured shoot fields** (city, camera, lens, film stock)
+against your **subject tags** to surface micro-project candidates neither
+would suggest on its own — *"Minolta in Melbourne"*, *"neon on Portra 400"*,
+*"signage + Nikon FM2"*. Each combo shows its co-occurrence count and, like the
+gap finder, offers a one-tap "start an idea" that seeds the project with every
+matching frame.
+
+Combos render as **two-part chips, not a single label** — each half keeps a
+colour tied to its own dimension (city / camera / lens / film-stock /
+subject-tag each get a distinct hue), joined by a plain-text connector ("in" /
+"on" / "+"). You should be able to tell what *kind* of intersection you're
+looking at before you've read the words.
+
+These are computed at query time from existing columns — no new table, no
+stored combo entity. Consistent with keeping this an engine, not a library.
+
+---
+
 ## Data model (v1)
 
 Two nouns — **photos** and **ideas** — joined two ways: photos carry **tags**,
@@ -56,9 +81,14 @@ ideas **collect photos**.
 - **photos** — one row per frame. Pixels live on disk; the row holds paths to the
   full-res **original** plus its two derivatives (**thumb** for the grid,
   **display** for single-frame viewing), a content hash (dedupe re-uploads),
-  filename, dimensions, best-effort camera / film-stock / season parsed from the
-  filename, and a tagging status. The vision tagger reads the display derivative,
-  not the original — cheaper, and plenty for recognising subjects.
+  filename, dimensions, a tagging status, and four structured shoot-context
+  fields — **city, camera, lens, film_stock**. All four are best-effort parsed
+  from the filename on ingest, then shown pre-filled in the upload form so you
+  can correct or fill them in by hand at upload time rather than digging back
+  into the tag editor later. (**Season** stays filename-only, no form field —
+  too low-value to type on every upload; derivable from the date instead.) The
+  vision tagger reads the display derivative, not the original — cheaper, and
+  plenty for recognising subjects.
 - **tags** — canonical vocabulary, deduped by slug.
 - **photo_tags** — the many-to-many join, and the most important table. Carries
   two extra fields that let AI suggestions and your truth coexist:
@@ -118,7 +148,9 @@ FilmCalc's shape plus a thin storage-and-vision backend:
 - [ ] Upload endpoint + on-disk storage, content-hash dedupe
 - [ ] Generate derivatives on ingest: thumb (grid) + display (single-frame view);
       keep original untouched for export
-- [ ] Filename parser (best-effort camera / film / season)
+- [ ] Filename parser (best-effort city / camera / lens / film / season)
+- [ ] Upload form: city / camera / lens / film_stock (pre-filled from filename
+      parse, editable) + tags, filled out at upload time
 - [ ] Vision auto-tag on ingest (BYO key), tags stored as `ai_suggested`
 - [ ] Photo grid with tag filter
 - [ ] Tag editor: accept / dismiss / add, plus per-photo-tag note
@@ -126,6 +158,8 @@ FilmCalc's shape plus a thin storage-and-vision backend:
 - [ ] Drop photos into ideas / remove (many-to-many), with per-membership `why` note
 - [ ] Gap finder: tagged-but-in-no-idea view
 - [ ] Orphan view: frames with no tags and no idea, so nothing good gets lost
+- [ ] Combo suggestions: cross-join city / camera / lens / film_stock against
+      subject tags into two-colour combo chips, each with a "start an idea"
 - [ ] Export an idea as a zip of its full-res photos
 
 ## Roadmap (v2, in priority order — only if v1 earns it)
@@ -136,9 +170,11 @@ FilmCalc's shape plus a thin storage-and-vision backend:
 2. **"What can I shoot today?"** — `light_pref` crossed with live weather +
    location. "It's overcast in Ballarat — here are the 3 projects you can shoot
    right now." The one genuinely novel feature; the north star.
-3. **Tag co-occurrence view.** "`signage` frames are often also `night` + `wet` —
-   start a project from that cluster?" The engine that *generates* ideas rather
-   than you naming them all by hand. The intellectual core.
+3. **Tag co-occurrence view.** Extends v1's deterministic **combo suggestions**
+   (structured field × subject tag) to fuzzier subject-tag × subject-tag
+   clustering — "`signage` frames are often also `night` + `wet` — start a
+   project from that cluster?" The engine that *generates* ideas rather than you
+   naming them all by hand. The intellectual core.
 4. **Idea progress nudges.** Uses the existing `status` field: "6 frames in — you
    wanted a roll." Closes the loop between planning and shooting.
 5. **Frame sequencing within an idea.** Drag frames into narrative order to build
@@ -152,9 +188,10 @@ the one thing that makes it worth using — that *you* do the noticing.
 
 - **Not a photo manager** — no albums, ratings, EXIF browser, or map view.
   Immich already does all of that; each one drags Frames toward being a library.
-- **No EXIF / film-log integration beyond the filename parse.** Going further
-  rebuilds the *other* Frames app. The filename already gives camera + film for
-  free; stop there.
+- **No automatic EXIF / film-log integration.** City, camera, lens, and film
+  stock are filename-parsed as a best-effort guess and otherwise typed by hand
+  in the upload form — never pulled from EXIF or a connected film-log service.
+  Going further rebuilds the *other* Frames app; stop at "you typed it once."
 - **No multi-user / sharing / social.** This is a single-user thinking tool. The
   moment it has accounts and sharing it's a different, much larger product.
 - **No in-app editing or filters.** That's Lightroom / Darktable's job, and it
