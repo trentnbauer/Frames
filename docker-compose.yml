@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    container_name: frames-app
+    restart: unless-stopped
+    environment:
+      - PORT=4000
+      - DATA_DIR=/data
+    volumes:
+      - frames-data:/data
+    ports:
+      # Drop this if TunnelMate reaches the container over the shared network below
+      # instead of the host.
+      - "4000:4000"
+    # Uncomment and point at your TunnelMate network so it can route to this
+    # container by name (e.g. http://frames-app:4000) instead of the host port.
+    # networks:
+    #   - tunnelmate
+
+volumes:
+  frames-data:
+
+# networks:
+#   tunnelmate:
+#     external: true

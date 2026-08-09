@@ -1,0 +1,138 @@
+import { Router } from 'express';
+import multer from 'multer';
+import db from '../db.js';
+import { ingestPhoto } from '../lib/ingest.js';
+import { slugify, type PhotoRow, type PhotoTagRow, type TagRow } from '../types.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+
+export const photosRouter = Router();
+
+function withTags(photo: PhotoRow) {
+  const tags = db
+    .prepare(
+      `SELECT t.id, t.slug, t.name, pt.source, pt.note
+       FROM photo_tags pt JOIN tags t ON t.id = pt.tag_id
+       WHERE pt.photo_id = ? ORDER BY t.name`
+    )
+    .all(photo.id) as (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[];
+  return { ...photo, tags };
+}
+
+photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+
+  const results = [];
+  for (const file of files) {
+    const { photo, wasDuplicate } = await ingestPhoto(file.buffer, file.originalname);
+    results.push({ photo: withTags(photo), wasDuplicate });
+  }
+
+  res.status(201).json({ results });
+});
+
+photosRouter.get('/', (req, res) => {
+  const { tag, untagged, orphan } = req.query;
+
+  let rows: PhotoRow[];
+
+  if (typeof tag === 'string' && tag) {
+    rows = db
+      .prepare(
+        `SELECT p.* FROM photos p
+         JOIN photo_tags pt ON pt.photo_id = p.id
+         JOIN tags t ON t.id = pt.tag_id
+         WHERE t.slug = ? ORDER BY p.created_at DESC`
+      )
+      .all(tag) as PhotoRow[];
+  } else if (untagged === 'true') {
+    rows = db
+      .prepare(
+        `SELECT p.* FROM photos p
+         WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
+         ORDER BY p.created_at DESC`
+      )
+      .all() as PhotoRow[];
+  } else if (orphan === 'true') {
+    rows = db
+      .prepare(
+        `SELECT p.* FROM photos p
+         WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
+           AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)
+         ORDER BY p.created_at DESC`
+      )
+      .all() as PhotoRow[];
+  } else {
+    rows = db.prepare('SELECT * FROM photos ORDER BY created_at DESC').all() as PhotoRow[];
+  }
+
+  res.json({ photos: rows.map(withTags) });
+});
+
+photosRouter.get('/:id', (req, res) => {
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow | undefined;
+  if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+  const ideas = db
+    .prepare(
+      `SELECT i.id, i.title, ip.why FROM idea_photos ip
+       JOIN ideas i ON i.id = ip.idea_id WHERE ip.photo_id = ?`
+    )
+    .all(photo.id);
+
+  res.json({ photo: withTags(photo), ideas });
+});
+
+photosRouter.delete('/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM photos WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Photo not found' });
+  res.status(204).end();
+});
+
+// --- Tags on a photo (the correction path: accept / dismiss / add / note) ---
+
+const insertTagStmt = db.prepare('INSERT INTO tags (slug, name) VALUES (?, ?) ON CONFLICT(slug) DO NOTHING');
+const findTagBySlugStmt = db.prepare('SELECT id FROM tags WHERE slug = ?');
+
+photosRouter.post('/:id/tags', (req, res) => {
+  const photoId = Number(req.params.id);
+  const { name, source } = req.body as { name?: string; source?: 'user_confirmed' | 'user_added' };
+  if (!name) return res.status(400).json({ error: 'name is required' });
+
+  const slug = slugify(name);
+  if (!slug) return res.status(400).json({ error: 'invalid tag name' });
+
+  insertTagStmt.run(slug, name);
+  const tagRow = findTagBySlugStmt.get(slug) as { id: number };
+
+  db.prepare(
+    `INSERT INTO photo_tags (photo_id, tag_id, source) VALUES (?, ?, ?)
+     ON CONFLICT(photo_id, tag_id) DO UPDATE SET source = excluded.source`
+  ).run(photoId, tagRow.id, source ?? 'user_added');
+
+  res.status(201).json({ tagId: tagRow.id, slug, name });
+});
+
+// Confirm an existing ai_suggested tag (flip source to user_confirmed).
+photosRouter.patch('/:id/tags/:tagId', (req, res) => {
+  const { id, tagId } = req.params;
+  const { source, note } = req.body as { source?: 'user_confirmed'; note?: string };
+
+  if (source) {
+    db.prepare('UPDATE photo_tags SET source = ? WHERE photo_id = ? AND tag_id = ?').run(source, id, tagId);
+  }
+  if (note !== undefined) {
+    db.prepare('UPDATE photo_tags SET note = ? WHERE photo_id = ? AND tag_id = ?').run(note, id, tagId);
+  }
+
+  res.status(200).json({ ok: true });
+});
+
+photosRouter.delete('/:id/tags/:tagId', (req, res) => {
+  const { id, tagId } = req.params;
+  db.prepare('DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ?').run(id, tagId);
+  res.status(204).end();
+});
