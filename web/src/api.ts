@@ -62,9 +62,35 @@ export const api = {
     gapFinder: () => request<{ gaps: { id: number; slug: string; name: string; unclaimed_count: number }[] }>('/api/gap-finder'),
     orphans: () => request<{ photos: import('./types').Photo[] }>('/api/orphans'),
   },
-  settings: {
-    get: () => request<{ provider: string | null; model: string | null; hasApiKey: boolean }>('/api/settings'),
-    update: (data: { provider?: string; apiKey?: string; model?: string }) =>
-      request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  visionProviders: {
+    list: () => request<{ providers: import('./types').VisionProviderProfile[] }>('/api/vision-providers'),
+    create: (data: {
+      name: string;
+      type: import('./types').VisionProviderType;
+      base_url?: string;
+      api_key?: string;
+      model?: string;
+      enabled?: boolean;
+    }) =>
+      request<{ provider: import('./types').VisionProviderProfile }>('/api/vision-providers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (
+      id: number,
+      data: Partial<{
+        name: string;
+        type: import('./types').VisionProviderType;
+        base_url: string;
+        api_key: string;
+        model: string;
+        enabled: boolean;
+      }>
+    ) =>
+      request<{ provider: import('./types').VisionProviderProfile }>(`/api/vision-providers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    remove: (id: number) => request<void>(`/api/vision-providers/${id}`, { method: 'DELETE' }),
   },
 };

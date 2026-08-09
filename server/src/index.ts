@@ -7,7 +7,7 @@ import { photosRouter } from './routes/photos.js';
 import { tagsRouter } from './routes/tags.js';
 import { ideasRouter } from './routes/ideas.js';
 import { discoveryRouter } from './routes/discovery.js';
-import { settingsRouter } from './routes/settings.js';
+import { visionProvidersRouter } from './routes/visionProviders.js';
 import { filesRouter } from './routes/files.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +18,7 @@ app.use(express.json());
 app.use('/api/photos', photosRouter);
 app.use('/api/tags', tagsRouter);
 app.use('/api/ideas', ideasRouter);
-app.use('/api/settings', settingsRouter);
+app.use('/api/vision-providers', visionProvidersRouter);
 app.use('/api', discoveryRouter);
 app.use('/files', filesRouter);
 

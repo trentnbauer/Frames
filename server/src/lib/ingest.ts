@@ -4,7 +4,7 @@ import db, { ORIGINALS_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
 import { parseFilename } from './filenameParser.js';
-import { getVisionProvider } from '../vision/index.js';
+import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
 
 const insertPhoto = db.prepare(`
@@ -51,7 +51,7 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 
   // Fire and forget: auto-tagging shouldn't block the upload response.
   autoTagPhoto(photo).catch((err) => {
-    console.error(`Auto-tag failed for photo ${photo.id}:`, err.message);
+    console.error(`Auto-tag crashed for photo ${photo.id}:`, err.message);
     db.prepare("UPDATE photos SET tagging_status = 'failed' WHERE id = ?").run(photo.id);
   });
 
@@ -61,29 +61,53 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 const insertTag = db.prepare('INSERT INTO tags (slug, name) VALUES (?, ?) ON CONFLICT(slug) DO NOTHING');
 const findTagBySlug = db.prepare('SELECT id FROM tags WHERE slug = ?');
 const linkTag = db.prepare(`
-  INSERT INTO photo_tags (photo_id, tag_id, source) VALUES (?, ?, 'ai_suggested')
+  INSERT INTO photo_tags (photo_id, tag_id, source, note) VALUES (?, ?, 'ai_suggested', ?)
   ON CONFLICT(photo_id, tag_id) DO NOTHING
 `);
 
+// Every enabled provider runs against the frame; their suggestions merge
+// (deduped by slug) into one set of ai_suggested tags, noting which
+// provider(s) proposed each one.
 async function autoTagPhoto(photo: PhotoRow) {
-  const provider = getVisionProvider();
-  if (!provider || !photo.display_path) {
+  const providers = getEnabledProviders();
+  if (providers.length === 0 || !photo.display_path) {
     db.prepare("UPDATE photos SET tagging_status = 'skipped' WHERE id = ?").run(photo.id);
     return;
   }
 
   const buffer = fs.readFileSync(photo.display_path);
-  const tagNames = await provider.tagImage(buffer, 'image/jpeg');
 
-  const tx = db.transaction((names: string[]) => {
-    for (const name of names) {
+  const results = await Promise.allSettled(providers.map((p) => p.instance.tagImage(buffer, 'image/jpeg')));
+
+  const bySlug = new Map<string, { name: string; sources: string[] }>();
+  let anySucceeded = false;
+
+  results.forEach((result, i) => {
+    const provider = providers[i];
+    if (result.status === 'rejected') {
+      console.error(`Vision provider "${provider.name}" failed for photo ${photo.id}:`, result.reason?.message ?? result.reason);
+      return;
+    }
+    anySucceeded = true;
+    for (const name of result.value) {
       const slug = slugify(name);
       if (!slug) continue;
+      const existing = bySlug.get(slug);
+      if (existing) {
+        existing.sources.push(provider.name);
+      } else {
+        bySlug.set(slug, { name, sources: [provider.name] });
+      }
+    }
+  });
+
+  const tx = db.transaction(() => {
+    for (const [slug, { name, sources }] of bySlug) {
       insertTag.run(slug, name);
       const tagRow = findTagBySlug.get(slug) as { id: number };
-      linkTag.run(photo.id, tagRow.id);
+      linkTag.run(photo.id, tagRow.id, `via ${sources.join(', ')}`);
     }
-    db.prepare("UPDATE photos SET tagging_status = 'tagged' WHERE id = ?").run(photo.id);
+    db.prepare('UPDATE photos SET tagging_status = ? WHERE id = ?').run(anySucceeded ? 'tagged' : 'failed', photo.id);
   });
-  tx(tagNames);
+  tx();
 }

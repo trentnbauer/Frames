@@ -51,3 +51,16 @@ export interface IdeaPhoto extends Photo {
 }
 
 export const LIGHT_PREFS: LightPref[] = ['any', 'overcast', 'raking_sun', 'golden_hour', 'dark', 'night'];
+
+export type VisionProviderType = 'openai' | 'anthropic' | 'self_hosted';
+
+export interface VisionProviderProfile {
+  id: number;
+  name: string;
+  type: VisionProviderType;
+  base_url: string | null;
+  model: string | null;
+  enabled: boolean;
+  hasApiKey: boolean;
+  created_at: string;
+}

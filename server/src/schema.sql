@@ -62,7 +62,13 @@ CREATE TABLE IF NOT EXISTS idea_references (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
+CREATE TABLE IF NOT EXISTS vision_providers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('openai', 'anthropic', 'self_hosted')),
+  base_url TEXT,
+  api_key TEXT,
+  model TEXT,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

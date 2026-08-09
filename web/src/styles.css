@@ -183,7 +183,30 @@ button.danger { background: transparent; border: 1px solid #663; color: #d66f6f;
 .gap-row { display: flex; align-items: center; gap: 12px; background: #1a1b1e; padding: 10px; border-radius: 6px; }
 .gap-row button { margin-left: auto; background: #3a5fff; border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
 
-.settings-page { display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
+.settings-page { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
 .settings-page label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #aaa; }
 .settings-page input, .settings-page select { background: #111; border: 1px solid #333; color: #eee; padding: 8px; border-radius: 4px; }
-.settings-page button { background: #3a5fff; border: none; color: white; padding: 8px 12px; border-radius: 4px; cursor: pointer; align-self: flex-start; }
+.settings-page > button, .new-provider-form button, .provider-row__edit button {
+  background: #3a5fff; border: none; color: white; padding: 8px 12px; border-radius: 4px; cursor: pointer; align-self: flex-start;
+}
+
+.provider-list { display: flex; flex-direction: column; gap: 8px; }
+
+.provider-row { background: #1a1b1e; border: 1px solid #2a2b2e; border-radius: 8px; padding: 10px 12px; }
+.provider-row.is-enabled { border-color: #3a5fff44; }
+.provider-row__head { display: flex; align-items: center; gap: 10px; }
+.provider-row__name { font-weight: 600; }
+.provider-row__type { font-size: 11px; color: #999; border: 1px solid #333; border-radius: 4px; padding: 1px 6px; }
+.provider-row__edit { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2b2e; }
+
+.link-button { background: none; border: none; color: #7d95ff; cursor: pointer; padding: 0; margin-left: auto; }
+
+.new-provider-form { display: flex; flex-direction: column; gap: 8px; background: #16171a; border: 1px dashed #333; border-radius: 8px; padding: 12px; }
+.new-provider-form h4 { margin: 0 0 4px; font-size: 14px; }
+
+.toggle { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle span { position: absolute; inset: 0; background: #333; border-radius: 20px; transition: background 0.15s; cursor: pointer; }
+.toggle span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.15s; }
+.toggle input:checked + span { background: #3a5fff; }
+.toggle input:checked + span::before { transform: translateX(14px); }
