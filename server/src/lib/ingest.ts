@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import db, { ORIGINALS_DIR } from '../db.js';
+import db, { ORIGINALS_DIR, DISPLAY_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
 import { parseFilename } from './filenameParser.js';
@@ -36,9 +36,9 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 
   const info = insertPhoto.run({
     content_hash: hash,
-    original_path: originalPath,
-    thumb_path: derivatives.thumbPath,
-    display_path: derivatives.displayPath,
+    original_path: path.basename(originalPath),
+    thumb_path: path.basename(derivatives.thumbPath),
+    display_path: path.basename(derivatives.displayPath),
     filename: originalFilename,
     width: derivatives.width,
     height: derivatives.height,
@@ -75,7 +75,7 @@ async function autoTagPhoto(photo: PhotoRow) {
     return;
   }
 
-  const buffer = fs.readFileSync(photo.display_path);
+  const buffer = fs.readFileSync(path.join(DISPLAY_DIR, photo.display_path));
 
   const results = await Promise.allSettled(providers.map((p) => p.instance.tagImage(buffer, 'image/jpeg')));
 

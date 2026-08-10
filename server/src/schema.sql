@@ -3,6 +3,9 @@
 CREATE TABLE IF NOT EXISTS photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content_hash TEXT UNIQUE NOT NULL,
+  -- *_path columns are bare filenames within their fixed directory
+  -- (ORIGINALS_DIR / THUMBS_DIR / DISPLAY_DIR), not absolute paths — keeps
+  -- the DB portable across DATA_DIR locations (host vs container, etc).
   original_path TEXT NOT NULL,
   thumb_path TEXT,
   display_path TEXT,

@@ -35,6 +35,7 @@ export function Settings() {
 
   return (
     <div className="settings-page">
+      <h2>Settings</h2>
       <h3>Vision auto-tagging</h3>
       <p className="muted">
         Bring your own keys, or point at a self-hosted model — Ollama, LM Studio, llama.cpp server, anything

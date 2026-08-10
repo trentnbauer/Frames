@@ -7,6 +7,11 @@ body {
   color: #e8e8e8;
 }
 
+.app-main > div > h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
 button, input, select, textarea {
   font-family: inherit;
   font-size: 14px;

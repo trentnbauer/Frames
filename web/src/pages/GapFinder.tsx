@@ -30,6 +30,7 @@ export function GapFinder({ onStartIdea }: Props) {
 
   return (
     <div className="gap-finder">
+      <h2>Gap finder</h2>
       <p className="muted">
         Tags with frames that aren't in any idea yet — the projects hiding in your archive.
       </p>

@@ -19,6 +19,7 @@ export function Orphans() {
 
   return (
     <div className="orphans-page">
+      <h2>Orphans</h2>
       <p className="muted">Frames with no tags and no idea — nothing good should get lost here.</p>
       <div className="photo-grid">
         {photos.map((p) => (

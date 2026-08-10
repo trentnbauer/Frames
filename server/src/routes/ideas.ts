@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import path from 'node:path';
-import db from '../db.js';
+import db, { ORIGINALS_DIR } from '../db.js';
 import { streamZip } from '../lib/zipExport.js';
 import type { IdeaRow, PhotoRow } from '../types.js';
 
@@ -123,7 +123,7 @@ ideasRouter.get('/:id/export', async (req, res) => {
 
   const zipName = `${idea.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.zip`;
   const files = photos.map((p) => ({
-    originalPath: p.original_path,
+    originalPath: path.join(ORIGINALS_DIR, p.original_path),
     filename: `${path.basename(p.original_path, path.extname(p.original_path))}${path.extname(p.filename) || path.extname(p.original_path)}`,
   }));
 

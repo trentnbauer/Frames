@@ -32,6 +32,7 @@ export function Ideas({ onOpenIdea }: Props) {
 
   return (
     <div className="ideas-page">
+      <h2>Ideas</h2>
       <div className="idea-create-row">
         <input
           value={title}

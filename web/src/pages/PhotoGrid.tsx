@@ -30,6 +30,7 @@ export function PhotoGrid({ onAddedToIdea }: Props) {
 
   return (
     <div className="photo-grid-page">
+      <h2>Photos</h2>
       <UploadDropzone onUploaded={refresh} />
 
       <div className="tag-filter-bar">
