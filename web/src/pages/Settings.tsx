@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { VisionProviderProfile, VisionProviderType } from '../types.js';
-import { applyTheme, getStoredTheme, type Theme } from '../theme.js';
+import { applyAccent, applyTheme, DEFAULT_ACCENT, getStoredAccent, getStoredTheme, type Theme } from '../theme.js';
 
 const TYPE_LABELS: Record<VisionProviderType, string> = {
   openai: 'OpenAI',
@@ -12,6 +12,7 @@ const TYPE_LABELS: Record<VisionProviderType, string> = {
 export function Settings() {
   const [providers, setProviders] = useState<VisionProviderProfile[]>([]);
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+  const [accent, setAccent] = useState<string>(() => getStoredAccent());
 
   async function refresh() {
     const res = await api.visionProviders.list();
@@ -25,6 +26,11 @@ export function Settings() {
   function setThemeAndApply(next: Theme) {
     applyTheme(next);
     setTheme(next);
+  }
+
+  function setAccentAndApply(next: string) {
+    applyAccent(next);
+    setAccent(next);
   }
 
   async function toggle(p: VisionProviderProfile) {
@@ -55,6 +61,26 @@ export function Settings() {
         <div className="segmented">
           <span className={`segmented__opt ${theme === 'dark' ? 'active' : ''}`} onClick={() => setThemeAndApply('dark')}>Dark</span>
           <span className={`segmented__opt ${theme === 'light' ? 'active' : ''}`} onClick={() => setThemeAndApply('light')}>Light</span>
+        </div>
+      </div>
+
+      <div className="appearance-row" style={{ marginTop: 8 }}>
+        <div>
+          <div className="appearance-row__title">Accent color</div>
+          <div className="appearance-row__sub">Used for buttons, active states, and the suggested-project banner.</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {accent !== DEFAULT_ACCENT && (
+            <span className="link-button" style={{ marginLeft: 0, cursor: 'pointer' }} onClick={() => setAccentAndApply(DEFAULT_ACCENT)}>
+              Reset
+            </span>
+          )}
+          <input
+            type="color"
+            value={accent}
+            onChange={(e) => setAccentAndApply(e.target.value)}
+            style={{ width: 40, height: 32, padding: 2, border: 'none', borderRadius: 6, background: 'var(--bg)', cursor: 'pointer' }}
+          />
         </div>
       </div>
 

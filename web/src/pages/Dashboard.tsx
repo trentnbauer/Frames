@@ -35,7 +35,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
 
   useEffect(() => {
     if (combos.length <= 1) return;
-    const timer = setInterval(() => setComboIndex((i) => (i + 1) % combos.length), 30000);
+    const timer = setInterval(() => setComboIndex((i) => (i + 1) % combos.length), 5000);
     return () => clearInterval(timer);
   }, [combos.length]);
 
@@ -73,8 +73,8 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         <div className="suggestion-banner">
           <div>
             <div className="suggestion-banner__label">Suggested project</div>
-            <div className="suggestion-banner__text">
-              <span className="accent">{cap(suggestion.main)}</span> {suggestion.connector} <span className="accent">{suggestion.location}</span>
+            <div className="suggestion-banner__text" key={comboIndex}>
+              {cap(suggestion.main)} {suggestion.connector} {suggestion.location}
             </div>
           </div>
           <button className="btn btn-accent" onClick={generateFromSuggestion}>Generate Project</button>

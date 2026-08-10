@@ -153,8 +153,37 @@ button { cursor: pointer; }
   font: 600 10.5px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase;
   color: var(--accent); margin-bottom: 6px;
 }
-.suggestion-banner__text { font: 500 16px/1.3 Inter, sans-serif; }
-.suggestion-banner__text .accent { color: var(--accent); }
+.suggestion-banner__text {
+  font: 500 italic 17px/1.3 Inter, sans-serif;
+  color: var(--accent);
+  animation: suggestion-fade-in .4s ease;
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .suggestion-banner__text {
+    background-image: linear-gradient(
+      90deg,
+      var(--accent),
+      color-mix(in srgb, var(--accent) 35%, white) 50%,
+      var(--accent)
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: suggestion-fade-in .4s ease, suggestion-gradient-flow 4s linear infinite;
+  }
+}
+@keyframes suggestion-gradient-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes suggestion-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-banner__text { animation: none !important; }
+}
 
 /* ---------- Project cards (Dashboard) ---------- */
 
