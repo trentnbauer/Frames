@@ -52,6 +52,14 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
     if (!navIds || !onNavigate || navIds.length === 0) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      // Don't hijack arrow keys used to move the text cursor while editing
+      // one of this modal's fields (camera/lens/film stock/location/tag
+      // input etc) — without this, typing and pressing Left/Right silently
+      // navigates to the next/previous photo mid-edit, discarding focus.
+      const active = document.activeElement;
+      const isEditable =
+        active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active as HTMLElement)?.isContentEditable;
+      if (isEditable) return;
       const idx = navIds.indexOf(photoId);
       if (idx === -1) return;
       const nextIdx = e.key === 'ArrowRight' ? idx + 1 : idx - 1;
