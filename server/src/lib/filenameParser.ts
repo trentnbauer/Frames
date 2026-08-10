@@ -25,7 +25,11 @@ function normalize(s: string): string {
 }
 
 function findMatch(normalizedName: string, candidates: string[]): string | null {
-  for (const candidate of candidates) {
+  // Longest first: without this, a shorter candidate that's a prefix of a
+  // more specific one (e.g. "Tri-X" vs "Tri-X 400") always wins and the
+  // longer one can never match, regardless of how the list was authored.
+  const byLengthDesc = [...candidates].sort((a, b) => b.length - a.length);
+  for (const candidate of byLengthDesc) {
     const normalizedCandidate = normalize(candidate);
     if (normalizedName.includes(normalizedCandidate)) return candidate;
   }

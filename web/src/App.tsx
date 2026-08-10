@@ -17,6 +17,7 @@ interface NewProjectRequest {
 export default function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [newProjectRequest, setNewProjectRequest] = useState<NewProjectRequest | null>(null);
 
@@ -37,10 +38,12 @@ export default function App() {
 
   function goTo(screen: Route['screen'], projectId: number | null = null) {
     navigate({ screen, projectId });
+    setMobileNavOpen(false);
   }
 
   function openNewProject(request: NewProjectRequest = {}) {
     setNewProjectRequest(request);
+    setMobileNavOpen(false);
   }
 
   async function handleProjectCreated(idea: Idea) {
@@ -52,7 +55,15 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="sidebar" style={{ width: sidebarCollapsed ? 72 : 232 }}>
+      <div className="mobile-topbar">
+        <button className="mobile-topbar__hamburger" onClick={() => setMobileNavOpen((o) => !o)} title="Menu">
+          <span className="mobile-topbar__hamburger-bars" />
+        </button>
+        <div className="mobile-topbar__brand">Frames</div>
+      </div>
+      <div className={`sidebar-backdrop ${mobileNavOpen ? 'visible' : ''}`} onClick={() => setMobileNavOpen(false)} />
+
+      <div className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: sidebarCollapsed ? 72 : 232 }}>
         <div className="sidebar__brand">
           <div className="sidebar__brand-dot" />
           {!sidebarCollapsed && <div className="sidebar__brand-name">Frames</div>}

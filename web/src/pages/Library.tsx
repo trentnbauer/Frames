@@ -7,22 +7,40 @@ interface Props {
   onOpenProject: (id: number) => void;
 }
 
+const PAGE_SIZE = 60;
+
 export function Library({ onOpenProject }: Props) {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [projectByPhoto, setProjectByPhoto] = useState<Record<number, string>>({});
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
 
+  // Multi-tag AND filtering happens client-side on top of the (unpaginated,
+  // server-filtered-by-first-tag) result set — pagination only applies to
+  // the unfiltered view. At personal-library scale a filtered set is small
+  // enough to fetch whole; a "Load more" under an active filter would need
+  // the backend to support multi-tag AND queries, which isn't there yet.
   async function refresh() {
-    const [photoRes, tagRes] = await Promise.all([api.photos.list(), api.tags.list()]);
-    setPhotos(photoRes.photos);
+    const [tagRes] = await Promise.all([api.tags.list()]);
     setTags(tagRes.tags);
+
+    if (activeTags.length > 0) {
+      const res = await api.photos.list({ tag: activeTags[0] });
+      setPhotos(res.photos);
+      setTotal(res.total);
+    } else {
+      const res = await api.photos.list({ limit: PAGE_SIZE, offset: 0 });
+      setPhotos(res.photos);
+      setTotal(res.total);
+    }
   }
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [activeTags]);
 
   useEffect(() => {
     api.ideas.list().then(async (res) => {
@@ -35,11 +53,23 @@ export function Library({ onOpenProject }: Props) {
     });
   }, []);
 
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const res = await api.photos.list({ limit: PAGE_SIZE, offset: photos.length });
+      setPhotos((prev) => [...prev, ...res.photos]);
+      setTotal(res.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   function toggleTag(slug: string) {
     setActiveTags((prev) => (prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug]));
   }
 
   const visible = photos.filter((p) => activeTags.length === 0 || activeTags.every((t) => p.tags.some((pt) => pt.slug === t)));
+  const canLoadMore = activeTags.length === 0 && photos.length < total;
 
   async function deletePhoto(id: number) {
     if (!confirm('Delete this photo? This removes the original and cannot be undone.')) return;
@@ -52,7 +82,7 @@ export function Library({ onOpenProject }: Props) {
       <div style={{ marginBottom: 28 }}>
         <h1 className="page-title">Library</h1>
         <div className="page-subtitle">
-          {visible.length} of {photos.length} photos{activeTags.length ? ` · filtered by ${activeTags.join(', ')}` : ''}
+          {visible.length} of {total} photos{activeTags.length ? ` · filtered by ${activeTags.join(', ')}` : ''}
         </div>
       </div>
 
@@ -87,6 +117,14 @@ export function Library({ onOpenProject }: Props) {
         ))}
         {visible.length === 0 && <p className="muted">No photos match. Upload some scans to get started.</p>}
       </div>
+
+      {canLoadMore && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+          <button className="btn" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : `Load more (${total - photos.length} left)`}
+          </button>
+        </div>
+      )}
 
       {openPhotoId !== null && (
         <PhotoDetail

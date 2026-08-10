@@ -13,13 +13,15 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   photos: {
-    list: (params?: { tag?: string; camera?: string; location?: string }) => {
+    list: (params?: { tag?: string; camera?: string; location?: string; limit?: number; offset?: number }) => {
       const qs = new URLSearchParams();
       if (params?.tag) qs.set('tag', params.tag);
       if (params?.camera) qs.set('camera', params.camera);
       if (params?.location) qs.set('location', params.location);
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.offset) qs.set('offset', String(params.offset));
       const suffix = qs.toString() ? `?${qs}` : '';
-      return request<{ photos: import('./types').Photo[] }>(`/api/photos${suffix}`);
+      return request<{ photos: import('./types').Photo[]; total: number }>(`/api/photos${suffix}`);
     },
     get: (id: number) => request<{ photo: import('./types').Photo; ideas: { id: number; title: string; why: string | null }[] }>(`/api/photos/${id}`),
     upload: async (files: File[]) => {

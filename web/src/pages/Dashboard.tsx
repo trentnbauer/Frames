@@ -26,7 +26,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
   }, [ideas]);
 
   useEffect(() => {
-    api.photos.list().then((res) => setTotalPhotos(res.photos.length));
+    api.photos.list({ limit: 1 }).then((res) => setTotalPhotos(res.total));
   }, [ideas]);
 
   useEffect(() => {

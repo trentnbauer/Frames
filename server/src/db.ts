@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runMigrations } from './migrate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,16 +21,6 @@ export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const schemaPath = path.join(__dirname, 'schema.sql');
-db.exec(fs.readFileSync(schemaPath, 'utf-8'));
-
-// CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
-// exists — patch pre-existing databases up to the current photos shape.
-const existingColumns = new Set((db.prepare('PRAGMA table_info(photos)').all() as { name: string }[]).map((c) => c.name));
-for (const column of ['lens', 'location', 'photoshoot']) {
-  if (!existingColumns.has(column)) {
-    db.exec(`ALTER TABLE photos ADD COLUMN ${column} TEXT`);
-  }
-}
+runMigrations(db, path.join(__dirname, 'migrations'));
 
 export default db;

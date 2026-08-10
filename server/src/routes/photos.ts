@@ -37,25 +37,31 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
 photosRouter.get('/', (req, res) => {
   const { tag, camera, location, untagged, orphan } = req.query;
 
+  // Pagination is opt-in via `limit` — omit it and every match comes back
+  // unpaginated, which several callers rely on (combo-suggestion matching,
+  // bulk-add, dashboard totals). Capped so a stray huge value can't page
+  // through the whole table in one query.
+  const limit = typeof req.query.limit === 'string' ? Math.min(parseInt(req.query.limit, 10) || 0, 200) : undefined;
+  const offset = typeof req.query.offset === 'string' ? Math.max(parseInt(req.query.offset, 10) || 0, 0) : 0;
+  const pageClause = limit ? 'LIMIT ? OFFSET ?' : '';
+  const pageParams = limit ? [limit, offset] : [];
+
   let rows: PhotoRow[];
+  let total: number;
 
   if (untagged === 'true') {
+    const where = 'WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)';
+    total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
-      .prepare(
-        `SELECT p.* FROM photos p
-         WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
-         ORDER BY p.created_at DESC`
-      )
-      .all() as PhotoRow[];
+      .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
+      .all(...pageParams) as PhotoRow[];
   } else if (orphan === 'true') {
+    const where = `WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
+                     AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)`;
+    total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
-      .prepare(
-        `SELECT p.* FROM photos p
-         WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
-           AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)
-         ORDER BY p.created_at DESC`
-      )
-      .all() as PhotoRow[];
+      .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
+      .all(...pageParams) as PhotoRow[];
   } else {
     // Composable filters: tag (via join), camera, location — combinable for
     // combo-suggestion lookups like "photos shot on X in Y".
@@ -77,13 +83,15 @@ photosRouter.get('/', (req, res) => {
       params.push(location);
     }
 
+    const joinClause = joins.join(' ');
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${joinClause} ${whereClause}`).get(...params) as { c: number }).c;
     rows = db
-      .prepare(`SELECT p.* FROM photos p ${joins.join(' ')} ${whereClause} ORDER BY p.created_at DESC`)
-      .all(...params) as PhotoRow[];
+      .prepare(`SELECT p.* FROM photos p ${joinClause} ${whereClause} ORDER BY p.created_at DESC ${pageClause}`)
+      .all(...params, ...pageParams) as PhotoRow[];
   }
 
-  res.json({ photos: rows.map(withTags) });
+  res.json({ photos: rows.map(withTags), total });
 });
 
 // Distinct previously-entered values, for datalist autocomplete on the
