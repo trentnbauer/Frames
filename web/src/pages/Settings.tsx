@@ -5,8 +5,10 @@ import { applyAccent, applyTheme, DEFAULT_ACCENT, getStoredAccent, getStoredThem
 import {
   getDropboxConfig,
   getGoogleDriveConfig,
+  getSocialHandles,
   setDropboxConfig,
   setGoogleDriveConfig,
+  setSocialHandles,
   type DropboxConfig,
   type GoogleDriveConfig,
 } from '../importConfig.js';
@@ -101,6 +103,13 @@ export function Settings() {
         photos you pick. Needs a free app registration on each service's developer console (below).
       </p>
       <ImportSourcesForm />
+
+      <div className="settings-section-label" style={{ marginTop: 24 }}>Social handles</div>
+      <p className="muted">
+        Shown in the bottom-left corner of a zine's back cover when you tick "Show social handles" there —
+        never forced on. One per line, e.g. <code>@yourhandle</code> or <code>yoursite.com</code>.
+      </p>
+      <SocialHandlesForm />
 
       <h3>Vision auto-tagging</h3>
       <p className="muted">
@@ -288,6 +297,35 @@ function ImportSourcesForm() {
         <button onClick={saveDropbox}>Save</button>
         {saved === 'dropbox' && <span className="muted"> Saved.</span>}
       </div>
+    </div>
+  );
+}
+
+function SocialHandlesForm() {
+  const [text, setText] = useState(() => getSocialHandles().join('\n'));
+  const [saved, setSaved] = useState(false);
+
+  function save() {
+    const handles = text.split('\n').map((h) => h.trim()).filter(Boolean);
+    setSocialHandles(handles);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+
+  return (
+    <div className="new-provider-form" style={{ marginBottom: 8 }}>
+      <label>
+        Handles
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'@yourhandle\nyoursite.com'}
+          rows={3}
+          style={{ fontFamily: 'inherit', resize: 'vertical' }}
+        />
+      </label>
+      <button onClick={save}>Save</button>
+      {saved && <span className="muted"> Saved.</span>}
     </div>
   );
 }

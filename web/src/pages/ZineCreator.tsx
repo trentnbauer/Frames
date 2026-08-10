@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { Idea, IdeaPhoto } from '../types.js';
 import { useEscapeKey } from '../useEscapeKey.js';
 import { useToast } from '../toast.js';
+import { getSocialHandles } from '../importConfig.js';
 
 // Ported from a Claude Design mockup ("Zine Creator") — a manual, page-by-page
 // zine layout tool (covers + interior spreads, each independently laid out),
@@ -54,6 +55,12 @@ interface SpreadSettings {
 
 const MIN_PAGE_COUNT = 4;
 const MAX_PAGE_COUNT = 48;
+// Bottom-left social-handles badge sits in the same corner a bottom+left
+// cover text alignment naturally lands in — when both are active on the
+// same cover, the bottom-aligned text needs this much extra clearance
+// (as a fraction of page height) so the two don't render on top of each
+// other. Applied identically in the live preview and canvas export.
+const SOCIAL_BADGE_RESERVE_FRAC = 0.09;
 const SPREAD_IDS = Array.from({ length: (MAX_PAGE_COUNT - 2) / 2 }, (_, i) => `s${i + 1}`);
 const FONT_CHOICES = ['Inter', 'Playfair Display', 'Bebas Neue', 'Space Mono', 'Courier Prime', 'Poppins'];
 const PAPER_SIZES: Record<PaperSize, { wIn: number; hIn: number }> = {
@@ -104,7 +111,7 @@ function fullSize(canvasSize: { w: number; h: number }, wide: boolean, count: nu
   return { w: h * portraitAspect, h };
 }
 
-function overlayStyle(vAlign: VAlign, hAlign: HAlign): React.CSSProperties {
+function overlayStyle(vAlign: VAlign, hAlign: HAlign, extraBottomPx = 0): React.CSSProperties {
   const justifyContent = vAlign === 'top' ? 'flex-start' : vAlign === 'middle' ? 'center' : 'flex-end';
   const alignItems = hAlign === 'left' ? 'flex-start' : hAlign === 'center' ? 'center' : 'flex-end';
   const background =
@@ -113,7 +120,11 @@ function overlayStyle(vAlign: VAlign, hAlign: HAlign): React.CSSProperties {
       : vAlign === 'middle'
         ? 'rgba(0,0,0,.38)'
         : 'linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0) 55%)';
-  return { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent, alignItems, textAlign: hAlign, gap: 8, padding: 28, pointerEvents: 'none', background, zIndex: 1 };
+  return {
+    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent, alignItems, textAlign: hAlign, gap: 8,
+    padding: 28, paddingBottom: vAlign === 'bottom' ? 28 + extraBottomPx : 28,
+    pointerEvents: 'none', background, zIndex: 1,
+  };
 }
 
 interface Props {
@@ -129,6 +140,8 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [fontChoice, setFontChoice] = useState('Inter');
   const [headerSize, setHeaderSize] = useState(28);
   const [subSize, setSubSize] = useState(15);
+  const [socialHandles] = useState(() => getSocialHandles());
+  const [showSocialHandles, setShowSocialHandles] = useState(true);
   const [selectedId, setSelectedId] = useState('front');
   const [coverSettings, setCoverSettings] = useState<{ front: CoverSettings; back: CoverSettings }>(() => ({
     front: defaultCover('Zine Title', 'A one-line tagline', ''),
@@ -341,6 +354,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
         widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), imageFit: st.imageFit, slotPhotos,
         borderColor: st.borderColor, borderPct: st.borderPct,
         overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
+        socialHandles: owner.id === 'back' && showSocialHandles ? socialHandles : undefined,
       });
     }
     const st = spreadSettings[owner.id];
@@ -593,7 +607,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
               {pageBoxes.map((p) => (
                 <div key={p.key} className="zine-page" style={{ width: p.size.w, height: p.size.h, background: p.bgColor, flexDirection: p.images.length > 1 ? 'column' : 'row' }}>
                   {p.cover && (
-                    <div style={overlayStyle(p.cover.textVAlign, p.cover.textHAlign)}>
+                    <div style={overlayStyle(p.cover.textVAlign, p.cover.textHAlign, p.key === 'back' && showSocialHandles && socialHandles.length > 0 ? p.size.h * SOCIAL_BADGE_RESERVE_FRAC : 0)}>
                       <div style={{ color: '#fff', fontFamily: `"${fontChoice}", sans-serif`, fontSize: headerSize, fontWeight: 600, lineHeight: 1.2 }}>{p.cover.header}</div>
                       <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub1}</div>
                       <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub2}</div>
@@ -605,6 +619,9 @@ export function ZineCreator({ projectId, onExit }: Props) {
                     </div>
                   ))}
                   {p.images.length === 0 && <div className="zine-slot-empty">No image</div>}
+                  {p.key === 'back' && showSocialHandles && socialHandles.length > 0 && (
+                    <div className="zine-social-handles">{socialHandles.join('  ·  ')}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -665,6 +682,18 @@ export function ZineCreator({ projectId, onExit }: Props) {
                     ))}
                   </div>
                 </div>
+                {selectedId === 'back' && socialHandles.length > 0 && (
+                  <div className="zine-field">
+                    <label>&nbsp;</label>
+                    <label className="zine-checkbox">
+                      <input type="checkbox" checked={showSocialHandles} onChange={(e) => setShowSocialHandles(e.target.checked)} />
+                      Show social handles
+                    </label>
+                  </div>
+                )}
+                {selectedId === 'back' && socialHandles.length === 0 && (
+                  <p className="muted" style={{ margin: 0, alignSelf: 'flex-end' }}>Add social handles in Settings to show them here.</p>
+                )}
               </>
             )}
 
@@ -915,6 +944,7 @@ interface RenderSpec {
   borderColor: string;
   borderPct: number;
   overlay?: { header: string; sub1: string; sub2: string; vAlign: VAlign; hAlign: HAlign; font: string; headerSize: number; subSize: number };
+  socialHandles?: string[];
 }
 
 async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
@@ -951,12 +981,14 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
     }
   }
 
-  if (spec.overlay) drawCoverOverlay(ctx, spec.widthPx, spec.heightPx, spec.overlay);
+  const reserveBottomPx = spec.socialHandles && spec.socialHandles.length > 0 ? spec.heightPx * SOCIAL_BADGE_RESERVE_FRAC : 0;
+  if (spec.overlay) drawCoverOverlay(ctx, spec.widthPx, spec.heightPx, spec.overlay, reserveBottomPx);
+  if (spec.socialHandles && spec.socialHandles.length > 0) drawSocialHandles(ctx, spec.widthPx, spec.heightPx, spec.socialHandles);
 
   return canvas;
 }
 
-function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number, overlay: NonNullable<RenderSpec['overlay']>) {
+function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number, overlay: NonNullable<RenderSpec['overlay']>, reserveBottomPx = 0) {
   const { header, sub1, sub2, vAlign, hAlign, font, headerSize: headerSizeChoice, subSize: subSizeChoice } = overlay;
   ctx.save();
 
@@ -995,7 +1027,7 @@ function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, height
 
   let y: number;
   if (vAlign === 'top') y = padding + (lines[0]?.size ?? 0) * 0.9;
-  else if (vAlign === 'bottom') y = heightPx - padding - totalHeight + (lines[0]?.size ?? 0) * 0.9;
+  else if (vAlign === 'bottom') y = heightPx - padding - reserveBottomPx - totalHeight + (lines[0]?.size ?? 0) * 0.9;
   else y = heightPx / 2 - totalHeight / 2 + (lines[0]?.size ?? 0) * 0.9;
 
   for (const line of lines) {
@@ -1004,6 +1036,38 @@ function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, height
     ctx.fillText(line.text, x, y);
     y += line.size * 1.2 + lineGap;
   }
+
+  ctx.restore();
+}
+
+// Bottom-left credit line on the back cover — always the same corner and
+// style regardless of the cover's own text alignment settings, since it's
+// a separate, optional "who made this" tag, not part of the header/subtext.
+function drawSocialHandles(ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number, handles: string[]) {
+  ctx.save();
+  const text = handles.join('  ·  ');
+  const fontSize = widthPx * 0.024;
+  ctx.font = `500 ${fontSize}px Inter, sans-serif`;
+
+  const paddingX = widthPx * 0.02;
+  const paddingY = heightPx * 0.015;
+  const boxPadding = fontSize * 0.55;
+  const textWidth = ctx.measureText(text).width;
+  const boxW = Math.min(textWidth + boxPadding * 2, widthPx - paddingX * 2);
+  const boxH = fontSize * 1.9;
+  const boxX = paddingX;
+  const boxY = heightPx - paddingY - boxH;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+
+  ctx.beginPath();
+  ctx.rect(boxX, boxY, boxW, boxH);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, boxX + boxPadding, boxY + boxH / 2);
 
   ctx.restore();
 }

@@ -24,6 +24,7 @@ services:
       # - FRAMES_GOOGLE_API_KEY=${FRAMES_GOOGLE_API_KEY:-}
       # - FRAMES_GOOGLE_CLIENT_ID=${FRAMES_GOOGLE_CLIENT_ID:-}
       # - FRAMES_DROPBOX_APP_KEY=${FRAMES_DROPBOX_APP_KEY:-}
+      # - FRAMES_SOCIAL_HANDLES=${FRAMES_SOCIAL_HANDLES:-}
     volumes:
       - ./server/src:/app/server/src
       - ./data:/data

@@ -665,6 +665,14 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
   display: flex; align-items: center; justify-content: center;
 }
 .zine-slot-empty { flex: 1; display: flex; align-items: center; justify-content: center; opacity: .4; font-size: 13px; }
+.zine-social-handles {
+  position: absolute; left: 10px; bottom: 8px; z-index: 2; max-width: calc(100% - 20px);
+  font: 500 10.5px/1.3 Inter, sans-serif; color: rgba(255, 255, 255, .85);
+  padding: 3px 7px; border-radius: 4px; background: rgba(0, 0, 0, .4); pointer-events: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.zine-checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.zine-checkbox input { cursor: pointer; }
 
 .zine-creator__panel {
   flex: none; border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
