@@ -187,6 +187,20 @@ button { cursor: pointer; }
 .btn-solid:hover { filter: brightness(1.08); }
 .btn-danger { color: #d66f6f; border-color: color-mix(in srgb, #d66f6f 40%, transparent); }
 
+/* ---------- What can I shoot today? ---------- */
+
+.weather-widget {
+  padding: 16px 18px; background: var(--surface); border-radius: 8px; margin-bottom: 20px;
+}
+.weather-widget__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.weather-widget__title { font: 600 10.5px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.weather-widget__summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 10px; }
+.weather-widget__light-badge {
+  font: 600 12px/1 Inter, sans-serif; padding: 4px 10px; border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+}
+.weather-widget__ideas { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* ---------- Suggested-project banner ---------- */
 
 .suggestion-banner {

@@ -83,6 +83,15 @@ export const api = {
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
   },
+  weather: {
+    today: (location: string) =>
+      request<{
+        place: { name: string; country: string | null };
+        weather: { temperatureC: number; cloudCoverPct: number; precipitationMm: number; isDay: boolean };
+        lightConditions: string;
+        ideas: import('./types').Idea[];
+      }>(`/api/weather/today?location=${encodeURIComponent(location)}`),
+  },
   visionProviders: {
     list: () => request<{ providers: import('./types').VisionProviderProfile[] }>('/api/vision-providers'),
     create: (data: {

@@ -1,7 +1,16 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+
+// Node's happy-eyeballs autoSelectFamily (on by default since Node 20) races
+// IPv4 and IPv6 connection attempts for outbound fetch() calls. On networks
+// without a working IPv6 route (common in Docker's default bridge network,
+// and in this dev sandbox), the race can fail outright instead of falling
+// back to the working IPv4 address — breaking the weather lookup. Disabling
+// it makes outbound requests use plain, sequential DNS resolution.
+net.setDefaultAutoSelectFamily(false);
 import './db.js';
 import { seedProvidersFromEnv } from './lib/envProviders.js';
 import { photosRouter } from './routes/photos.js';
@@ -12,6 +21,7 @@ import { visionProvidersRouter } from './routes/visionProviders.js';
 import { filesRouter } from './routes/files.js';
 import { configRouter } from './routes/config.js';
 import { backupRouter } from './routes/backup.js';
+import { weatherRouter } from './routes/weather.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +37,7 @@ app.use('/api/vision-providers', visionProvidersRouter);
 app.use('/api', discoveryRouter);
 app.use('/api/config', configRouter);
 app.use('/api/backup', backupRouter);
+app.use('/api/weather', weatherRouter);
 app.use('/files', filesRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

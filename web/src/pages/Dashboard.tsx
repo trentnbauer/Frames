@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { ComboSuggestion, Idea, IdeaPhoto } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { useToast } from '../toast.js';
+import { getStoredLocation, setStoredLocation } from '../weatherLocation.js';
 
 interface Props {
   ideas: Idea[];
@@ -80,6 +81,8 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         </div>
       </div>
 
+      <WeatherWidget onOpenProject={onOpenProject} />
+
       {suggestion && (
         <div className="suggestion-banner">
           <div>
@@ -139,6 +142,101 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         {ideas.length === 0 && <p className="muted">No projects yet. Start one from a tag you keep noticing.</p>}
         {ideas.length > 0 && visibleIdeas.length === 0 && <p className="muted">No projects match "{search}".</p>}
       </div>
+    </div>
+  );
+}
+
+interface WeatherResult {
+  place: { name: string; country: string | null };
+  weather: { temperatureC: number; cloudCoverPct: number; precipitationMm: number; isDay: boolean };
+  lightConditions: string;
+  ideas: Idea[];
+}
+
+function formatLightConditions(v: string): string {
+  return v.replace('_', ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function WeatherWidget({ onOpenProject }: { onOpenProject: (id: number) => void }) {
+  const [location, setLocation] = useState(() => getStoredLocation());
+  const [locationInput, setLocationInput] = useState(location);
+  const [editing, setEditing] = useState(!location);
+  const [result, setResult] = useState<WeatherResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!location) return;
+    setLoading(true);
+    setError(null);
+    api.weather
+      .today(location)
+      .then((res) => setResult(res))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load weather'))
+      .finally(() => setLoading(false));
+  }, [location]);
+
+  function saveLocation() {
+    const trimmed = locationInput.trim();
+    if (!trimmed) return;
+    setStoredLocation(trimmed);
+    setLocation(trimmed);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="weather-widget">
+        <div className="weather-widget__title">What can I shoot today?</div>
+        <p className="muted">Set a location to see today's light conditions and which active ideas fit.</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="field-input"
+            value={locationInput}
+            onChange={(e) => setLocationInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && saveLocation()}
+            placeholder="City, e.g. Melbourne"
+          />
+          <button className="btn btn-accent" onClick={saveLocation}>Save</button>
+          {location && <button className="btn" onClick={() => setEditing(false)}>Cancel</button>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="weather-widget">
+      <div className="weather-widget__head">
+        <div className="weather-widget__title">What can I shoot today?</div>
+        <span className="link-button" style={{ marginLeft: 0, cursor: 'pointer' }} onClick={() => { setLocationInput(location); setEditing(true); }}>
+          Change location
+        </span>
+      </div>
+
+      {loading && <p className="muted">Checking the sky over {location}…</p>}
+      {error && <p className="muted">{error}</p>}
+
+      {result && !loading && !error && (
+        <>
+          <div className="weather-widget__summary">
+            <span className="weather-widget__light-badge">{formatLightConditions(result.lightConditions)}</span>
+            <span className="muted">
+              {result.place.name}
+              {result.place.country ? `, ${result.place.country}` : ''} · {Math.round(result.weather.temperatureC)}°C ·{' '}
+              {result.weather.cloudCoverPct}% cloud
+            </span>
+          </div>
+          {result.ideas.length > 0 ? (
+            <div className="weather-widget__ideas">
+              {result.ideas.map((idea) => (
+                <button key={idea.id} className="chip" onClick={() => onOpenProject(idea.id)}>{idea.title}</button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No active ideas fit this light yet.</p>
+          )}
+        </>
+      )}
     </div>
   );
 }
