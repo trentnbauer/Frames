@@ -642,6 +642,29 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 .zine-thumb.is-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .zine-thumb__boxes { display: flex; gap: 4px; justify-content: center; }
 .zine-thumb__label { margin-top: 6px; text-align: center; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; opacity: .65; }
+.zine-thumb__actions { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
+.zine-thumb__actions button {
+  width: 20px; height: 20px; border-radius: 5px; border: none; background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text); font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.zine-thumb__actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.zine-thumb__actions button:disabled { opacity: .3; cursor: not-allowed; }
+
+.zine-undo-group { display: inline-flex; gap: 4px; }
+.zine-undo-group .btn { padding: 6px 10px; }
+
+.zine-template-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.zine-template-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+}
+.zine-template-row__name { flex: 1; font-weight: 500; }
+.zine-template-save-row { display: flex; gap: 8px; align-items: center; }
+.zine-template-save-row input {
+  flex: 1; min-height: 36px; padding: 6px 10px; font-size: 13px; color: var(--text); background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; box-sizing: border-box;
+}
+.zine-template-save-row input:focus { border-color: var(--accent); outline: none; }
 
 .zine-creator__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .zine-creator__canvas-wrap { flex: 1; min-height: 0; padding: 24px 24px 48px; overflow: hidden; box-sizing: border-box; }

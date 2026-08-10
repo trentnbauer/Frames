@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, IdeaPhoto } from '../types.js';
 import { useEscapeKey } from '../useEscapeKey.js';
@@ -62,6 +62,9 @@ const MAX_PAGE_COUNT = 48;
 // other. Applied identically in the live preview and canvas export.
 const SOCIAL_BADGE_RESERVE_FRAC = 0.09;
 const SPREAD_IDS = Array.from({ length: (MAX_PAGE_COUNT - 2) / 2 }, (_, i) => `s${i + 1}`);
+// Every slot key a spread can own, minus its `${id}-` prefix — used to
+// move a spread's photo placements between buckets on duplicate.
+const SLOT_SUFFIXES = ['L-0', 'R-0', 'span-0', 'span-1'];
 const FONT_CHOICES = ['Inter', 'Playfair Display', 'Bebas Neue', 'Space Mono', 'Courier Prime', 'Poppins'];
 const PAPER_SIZES: Record<PaperSize, { wIn: number; hIn: number }> = {
   Letter: { wIn: 8.5, hIn: 11 },
@@ -99,6 +102,74 @@ interface ZinePersistedState {
   spreadSettings: Record<string, SpreadSettings>;
   slotPhotos: Record<string, number>;
   slotTransforms: Record<string, SlotTransform>;
+  // Which spread bucket (s1, s2, ...) shows at each visible position —
+  // reordering/duplicating spreads permutes this without touching the
+  // buckets' own settings/photos. Missing on saves from before this
+  // existed; hydration falls back to the natural s1..sN order.
+  spreadOrder?: string[];
+}
+
+// A reusable layout starting point — deliberately excludes slotPhotos/
+// slotTransforms (photo picks are specific to one project's frames) and
+// showSocialHandles (a personal-account toggle, not a layout choice).
+// Stored client-side (localStorage), not per-project, since a template is
+// meant to be applied across different projects.
+interface ZineTemplate {
+  id: string;
+  name: string;
+  createdAt: string;
+  pageCount: number;
+  paperSize: PaperSize;
+  fontChoice: string;
+  headerSize: number;
+  subSize: number;
+  exportMode: 'pages' | 'booklet' | 'zine';
+  coverSettings: { front: CoverSettings; back: CoverSettings };
+  spreadSettings: Record<string, SpreadSettings>;
+  spreadOrder: string[];
+}
+
+const TEMPLATES_KEY = 'frames-zine-templates';
+function loadTemplates(): ZineTemplate[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function saveTemplatesToStorage(templates: ZineTemplate[]) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+// Everything undo/redo and autosave track together as one unit — the
+// "document," as opposed to purely transient UI state (selectedId, which
+// modal is open, measured canvas size). Same shape as the persisted-save
+// fields (minus the version tag) plus spreadOrder, which always exists at
+// runtime even though it's optional in a stored save.
+interface ZineDoc {
+  pageCount: number;
+  paperSize: PaperSize;
+  fontChoice: string;
+  headerSize: number;
+  subSize: number;
+  showSocialHandles: boolean;
+  exportMode: 'pages' | 'booklet' | 'zine';
+  coverSettings: { front: CoverSettings; back: CoverSettings };
+  spreadSettings: Record<string, SpreadSettings>;
+  slotPhotos: Record<string, number>;
+  slotTransforms: Record<string, SlotTransform>;
+  spreadOrder: string[];
+}
+
+const HISTORY_LIMIT = 50;
+const HISTORY_BURST_MS = 400;
+const AUTOSAVE_DEBOUNCE_MS = 2500;
+
+function nextUnusedSpreadId(order: string[]): string {
+  const found = SPREAD_IDS.find((sid) => !order.includes(sid));
+  if (!found) throw new Error('No spread slots left');
+  return found;
 }
 
 // Per-slot pan/zoom for "Fill" (cover-fit) photos — ox/oy shift the crop
@@ -190,16 +261,21 @@ export function ZineCreator({ projectId, onExit }: Props) {
     for (const id of SPREAD_IDS) m[id] = defaultSpread();
     return m;
   });
+  const [spreadOrder, setSpreadOrder] = useState<string[]>(() => SPREAD_IDS.slice(0, (8 - 2) / 2));
   const [slotPhotos, setSlotPhotos] = useState<Record<string, number>>({});
   const [slotTransforms, setSlotTransforms] = useState<Record<string, SlotTransform>>({});
   const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [mobileSetupOpen, setMobileSetupOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templates, setTemplates] = useState<ZineTemplate[]>(() => loadTemplates());
+  const [templateNameInput, setTemplateNameInput] = useState('');
   const [exportMode, setExportMode] = useState<'pages' | 'booklet' | 'zine'>('zine');
   const [exporting, setExporting] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const [canvasEl, setCanvasEl] = useState<HTMLDivElement | null>(null);
-  const [saveState, setSaveState] = useState<'idle' | 'saving'>('idle');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [history, setHistory] = useState<{ past: ZineDoc[]; future: ZineDoc[] }>({ past: [], future: [] });
   const showToast = useToast();
 
   // A callback ref, not useRef — this component returns null while `idea`
@@ -212,43 +288,148 @@ export function ZineCreator({ projectId, onExit }: Props) {
   // callback ref fires exactly when the node actually mounts/unmounts.
   const canvasRef = useCallback((el: HTMLDivElement | null) => setCanvasEl(el), []);
 
-  useEffect(() => {
-    api.ideas.get(projectId).then((res) => {
-      setIdea(res.idea);
-      setPhotos(res.photos);
-      if (!res.idea.zine_state) return;
-      try {
-        const s = JSON.parse(res.idea.zine_state) as ZinePersistedState;
-        setPageCountState(s.pageCount);
-        setPaperSize(s.paperSize);
-        setFontChoice(s.fontChoice);
-        setHeaderSize(s.headerSize);
-        setSubSize(s.subSize);
-        setShowSocialHandles(s.showSocialHandles);
-        setExportMode(s.exportMode);
-        setCoverSettings(s.coverSettings);
-        setSpreadSettings(s.spreadSettings);
-        setSlotPhotos(s.slotPhotos);
-        setSlotTransforms(s.slotTransforms);
-      } catch {
-        // Corrupt or pre-versioning saved state — ignore, start fresh.
-      }
-    });
-  }, [projectId]);
+  // Undo/redo and autosave both watch this one combined snapshot instead of
+  // each of the ~11 underlying fields separately. useMemo keeps the same
+  // object reference across renders where none of the fields changed, so
+  // effects keyed on [doc] only fire on a genuine edit.
+  const doc: ZineDoc = useMemo(
+    () => ({ pageCount, paperSize, fontChoice, headerSize, subSize, showSocialHandles, exportMode, coverSettings, spreadSettings, slotPhotos, slotTransforms, spreadOrder }),
+    [pageCount, paperSize, fontChoice, headerSize, subSize, showSocialHandles, exportMode, coverSettings, spreadSettings, slotPhotos, slotTransforms, spreadOrder]
+  );
 
-  function saveZine() {
+  function applyDoc(d: ZineDoc) {
+    setPageCountState(d.pageCount);
+    setPaperSize(d.paperSize);
+    setFontChoice(d.fontChoice);
+    setHeaderSize(d.headerSize);
+    setSubSize(d.subSize);
+    setShowSocialHandles(d.showSocialHandles);
+    setExportMode(d.exportMode);
+    setCoverSettings(d.coverSettings);
+    setSpreadSettings(d.spreadSettings);
+    setSlotPhotos(d.slotPhotos);
+    setSlotTransforms(d.slotTransforms);
+    setSpreadOrder(d.spreadOrder);
+  }
+
+  // Guards a doc change that was caused by applyDoc itself (undo/redo, or
+  // hydrating a saved zine on load) so it doesn't get recorded as a new
+  // history entry or treated as a fresh edit burst.
+  const isRestoring = useRef(false);
+  const prevDocRef = useRef(doc);
+  const burstActiveRef = useRef(false);
+  const burstTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (isRestoring.current) {
+      isRestoring.current = false;
+      prevDocRef.current = doc;
+      return;
+    }
+    if (!burstActiveRef.current) {
+      // First edit after a quiet period: commit the pre-edit state as an
+      // undo point immediately, so undo is available right away rather
+      // than only after the user pauses.
+      setHistory((h) => ({ past: [...h.past.slice(-(HISTORY_LIMIT - 1)), prevDocRef.current], future: [] }));
+      burstActiveRef.current = true;
+    }
+    clearTimeout(burstTimerRef.current);
+    burstTimerRef.current = setTimeout(() => { burstActiveRef.current = false; }, HISTORY_BURST_MS);
+    prevDocRef.current = doc;
+  }, [doc]);
+
+  function undo() {
+    if (history.past.length === 0) return;
+    const prev = history.past[history.past.length - 1];
+    setHistory((h) => ({ past: h.past.slice(0, -1), future: [doc, ...h.future] }));
+    isRestoring.current = true;
+    applyDoc(prev);
+  }
+
+  function redo() {
+    if (history.future.length === 0) return;
+    const next = history.future[0];
+    setHistory((h) => ({ past: [...h.past, doc], future: h.future.slice(1) }));
+    isRestoring.current = true;
+    applyDoc(next);
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== 'z') return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  function persistZine(opts: { toast: boolean }) {
     if (!idea) return;
     setSaveState('saving');
     const state: ZinePersistedState = {
       version: 1, pageCount, paperSize, fontChoice, headerSize, subSize, showSocialHandles, exportMode,
-      coverSettings, spreadSettings, slotPhotos, slotTransforms,
+      coverSettings, spreadSettings, slotPhotos, slotTransforms, spreadOrder,
     };
     api.ideas
       .update(idea.id, { zine_state: JSON.stringify(state) })
-      .then(() => showToast('Zine saved — pick up where you left off later'))
-      .catch(() => showToast('Failed to save zine'))
-      .finally(() => setSaveState('idle'));
+      .then(() => {
+        setSaveState('saved');
+        if (opts.toast) showToast('Zine saved — pick up where you left off later');
+        setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2000);
+      })
+      .catch(() => {
+        setSaveState('idle');
+        if (opts.toast) showToast('Failed to save zine');
+      });
   }
+
+  function saveZine() {
+    persistZine({ toast: true });
+  }
+
+  const loadedRef = useRef(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => persistZine({ toast: false }), AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(autosaveTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
+
+  useEffect(() => {
+    setHistory({ past: [], future: [] });
+    loadedRef.current = false;
+    api.ideas.get(projectId).then((res) => {
+      setIdea(res.idea);
+      setPhotos(res.photos);
+      if (res.idea.zine_state) {
+        try {
+          const s = JSON.parse(res.idea.zine_state) as ZinePersistedState;
+          isRestoring.current = true;
+          setPageCountState(s.pageCount);
+          setPaperSize(s.paperSize);
+          setFontChoice(s.fontChoice);
+          setHeaderSize(s.headerSize);
+          setSubSize(s.subSize);
+          setShowSocialHandles(s.showSocialHandles);
+          setExportMode(s.exportMode);
+          setCoverSettings(s.coverSettings);
+          setSpreadSettings(s.spreadSettings);
+          setSlotPhotos(s.slotPhotos);
+          setSlotTransforms(s.slotTransforms);
+          setSpreadOrder(s.spreadOrder ?? SPREAD_IDS.slice(0, (s.pageCount - 2) / 2));
+        } catch {
+          // Corrupt or pre-versioning saved state — ignore, start fresh.
+        }
+      }
+      loadedRef.current = true;
+    });
+  }, [projectId]);
 
   // Loaded once, on demand — these display fonts are only used for the
   // zine's own cover text, not the rest of the app's UI.
@@ -277,14 +458,15 @@ export function ZineCreator({ projectId, onExit }: Props) {
   useEscapeKey(pickerSlot !== null, () => setPickerSlot(null));
   useEscapeKey(exportOpen, () => setExportOpen(false));
   useEscapeKey(mobileSetupOpen, () => setMobileSetupOpen(false));
+  useEscapeKey(templatesOpen, () => setTemplatesOpen(false));
 
   function visibleIds(): string[] {
     const n = (pageCount - 2) / 2;
-    return ['front', ...SPREAD_IDS.slice(0, n), 'back'];
+    return ['front', ...spreadOrder.slice(0, n), 'back'];
   }
 
   function spreadLabel(id: string): string {
-    const idx = SPREAD_IDS.indexOf(id);
+    const idx = spreadOrder.indexOf(id);
     const start = 2 + idx * 2;
     return `${start}–${start + 1}`;
   }
@@ -295,10 +477,17 @@ export function ZineCreator({ projectId, onExit }: Props) {
   // whenever the count lands on one of those two; anything else falls back
   // to Booklet, per the user's own rule ("8 or 16 gets a zine, anything
   // else defaults to booklet") — still overridable by hand afterward.
-  function changePageCount(delta: number) {
-    const n = Math.min(MAX_PAGE_COUNT, Math.max(MIN_PAGE_COUNT, pageCount + delta));
+  // (Duplicating a single spread moves the count by 2 instead of 4 — see
+  // duplicateSpread — so this can't assume n is always a multiple of 4.)
+  function applyPageCount(n: number) {
     const spreadCount = (n - 2) / 2;
-    const visible = ['front', ...SPREAD_IDS.slice(0, spreadCount), 'back'];
+    const visible = ['front', ...spreadOrder.slice(0, spreadCount), 'back'];
+    setSpreadOrder((order) => {
+      if (spreadCount <= order.length) return order.slice(0, spreadCount);
+      const next = [...order];
+      while (next.length < spreadCount) next.push(nextUnusedSpreadId(next));
+      return next;
+    });
     setPageCountState(n);
     setSelectedId((cur) => (visible.includes(cur) ? cur : 'front'));
     if (n === 8 || n === 16) {
@@ -306,6 +495,147 @@ export function ZineCreator({ projectId, onExit }: Props) {
     } else {
       setExportMode((mode) => (mode === 'zine' ? 'booklet' : mode));
     }
+  }
+
+  function changePageCount(delta: number) {
+    applyPageCount(clamp(pageCount + delta, MIN_PAGE_COUNT, MAX_PAGE_COUNT));
+  }
+
+  // Swaps a spread with its immediate neighbor in reading order. Only the
+  // *order* changes — the spread's own settings and photo placements stay
+  // in their original bucket (s1, s2, ...) and just get shown at a
+  // different position, so nothing needs to be copied.
+  function moveSpread(id: string, dir: -1 | 1) {
+    setSpreadOrder((order) => {
+      const i = order.indexOf(id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= order.length) return order;
+      const next = [...order];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  // Inserts a copy of a spread right after itself: settings and photo
+  // placements are copied into a fresh, previously-unused bucket, and the
+  // page count grows by 2 (one spread) rather than the usual step of 4.
+  function duplicateSpread(id: string) {
+    if (pageCount >= MAX_PAGE_COUNT) {
+      showToast('Reached the maximum page count');
+      return;
+    }
+    const newId = nextUnusedSpreadId(spreadOrder);
+    const i = spreadOrder.indexOf(id);
+    const nextOrder = [...spreadOrder];
+    nextOrder.splice(i + 1, 0, newId);
+    setSpreadOrder(nextOrder);
+    setSpreadSettings((s) => ({ ...s, [newId]: { ...s[id] } }));
+    setSlotPhotos((p) => {
+      const next = { ...p };
+      for (const suffix of SLOT_SUFFIXES) {
+        const oldKey = `${id}-${suffix}`;
+        if (oldKey in p) next[`${newId}-${suffix}`] = p[oldKey];
+      }
+      return next;
+    });
+    setSlotTransforms((t) => {
+      const next = { ...t };
+      for (const suffix of SLOT_SUFFIXES) {
+        const oldKey = `${id}-${suffix}`;
+        if (oldKey in t) next[`${newId}-${suffix}`] = t[oldKey];
+      }
+      return next;
+    });
+    const n = pageCount + 2;
+    setPageCountState(n);
+    setSelectedId(newId);
+    if (n !== 8 && n !== 16 && exportMode === 'zine') setExportMode('booklet');
+  }
+
+  // Fills every currently-empty slot, front cover to back cover, with
+  // frames from the project's pool that aren't already placed anywhere —
+  // a fast first pass before manually swapping specific photos in.
+  function autoFillSlots() {
+    const usedPhotoIds = new Set(Object.values(slotPhotos));
+    const availablePhotos = photos.filter((p) => !usedPhotoIds.has(p.id));
+    const allSlotKeys: string[] = [];
+    for (const id of visibleIds()) {
+      if (isCoverId(id)) {
+        const st = coverSettings[id];
+        allSlotKeys.push(...imageSlotsFor(st.imageMode, `${id}-img`));
+      } else {
+        const st = spreadSettings[id];
+        if (st.spanMode === 'span') allSlotKeys.push(...imageSlotsFor(st.modeSpan, `${id}-span`));
+        else {
+          allSlotKeys.push(...imageSlotsFor(st.modeL, `${id}-L`));
+          allSlotKeys.push(...imageSlotsFor(st.modeR, `${id}-R`));
+        }
+      }
+    }
+    const emptySlots = allSlotKeys.filter((k) => slotPhotos[k] == null);
+    if (emptySlots.length === 0) {
+      showToast('Every slot already has a frame');
+      return;
+    }
+    if (availablePhotos.length === 0) {
+      showToast('No unplaced frames left to auto-fill with');
+      return;
+    }
+    const n = Math.min(emptySlots.length, availablePhotos.length);
+    setSlotPhotos((s) => {
+      const next = { ...s };
+      for (let i = 0; i < n; i++) next[emptySlots[i]] = availablePhotos[i].id;
+      return next;
+    });
+    showToast(`Filled ${n} empty slot${n === 1 ? '' : 's'} with unplaced frames`);
+  }
+
+  function saveAsTemplate() {
+    const name = templateNameInput.trim();
+    if (!name) {
+      showToast('Give the template a name first');
+      return;
+    }
+    const t: ZineTemplate = {
+      id: `t${Date.now()}`, name, createdAt: new Date().toISOString(),
+      pageCount, paperSize, fontChoice, headerSize, subSize, exportMode,
+      coverSettings, spreadSettings, spreadOrder,
+    };
+    setTemplates((ts) => {
+      const next = [...ts, t];
+      saveTemplatesToStorage(next);
+      return next;
+    });
+    setTemplateNameInput('');
+    showToast(`Saved template "${name}"`);
+  }
+
+  function applyTemplate(t: ZineTemplate) {
+    setPageCountState(t.pageCount);
+    setPaperSize(t.paperSize);
+    setFontChoice(t.fontChoice);
+    setHeaderSize(t.headerSize);
+    setSubSize(t.subSize);
+    setExportMode(t.exportMode);
+    setCoverSettings(t.coverSettings);
+    setSpreadSettings(t.spreadSettings);
+    setSpreadOrder(t.spreadOrder);
+    // A template is a layout/style starting point, not a specific
+    // project's photo picks — deliberately leaves photos out, and this is
+    // safe to do destructively since it's a single Ctrl+Z away either way.
+    setSlotPhotos({});
+    setSlotTransforms({});
+    setSelectedId('front');
+    setTemplatesOpen(false);
+    showToast(`Applied template "${t.name}" — Ctrl+Z to undo`);
+  }
+
+  function deleteTemplate(id: string) {
+    setTemplates((ts) => {
+      const next = ts.filter((t) => t.id !== id);
+      saveTemplatesToStorage(next);
+      return next;
+    });
   }
 
   function updateCover(id: 'front' | 'back', patch: Partial<CoverSettings>) {
@@ -668,25 +998,42 @@ export function ZineCreator({ projectId, onExit }: Props) {
         <div className="zine-creator__nav-controls">
           <div className="zine-creator__setup-inline">{renderSetupControls()}</div>
           <button type="button" className="zine-creator__setup-toggle" onClick={() => setMobileSetupOpen(true)} title="Zine settings">⚙ Settings</button>
-          <button className="btn" onClick={saveZine} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Saving…' : 'Save'}</button>
+          <div className="zine-undo-group">
+            <button type="button" className="btn" onClick={undo} disabled={history.past.length === 0} title="Undo (Ctrl+Z)">↺</button>
+            <button type="button" className="btn" onClick={redo} disabled={history.future.length === 0} title="Redo (Ctrl+Shift+Z)">↻</button>
+          </div>
+          <button type="button" className="btn" onClick={autoFillSlots} title="Fill every empty slot with unplaced frames">Auto-fill</button>
+          <button type="button" className="btn" onClick={() => setTemplatesOpen(true)}>Templates</button>
+          <button className="btn" onClick={saveZine} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : 'Save'}</button>
           <button className="btn btn-solid" onClick={() => setExportOpen(true)}>Export PDF</button>
         </div>
       </nav>
 
       <div className="zine-creator__body">
         <div className="zine-creator__thumbs">
-          {visibleIds().map((id) => (
-            <div key={id} className={`zine-thumb ${selectedId === id ? 'is-selected' : ''}`} onClick={() => setSelectedId(id)}>
-              <div className="zine-thumb__boxes">
-                {thumbBoxesFor(id).map((b, i) => (
-                  <div key={i} style={b.style}>
-                    {b.photoId != null && <img src={`/files/thumb/${b.photoId}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+          {visibleIds().map((id) => {
+            const isSpread = !isCoverId(id);
+            const posInOrder = isSpread ? spreadOrder.indexOf(id) : -1;
+            return (
+              <div key={id} className={`zine-thumb ${selectedId === id ? 'is-selected' : ''}`} onClick={() => setSelectedId(id)}>
+                <div className="zine-thumb__boxes">
+                  {thumbBoxesFor(id).map((b, i) => (
+                    <div key={i} style={b.style}>
+                      {b.photoId != null && <img src={`/files/thumb/${b.photoId}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                    </div>
+                  ))}
+                </div>
+                <div className="zine-thumb__label">{id === 'front' ? 'Front' : id === 'back' ? 'Back' : `Pages ${spreadLabel(id)}`}</div>
+                {isSpread && (
+                  <div className="zine-thumb__actions" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" onClick={() => moveSpread(id, -1)} disabled={posInOrder <= 0} title="Move earlier">‹</button>
+                    <button type="button" onClick={() => duplicateSpread(id)} disabled={pageCount >= MAX_PAGE_COUNT} title="Duplicate">⧉</button>
+                    <button type="button" onClick={() => moveSpread(id, 1)} disabled={posInOrder >= spreadOrder.length - 1} title="Move later">›</button>
                   </div>
-                ))}
+                )}
               </div>
-              <div className="zine-thumb__label">{id === 'front' ? 'Front' : id === 'back' ? 'Back' : `Pages ${spreadLabel(id)}`}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="zine-creator__main">
@@ -921,6 +1268,43 @@ export function ZineCreator({ projectId, onExit }: Props) {
             <div className="zine-creator__setup-modal-controls">{renderSetupControls()}</div>
             <div className="modal-actions">
               <button className="btn btn-solid" onClick={() => setMobileSetupOpen(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {templatesOpen && (
+        <div className="modal-overlay" onClick={() => setTemplatesOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-card__title">Templates</div>
+            <p className="muted" style={{ margin: 0 }}>
+              A template captures layout and style — page count, paper size, fonts, cover and spread settings — but not
+              which photos are placed. Applying one replaces your current layout (Ctrl+Z to undo).
+            </p>
+            {templates.length > 0 && (
+              <div className="zine-template-list">
+                {templates.map((t) => (
+                  <div key={t.id} className="zine-template-row">
+                    <span className="zine-template-row__name">{t.name}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>{t.pageCount}pp · {t.paperSize}</span>
+                    <button type="button" className="btn" onClick={() => applyTemplate(t)}>Apply</button>
+                    <button type="button" className="btn btn-danger" onClick={() => deleteTemplate(t.id)}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {templates.length === 0 && <p className="muted" style={{ margin: 0 }}>No saved templates yet.</p>}
+            <div className="zine-template-save-row">
+              <input
+                value={templateNameInput}
+                onChange={(e) => setTemplateNameInput(e.target.value)}
+                placeholder="Template name"
+                onKeyDown={(e) => e.key === 'Enter' && saveAsTemplate()}
+              />
+              <button type="button" className="btn btn-solid" onClick={saveAsTemplate}>Save current as template</button>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setTemplatesOpen(false)}>Close</button>
             </div>
           </div>
         </div>
