@@ -18,14 +18,22 @@ interface Props {
 // landing in the top row) is the standard layout for this fold — it's a
 // public-domain paper-craft technique, not specific to any one tool.
 const DPI = 300;
-const PAPER_W_IN = 11; // US Letter, landscape
-const PAPER_H_IN = 8.5;
-const CANVAS_W = PAPER_W_IN * DPI;
-const CANVAS_H = PAPER_H_IN * DPI;
 const COLS = 4;
 const ROWS = 2;
-const PANEL_W = CANVAS_W / COLS;
-const PANEL_H = CANVAS_H / ROWS;
+
+type PaperKey = 'letter' | 'a4' | 'a3';
+
+const PAPER_SIZES: Record<PaperKey, { label: string; wIn: number; hIn: number }> = {
+  letter: { label: 'US Letter', wIn: 11, hIn: 8.5 },
+  a4: { label: 'A4', wIn: 11.69, hIn: 8.27 },
+  a3: { label: 'A3', wIn: 16.54, hIn: 11.69 },
+};
+
+// Font sizes/margins below are tuned for US Letter's panel width — scale
+// them by how much bigger/smaller the chosen paper's panels are so cover
+// text reads at the same visual proportion on A3 as it does on Letter,
+// instead of shrinking (bigger paper) or clipping (smaller paper).
+const BASE_PANEL_W = (PAPER_SIZES.letter.wIn * DPI) / COLS;
 
 type Panel =
   | { row: 0 | 1; col: 0 | 1 | 2 | 3; kind: 'photo'; photoIndex: number; rotate: boolean }
@@ -102,7 +110,14 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: num
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
-async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPhoto[], accent: string) {
+async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPhoto[], accent: string, paperKey: PaperKey) {
+  const paper = PAPER_SIZES[paperKey];
+  const CANVAS_W = paper.wIn * DPI;
+  const CANVAS_H = paper.hIn * DPI;
+  const PANEL_W = CANVAS_W / COLS;
+  const PANEL_H = CANVAS_H / ROWS;
+  const scale = PANEL_W / BASE_PANEL_W;
+
   canvas.width = CANVAS_W;
   canvas.height = CANVAS_H;
   const ctx = canvas.getContext('2d')!;
@@ -143,9 +158,9 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
       ctx.fillRect(0, 0, PANEL_W, PANEL_H);
       ctx.fillStyle = accent;
       ctx.textAlign = 'center';
-      const titleMaxWidth = PANEL_W - 140;
+      const titleMaxWidth = PANEL_W - 140 * scale;
       const titleMaxHeight = idea.notes ? PANEL_H * 0.62 : PANEL_H * 0.8;
-      const { lines, lineHeight } = fitTitle(ctx, idea.title.toUpperCase(), titleMaxWidth, titleMaxHeight, 130, 48);
+      const { lines, lineHeight } = fitTitle(ctx, idea.title.toUpperCase(), titleMaxWidth, titleMaxHeight, 130 * scale, 48 * scale);
       const totalHeight = lines.length * lineHeight;
       let ty = PANEL_H / 2 - totalHeight / 2 + lineHeight * 0.75;
       for (const line of lines) {
@@ -153,13 +168,13 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
         ty += lineHeight;
       }
       if (idea.notes) {
-        ctx.font = '48px system-ui, sans-serif';
+        ctx.font = `${48 * scale}px system-ui, sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,0.65)';
-        const subLines = wrapText(ctx, idea.notes, PANEL_W - 160).slice(0, 3);
-        let sy = ty + 30;
+        const subLines = wrapText(ctx, idea.notes, PANEL_W - 160 * scale).slice(0, 3);
+        let sy = ty + 30 * scale;
         for (const line of subLines) {
           ctx.fillText(line, PANEL_W / 2, sy);
-          sy += 60;
+          sy += 60 * scale;
         }
       }
     } else {
@@ -167,11 +182,11 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
       ctx.fillRect(0, 0, PANEL_W, PANEL_H);
       ctx.textAlign = 'center';
       ctx.fillStyle = accent;
-      ctx.font = 'bold 60px system-ui, sans-serif';
-      ctx.fillText('◆ FRAMES ◆', PANEL_W / 2, PANEL_H / 2 - 20);
+      ctx.font = `bold ${60 * scale}px system-ui, sans-serif`;
+      ctx.fillText('◆ FRAMES ◆', PANEL_W / 2, PANEL_H / 2 - 20 * scale);
       ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = '36px system-ui, sans-serif';
-      ctx.fillText(`${photos.length} frame${photos.length === 1 ? '' : 's'}`, PANEL_W / 2, PANEL_H / 2 + 40);
+      ctx.font = `${36 * scale}px system-ui, sans-serif`;
+      ctx.fillText(`${photos.length} frame${photos.length === 1 ? '' : 's'}`, PANEL_W / 2, PANEL_H / 2 + 40 * scale);
     }
 
     ctx.restore();
@@ -181,8 +196,8 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
   // here" mark across the inner two panels of the center horizontal fold —
   // the single slit that makes the whole fold work.
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([14, 10]);
+  ctx.lineWidth = 2 * scale;
+  ctx.setLineDash([14 * scale, 10 * scale]);
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
     ctx.moveTo(c * PANEL_W, 0);
@@ -200,7 +215,7 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
 
   ctx.setLineDash([]);
   ctx.strokeStyle = '#e0524f';
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 5 * scale;
   ctx.beginPath();
   ctx.moveTo(PANEL_W, PANEL_H);
   ctx.lineTo(3 * PANEL_W, PANEL_H);
@@ -210,14 +225,19 @@ async function renderZine(canvas: HTMLCanvasElement, idea: Idea, photos: IdeaPho
 export function ZineExportModal({ open, idea, photos, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendering, setRendering] = useState(false);
+  const [paperKey, setPaperKey] = useState<PaperKey>('letter');
 
   useEscapeKey(open, onClose);
 
   useEffect(() => {
+    if (!open) setPaperKey('letter');
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !idea || !canvasRef.current) return;
     setRendering(true);
-    renderZine(canvasRef.current, idea, photos, getStoredAccent()).finally(() => setRendering(false));
-  }, [open, idea, photos]);
+    renderZine(canvasRef.current, idea, photos, getStoredAccent(), paperKey).finally(() => setRendering(false));
+  }, [open, idea, photos, paperKey]);
 
   if (!open || !idea) return null;
 
@@ -230,7 +250,7 @@ export function ZineExportModal({ open, idea, photos, onClose }: Props) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${idea!.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-zine.jpg`;
+        a.download = `${idea!.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-zine-${paperKey}.jpg`;
         a.click();
         URL.revokeObjectURL(url);
       },
@@ -244,9 +264,17 @@ export function ZineExportModal({ open, idea, photos, onClose }: Props) {
       <div className="modal-card modal-card--wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-card__title">Zine — one-sheet, 8-page fold</div>
         <p className="muted" style={{ margin: '-4px 0 0' }}>
-          Uses up to 6 frames from this project (in their sequence order) plus the title as the cover. Print single-sided
-          on US Letter, landscape.
+          Uses up to 6 frames from this project (in their sequence order) plus the title as the cover. Print
+          single-sided, landscape.
         </p>
+
+        <div className="segmented">
+          {(Object.keys(PAPER_SIZES) as PaperKey[]).map((key) => (
+            <span key={key} className={`segmented__opt ${paperKey === key ? 'active' : ''}`} onClick={() => setPaperKey(key)}>
+              {PAPER_SIZES[key].label}
+            </span>
+          ))}
+        </div>
 
         <div className="zine-preview">
           <canvas ref={canvasRef} className="zine-preview__canvas" />
