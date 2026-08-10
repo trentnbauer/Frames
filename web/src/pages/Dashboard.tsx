@@ -82,6 +82,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
       </div>
 
       <WeatherWidget onOpenProject={onOpenProject} />
+      <NudgeDigest ideas={ideas} onOpenProject={onOpenProject} />
 
       {suggestion && (
         <div className="suggestion-banner">
@@ -130,6 +131,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
                 <div className="project-card__meta">
                   {idea.photo_count ?? 0} photo{idea.photo_count === 1 ? '' : 's'} · {relativeTime(idea.created_at)}
                 </div>
+                {idea.nudge && <div className={`project-card__nudge project-card__nudge--${idea.nudge.type}`}>{idea.nudge.message}</div>}
                 <div>
                   {tagPreview.map((t) => (
                     <span key={t} className="tag-pill" style={{ marginRight: 6 }}>{t}</span>
@@ -142,6 +144,23 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         {ideas.length === 0 && <p className="muted">No projects yet. Start one from a tag you keep noticing.</p>}
         {ideas.length > 0 && visibleIdeas.length === 0 && <p className="muted">No projects match "{search}".</p>}
       </div>
+    </div>
+  );
+}
+
+function NudgeDigest({ ideas, onOpenProject }: { ideas: Idea[]; onOpenProject: (id: number) => void }) {
+  const nudged = ideas.filter((i) => i.nudge);
+  if (nudged.length === 0) return null;
+
+  return (
+    <div className="nudge-digest">
+      <div className="nudge-digest__title">Needs attention</div>
+      {nudged.map((idea) => (
+        <button key={idea.id} className="nudge-digest__row" onClick={() => onOpenProject(idea.id)}>
+          <span className="nudge-digest__idea">{idea.title}</span>
+          <span className="muted">{idea.nudge!.message}</span>
+        </button>
+      ))}
     </div>
   );
 }

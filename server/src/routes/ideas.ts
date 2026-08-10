@@ -3,24 +3,31 @@ import path from 'node:path';
 import db, { ORIGINALS_DIR } from '../db.js';
 import { streamZip } from '../lib/zipExport.js';
 import { withTags } from '../lib/withTags.js';
+import { deriveNudge } from '../lib/ideaNudges.js';
 import type { IdeaRow, PhotoRow } from '../types.js';
 
 export const ideasRouter = Router();
 
-function withPhotoCount(idea: IdeaRow) {
-  const { count } = db
-    .prepare(
-      `SELECT COUNT(*) as count FROM idea_photos ip
-       JOIN photos p ON p.id = ip.photo_id
-       WHERE ip.idea_id = ? AND p.deleted_at IS NULL`
-    )
-    .get(idea.id) as { count: number };
-  return { ...idea, photo_count: count };
-}
-
 ideasRouter.get('/', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM ideas ORDER BY created_at DESC').all() as IdeaRow[];
-  res.json({ ideas: rows.map(withPhotoCount) });
+  const rows = db
+    .prepare(
+      `SELECT i.*,
+         COUNT(CASE WHEN p.id IS NOT NULL AND p.deleted_at IS NULL THEN 1 END) as photo_count,
+         MAX(CASE WHEN p.id IS NOT NULL AND p.deleted_at IS NULL THEN ip.created_at END) as last_activity
+       FROM ideas i
+       LEFT JOIN idea_photos ip ON ip.idea_id = i.id
+       LEFT JOIN photos p ON p.id = ip.photo_id
+       GROUP BY i.id
+       ORDER BY i.created_at DESC`
+    )
+    .all() as (IdeaRow & { photo_count: number; last_activity: string | null })[];
+
+  const ideas = rows.map(({ last_activity, ...idea }) => ({
+    ...idea,
+    nudge: deriveNudge({ status: idea.status, photoCount: idea.photo_count, createdAt: idea.created_at, lastActivity: last_activity }),
+  }));
+
+  res.json({ ideas });
 });
 
 ideasRouter.post('/', (req, res) => {

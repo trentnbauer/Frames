@@ -201,6 +201,21 @@ button { cursor: pointer; }
 }
 .weather-widget__ideas { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* ---------- Idea progress nudges ---------- */
+
+.nudge-digest { margin-bottom: 20px; }
+.nudge-digest__title { font: 600 10.5px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.nudge-digest__row {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left;
+  background: var(--surface); border: none; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; cursor: pointer;
+}
+.nudge-digest__row:hover { filter: brightness(1.08); }
+.nudge-digest__idea { font-weight: 600; flex: none; }
+.project-card__nudge {
+  font-size: 12px; margin-top: 6px; padding: 4px 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+}
+
 /* ---------- Suggested-project banner ---------- */
 
 .suggestion-banner {

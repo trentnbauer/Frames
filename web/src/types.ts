@@ -39,6 +39,13 @@ export interface Tag {
   photo_count: number;
 }
 
+export type NudgeType = 'idle_idea' | 'stalled' | 'ready_to_finish';
+
+export interface Nudge {
+  type: NudgeType;
+  message: string;
+}
+
 export interface Idea {
   id: number;
   title: string;
@@ -47,6 +54,7 @@ export interface Idea {
   status: IdeaStatus;
   created_at: string;
   photo_count?: number;
+  nudge?: Nudge | null;
 }
 
 export interface IdeaPhoto extends Photo {

@@ -1,7 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import path from 'node:path';
 import type { Express } from 'express';
 import { createTestApp, tinyJpeg } from '../test/helpers.js';
+
+async function backdateIdeaCreatedAt(daysAgo: number, ideaId: number) {
+  const Database = (await import('better-sqlite3')).default;
+  const dbPath = path.join(process.env.DATA_DIR!, 'frames.db');
+  const raw = new Database(dbPath);
+  const iso = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+  raw.prepare('UPDATE ideas SET created_at = ? WHERE id = ?').run(iso, ideaId);
+  raw.close();
+}
 
 async function uploadPhoto(app: Express, seed: number, filename: string) {
   const jpeg = await tinyJpeg(seed);
@@ -35,6 +45,25 @@ describe('ideas routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.ideas).toHaveLength(1);
     expect(res.body.ideas[0].photo_count).toBe(0);
+  });
+
+  it('nudges an active idea that has sat empty for over a week', async () => {
+    const ideaRes = await request(app).post('/api/ideas').send({ title: 'Neglected idea' });
+    await backdateIdeaCreatedAt(10, ideaRes.body.idea.id);
+
+    const res = await request(app).get('/api/ideas');
+    const idea = res.body.ideas.find((i: { id: number }) => i.id === ideaRes.body.idea.id);
+    expect(idea.nudge).toMatchObject({ type: 'idle_idea' });
+  });
+
+  it('does not nudge a done idea even if it has sat empty for a long time', async () => {
+    const ideaRes = await request(app).post('/api/ideas').send({ title: 'Old but done' });
+    await backdateIdeaCreatedAt(60, ideaRes.body.idea.id);
+    await request(app).patch(`/api/ideas/${ideaRes.body.idea.id}`).send({ status: 'done' });
+
+    const res = await request(app).get('/api/ideas');
+    const idea = res.body.ideas.find((i: { id: number }) => i.id === ideaRes.body.idea.id);
+    expect(idea.nudge).toBeNull();
   });
 
   it('drops photos into an idea with a why note, and removes them', async () => {
