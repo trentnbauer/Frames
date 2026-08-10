@@ -42,6 +42,11 @@ export default function App() {
     setMobileNavOpen(false);
   }
 
+  function goToLibraryFor(forProjectId: number) {
+    navigate({ screen: 'library', projectId: null, forProjectId });
+    setMobileNavOpen(false);
+  }
+
   function openNewProject(request: NewProjectRequest = {}) {
     setNewProjectRequest(request);
     setMobileNavOpen(false);
@@ -127,13 +132,15 @@ export default function App() {
               onGenerateProject={(title, onCreated) => openNewProject({ initialTitle: title, onCreated })}
             />
           )}
-          {route.screen === 'library' && <Library onOpenProject={(id) => goTo('project', id)} />}
+          {route.screen === 'library' && (
+            <Library onOpenProject={(id) => goTo('project', id)} forProjectId={route.forProjectId ?? null} />
+          )}
           {route.screen === 'settings' && <Settings />}
           {route.screen === 'project' && route.projectId !== null && (
             <ProjectDetail
               projectId={route.projectId}
               onBack={() => goTo('dashboard')}
-              onImport={() => goTo('library')}
+              onImport={() => goToLibraryFor(route.projectId!)}
               onDeleted={() => {
                 refreshIdeas();
                 goTo('dashboard');

@@ -7,12 +7,13 @@ import { useToast } from '../toast.js';
 
 interface Props {
   onOpenProject: (id: number) => void;
+  forProjectId: number | null;
 }
 
 const PAGE_SIZE = 60;
 const EMPTY_OPTIONS: ShootOptions = { camera: [], lens: [], film_stock: [], location: [], photoshoot: [] };
 
-export function Library({ onOpenProject }: Props) {
+export function Library({ onOpenProject, forProjectId }: Props) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -71,17 +72,22 @@ export function Library({ onOpenProject }: Props) {
     api.photos.shootOptions().then(setOptions);
   }, [photos]);
 
+  async function refreshProjectMap() {
+    const res = await api.ideas.list();
+    setAllIdeas(res.ideas);
+    const pairs = await Promise.all(res.ideas.map((idea) => api.ideas.get(idea.id).then((d) => [idea, d.photos] as const)));
+    const map: Record<number, string> = {};
+    for (const [idea, photos] of pairs) {
+      for (const p of photos) map[p.id] = idea.title;
+    }
+    setProjectByPhoto(map);
+  }
+
   useEffect(() => {
-    api.ideas.list().then(async (res) => {
-      setAllIdeas(res.ideas);
-      const pairs = await Promise.all(res.ideas.map((idea) => api.ideas.get(idea.id).then((d) => [idea, d.photos] as const)));
-      const map: Record<number, string> = {};
-      for (const [idea, photos] of pairs) {
-        for (const p of photos) map[p.id] = idea.title;
-      }
-      setProjectByPhoto(map);
-    });
+    refreshProjectMap();
   }, []);
+
+  const forProject = forProjectId != null ? allIdeas.find((i) => i.id === forProjectId) ?? null : null;
 
   async function refreshTrash() {
     const res = await api.photos.list({ trashed: true });
@@ -110,10 +116,21 @@ export function Library({ onOpenProject }: Props) {
       const res = await api.photos.upload(Array.from(files));
       setImportBatch((prev) => [...prev, ...res.results.map((r) => r.photo)]);
       const dupes = res.results.filter((r) => r.wasDuplicate).length;
-      showToast(
-        `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'}` +
-          (dupes ? ` (${dupes} already in Library)` : '')
-      );
+
+      if (forProjectId != null) {
+        for (const r of res.results) await api.ideas.addPhoto(forProjectId, r.photo.id);
+        showToast(
+          `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'} and added to "${forProject?.title ?? 'project'}"` +
+            (dupes ? ` (${dupes} already in Library)` : '')
+        );
+        await refreshProjectMap();
+      } else {
+        showToast(
+          `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'}` +
+            (dupes ? ` (${dupes} already in Library)` : '')
+        );
+      }
+
       await refresh();
     } finally {
       setUploading(false);
@@ -284,6 +301,15 @@ export function Library({ onOpenProject }: Props) {
 
   return (
     <div>
+      {forProject && (
+        <div className="suggestion-banner" style={{ marginBottom: 16 }}>
+          <div className="suggestion-banner__text" style={{ fontStyle: 'normal' }}>
+            Photos you import now are added straight to <strong>{forProject.title}</strong>.
+          </div>
+          <button className="btn btn-accent" onClick={() => onOpenProject(forProject.id)}>Done — back to project</button>
+        </div>
+      )}
+
       <div className="page-header" style={{ marginBottom: 28 }}>
         <div>
           <h1 className="page-title">Library</h1>
