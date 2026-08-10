@@ -23,4 +23,13 @@ db.pragma('foreign_keys = ON');
 const schemaPath = path.join(__dirname, 'schema.sql');
 db.exec(fs.readFileSync(schemaPath, 'utf-8'));
 
+// CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
+// exists — patch pre-existing databases up to the current photos shape.
+const existingColumns = new Set((db.prepare('PRAGMA table_info(photos)').all() as { name: string }[]).map((c) => c.name));
+for (const column of ['lens', 'location', 'photoshoot']) {
+  if (!existingColumns.has(column)) {
+    db.exec(`ALTER TABLE photos ADD COLUMN ${column} TEXT`);
+  }
+}
+
 export default db;

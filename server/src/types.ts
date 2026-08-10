@@ -13,7 +13,10 @@ export interface PhotoRow {
   width: number | null;
   height: number | null;
   camera: string | null;
+  lens: string | null;
   film_stock: string | null;
+  location: string | null;
+  photoshoot: string | null;
   season: string | null;
   tagging_status: TaggingStatus;
   created_at: string;

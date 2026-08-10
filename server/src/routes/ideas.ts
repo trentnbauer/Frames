@@ -108,6 +108,41 @@ ideasRouter.delete('/:id/photos/:photoId', (req, res) => {
   res.status(204).end();
 });
 
+// Idea filler: derive the idea's dominant tags from its current member
+// photos, then surface other photos sharing those tags that aren't members
+// yet — the "6 frames tagged X might belong here" nudge from plan.md's core
+// loop, seen from the idea side rather than the tag side.
+ideasRouter.get('/:id/suggested-photos', (req, res) => {
+  const ideaId = req.params.id;
+
+  const dominantTags = db
+    .prepare(
+      `SELECT DISTINCT pt.tag_id FROM idea_photos ip
+       JOIN photo_tags pt ON pt.photo_id = ip.photo_id
+       WHERE ip.idea_id = ?`
+    )
+    .all(ideaId) as { tag_id: number }[];
+
+  if (dominantTags.length === 0) return res.json({ photos: [] });
+
+  const tagIds = dominantTags.map((t) => t.tag_id);
+  const placeholders = tagIds.map(() => '?').join(',');
+
+  const rows = db
+    .prepare(
+      `SELECT p.*, COUNT(*) as shared_tag_count FROM photos p
+       JOIN photo_tags pt ON pt.photo_id = p.id
+       WHERE pt.tag_id IN (${placeholders})
+         AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.idea_id = ? AND ip.photo_id = p.id)
+       GROUP BY p.id
+       ORDER BY shared_tag_count DESC, p.created_at DESC
+       LIMIT 8`
+    )
+    .all(...tagIds, ideaId) as PhotoRow[];
+
+  res.json({ photos: rows });
+});
+
 ideasRouter.get('/:id/export', async (req, res) => {
   const idea = db.prepare('SELECT * FROM ideas WHERE id = ?').get(req.params.id) as IdeaRow | undefined;
   if (!idea) return res.status(404).json({ error: 'Idea not found' });

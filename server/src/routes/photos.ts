@@ -35,20 +35,11 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
 });
 
 photosRouter.get('/', (req, res) => {
-  const { tag, untagged, orphan } = req.query;
+  const { tag, camera, location, untagged, orphan } = req.query;
 
   let rows: PhotoRow[];
 
-  if (typeof tag === 'string' && tag) {
-    rows = db
-      .prepare(
-        `SELECT p.* FROM photos p
-         JOIN photo_tags pt ON pt.photo_id = p.id
-         JOIN tags t ON t.id = pt.tag_id
-         WHERE t.slug = ? ORDER BY p.created_at DESC`
-      )
-      .all(tag) as PhotoRow[];
-  } else if (untagged === 'true') {
+  if (untagged === 'true') {
     rows = db
       .prepare(
         `SELECT p.* FROM photos p
@@ -66,10 +57,50 @@ photosRouter.get('/', (req, res) => {
       )
       .all() as PhotoRow[];
   } else {
-    rows = db.prepare('SELECT * FROM photos ORDER BY created_at DESC').all() as PhotoRow[];
+    // Composable filters: tag (via join), camera, location — combinable for
+    // combo-suggestion lookups like "photos shot on X in Y".
+    const joins: string[] = [];
+    const where: string[] = [];
+    const params: string[] = [];
+
+    if (typeof tag === 'string' && tag) {
+      joins.push('JOIN photo_tags pt ON pt.photo_id = p.id JOIN tags t ON t.id = pt.tag_id');
+      where.push('t.slug = ?');
+      params.push(tag);
+    }
+    if (typeof camera === 'string' && camera) {
+      where.push('p.camera = ?');
+      params.push(camera);
+    }
+    if (typeof location === 'string' && location) {
+      where.push('p.location = ?');
+      params.push(location);
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    rows = db
+      .prepare(`SELECT p.* FROM photos p ${joins.join(' ')} ${whereClause} ORDER BY p.created_at DESC`)
+      .all(...params) as PhotoRow[];
   }
 
   res.json({ photos: rows.map(withTags) });
+});
+
+// Distinct previously-entered values, for datalist autocomplete on the
+// Import review form.
+photosRouter.get('/shoot-options', (_req, res) => {
+  const distinct = (column: string) =>
+    (db.prepare(`SELECT DISTINCT ${column} AS v FROM photos WHERE ${column} IS NOT NULL AND ${column} != ''`).all() as { v: string }[]).map(
+      (r) => r.v
+    );
+
+  res.json({
+    camera: distinct('camera'),
+    lens: distinct('lens'),
+    film_stock: distinct('film_stock'),
+    location: distinct('location'),
+    photoshoot: distinct('photoshoot'),
+  });
 });
 
 photosRouter.get('/:id', (req, res) => {
@@ -90,6 +121,36 @@ photosRouter.delete('/:id', (req, res) => {
   const result = db.prepare('DELETE FROM photos WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Photo not found' });
   res.status(204).end();
+});
+
+// Shoot-detail fields: filename-parsed as a best-effort guess (camera,
+// film_stock, season), otherwise typed by hand — on the Import review screen
+// or later from the photo detail view.
+photosRouter.patch('/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow | undefined;
+  if (!existing) return res.status(404).json({ error: 'Photo not found' });
+
+  const { camera, lens, film_stock, location, photoshoot } = req.body as {
+    camera?: string;
+    lens?: string;
+    film_stock?: string;
+    location?: string;
+    photoshoot?: string;
+  };
+
+  db.prepare(
+    'UPDATE photos SET camera = ?, lens = ?, film_stock = ?, location = ?, photoshoot = ? WHERE id = ?'
+  ).run(
+    camera !== undefined ? camera || null : existing.camera,
+    lens !== undefined ? lens || null : existing.lens,
+    film_stock !== undefined ? film_stock || null : existing.film_stock,
+    location !== undefined ? location || null : existing.location,
+    photoshoot !== undefined ? photoshoot || null : existing.photoshoot,
+    req.params.id
+  );
+
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow;
+  res.json({ photo: withTags(photo) });
 });
 
 // --- Tags on a photo (the correction path: accept / dismiss / add / note) ---

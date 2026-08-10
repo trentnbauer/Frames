@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS photos (
   width INTEGER,
   height INTEGER,
   camera TEXT,
+  lens TEXT,
   film_stock TEXT,
+  location TEXT,
+  photoshoot TEXT,
   season TEXT,
   tagging_status TEXT NOT NULL DEFAULT 'pending' CHECK (tagging_status IN ('pending', 'tagged', 'failed', 'skipped')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
