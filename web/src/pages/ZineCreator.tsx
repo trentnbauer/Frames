@@ -24,11 +24,14 @@ interface BorderSetting {
   color: string;
 }
 
+type ImageFit = 'cover' | 'contain';
+
 interface CoverSettings {
   header: string;
   sub1: string;
   sub2: string;
   imageMode: ImageMode;
+  imageFit: ImageFit;
   borderPct: number;
   borderColor: string;
   bgColor: string;
@@ -41,6 +44,9 @@ interface SpreadSettings {
   modeL: ImageMode;
   modeR: ImageMode;
   modeSpan: ImageMode;
+  fitL: ImageFit;
+  fitR: ImageFit;
+  fitSpan: ImageFit;
   borderL: BorderSetting;
   borderR: BorderSetting;
   borderSpan: BorderSetting;
@@ -56,17 +62,15 @@ const PAPER_SIZES: Record<PaperSize, { wIn: number; hIn: number }> = {
   A3: { wIn: 11.69, hIn: 16.54 },
   A2: { wIn: 16.54, hIn: 23.39 },
 };
-const PORTRAIT_ASPECT = 0.7727; // single page, w/h
-const SPAN_ASPECT = 1.5454; // two pages side by side, w/h — exactly 2x portrait
-
 function defaultCover(header: string, sub1: string, sub2: string): CoverSettings {
-  return { header, sub1, sub2, imageMode: 'portrait', borderPct: 0, borderColor: '#ffffff', bgColor: '#161826', textVAlign: 'bottom', textHAlign: 'left' };
+  return { header, sub1, sub2, imageMode: 'portrait', imageFit: 'cover', borderPct: 0, borderColor: '#ffffff', bgColor: '#161826', textVAlign: 'bottom', textHAlign: 'left' };
 }
 
 function defaultSpread(): SpreadSettings {
   return {
     spanMode: 'split',
     modeL: 'portrait', modeR: 'portrait', modeSpan: 'landscape2',
+    fitL: 'cover', fitR: 'cover', fitSpan: 'cover',
     borderL: { pct: 0, color: '#ffffff' }, borderR: { pct: 0, color: '#ffffff' }, borderSpan: { pct: 0, color: '#ffffff' },
   };
 }
@@ -80,18 +84,24 @@ function isCoverId(id: string): id is 'front' | 'back' {
   return id === 'front' || id === 'back';
 }
 
-function fullSize(canvasSize: { w: number; h: number }, wide: boolean, count: number) {
+// portraitAspect is the *selected paper size's own* w/h ratio — Letter
+// (0.773) and the ISO A-series (~0.707) are visibly different shapes, so
+// the on-screen page boxes need to reflect whichever is actually chosen,
+// not a fixed ratio. Export already used the real paper dimensions in
+// pixels throughout; only this live preview sizing had the fixed value.
+function fullSize(canvasSize: { w: number; h: number }, wide: boolean, count: number, portraitAspect: number) {
   const gap = 10;
   if (wide) {
+    const spanAspect = portraitAspect * 2;
     let h = canvasSize.h;
-    let w = h * SPAN_ASPECT;
+    let w = h * spanAspect;
     if (w > canvasSize.w) { h = h * (canvasSize.w / w); w = canvasSize.w; }
     return { w, h };
   }
   let h = canvasSize.h;
-  const totalW = count * h * PORTRAIT_ASPECT + (count - 1) * gap;
+  const totalW = count * h * portraitAspect + (count - 1) * gap;
   if (totalW > canvasSize.w) h = h * (canvasSize.w / totalW);
-  return { w: h * PORTRAIT_ASPECT, h };
+  return { w: h * portraitAspect, h };
 }
 
 function overlayStyle(vAlign: VAlign, hAlign: HAlign): React.CSSProperties {
@@ -233,25 +243,28 @@ export function ZineCreator({ projectId, onExit }: Props) {
     size: { w: number; h: number };
     bgColor: string;
     images: string[];
+    imageFit: ImageFit;
     borderColor: string;
     borderPct: number;
     cover?: CoverSettings;
   }
 
+  const portraitAspect = PAPER_SIZES[paperSize].wIn / PAPER_SIZES[paperSize].hIn;
+
   function canvasPagesForSelected(): PageBox[] {
     const id = selectedId;
     if (isCoverId(id)) {
       const st = coverSettings[id];
-      return [{ key: id, size: fullSize(canvasSize, false, 1), bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${id}-img`), borderColor: st.borderColor, borderPct: st.borderPct, cover: st }];
+      return [{ key: id, size: fullSize(canvasSize, false, 1, portraitAspect), bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${id}-img`), imageFit: st.imageFit, borderColor: st.borderColor, borderPct: st.borderPct, cover: st }];
     }
     const st = spreadSettings[id];
     if (st.spanMode === 'span') {
-      return [{ key: `${id}-span`, size: fullSize(canvasSize, true, 1), bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${id}-span`), borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct }];
+      return [{ key: `${id}-span`, size: fullSize(canvasSize, true, 1, portraitAspect), bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${id}-span`), imageFit: st.fitSpan, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct }];
     }
-    const size = fullSize(canvasSize, false, 2);
+    const size = fullSize(canvasSize, false, 2, portraitAspect);
     return [
-      { key: `${id}-L`, size, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${id}-L`), borderColor: st.borderL.color, borderPct: st.borderL.pct },
-      { key: `${id}-R`, size, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${id}-R`), borderColor: st.borderR.color, borderPct: st.borderR.pct },
+      { key: `${id}-L`, size, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${id}-L`), imageFit: st.fitL, borderColor: st.borderL.color, borderPct: st.borderL.pct },
+      { key: `${id}-R`, size, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${id}-R`), imageFit: st.fitR, borderColor: st.borderR.color, borderPct: st.borderR.pct },
     ];
   }
 
@@ -264,15 +277,15 @@ export function ZineCreator({ projectId, onExit }: Props) {
     const firstPhoto = (slots: string[]) => (slots.length ? slotPhotos[slots[0]] : undefined);
     if (isCoverId(id)) {
       const st = coverSettings[id];
-      return [{ style: box(PORTRAIT_ASPECT, st.bgColor), photoId: firstPhoto(imageSlotsFor(st.imageMode, `${id}-img`)) }];
+      return [{ style: box(portraitAspect, st.bgColor), photoId: firstPhoto(imageSlotsFor(st.imageMode, `${id}-img`)) }];
     }
     const st = spreadSettings[id];
     if (st.spanMode === 'span') {
-      return [{ style: box(SPAN_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeSpan, `${id}-span`)) }];
+      return [{ style: box(portraitAspect * 2, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeSpan, `${id}-span`)) }];
     }
     return [
-      { style: box(PORTRAIT_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeL, `${id}-L`)) },
-      { style: box(PORTRAIT_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeR, `${id}-R`)) },
+      { style: box(portraitAspect, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeL, `${id}-L`)) },
+      { style: box(portraitAspect, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeR, `${id}-R`)) },
     ];
   }
 
@@ -314,19 +327,19 @@ export function ZineCreator({ projectId, onExit }: Props) {
     if (owner.part === 'cover') {
       const st = coverSettings[owner.id as 'front' | 'back'];
       return renderPageCanvas({
-        widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), slotPhotos,
+        widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), imageFit: st.imageFit, slotPhotos,
         borderColor: st.borderColor, borderPct: st.borderPct,
         overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
       });
     }
     const st = spreadSettings[owner.id];
-    if (owner.part === 'L') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${owner.id}-L`), slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct });
-    if (owner.part === 'R') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${owner.id}-R`), slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct });
+    if (owner.part === 'L') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${owner.id}-L`), imageFit: st.fitL, slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct });
+    if (owner.part === 'R') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${owner.id}-R`), imageFit: st.fitR, slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct });
 
     const cacheKey = `${owner.id}-${widthPx}x${heightPx}`;
     let wide = wideCache.get(cacheKey);
     if (!wide) {
-      wide = await renderPageCanvas({ widthPx: widthPx * 2, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${owner.id}-span`), slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
+      wide = await renderPageCanvas({ widthPx: widthPx * 2, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${owner.id}-span`), imageFit: st.fitSpan, slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
       wideCache.set(cacheKey, wide);
     }
     return owner.part === 'span-left' ? sliceCanvas(wide, 0, 0, widthPx, heightPx) : sliceCanvas(wide, widthPx, 0, widthPx, heightPx);
@@ -568,7 +581,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
                   )}
                   {p.images.map((slotKey) => (
                     <div key={slotKey} className="zine-slot-wrap" style={{ padding: `${p.borderPct}%`, background: p.borderColor }}>
-                      <ZineImageSlot photoId={slotPhotos[slotKey]} onPick={() => setPickerSlot(slotKey)} onClear={() => clearSlot(slotKey)} />
+                      <ZineImageSlot photoId={slotPhotos[slotKey]} fit={p.imageFit} fillColor={p.borderColor} onPick={() => setPickerSlot(slotKey)} onClear={() => clearSlot(slotKey)} />
                     </div>
                   ))}
                   {p.images.length === 0 && <div className="zine-slot-empty">No image</div>}
@@ -599,6 +612,15 @@ export function ZineCreator({ projectId, onExit }: Props) {
                     ))}
                   </div>
                 </div>
+                {selectedCover.imageMode !== 'none' && (
+                  <div className="zine-field">
+                    <label>Photo fit</label>
+                    <div className="segmented">
+                      <span className={`segmented__opt ${selectedCover.imageFit === 'cover' ? 'active' : ''}`} onClick={() => updateCover(selectedId as 'front' | 'back', { imageFit: 'cover' })} title="Crop to fill the slot">Fill</span>
+                      <span className={`segmented__opt ${selectedCover.imageFit === 'contain' ? 'active' : ''}`} onClick={() => updateCover(selectedId as 'front' | 'back', { imageFit: 'contain' })} title="Show the whole photo, uncropped">Whole photo</span>
+                    </div>
+                  </div>
+                )}
                 <div className="zine-field">
                   <label>Border color</label>
                   <input type="color" value={selectedCover.borderColor} onChange={(e) => updateCover(selectedId as 'front' | 'back', { borderColor: e.target.value })} className="zine-color-input" />
@@ -657,6 +679,13 @@ export function ZineCreator({ projectId, onExit }: Props) {
                       </div>
                     </div>
                     <div className="zine-field">
+                      <label>Left fit</label>
+                      <div className="segmented">
+                        <span className={`segmented__opt ${selectedSpread.fitL === 'cover' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitL: 'cover' })} title="Crop to fill">Fill</span>
+                        <span className={`segmented__opt ${selectedSpread.fitL === 'contain' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitL: 'contain' })} title="Show the whole photo">Whole</span>
+                      </div>
+                    </div>
+                    <div className="zine-field">
                       <label>Right page</label>
                       <div className="segmented">
                         {(['portrait', 'landscape1', 'landscape2'] as ImageMode[]).map((m) => (
@@ -672,6 +701,13 @@ export function ZineCreator({ projectId, onExit }: Props) {
                         <input type="color" value={selectedSpread.borderR.color} onChange={(e) => updateSpreadBorder(selectedId, 'borderR', { color: e.target.value })} className="zine-color-input zine-color-input--sm" />
                         <input type="range" min={0} max={30} step={1} value={selectedSpread.borderR.pct} onChange={(e) => updateSpreadBorder(selectedId, 'borderR', { pct: Number(e.target.value) })} className="zine-range zine-range--sm" />
                         <span className="muted" style={{ fontSize: 12 }}>{selectedSpread.borderR.pct}%</span>
+                      </div>
+                    </div>
+                    <div className="zine-field">
+                      <label>Right fit</label>
+                      <div className="segmented">
+                        <span className={`segmented__opt ${selectedSpread.fitR === 'cover' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitR: 'cover' })} title="Crop to fill">Fill</span>
+                        <span className={`segmented__opt ${selectedSpread.fitR === 'contain' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitR: 'contain' })} title="Show the whole photo">Whole</span>
                       </div>
                     </div>
                   </>
@@ -692,6 +728,13 @@ export function ZineCreator({ projectId, onExit }: Props) {
                         <input type="color" value={selectedSpread.borderSpan.color} onChange={(e) => updateSpreadBorder(selectedId, 'borderSpan', { color: e.target.value })} className="zine-color-input zine-color-input--sm" />
                         <input type="range" min={0} max={30} step={1} value={selectedSpread.borderSpan.pct} onChange={(e) => updateSpreadBorder(selectedId, 'borderSpan', { pct: Number(e.target.value) })} className="zine-range zine-range--sm" />
                         <span className="muted" style={{ fontSize: 12 }}>{selectedSpread.borderSpan.pct}%</span>
+                      </div>
+                    </div>
+                    <div className="zine-field">
+                      <label>Fit</label>
+                      <div className="segmented">
+                        <span className={`segmented__opt ${selectedSpread.fitSpan === 'cover' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitSpan: 'cover' })} title="Crop to fill">Fill</span>
+                        <span className={`segmented__opt ${selectedSpread.fitSpan === 'contain' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { fitSpan: 'contain' })} title="Show the whole photo">Whole</span>
                       </div>
                     </div>
                   </>
@@ -777,7 +820,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
   );
 }
 
-function ZineImageSlot({ photoId, onPick, onClear }: { photoId: number | undefined; onPick: () => void; onClear: () => void }) {
+function ZineImageSlot({ photoId, fit, fillColor, onPick, onClear }: { photoId: number | undefined; fit: ImageFit; fillColor: string; onPick: () => void; onClear: () => void }) {
   if (photoId == null) {
     return (
       <button className="zine-slot zine-slot--empty" onClick={onPick} type="button">
@@ -786,8 +829,8 @@ function ZineImageSlot({ photoId, onPick, onClear }: { photoId: number | undefin
     );
   }
   return (
-    <div className="zine-slot zine-slot--filled">
-      <img src={`/files/display/${photoId}`} alt="" onClick={onPick} />
+    <div className="zine-slot zine-slot--filled" style={{ background: fillColor }}>
+      <img src={`/files/display/${photoId}`} alt="" onClick={onPick} style={{ objectFit: fit }} />
       <button type="button" className="zine-slot__delete" onClick={(e) => { e.stopPropagation(); onClear(); }} title="Remove image">×</button>
     </div>
   );
@@ -812,6 +855,17 @@ function drawCoverFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: 
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
+// "Fit" mode — the whole photo stays uncropped, scaled to fit inside the
+// slot and centered; whatever margin that leaves is the slot's own border
+// color (already painted behind it), matching the live preview's letterbox.
+function drawContainFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  if (dw <= 0 || dh <= 0) return;
+  const scale = Math.min(dw / img.width, dh / img.height);
+  const sw = img.width * scale, sh = img.height * scale;
+  const ox = dx + (dw - sw) / 2, oy = dy + (dh - sh) / 2;
+  ctx.drawImage(img, ox, oy, sw, sh);
+}
+
 function sliceCanvas(src: HTMLCanvasElement, sx: number, sy: number, sw: number, sh: number): HTMLCanvasElement {
   const out = document.createElement('canvas');
   out.width = sw; out.height = sh;
@@ -824,6 +878,7 @@ interface RenderSpec {
   heightPx: number;
   bgColor: string;
   images: string[];
+  imageFit: ImageFit;
   slotPhotos: Record<string, number>;
   borderColor: string;
   borderPct: number;
@@ -851,7 +906,10 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
       const photoId = spec.slotPhotos[spec.images[i]];
       if (photoId != null) {
         const img = await loadImage(`/files/display/${photoId}`);
-        if (img) drawCoverFit(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx);
+        if (img) {
+          const draw = spec.imageFit === 'contain' ? drawContainFit : drawCoverFit;
+          draw(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx);
+        }
       }
     }
   }
