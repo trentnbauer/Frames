@@ -2,7 +2,7 @@
 // the browser's back/forward buttons step through app views instead of
 // leaving the SPA entirely.
 
-export type Screen = 'dashboard' | 'library' | 'import' | 'orphans' | 'settings' | 'project';
+export type Screen = 'dashboard' | 'library' | 'import' | 'settings' | 'project';
 
 export interface Route {
   screen: Screen;
@@ -13,7 +13,6 @@ const SCREEN_PATHS: Record<Exclude<Screen, 'project'>, string> = {
   dashboard: '/',
   library: '/library',
   import: '/import',
-  orphans: '/orphans',
   settings: '/settings',
 };
 

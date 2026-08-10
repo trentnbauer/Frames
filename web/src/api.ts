@@ -13,13 +13,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   photos: {
-    list: (params?: { tag?: string; camera?: string; location?: string; untagged?: boolean; orphan?: boolean }) => {
+    list: (params?: { tag?: string; camera?: string; location?: string }) => {
       const qs = new URLSearchParams();
       if (params?.tag) qs.set('tag', params.tag);
       if (params?.camera) qs.set('camera', params.camera);
       if (params?.location) qs.set('location', params.location);
-      if (params?.untagged) qs.set('untagged', 'true');
-      if (params?.orphan) qs.set('orphan', 'true');
       const suffix = qs.toString() ? `?${qs}` : '';
       return request<{ photos: import('./types').Photo[] }>(`/api/photos${suffix}`);
     },
@@ -65,8 +63,6 @@ export const api = {
     exportUrl: (ideaId: number) => `/api/ideas/${ideaId}/export`,
   },
   discovery: {
-    gapFinder: () => request<{ gaps: { id: number; slug: string; name: string; unclaimed_count: number }[] }>('/api/gap-finder'),
-    orphans: () => request<{ photos: import('./types').Photo[] }>('/api/orphans'),
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
   },
   visionProviders: {

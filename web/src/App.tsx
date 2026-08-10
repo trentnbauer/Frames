@@ -5,7 +5,6 @@ import { navigate, parseRoute, type Route } from './router.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Library } from './pages/Library.js';
 import { Import } from './pages/Import.js';
-import { Orphans } from './pages/Orphans.js';
 import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { NewProjectModal } from './components/NewProjectModal.js';
@@ -74,11 +73,6 @@ export default function App() {
           <span className="nav-item__icon">I</span>
           {!sidebarCollapsed && <span>Import</span>}
         </button>
-        <button className={`nav-item ${route.screen === 'orphans' ? 'active' : ''}`} onClick={() => goTo('orphans')} title="Orphans">
-          <span className="nav-item__icon">O</span>
-          {!sidebarCollapsed && <span>Orphans</span>}
-        </button>
-
         {!sidebarCollapsed && (
           <>
             <div className="sidebar__section-label">Projects</div>
@@ -120,7 +114,6 @@ export default function App() {
           )}
           {route.screen === 'library' && <Library onOpenProject={(id) => goTo('project', id)} />}
           {route.screen === 'import' && <Import />}
-          {route.screen === 'orphans' && <Orphans />}
           {route.screen === 'settings' && <Settings />}
           {route.screen === 'project' && route.projectId !== null && (
             <ProjectDetail

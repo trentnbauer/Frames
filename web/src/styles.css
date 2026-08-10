@@ -179,7 +179,7 @@ button { cursor: pointer; }
   padding: 3px 9px; border-radius: 6px; background: #3f424d; color: #f3f5fe;
 }
 
-/* ---------- Photo grid (Library + Project + Orphans) ---------- */
+/* ---------- Photo grid (Library + Project) ---------- */
 
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
 .photo-tile-card {
