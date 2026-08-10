@@ -614,6 +614,20 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 }
 .zine-size-input input:focus { border-color: var(--accent); outline: none; }
 
+.zine-page-stepper {
+  display: inline-flex; align-items: center; gap: 8px; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 8px; padding: 4px 10px; font: 500 12.5px/1 Inter, sans-serif;
+}
+.zine-page-stepper button {
+  width: 20px; height: 20px; border-radius: 5px; border: none; background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.zine-page-stepper button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.zine-page-stepper button:disabled { opacity: .35; cursor: not-allowed; }
+.zine-page-stepper span { min-width: 62px; text-align: center; }
+
+.segmented__opt.is-disabled { opacity: .4; cursor: not-allowed; }
+
 .zine-creator__body { flex: 1; display: flex; min-height: 0; }
 
 .zine-creator__thumbs {

@@ -46,7 +46,9 @@ interface SpreadSettings {
   borderSpan: BorderSetting;
 }
 
-const SPREAD_IDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'];
+const MIN_PAGE_COUNT = 4;
+const MAX_PAGE_COUNT = 48;
+const SPREAD_IDS = Array.from({ length: (MAX_PAGE_COUNT - 2) / 2 }, (_, i) => `s${i + 1}`);
 const FONT_CHOICES = ['Inter', 'Playfair Display', 'Bebas Neue', 'Space Mono', 'Courier Prime', 'Poppins'];
 const PAPER_SIZES: Record<PaperSize, { wIn: number; hIn: number }> = {
   Letter: { wIn: 8.5, hIn: 11 },
@@ -112,7 +114,7 @@ interface Props {
 export function ZineCreator({ projectId, onExit }: Props) {
   const [idea, setIdea] = useState<Idea | null>(null);
   const [photos, setPhotos] = useState<IdeaPhoto[]>([]);
-  const [pageCount, setPageCount] = useState<8 | 16>(8);
+  const [pageCount, setPageCountState] = useState(8);
   const [paperSize, setPaperSize] = useState<PaperSize>('Letter');
   const [fontChoice, setFontChoice] = useState('Inter');
   const [headerSize, setHeaderSize] = useState(28);
@@ -130,7 +132,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [slotPhotos, setSlotPhotos] = useState<Record<string, number>>({});
   const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<'pages' | 'booklet'>('pages');
+  const [exportMode, setExportMode] = useState<'pages' | 'booklet' | 'zine'>('zine');
   const [exporting, setExporting] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -182,11 +184,23 @@ export function ZineCreator({ projectId, onExit }: Props) {
     return `${start}–${start + 1}`;
   }
 
-  function setPageCount8or16(n: 8 | 16) {
+  // Page count always moves in steps of 4 — every export mode needs that:
+  // booklet imposition holds exactly 4 pages per sheet, and the one-sheet
+  // "Zine" fold only exists at 8 or 16 (see below). Zine is auto-selected
+  // whenever the count lands on one of those two; anything else falls back
+  // to Booklet, per the user's own rule ("8 or 16 gets a zine, anything
+  // else defaults to booklet") — still overridable by hand afterward.
+  function changePageCount(delta: number) {
+    const n = Math.min(MAX_PAGE_COUNT, Math.max(MIN_PAGE_COUNT, pageCount + delta));
     const spreadCount = (n - 2) / 2;
     const visible = ['front', ...SPREAD_IDS.slice(0, spreadCount), 'back'];
-    setPageCount(n);
+    setPageCountState(n);
     setSelectedId((cur) => (visible.includes(cur) ? cur : 'front'));
+    if (n === 8 || n === 16) {
+      setExportMode('zine');
+    } else {
+      setExportMode((mode) => (mode === 'zine' ? 'booklet' : mode));
+    }
   }
 
   function updateCover(id: 'front' | 'back', patch: Partial<CoverSettings>) {
@@ -262,6 +276,142 @@ export function ZineCreator({ projectId, onExit }: Props) {
     ];
   }
 
+  // One entry per physical zine page, in reading order (front cover ...
+  // back cover) — 'L'/'R' are the independent halves of a split spread,
+  // 'span-left'/'span-right' are the two physical halves of one spanning
+  // image (rendered together, then sliced, so the image lines up across
+  // the fold no matter what target size they're rendered at).
+  function buildPageOwners(): { id: string; part: 'cover' | 'L' | 'R' | 'span-left' | 'span-right' }[] {
+    const owners: { id: string; part: 'cover' | 'L' | 'R' | 'span-left' | 'span-right' }[] = [];
+    for (const id of visibleIds()) {
+      if (isCoverId(id)) {
+        owners.push({ id, part: 'cover' });
+      } else {
+        const st = spreadSettings[id];
+        if (st.spanMode === 'split') {
+          owners.push({ id, part: 'L' });
+          owners.push({ id, part: 'R' });
+        } else {
+          owners.push({ id, part: 'span-left' });
+          owners.push({ id, part: 'span-right' });
+        }
+      }
+    }
+    return owners;
+  }
+
+  // Renders exactly one physical page's content at an arbitrary target
+  // size — the same underlying photo/border/cover-text logic serves both
+  // full-paper-size export (pages/booklet) and the zine fold's smaller,
+  // differently-proportioned panels. wideCache avoids re-rendering a
+  // spanning image's wide composition twice for its left/right halves.
+  async function renderOwnerAt(
+    owner: { id: string; part: 'cover' | 'L' | 'R' | 'span-left' | 'span-right' },
+    widthPx: number,
+    heightPx: number,
+    wideCache: Map<string, HTMLCanvasElement>
+  ): Promise<HTMLCanvasElement> {
+    if (owner.part === 'cover') {
+      const st = coverSettings[owner.id as 'front' | 'back'];
+      return renderPageCanvas({
+        widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), slotPhotos,
+        borderColor: st.borderColor, borderPct: st.borderPct,
+        overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
+      });
+    }
+    const st = spreadSettings[owner.id];
+    if (owner.part === 'L') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${owner.id}-L`), slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct });
+    if (owner.part === 'R') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${owner.id}-R`), slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct });
+
+    const cacheKey = `${owner.id}-${widthPx}x${heightPx}`;
+    let wide = wideCache.get(cacheKey);
+    if (!wide) {
+      wide = await renderPageCanvas({ widthPx: widthPx * 2, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${owner.id}-span`), slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
+      wideCache.set(cacheKey, wide);
+    }
+    return owner.part === 'span-left' ? sliceCanvas(wide, 0, 0, widthPx, heightPx) : sliceCanvas(wide, widthPx, 0, widthPx, heightPx);
+  }
+
+  // The classic one-sheet, single-sided, 8-page "cut-and-fold" zine: fold a
+  // landscape sheet into eighths, slit the center fold across its middle two
+  // panels only, then fold into a booklet. A single printed side becomes a
+  // fully readable 8-page booklet. Panel grid (top row rotated 180°, cover
+  // and back cover landing in the top row) is the standard layout for this
+  // fold — verified earlier against this exact page order and rotation.
+  async function renderZineFoldSheet(
+    sheetOwners: { id: string; part: 'cover' | 'L' | 'R' | 'span-left' | 'span-right' }[],
+    paper: { wIn: number; hIn: number },
+    dpi: number
+  ): Promise<HTMLCanvasElement> {
+    const cols = 4, rows = 2;
+    const canvasW = Math.round(paper.hIn * dpi); // landscape: paper's height becomes the sheet's width
+    const canvasH = Math.round(paper.wIn * dpi);
+    const panelW = canvasW / cols;
+    const panelH = canvasH / rows;
+
+    const wideCache = new Map<string, HTMLCanvasElement>();
+    const pageImgs: HTMLCanvasElement[] = [];
+    for (const owner of sheetOwners) pageImgs.push(await renderOwnerAt(owner, panelW, panelH, wideCache));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW; canvas.height = canvasH;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#0d0e14';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // top row (rotated 180°): page6, page7, page8(back cover), page1(cover)
+    // bottom row (upright): page5, page4, page3, page2
+    const panels = [
+      { row: 0, col: 0, idx: 5, rotate: true },
+      { row: 0, col: 1, idx: 6, rotate: true },
+      { row: 0, col: 2, idx: 7, rotate: true },
+      { row: 0, col: 3, idx: 0, rotate: true },
+      { row: 1, col: 0, idx: 4, rotate: false },
+      { row: 1, col: 1, idx: 3, rotate: false },
+      { row: 1, col: 2, idx: 2, rotate: false },
+      { row: 1, col: 3, idx: 1, rotate: false },
+    ];
+
+    for (const p of panels) {
+      const x = p.col * panelW, y = p.row * panelH;
+      const img = pageImgs[p.idx];
+      if (!img) continue;
+      ctx.save();
+      if (p.rotate) {
+        ctx.translate(x + panelW / 2, y + panelH / 2);
+        ctx.rotate(Math.PI);
+        ctx.drawImage(img, -panelW / 2, -panelH / 2, panelW, panelH);
+      } else {
+        ctx.drawImage(img, x, y, panelW, panelH);
+      }
+      ctx.restore();
+    }
+
+    // Fold guides: dashed lines at every panel boundary, plus a solid
+    // "cut here" mark across the inner two panels of the center fold.
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([14, 10]);
+    for (let c = 1; c < cols; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * panelW, 0);
+      ctx.lineTo(c * panelW, canvasH);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(0, panelH); ctx.lineTo(panelW, panelH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3 * panelW, panelH); ctx.lineTo(4 * panelW, panelH); ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#e0524f';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(panelW, panelH);
+    ctx.lineTo(3 * panelW, panelH);
+    ctx.stroke();
+
+    return canvas;
+  }
+
   async function exportPdf() {
     setExporting(true);
     try {
@@ -273,32 +423,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
       const dpi = 300;
       const wPx = Math.round(paper.wIn * dpi);
       const hPx = Math.round(paper.hIn * dpi);
-
-      // Every physical zine page, rendered independently and in reading
-      // order (front cover ... back cover) — the same canvases either go
-      // straight into the PDF one-per-sheet ("pages" mode) or get paired up
-      // two-per-side for a saddle-stitch "booklet" imposition below.
-      const pages: HTMLCanvasElement[] = [];
-      for (const id of visibleIds()) {
-        if (isCoverId(id)) {
-          const st = coverSettings[id];
-          pages.push(await renderPageCanvas({
-            widthPx: wPx, heightPx: hPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${id}-img`), slotPhotos,
-            borderColor: st.borderColor, borderPct: st.borderPct,
-            overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
-          }));
-        } else {
-          const st = spreadSettings[id];
-          if (st.spanMode === 'split') {
-            pages.push(await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${id}-L`), slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct }));
-            pages.push(await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${id}-R`), slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct }));
-          } else {
-            const wide = await renderPageCanvas({ widthPx: wPx * 2, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${id}-span`), slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
-            pages.push(sliceCanvas(wide, 0, 0, wPx, hPx));
-            pages.push(sliceCanvas(wide, wPx, 0, wPx, hPx));
-          }
-        }
-      }
+      const owners = buildPageOwners();
 
       let pdf: InstanceType<typeof jsPDF> | undefined;
       const addPdfPage = (dataUrl: string, wIn: number, hIn: number) => {
@@ -308,40 +433,64 @@ export function ZineCreator({ projectId, onExit }: Props) {
         pdf.addImage(dataUrl, 'JPEG', 0, 0, wIn, hIn);
       };
 
-      if (exportMode === 'pages') {
-        for (const canvas of pages) addPdfPage(canvas.toDataURL('image/jpeg', 0.92), paper.wIn, paper.hIn);
-      } else {
-        // Saddle-stitch imposition: N pages (a multiple of 4 here — 8 or 16)
-        // become N/4 sheets, each holding 2 pages per side. The standard
-        // imposition formula pairs pages that sum to N+1 on every side, so
-        // the nested, folded stack reads in order front-to-back. No page
-        // rotation needed (unlike a single-sheet cut-and-fold zine) — every
-        // page sits right-side-up in its imposed position.
-        const n = pages.length;
-        const sheets = n / 4;
-        for (let s = 0; s < sheets; s++) {
-          const front = document.createElement('canvas');
-          front.width = wPx * 2; front.height = hPx;
-          const fctx = front.getContext('2d')!;
-          fctx.drawImage(pages[n - 2 * s - 1], 0, 0); // front-left
-          fctx.drawImage(pages[2 * s], wPx, 0); // front-right
-          addPdfPage(front.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+      if (exportMode === 'pages' || exportMode === 'booklet') {
+        const wideCache = new Map<string, HTMLCanvasElement>();
+        const pages: HTMLCanvasElement[] = [];
+        for (const owner of owners) pages.push(await renderOwnerAt(owner, wPx, hPx, wideCache));
 
-          const back = document.createElement('canvas');
-          back.width = wPx * 2; back.height = hPx;
-          const bctx = back.getContext('2d')!;
-          bctx.drawImage(pages[2 * s + 1], 0, 0); // back-left
-          bctx.drawImage(pages[n - 2 * s - 2], wPx, 0); // back-right
-          addPdfPage(back.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+        if (exportMode === 'pages') {
+          for (const canvas of pages) addPdfPage(canvas.toDataURL('image/jpeg', 0.92), paper.wIn, paper.hIn);
+        } else {
+          // Saddle-stitch imposition: N pages (padded to the nearest multiple
+          // of 4, if needed, with blank trailing pages) become N/4 sheets,
+          // each holding 2 pages per side. The standard imposition formula
+          // pairs pages that sum to N+1 on every side, so the nested, folded
+          // stack reads in order front-to-back. No page rotation needed
+          // (unlike the one-sheet cut-and-fold zine below) — every page sits
+          // right-side-up in its imposed position.
+          while (pages.length % 4 !== 0) {
+            const blank = document.createElement('canvas');
+            blank.width = wPx; blank.height = hPx;
+            blank.getContext('2d')!.fillRect(0, 0, wPx, hPx);
+            pages.push(blank);
+          }
+          const n = pages.length;
+          const sheets = n / 4;
+          for (let s = 0; s < sheets; s++) {
+            const front = document.createElement('canvas');
+            front.width = wPx * 2; front.height = hPx;
+            const fctx = front.getContext('2d')!;
+            fctx.drawImage(pages[n - 2 * s - 1], 0, 0); // front-left
+            fctx.drawImage(pages[2 * s], wPx, 0); // front-right
+            addPdfPage(front.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+
+            const back = document.createElement('canvas');
+            back.width = wPx * 2; back.height = hPx;
+            const bctx = back.getContext('2d')!;
+            bctx.drawImage(pages[2 * s + 1], 0, 0); // back-left
+            bctx.drawImage(pages[n - 2 * s - 2], wPx, 0); // back-right
+            addPdfPage(back.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+          }
+        }
+      } else {
+        // One-sheet cut-and-fold zine: exactly 8 pages per sheet (the
+        // classic single-cut, triple-fold format — verified panel layout,
+        // see renderZineFoldSheet). 16 pages = two independent 8-page
+        // sheets, each folded the same way and nested together.
+        for (let start = 0; start < owners.length; start += 8) {
+          const sheet = await renderZineFoldSheet(owners.slice(start, start + 8), paper, dpi);
+          addPdfPage(sheet.toDataURL('image/jpeg', 0.92), paper.hIn, paper.wIn);
         }
       }
 
-      const suffix = exportMode === 'booklet' ? '-booklet' : '';
+      const suffix = exportMode === 'booklet' ? '-booklet' : exportMode === 'zine' ? '-zine' : '';
       pdf!.save(`${(idea?.title || 'zine').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}${suffix}.pdf`);
       showToast(
         exportMode === 'booklet'
           ? 'Booklet PDF downloaded — print double-sided (flip on short edge), fold the stack once, staple the spine.'
-          : 'Zine PDF downloaded'
+          : exportMode === 'zine'
+            ? 'Zine PDF downloaded — print single-sided, follow the fold guide on each sheet.'
+            : 'PDF downloaded'
       );
       setExportOpen(false);
     } catch (err) {
@@ -364,9 +513,10 @@ export function ZineCreator({ projectId, onExit }: Props) {
         <button className="back-link" onClick={onExit} style={{ marginRight: 12 }}>← {idea.title}</button>
         <span className="zine-creator__brand">Zine Creator</span>
         <div className="zine-creator__nav-controls">
-          <div className="segmented">
-            <span className={`segmented__opt ${pageCount === 8 ? 'active' : ''}`} onClick={() => setPageCount8or16(8)}>8 pages</span>
-            <span className={`segmented__opt ${pageCount === 16 ? 'active' : ''}`} onClick={() => setPageCount8or16(16)}>16 pages</span>
+          <div className="zine-page-stepper" title="Add or remove pages (in fours — a Zine sheet holds 8, a Booklet sheet holds 4)">
+            <button type="button" onClick={() => changePageCount(-4)} disabled={pageCount <= MIN_PAGE_COUNT}>−</button>
+            <span>{pageCount} pages</span>
+            <button type="button" onClick={() => changePageCount(4)} disabled={pageCount >= MAX_PAGE_COUNT}>+</button>
           </div>
           <div className="segmented">
             {(Object.keys(PAPER_SIZES) as PaperSize[]).map((size) => (
@@ -584,19 +734,35 @@ export function ZineCreator({ projectId, onExit }: Props) {
             <div className="zine-field">
               <label>Layout</label>
               <div className="segmented">
-                <span className={`segmented__opt ${exportMode === 'pages' ? 'active' : ''}`} onClick={() => setExportMode('pages')}>Single pages</span>
+                <span
+                  className={`segmented__opt ${exportMode === 'zine' ? 'active' : ''} ${pageCount !== 8 && pageCount !== 16 ? 'is-disabled' : ''}`}
+                  onClick={() => (pageCount === 8 || pageCount === 16) && setExportMode('zine')}
+                  title={pageCount === 8 || pageCount === 16 ? undefined : 'Only available at 8 or 16 pages'}
+                >
+                  Zine (one sheet)
+                </span>
                 <span className={`segmented__opt ${exportMode === 'booklet' ? 'active' : ''}`} onClick={() => setExportMode('booklet')}>Booklet (fold + staple)</span>
+                <span className={`segmented__opt ${exportMode === 'pages' ? 'active' : ''}`} onClick={() => setExportMode('pages')}>Single pages</span>
               </div>
             </div>
 
-            {exportMode === 'pages' ? (
+            {exportMode === 'zine' && (
+              <p className="muted" style={{ margin: 0 }}>
+                {pageCount === 8
+                  ? `1 landscape ${paperSize} sheet (${PAPER_SIZES[paperSize].hIn}×${PAPER_SIZES[paperSize].wIn}in), single-sided — fold into eighths, cut the center slit, pop into an 8-page booklet.`
+                  : `2 landscape ${paperSize} sheets (${PAPER_SIZES[paperSize].hIn}×${PAPER_SIZES[paperSize].wIn}in each), single-sided — fold and cut each sheet the same way into its own 8-page booklet, then nest one inside the other for all 16 pages.`}
+              </p>
+            )}
+            {exportMode === 'booklet' && (
+              <p className="muted" style={{ margin: 0 }}>
+                {Math.ceil(pageCount / 4)} double-wide {paperSize} sheets ({(PAPER_SIZES[paperSize].wIn * 2).toFixed(2)}×{PAPER_SIZES[paperSize].hIn}in), 2 pages per side, imposed for saddle-stitch
+                binding. Print double-sided (flip on short edge), fold the stack once, staple the spine.
+                {pageCount % 4 !== 0 && ` (${4 - (pageCount % 4)} blank page${4 - (pageCount % 4) === 1 ? '' : 's'} added at the end to fill the last sheet.)`}
+              </p>
+            )}
+            {exportMode === 'pages' && (
               <p className="muted" style={{ margin: 0 }}>
                 {pageCount} {paperSize} sheets, one page per sheet, in reading order — simplest to print, stack, and bind at the edge.
-              </p>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>
-                {pageCount / 4} double-wide {paperSize} sheets ({(PAPER_SIZES[paperSize].wIn * 2).toFixed(2)}×{PAPER_SIZES[paperSize].hIn}in), 2 pages per side, imposed for saddle-stitch
-                binding. Print double-sided (flip on short edge), fold the stack once, staple the spine.
               </p>
             )}
 
