@@ -501,6 +501,7 @@ button { cursor: pointer; }
 
 .photo-detail__meta { margin-bottom: 16px; }
 .photo-detail__meta-sub { color: color-mix(in srgb, var(--text) 55%, transparent); font-size: 13px; }
+.photo-detail__tagging-error { color: #d66f6f; font-size: 12px; margin-top: 2px; }
 .photo-detail h3 { font: 600 13px/1 Inter, sans-serif; margin: 0 0 10px; }
 
 .tag-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }

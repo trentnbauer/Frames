@@ -27,6 +27,7 @@ export interface Photo {
   photoshoot: string | null;
   season: string | null;
   tagging_status: TaggingStatus;
+  tagging_error: string | null;
   created_at: string;
   deleted_at: string | null;
   tags: PhotoTag[];

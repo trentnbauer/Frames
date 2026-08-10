@@ -52,7 +52,7 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
   // Fire and forget: auto-tagging shouldn't block the upload response.
   autoTagPhoto(photo).catch((err) => {
     console.error(`Auto-tag crashed for photo ${photo.id}:`, err.message);
-    db.prepare("UPDATE photos SET tagging_status = 'failed' WHERE id = ?").run(photo.id);
+    db.prepare("UPDATE photos SET tagging_status = 'failed', tagging_error = ? WHERE id = ?").run(err.message, photo.id);
   });
 
   return { photo, wasDuplicate: false };
@@ -72,7 +72,7 @@ const linkTag = db.prepare(`
 export async function autoTagPhoto(photo: PhotoRow) {
   const providers = getEnabledProviders();
   if (providers.length === 0 || !photo.display_path) {
-    db.prepare("UPDATE photos SET tagging_status = 'skipped' WHERE id = ?").run(photo.id);
+    db.prepare("UPDATE photos SET tagging_status = 'skipped', tagging_error = NULL WHERE id = ?").run(photo.id);
     return;
   }
 
@@ -82,11 +82,14 @@ export async function autoTagPhoto(photo: PhotoRow) {
 
   const bySlug = new Map<string, { name: string; sources: string[] }>();
   let anySucceeded = false;
+  const failures: string[] = [];
 
   results.forEach((result, i) => {
     const provider = providers[i];
     if (result.status === 'rejected') {
-      console.error(`Vision provider "${provider.name}" failed for photo ${photo.id}:`, result.reason?.message ?? result.reason);
+      const message = result.reason?.message ?? String(result.reason);
+      console.error(`Vision provider "${provider.name}" failed for photo ${photo.id}:`, message);
+      failures.push(`${provider.name}: ${message}`);
       return;
     }
     anySucceeded = true;
@@ -102,13 +105,18 @@ export async function autoTagPhoto(photo: PhotoRow) {
     }
   });
 
+  // Surfaced to the user in the UI even when other providers succeeded,
+  // since a failing provider (e.g. a bad API key) is worth knowing about
+  // regardless of whether a different one covered for it.
+  const taggingError = failures.length > 0 ? failures.join('; ') : null;
+
   const tx = db.transaction(() => {
     for (const [slug, { name, sources }] of bySlug) {
       insertTag.run(slug, name);
       const tagRow = findTagBySlug.get(slug) as { id: number };
       linkTag.run(photo.id, tagRow.id, `via ${sources.join(', ')}`);
     }
-    db.prepare('UPDATE photos SET tagging_status = ? WHERE id = ?').run(anySucceeded ? 'tagged' : 'failed', photo.id);
+    db.prepare('UPDATE photos SET tagging_status = ?, tagging_error = ? WHERE id = ?').run(anySucceeded ? 'tagged' : 'failed', taggingError, photo.id);
   });
   tx();
 }

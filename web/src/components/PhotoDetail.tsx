@@ -139,7 +139,13 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
         setRetagging(false);
         await refresh();
         onChanged();
-        showToast(updated.tagging_status === 'tagged' ? 'Re-tagged' : 'Re-tag finished with no new tags');
+        showToast(
+          updated.tagging_status === 'tagged'
+            ? 'Re-tagged'
+            : updated.tagging_status === 'failed'
+              ? `Tagging failed: ${updated.tagging_error || 'unknown error'}`
+              : 'Re-tag finished with no new tags'
+        );
       }
     }, 1500);
   }
@@ -160,6 +166,9 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
             </button>
           </div>
           <div className="photo-detail__meta-sub">{metaLine || 'No shoot details yet'}</div>
+          {photo.tagging_status === 'failed' && photo.tagging_error && (
+            <div className="photo-detail__tagging-error">Tagging failed: {photo.tagging_error}</div>
+          )}
         </div>
 
         <section>

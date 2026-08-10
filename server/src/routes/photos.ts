@@ -175,10 +175,10 @@ photosRouter.post('/:id/retag', (req, res) => {
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow | undefined;
   if (!photo) return res.status(404).json({ error: 'Photo not found' });
 
-  db.prepare("UPDATE photos SET tagging_status = 'pending' WHERE id = ?").run(photo.id);
+  db.prepare("UPDATE photos SET tagging_status = 'pending', tagging_error = NULL WHERE id = ?").run(photo.id);
   autoTagPhoto({ ...photo, tagging_status: 'pending' }).catch((err) => {
     console.error(`Re-tag crashed for photo ${photo.id}:`, err.message);
-    db.prepare("UPDATE photos SET tagging_status = 'failed' WHERE id = ?").run(photo.id);
+    db.prepare("UPDATE photos SET tagging_status = 'failed', tagging_error = ? WHERE id = ?").run(err.message, photo.id);
   });
 
   res.status(202).json({ ok: true });
