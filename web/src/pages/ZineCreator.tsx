@@ -927,6 +927,11 @@ function ZineImageSlot({
   onPick: () => void; onClear: () => void; onTransformChange: (patch: Partial<SlotTransform>) => void;
 }) {
   const drag = useRef<{ startX: number; startY: number; startOx: number; startOy: number; moved: boolean } | null>(null);
+  // The click event that ends a drag fires *after* pointerup, so the
+  // moved-flag can't live only on `drag.current` — that gets cleared in
+  // handlePointerUp before handleSlotClick ever runs. This ref survives
+  // past that point and is consumed (cleared) by the click handler itself.
+  const suppressNextClick = useRef(false);
 
   if (photoId == null) {
     return (
@@ -941,6 +946,7 @@ function ZineImageSlot({
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!pannable) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    suppressNextClick.current = false;
     drag.current = { startX: e.clientX, startY: e.clientY, startOx: transform.ox, startOy: transform.oy, moved: false };
   }
 
@@ -948,7 +954,7 @@ function ZineImageSlot({
     if (!drag.current) return;
     const dx = e.clientX - drag.current.startX;
     const dy = e.clientY - drag.current.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.current.moved = true;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { drag.current.moved = true; suppressNextClick.current = true; }
     const rect = e.currentTarget.getBoundingClientRect();
     // Drag right -> reveal more of the image's left side (the photo
     // appears to move with the cursor), so ox moves opposite to dx.
@@ -973,7 +979,7 @@ function ZineImageSlot({
   // rather than the img, and a click handler on the img would then never
   // fire at all. Attaching it here means retargeting doesn't matter.
   function handleSlotClick(e: React.MouseEvent) {
-    if (drag.current?.moved) { e.preventDefault(); e.stopPropagation(); return; }
+    if (suppressNextClick.current) { suppressNextClick.current = false; e.preventDefault(); e.stopPropagation(); return; }
     onPick();
   }
 
