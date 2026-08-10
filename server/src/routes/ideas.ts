@@ -120,6 +120,25 @@ ideasRouter.delete('/:id/photos/:photoId', (req, res) => {
   res.status(204).end();
 });
 
+// Frame sequencing: client sends the idea's full membership as an ordered
+// list of photo ids (drag-to-reorder in the UI), position is rewritten to
+// match that order 1:1. Ids that aren't members of this idea are silently
+// no-ops (the UPDATE just matches zero rows) rather than errors, since the
+// client always derives the list from its own up-to-date membership state.
+ideasRouter.patch('/:id/reorder', (req, res) => {
+  const { photoIds } = req.body as { photoIds?: number[] };
+  if (!Array.isArray(photoIds)) return res.status(400).json({ error: 'photoIds must be an array' });
+
+  const update = db.prepare('UPDATE idea_photos SET position = ? WHERE idea_id = ? AND photo_id = ?');
+  const ideaId = req.params.id;
+  const reorder = db.transaction((ids: number[]) => {
+    ids.forEach((photoId, index) => update.run(index, ideaId, photoId));
+  });
+  reorder(photoIds);
+
+  res.status(200).json({ ok: true });
+});
+
 // Idea filler: derive the idea's dominant tags from its current member
 // photos, then surface other photos sharing those tags that aren't members
 // yet — the "6 frames tagged X might belong here" nudge from plan.md's core

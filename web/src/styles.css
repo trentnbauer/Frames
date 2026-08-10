@@ -291,9 +291,10 @@ button { cursor: pointer; }
   outline-offset: 6px;
 }
 .photo-tile-card {
-  border-radius: 8px; overflow: hidden; position: relative;
+  border-radius: 8px; overflow: hidden; position: relative; cursor: grab;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); background: var(--surface);
 }
+.photo-tile-card.is-drop-target { box-shadow: 0 0 0 2px var(--accent); }
 .photo-tile-card__img-btn { display: block; width: 100%; height: 150px; padding: 0; border: none; background: var(--bg); }
 .photo-tile-card__img-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .photo-tile-card__badge {

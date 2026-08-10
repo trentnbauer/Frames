@@ -76,6 +76,8 @@ export const api = {
       request(`/api/ideas/${ideaId}/photos/${photoId}`, { method: 'PATCH', body: JSON.stringify({ why }) }),
     removePhoto: (ideaId: number, photoId: number) =>
       request<void>(`/api/ideas/${ideaId}/photos/${photoId}`, { method: 'DELETE' }),
+    reorder: (ideaId: number, photoIds: number[]) =>
+      request(`/api/ideas/${ideaId}/reorder`, { method: 'PATCH', body: JSON.stringify({ photoIds }) }),
     suggestedPhotos: (ideaId: number) => request<{ photos: import('./types').Photo[] }>(`/api/ideas/${ideaId}/suggested-photos`),
     exportUrl: (ideaId: number) => `/api/ideas/${ideaId}/export`,
     briefUrl: (ideaId: number) => `/api/ideas/${ideaId}/brief`,

@@ -190,6 +190,31 @@ describe('ideas routes', () => {
     expect(res.text).toContain('No frames in this idea yet');
   });
 
+  it('reorders idea photos by position', async () => {
+    const ideaRes = await request(app).post('/api/ideas').send({ title: 'Sequencing test' });
+    const ideaId = ideaRes.body.idea.id;
+    const a = await uploadPhoto(app, 60, 'a.jpg');
+    const b = await uploadPhoto(app, 61, 'b.jpg');
+    const c = await uploadPhoto(app, 62, 'c.jpg');
+    await request(app).post(`/api/ideas/${ideaId}/photos`).send({ photoId: a.id });
+    await request(app).post(`/api/ideas/${ideaId}/photos`).send({ photoId: b.id });
+    await request(app).post(`/api/ideas/${ideaId}/photos`).send({ photoId: c.id });
+
+    const reorderRes = await request(app)
+      .patch(`/api/ideas/${ideaId}/reorder`)
+      .send({ photoIds: [c.id, a.id, b.id] });
+    expect(reorderRes.status).toBe(200);
+
+    const detail = await request(app).get(`/api/ideas/${ideaId}`);
+    expect(detail.body.photos.map((p: { id: number }) => p.id)).toEqual([c.id, a.id, b.id]);
+  });
+
+  it('rejects a reorder without a photoIds array', async () => {
+    const ideaRes = await request(app).post('/api/ideas').send({ title: 'Bad reorder' });
+    const res = await request(app).patch(`/api/ideas/${ideaRes.body.idea.id}/reorder`).send({});
+    expect(res.status).toBe(400);
+  });
+
   it('deletes an idea without deleting its photos', async () => {
     const ideaRes = await request(app).post('/api/ideas').send({ title: 'Throwaway' });
     const ideaId = ideaRes.body.idea.id;

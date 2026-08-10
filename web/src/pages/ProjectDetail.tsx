@@ -21,6 +21,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
   const [dragOverGrid, setDragOverGrid] = useState(false);
+  const [dragOverPhotoId, setDragOverPhotoId] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
   const showToast = useToast();
 
@@ -88,7 +89,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
 
   function handleDragStart(e: DragEvent, photoId: number) {
     e.dataTransfer.setData('text/x-frames-photo-id', String(photoId));
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'copyMove';
   }
 
   function handleGridDragOver(e: DragEvent) {
@@ -104,6 +105,48 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
     const raw = e.dataTransfer.getData('text/x-frames-photo-id');
     const photoId = Number(raw);
     if (raw && !Number.isNaN(photoId)) addPhotoById(photoId);
+  }
+
+  async function reorderPhoto(draggedId: number, targetId: number) {
+    const from = photos.findIndex((p) => p.id === draggedId);
+    const to = photos.findIndex((p) => p.id === targetId);
+    if (from === -1 || to === -1 || from === to) return;
+
+    const reordered = [...photos];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setPhotos(reordered);
+
+    try {
+      await api.ideas.reorder(projectId, reordered.map((p) => p.id));
+    } catch {
+      showToast('Could not save the new order');
+      await refresh();
+    }
+  }
+
+  function handleTileDragOver(e: DragEvent, photoId: number) {
+    if (!e.dataTransfer.types.includes('text/x-frames-photo-id')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = photos.some((p) => p.id === photoId) ? 'move' : 'copy';
+    setDragOverPhotoId(photoId);
+  }
+
+  function handleTileDrop(e: DragEvent, targetPhotoId: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverPhotoId(null);
+    setDragOverGrid(false);
+    const raw = e.dataTransfer.getData('text/x-frames-photo-id');
+    const draggedId = Number(raw);
+    if (!raw || Number.isNaN(draggedId) || draggedId === targetPhotoId) return;
+
+    if (photos.some((p) => p.id === draggedId)) {
+      reorderPhoto(draggedId, targetPhotoId);
+    } else {
+      addPhotoById(draggedId);
+    }
   }
 
   async function deleteProject() {
@@ -196,7 +239,15 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
         onDrop={handleGridDrop}
       >
         {visible.map((photo) => (
-          <div key={photo.id} className="photo-tile-card">
+          <div
+            key={photo.id}
+            className={`photo-tile-card ${dragOverPhotoId === photo.id ? 'is-drop-target' : ''}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, photo.id)}
+            onDragOver={(e) => handleTileDragOver(e, photo.id)}
+            onDragLeave={() => setDragOverPhotoId((id) => (id === photo.id ? null : id))}
+            onDrop={(e) => handleTileDrop(e, photo.id)}
+          >
             <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
               <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
             </button>
