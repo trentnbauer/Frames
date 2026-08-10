@@ -50,6 +50,11 @@ describe('ideas routes', () => {
     const detail = await request(app).get(`/api/ideas/${ideaId}`);
     expect(detail.body.photos).toHaveLength(1);
     expect(detail.body.photos[0].why).toBe('the wide half of the diptych');
+    // Regression: an idea's photos previously came back without a `tags`
+    // array (unlike every other photo-returning route), which crashed the
+    // Dashboard/ProjectDetail React tree with no error boundary the moment
+    // a real idea had a photo — a blank page with no server-visible error.
+    expect(detail.body.photos[0].tags).toEqual([]);
 
     const remove = await request(app).delete(`/api/ideas/${ideaId}/photos/${photo.id}`);
     expect(remove.status).toBe(204);
@@ -93,6 +98,11 @@ describe('ideas routes', () => {
     expect(ids).toContain(candidate.id);
     expect(ids).not.toContain(member.id);
     expect(ids).not.toContain(unrelated.id);
+    // Same regression guard as above: suggested-photos also returns raw
+    // photo rows and needs tags attached for the frontend to render them.
+    for (const photo of suggested.body.photos) {
+      expect(Array.isArray(photo.tags)).toBe(true);
+    }
   });
 
   it('returns no suggestions for an idea with no members', async () => {

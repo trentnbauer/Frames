@@ -2,22 +2,12 @@ import { Router } from 'express';
 import multer from 'multer';
 import db from '../db.js';
 import { ingestPhoto } from '../lib/ingest.js';
-import { slugify, type PhotoRow, type PhotoTagRow, type TagRow } from '../types.js';
+import { withTags } from '../lib/withTags.js';
+import { slugify, type PhotoRow } from '../types.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 export const photosRouter = Router();
-
-function withTags(photo: PhotoRow) {
-  const tags = db
-    .prepare(
-      `SELECT t.id, t.slug, t.name, pt.source, pt.note
-       FROM photo_tags pt JOIN tags t ON t.id = pt.tag_id
-       WHERE pt.photo_id = ? ORDER BY t.name`
-    )
-    .all(photo.id) as (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[];
-  return { ...photo, tags };
-}
 
 photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
   const files = req.files as Express.Multer.File[] | undefined;

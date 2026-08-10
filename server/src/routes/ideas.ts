@@ -2,6 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import db, { ORIGINALS_DIR } from '../db.js';
 import { streamZip } from '../lib/zipExport.js';
+import { withTags } from '../lib/withTags.js';
 import type { IdeaRow, PhotoRow } from '../types.js';
 
 export const ideasRouter = Router();
@@ -40,9 +41,9 @@ ideasRouter.get('/:id', (req, res) => {
        JOIN photos p ON p.id = ip.photo_id
        WHERE ip.idea_id = ? ORDER BY ip.position ASC, ip.created_at ASC`
     )
-    .all(idea.id);
+    .all(idea.id) as PhotoRow[];
 
-  res.json({ idea, photos });
+  res.json({ idea, photos: photos.map(withTags) });
 });
 
 ideasRouter.patch('/:id', (req, res) => {
@@ -140,7 +141,7 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
     )
     .all(...tagIds, ideaId) as PhotoRow[];
 
-  res.json({ photos: rows });
+  res.json({ photos: rows.map(withTags) });
 });
 
 ideasRouter.get('/:id/export', async (req, res) => {

@@ -5,5 +5,6 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 10000,
     fileParallelism: false,
+    exclude: ['**/node_modules/**', 'dist/**'],
   },
 });
