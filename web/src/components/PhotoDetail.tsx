@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, Photo } from '../types.js';
 import { TagChip } from './TagChip.js';
@@ -21,6 +21,7 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
   const [newTag, setNewTag] = useState('');
   const [selectedIdeaId, setSelectedIdeaId] = useState<number | ''>('');
   const [retagging, setRetagging] = useState(false);
+  const pollRef = useRef<number | null>(null);
   const showToast = useToast();
 
   async function refresh() {
@@ -32,6 +33,17 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
 
   useEffect(() => {
     refresh();
+    setRetagging(false);
+    // Stop polling for the photo we're leaving — otherwise a re-tag started
+    // on one photo keeps polling in the background after closing the modal
+    // or navigating to another photo, and eventually overwrites whatever's
+    // currently on screen with the old photo's data.
+    return () => {
+      if (pollRef.current !== null) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
   }, [photoId]);
 
   useEscapeKey(true, onClose);
@@ -108,10 +120,14 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
   async function retag() {
     setRetagging(true);
     await api.photos.retag(photo!.id);
-    const poll = setInterval(async () => {
-      const { photo: updated } = await api.photos.get(photoId);
+    const targetId = photoId;
+    pollRef.current = window.setInterval(async () => {
+      const { photo: updated } = await api.photos.get(targetId);
       if (updated.tagging_status !== 'pending') {
-        clearInterval(poll);
+        if (pollRef.current !== null) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
         setRetagging(false);
         await refresh();
         onChanged();
