@@ -14,10 +14,13 @@ describe('parseRoute', () => {
   it('parses each top-level screen path', () => {
     setPath('/library');
     expect(parseRoute()).toEqual({ screen: 'library', projectId: null });
-    setPath('/import');
-    expect(parseRoute()).toEqual({ screen: 'import', projectId: null });
     setPath('/settings');
     expect(parseRoute()).toEqual({ screen: 'settings', projectId: null });
+  });
+
+  it('redirects the old /import path to library', () => {
+    setPath('/import');
+    expect(parseRoute()).toEqual({ screen: 'library', projectId: null });
   });
 
   it('parses a project detail path with its id', () => {

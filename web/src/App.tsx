@@ -4,7 +4,6 @@ import type { Idea } from './types.js';
 import { navigate, parseRoute, type Route } from './router.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Library } from './pages/Library.js';
-import { Import } from './pages/Import.js';
 import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { NewProjectModal } from './components/NewProjectModal.js';
@@ -89,10 +88,6 @@ export default function App() {
           <span className="nav-item__icon">L</span>
           {!sidebarCollapsed && <span>Library</span>}
         </button>
-        <button className={`nav-item ${route.screen === 'import' ? 'active' : ''}`} onClick={() => goTo('import')} title="Import">
-          <span className="nav-item__icon">I</span>
-          {!sidebarCollapsed && <span>Import</span>}
-        </button>
         {!sidebarCollapsed && (
           <>
             <div className="sidebar__section-label">Projects</div>
@@ -127,19 +122,18 @@ export default function App() {
             <Dashboard
               ideas={ideas}
               onOpenProject={(id) => goTo('project', id)}
-              onImport={() => goTo('import')}
+              onImport={() => goTo('library')}
               onNewProject={() => openNewProject()}
               onGenerateProject={(title, onCreated) => openNewProject({ initialTitle: title, onCreated })}
             />
           )}
           {route.screen === 'library' && <Library onOpenProject={(id) => goTo('project', id)} />}
-          {route.screen === 'import' && <Import />}
           {route.screen === 'settings' && <Settings />}
           {route.screen === 'project' && route.projectId !== null && (
             <ProjectDetail
               projectId={route.projectId}
               onBack={() => goTo('dashboard')}
-              onImport={() => goTo('import')}
+              onImport={() => goTo('library')}
               onDeleted={() => {
                 refreshIdeas();
                 goTo('dashboard');

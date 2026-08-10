@@ -2,7 +2,7 @@
 // the browser's back/forward buttons step through app views instead of
 // leaving the SPA entirely.
 
-export type Screen = 'dashboard' | 'library' | 'import' | 'settings' | 'project';
+export type Screen = 'dashboard' | 'library' | 'settings' | 'project';
 
 export interface Route {
   screen: Screen;
@@ -12,7 +12,6 @@ export interface Route {
 const SCREEN_PATHS: Record<Exclude<Screen, 'project'>, string> = {
   dashboard: '/',
   library: '/library',
-  import: '/import',
   settings: '/settings',
 };
 
@@ -21,6 +20,9 @@ export function parseRoute(): Route {
 
   const projectMatch = pathname.match(/^\/projects\/(\d+)$/);
   if (projectMatch) return { screen: 'project', projectId: Number(projectMatch[1]) };
+
+  // Import was folded into Library — keep old /import links/bookmarks working.
+  if (pathname === '/import') return { screen: 'library', projectId: null };
 
   const screen = (Object.keys(SCREEN_PATHS) as (keyof typeof SCREEN_PATHS)[]).find(
     (s) => SCREEN_PATHS[s] === pathname

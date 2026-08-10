@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { api } from '../api.js';
 import type { Photo, ShootOptions, Tag } from '../types.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
+import { pickFromDropbox, pickFromGoogleDrive } from '../importSources.js';
 import { useToast } from '../toast.js';
 
 interface Props {
@@ -29,6 +30,10 @@ export function Library({ onOpenProject }: Props) {
   const [allIdeas, setAllIdeas] = useState<{ id: number; title: string }[]>([]);
   const [bulkIdeaId, setBulkIdeaId] = useState<number | ''>('');
   const [bulkTag, setBulkTag] = useState('');
+  const [importBatch, setImportBatch] = useState<Photo[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const showToast = useToast();
 
   const hasFilters = activeTags.length > 0 || !!activeCamera || !!activeLocation || !!search.trim();
@@ -86,6 +91,70 @@ export function Library({ onOpenProject }: Props) {
   useEffect(() => {
     if (showTrash) refreshTrash();
   }, [showTrash]);
+
+  // Poll rows still auto-tagging so suggested tags appear without a manual refresh.
+  useEffect(() => {
+    const pendingIds = importBatch.filter((p) => p.tagging_status === 'pending').map((p) => p.id);
+    if (pendingIds.length === 0) return;
+    const timer = setInterval(async () => {
+      const updated = await Promise.all(pendingIds.map((id) => api.photos.get(id).then((r) => r.photo)));
+      setImportBatch((prev) => prev.map((p) => updated.find((u) => u.id === p.id) ?? p));
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [importBatch]);
+
+  async function handleFiles(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const res = await api.photos.upload(Array.from(files));
+      setImportBatch((prev) => [...prev, ...res.results.map((r) => r.photo)]);
+      const dupes = res.results.filter((r) => r.wasDuplicate).length;
+      showToast(
+        `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'}` +
+          (dupes ? ` (${dupes} already in Library)` : '')
+      );
+      await refresh();
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function importFrom(source: 'google' | 'dropbox') {
+    try {
+      const files = source === 'google' ? await pickFromGoogleDrive() : await pickFromDropbox();
+      await handleFiles(files);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Import failed');
+    }
+  }
+
+  async function refreshImportRow(id: number) {
+    const { photo } = await api.photos.get(id);
+    setImportBatch((prev) => prev.map((p) => (p.id === id ? photo : p)));
+  }
+
+  async function removeImportTag(photo: Photo, tagId: number) {
+    await api.photos.removeTag(photo.id, tagId);
+    await refreshImportRow(photo.id);
+  }
+
+  async function addImportTag(photo: Photo) {
+    const value = (newTagValues[photo.id] ?? '').trim();
+    if (!value) return;
+    await api.photos.addTag(photo.id, value, 'user_added');
+    setNewTagValues((prev) => ({ ...prev, [photo.id]: '' }));
+    await refreshImportRow(photo.id);
+    await refresh();
+  }
+
+  async function updateImportField(photo: Photo, field: 'camera' | 'lens' | 'film_stock' | 'location' | 'photoshoot', value: string) {
+    if (value === (photo[field] ?? '')) return;
+    await api.photos.update(photo.id, { [field]: value });
+    await refreshImportRow(photo.id);
+    await refresh();
+  }
 
   async function loadMore() {
     setLoadingMore(true);
@@ -223,8 +292,88 @@ export function Library({ onOpenProject }: Props) {
           </div>
         </div>
         <div className="page-header__actions">
+          <button className="btn" onClick={() => importFrom('google')}>Import from Google Drive</button>
+          <button className="btn" onClick={() => importFrom('dropbox')}>Import from Dropbox</button>
           <button className="btn" onClick={() => setShowTrash(true)}>Trash</button>
         </div>
+      </div>
+
+      <datalist id="tag-options-list">{tags.map((t) => <option key={t.id} value={t.name} />)}</datalist>
+      <datalist id="camera-options-list">{options.camera.map((o) => <option key={o} value={o} />)}</datalist>
+      <datalist id="lens-options-list">{options.lens.map((o) => <option key={o} value={o} />)}</datalist>
+      <datalist id="film-options-list">{options.film_stock.map((o) => <option key={o} value={o} />)}</datalist>
+      <datalist id="location-options-list">{options.location.map((o) => <option key={o} value={o} />)}</datalist>
+      <datalist id="photoshoot-options-list">{options.photoshoot.map((o) => <option key={o} value={o} />)}</datalist>
+
+      {importBatch.length > 0 && (
+        <>
+          <div className="import-status-row">
+            <div className="import-status-row__label">{importBatch.length} photo{importBatch.length === 1 ? '' : 's'} to review</div>
+            <button className="btn" onClick={() => fileInputRef.current?.click()}>Add More</button>
+          </div>
+
+          <div className="import-list">
+            {importBatch.map((photo) => (
+              <div key={photo.id} className="import-row">
+                <img className="import-row__thumb" src={`/files/thumb/${photo.id}`} alt={photo.filename} />
+                <div className="import-row__body">
+                  <div className="import-row__filename">
+                    {photo.filename}{photo.tagging_status === 'pending' ? ' · tagging…' : ''}
+                  </div>
+
+                  <div className="import-row__label">Suggested tags — click to remove</div>
+                  <div className="import-row__tags">
+                    {photo.tags.map((t) => (
+                      <span key={t.id} className="import-tag-pill active" onClick={() => removeImportTag(photo, t.id)}>
+                        {t.name} ✕
+                      </span>
+                    ))}
+                    <input
+                      className="import-tag-input"
+                      value={newTagValues[photo.id] ?? ''}
+                      onChange={(e) => setNewTagValues((prev) => ({ ...prev, [photo.id]: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && addImportTag(photo)}
+                      list="tag-options-list"
+                      placeholder="+ add tag"
+                    />
+                  </div>
+
+                  <div className="import-row__label">Shoot details — optional</div>
+                  <input
+                    className="field-input import-row__photoshoot"
+                    defaultValue={photo.photoshoot ?? ''}
+                    onBlur={(e) => updateImportField(photo, 'photoshoot', e.target.value)}
+                    list="photoshoot-options-list"
+                    placeholder="Photoshoot, e.g. Portrait of Ebony"
+                  />
+                  <div className="import-row__fields-grid">
+                    <input className="field-input" defaultValue={photo.camera ?? ''} onBlur={(e) => updateImportField(photo, 'camera', e.target.value)} list="camera-options-list" placeholder="Camera model" />
+                    <input className="field-input" defaultValue={photo.lens ?? ''} onBlur={(e) => updateImportField(photo, 'lens', e.target.value)} list="lens-options-list" placeholder="Lens" />
+                    <input className="field-input" defaultValue={photo.film_stock ?? ''} onBlur={(e) => updateImportField(photo, 'film_stock', e.target.value)} list="film-options-list" placeholder="Film stock" />
+                    <input className="field-input" defaultValue={photo.location ?? ''} onBlur={(e) => updateImportField(photo, 'location', e.target.value)} list="location-options-list" placeholder="Location" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div
+        className={`dropzone-lg ${importBatch.length > 0 ? 'has-batch' : ''}`}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleFiles(e.dataTransfer.files);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
+        <div className="dropzone-lg__icon"><div className="dropzone-lg__icon-arrow" /></div>
+        <div className="dropzone-lg__title">
+          {uploading ? 'Uploading…' : importBatch.length > 0 ? 'Import more photos' : 'Drop photos to import'}
+        </div>
+        <div className="dropzone-lg__hint">Drag and drop, or click to choose files from your desktop</div>
       </div>
 
       <input
