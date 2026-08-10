@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, LightPref } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
+import { useEscapeKey } from '../useEscapeKey.js';
 
 interface Props {
   open: boolean;
@@ -18,6 +19,8 @@ export function NewProjectModal({ open, initialTitle, onClose, onCreated }: Prop
   useEffect(() => {
     if (open) setTitle(initialTitle ?? '');
   }, [open, initialTitle]);
+
+  useEscapeKey(open, onClose);
 
   if (!open) return null;
 

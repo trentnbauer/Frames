@@ -115,6 +115,16 @@ describe('photos routes', () => {
     expect(unpaginated.body.photos.length).toBe(unpaginated.body.total);
   });
 
+  it('treats a negative or non-numeric limit as unpaginated rather than passing it to SQLite', async () => {
+    // Regression: SQLite treats `LIMIT -5` as "no limit" — a negative limit
+    // was silently returning everything instead of erroring or clamping.
+    const total = (await request(app).get('/api/photos')).body.total;
+    const negative = await request(app).get('/api/photos').query({ limit: -5, offset: -10 });
+    expect(negative.body.photos.length).toBe(total);
+    const nonNumeric = await request(app).get('/api/photos').query({ limit: 'abc' });
+    expect(nonNumeric.body.photos.length).toBe(total);
+  });
+
   it('deletes a photo', async () => {
     const list = await request(app).get('/api/photos');
     const id = list.body.photos[0].id;

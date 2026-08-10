@@ -31,7 +31,11 @@ photosRouter.get('/', (req, res) => {
   // unpaginated, which several callers rely on (combo-suggestion matching,
   // bulk-add, dashboard totals). Capped so a stray huge value can't page
   // through the whole table in one query.
-  const limit = typeof req.query.limit === 'string' ? Math.min(parseInt(req.query.limit, 10) || 0, 200) : undefined;
+  // A non-positive or invalid limit is treated the same as omitting it
+  // (unpaginated) rather than reaching SQLite, where `LIMIT -5` means
+  // "no limit" — silently bypassing pagination instead of erroring.
+  const rawLimit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : NaN;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : undefined;
   const offset = typeof req.query.offset === 'string' ? Math.max(parseInt(req.query.offset, 10) || 0, 0) : 0;
   const pageClause = limit ? 'LIMIT ? OFFSET ?' : '';
   const pageParams = limit ? [limit, offset] : [];

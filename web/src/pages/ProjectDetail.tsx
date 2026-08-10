@@ -20,17 +20,32 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
   const [dragOverGrid, setDragOverGrid] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   async function refresh() {
-    const [detail, sug] = await Promise.all([api.ideas.get(projectId), api.ideas.suggestedPhotos(projectId)]);
-    setIdea(detail.idea);
-    setPhotos(detail.photos);
-    setSuggested(sug.photos.slice(0, 4));
+    try {
+      const [detail, sug] = await Promise.all([api.ideas.get(projectId), api.ideas.suggestedPhotos(projectId)]);
+      setIdea(detail.idea);
+      setPhotos(detail.photos);
+      setSuggested(sug.photos.slice(0, 4));
+    } catch {
+      setNotFound(true);
+    }
   }
 
   useEffect(() => {
+    setNotFound(false);
     refresh();
   }, [projectId]);
+
+  if (notFound) {
+    return (
+      <div>
+        <button className="back-link" onClick={onBack}>← All projects</button>
+        <p className="muted">This project doesn't exist — maybe it was deleted.</p>
+      </div>
+    );
+  }
 
   if (!idea) return null;
 

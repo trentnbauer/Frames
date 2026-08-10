@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, Photo } from '../types.js';
 import { TagChip } from './TagChip.js';
+import { useEscapeKey } from '../useEscapeKey.js';
 
 interface Props {
   photoId: number;
@@ -27,6 +28,8 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea }: Prop
   useEffect(() => {
     refresh();
   }, [photoId]);
+
+  useEscapeKey(true, onClose);
 
   if (!photo) return null;
 
