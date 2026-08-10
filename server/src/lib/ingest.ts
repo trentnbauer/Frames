@@ -3,13 +3,14 @@ import path from 'node:path';
 import db, { ORIGINALS_DIR, DISPLAY_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
+import { extractPalette } from './palette.js';
 import { parseFilename } from './filenameParser.js';
 import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
 
 const insertPhoto = db.prepare(`
-  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, film_stock, season, tagging_status)
-  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @film_stock, @season, 'pending')
+  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, film_stock, season, palette, tagging_status)
+  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @film_stock, @season, @palette, 'pending')
 `);
 
 const findByHash = db.prepare('SELECT * FROM photos WHERE content_hash = ?');
@@ -45,6 +46,7 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
     camera: parsed.camera,
     film_stock: parsed.filmStock,
     season: parsed.season,
+    palette: JSON.stringify(derivatives.palette),
   });
 
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(info.lastInsertRowid) as PhotoRow;
@@ -119,4 +121,27 @@ export async function autoTagPhoto(photo: PhotoRow) {
     db.prepare('UPDATE photos SET tagging_status = ?, tagging_error = ? WHERE id = ?').run(anySucceeded ? 'tagged' : 'failed', taggingError, photo.id);
   });
   tx();
+}
+
+// Photos uploaded before the color-bar feature existed have no palette —
+// this fills them in from their original file, one at a time so a large
+// library doesn't spike memory decoding many images at once. Fire-and-
+// forget from the route; safe to call again mid-run since it only ever
+// selects rows still missing a palette.
+export async function backfillPalettes(): Promise<number> {
+  const rows = db.prepare("SELECT id, original_path FROM photos WHERE deleted_at IS NULL AND palette IS NULL").all() as {
+    id: number;
+    original_path: string;
+  }[];
+  let done = 0;
+  for (const row of rows) {
+    try {
+      const palette = await extractPalette(path.join(ORIGINALS_DIR, row.original_path));
+      db.prepare('UPDATE photos SET palette = ? WHERE id = ?').run(JSON.stringify(palette), row.id);
+      done += 1;
+    } catch (err) {
+      console.error(`Palette backfill failed for photo ${row.id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return done;
 }

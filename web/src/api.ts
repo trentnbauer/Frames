@@ -49,6 +49,8 @@ export const api = {
     restore: (id: number) => request<{ photo: import('./types').Photo }>(`/api/photos/${id}/restore`, { method: 'POST' }),
     deletePermanently: (id: number) => request<void>(`/api/photos/${id}/permanent`, { method: 'DELETE' }),
     retag: (id: number) => request<{ ok: boolean }>(`/api/photos/${id}/retag`, { method: 'POST' }),
+    paletteBackfillCount: () => request<{ count: number }>('/api/photos/palette-backfill-count'),
+    backfillPalette: () => request<{ ok: boolean }>('/api/photos/backfill-palette', { method: 'POST' }),
     shootOptions: () => request<import('./types').ShootOptions>('/api/photos/shoot-options'),
     addTag: (photoId: number, name: string, source?: 'user_confirmed' | 'user_added') =>
       request(`/api/photos/${photoId}/tags`, { method: 'POST', body: JSON.stringify({ name, source }) }),

@@ -157,6 +157,13 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
       <div className="photo-detail" onClick={(e) => e.stopPropagation()}>
         <button className="photo-detail__close" onClick={onClose}>×</button>
         <img className="photo-detail__image" src={`/files/display/${photo.id}`} alt={photo.filename} />
+        {photo.palette && photo.palette.length > 0 && (
+          <div className="palette-bar palette-bar--lg">
+            {photo.palette.map((color, i) => (
+              <span key={i} className="palette-bar__swatch" style={{ background: color }} />
+            ))}
+          </div>
+        )}
 
         <div className="photo-detail__meta">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

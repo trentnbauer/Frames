@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
 import db, { ORIGINALS_DIR, THUMBS_DIR, DISPLAY_DIR } from '../db.js';
-import { ingestPhoto, autoTagPhoto } from '../lib/ingest.js';
+import { ingestPhoto, autoTagPhoto, backfillPalettes } from '../lib/ingest.js';
 import { withTags } from '../lib/withTags.js';
 import { slugify, type PhotoRow } from '../types.js';
 
@@ -99,6 +99,22 @@ photosRouter.get('/', (req, res) => {
   }
 
   res.json({ photos: rows.map(withTags), total });
+});
+
+// How many photos still need a color-bar palette computed (uploaded before
+// that feature existed) — drives whether Library shows the backfill button.
+photosRouter.get('/palette-backfill-count', (_req, res) => {
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM photos WHERE deleted_at IS NULL AND palette IS NULL').get() as {
+    count: number;
+  };
+  res.json({ count });
+});
+
+// Fire-and-forget: computes palettes for every photo that predates the
+// color-bar feature. Poll palette-backfill-count to see progress.
+photosRouter.post('/backfill-palette', (_req, res) => {
+  backfillPalettes().catch((err) => console.error('Palette backfill crashed:', err.message));
+  res.status(202).json({ ok: true });
 });
 
 // Distinct previously-entered values, for datalist autocomplete on the

@@ -3,7 +3,11 @@ import type { PhotoRow, PhotoTagRow, TagRow } from '../types.js';
 
 // Attaches each photo's tags — every route that returns photos to the
 // frontend needs this, since the Photo type always carries a `tags` array.
-export function withTags<T extends PhotoRow>(photo: T): T & { tags: (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[] } {
+// Also the single choke point that parses the stored palette JSON string
+// into an actual array, so every caller gets it ready to use.
+export function withTags<T extends PhotoRow>(
+  photo: T
+): Omit<T, 'palette'> & { tags: (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[]; palette: string[] | null } {
   const tags = db
     .prepare(
       `SELECT t.id, t.slug, t.name, pt.source, pt.note
@@ -11,5 +15,16 @@ export function withTags<T extends PhotoRow>(photo: T): T & { tags: (TagRow & Pi
        WHERE pt.photo_id = ? ORDER BY t.name`
     )
     .all(photo.id) as (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[];
-  return { ...photo, tags };
+
+  let palette: string[] | null = null;
+  if (photo.palette) {
+    try {
+      const parsed = JSON.parse(photo.palette);
+      if (Array.isArray(parsed)) palette = parsed;
+    } catch {
+      // Corrupt palette JSON — treat as missing rather than erroring the whole response.
+    }
+  }
+
+  return { ...photo, tags, palette };
 }

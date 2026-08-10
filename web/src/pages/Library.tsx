@@ -34,6 +34,8 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [importBatch, setImportBatch] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
+  const [paletteBackfillCount, setPaletteBackfillCount] = useState(0);
+  const [backfillingPalettes, setBackfillingPalettes] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showToast = useToast();
 
@@ -71,6 +73,27 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   useEffect(() => {
     api.photos.shootOptions().then(setOptions);
   }, [photos]);
+
+  useEffect(() => {
+    api.photos.paletteBackfillCount().then((r) => setPaletteBackfillCount(r.count));
+  }, []);
+
+  async function backfillPalettes() {
+    setBackfillingPalettes(true);
+    await api.photos.backfillPalette();
+    // The backend processes one photo at a time in the background — poll
+    // until the count hits zero, refreshing the visible photos as we go so
+    // color bars appear without a manual page reload.
+    const timer = setInterval(async () => {
+      const [{ count }] = await Promise.all([api.photos.paletteBackfillCount(), refresh()]);
+      setPaletteBackfillCount(count);
+      if (count === 0) {
+        clearInterval(timer);
+        setBackfillingPalettes(false);
+        showToast('Color bars generated for your library');
+      }
+    }, 2000);
+  }
 
   async function refreshProjectMap() {
     const res = await api.ideas.list();
@@ -310,6 +333,18 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         </div>
       )}
 
+      {paletteBackfillCount > 0 && (
+        <div className="suggestion-banner" style={{ marginBottom: 16 }}>
+          <div className="suggestion-banner__text" style={{ fontStyle: 'normal' }}>
+            {paletteBackfillCount} photo{paletteBackfillCount === 1 ? '' : 's'} {paletteBackfillCount === 1 ? 'has' : 'have'} no color bar yet —
+            uploaded before that feature existed.
+          </div>
+          <button className="btn btn-accent" onClick={backfillPalettes} disabled={backfillingPalettes}>
+            {backfillingPalettes ? 'Generating…' : 'Generate color bars'}
+          </button>
+        </div>
+      )}
+
       <div className="page-header" style={{ marginBottom: 28 }}>
         <div>
           <h1 className="page-title">Library</h1>
@@ -454,6 +489,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
             </button>
             {projectByPhoto[photo.id] && <span className="photo-tile-card__badge">{projectByPhoto[photo.id]}</span>}
             <button className="photo-tile-card__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
+            <PaletteBar palette={photo.palette} />
             <div className="photo-tile-card__meta">
               <div className="photo-tile-card__filename">{photo.filename}</div>
               <div className="photo-tile-card__tags">
@@ -485,6 +521,20 @@ export function Library({ onOpenProject, forProjectId }: Props) {
           onNavigate={setOpenPhotoId}
         />
       )}
+    </div>
+  );
+}
+
+// A Lomography-style color-bar strip: equal-width swatches of the photo's
+// dominant colors, most-prominent first. Renders nothing for photos that
+// predate this feature (palette null) rather than an empty/broken bar.
+function PaletteBar({ palette }: { palette: string[] | null }) {
+  if (!palette || palette.length === 0) return null;
+  return (
+    <div className="palette-bar">
+      {palette.map((color, i) => (
+        <span key={i} className="palette-bar__swatch" style={{ background: color }} />
+      ))}
     </div>
   );
 }
