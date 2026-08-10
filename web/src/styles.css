@@ -604,6 +604,15 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 }
 .zine-creator__brand { font: 600 15px/1 Inter, sans-serif; }
 .zine-creator__nav-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.zine-size-input {
+  display: inline-flex; align-items: center; gap: 5px; font: 500 12px/1 Inter, sans-serif;
+  color: color-mix(in srgb, var(--text) 65%, transparent);
+}
+.zine-size-input input {
+  width: 48px; min-height: 32px; padding: 4px 6px; font-size: 13px; color: var(--text); background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; box-sizing: border-box;
+}
+.zine-size-input input:focus { border-color: var(--accent); outline: none; }
 
 .zine-creator__body { flex: 1; display: flex; min-height: 0; }
 

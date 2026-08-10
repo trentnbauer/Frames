@@ -115,6 +115,8 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [pageCount, setPageCount] = useState<8 | 16>(8);
   const [paperSize, setPaperSize] = useState<PaperSize>('Letter');
   const [fontChoice, setFontChoice] = useState('Inter');
+  const [headerSize, setHeaderSize] = useState(28);
+  const [subSize, setSubSize] = useState(15);
   const [selectedId, setSelectedId] = useState('front');
   const [coverSettings, setCoverSettings] = useState<{ front: CoverSettings; back: CoverSettings }>(() => ({
     front: defaultCover('Zine Title', 'A one-line tagline', ''),
@@ -128,6 +130,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [slotPhotos, setSlotPhotos] = useState<Record<string, number>>({});
   const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'pages' | 'booklet'>('pages');
   const [exporting, setExporting] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -238,16 +241,25 @@ export function ZineCreator({ projectId, onExit }: Props) {
     ];
   }
 
-  function thumbBoxesFor(id: string): { style: React.CSSProperties }[] {
+  function thumbBoxesFor(id: string): { style: React.CSSProperties; photoId?: number }[] {
     const THUMB_H = 92;
     const box = (aspect: number, bgColor: string): React.CSSProperties => ({
-      height: THUMB_H, width: THUMB_H * aspect, background: bgColor, boxSizing: 'border-box',
+      height: THUMB_H, width: THUMB_H * aspect, background: bgColor, boxSizing: 'border-box', overflow: 'hidden',
       boxShadow: '0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent)', borderRadius: 1, flex: 'none',
     });
-    if (isCoverId(id)) return [{ style: box(PORTRAIT_ASPECT, coverSettings[id].bgColor) }];
+    const firstPhoto = (slots: string[]) => (slots.length ? slotPhotos[slots[0]] : undefined);
+    if (isCoverId(id)) {
+      const st = coverSettings[id];
+      return [{ style: box(PORTRAIT_ASPECT, st.bgColor), photoId: firstPhoto(imageSlotsFor(st.imageMode, `${id}-img`)) }];
+    }
     const st = spreadSettings[id];
-    if (st.spanMode === 'span') return [{ style: box(SPAN_ASPECT, '#ffffff') }];
-    return [{ style: box(PORTRAIT_ASPECT, '#ffffff') }, { style: box(PORTRAIT_ASPECT, '#ffffff') }];
+    if (st.spanMode === 'span') {
+      return [{ style: box(SPAN_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeSpan, `${id}-span`)) }];
+    }
+    return [
+      { style: box(PORTRAIT_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeL, `${id}-L`)) },
+      { style: box(PORTRAIT_ASPECT, '#ffffff'), photoId: firstPhoto(imageSlotsFor(st.modeR, `${id}-R`)) },
+    ];
   }
 
   async function exportPdf() {
@@ -262,40 +274,75 @@ export function ZineCreator({ projectId, onExit }: Props) {
       const wPx = Math.round(paper.wIn * dpi);
       const hPx = Math.round(paper.hIn * dpi);
 
-      const pdf = new jsPDF({ unit: 'in', format: [paper.wIn, paper.hIn], orientation: 'portrait' });
-      let first = true;
-      const addPage = (dataUrl: string) => {
-        if (!first) pdf.addPage([paper.wIn, paper.hIn], 'portrait');
-        first = false;
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, paper.wIn, paper.hIn);
-      };
-
+      // Every physical zine page, rendered independently and in reading
+      // order (front cover ... back cover) — the same canvases either go
+      // straight into the PDF one-per-sheet ("pages" mode) or get paired up
+      // two-per-side for a saddle-stitch "booklet" imposition below.
+      const pages: HTMLCanvasElement[] = [];
       for (const id of visibleIds()) {
         if (isCoverId(id)) {
           const st = coverSettings[id];
-          const canvas = await renderPageCanvas({
+          pages.push(await renderPageCanvas({
             widthPx: wPx, heightPx: hPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${id}-img`), slotPhotos,
             borderColor: st.borderColor, borderPct: st.borderPct,
-            overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice },
-          });
-          addPage(canvas.toDataURL('image/jpeg', 0.92));
+            overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
+          }));
         } else {
           const st = spreadSettings[id];
           if (st.spanMode === 'split') {
-            const left = await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${id}-L`), slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct });
-            addPage(left.toDataURL('image/jpeg', 0.92));
-            const right = await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${id}-R`), slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct });
-            addPage(right.toDataURL('image/jpeg', 0.92));
+            pages.push(await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${id}-L`), slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct }));
+            pages.push(await renderPageCanvas({ widthPx: wPx, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${id}-R`), slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct }));
           } else {
             const wide = await renderPageCanvas({ widthPx: wPx * 2, heightPx: hPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${id}-span`), slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
-            addPage(sliceCanvas(wide, 0, 0, wPx, hPx).toDataURL('image/jpeg', 0.92));
-            addPage(sliceCanvas(wide, wPx, 0, wPx, hPx).toDataURL('image/jpeg', 0.92));
+            pages.push(sliceCanvas(wide, 0, 0, wPx, hPx));
+            pages.push(sliceCanvas(wide, wPx, 0, wPx, hPx));
           }
         }
       }
 
-      pdf.save(`${(idea?.title || 'zine').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`);
-      showToast('Zine PDF downloaded');
+      let pdf: InstanceType<typeof jsPDF> | undefined;
+      const addPdfPage = (dataUrl: string, wIn: number, hIn: number) => {
+        const orientation = wIn > hIn ? 'landscape' : 'portrait';
+        if (!pdf) pdf = new jsPDF({ unit: 'in', format: [wIn, hIn], orientation });
+        else pdf.addPage([wIn, hIn], orientation);
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, wIn, hIn);
+      };
+
+      if (exportMode === 'pages') {
+        for (const canvas of pages) addPdfPage(canvas.toDataURL('image/jpeg', 0.92), paper.wIn, paper.hIn);
+      } else {
+        // Saddle-stitch imposition: N pages (a multiple of 4 here — 8 or 16)
+        // become N/4 sheets, each holding 2 pages per side. The standard
+        // imposition formula pairs pages that sum to N+1 on every side, so
+        // the nested, folded stack reads in order front-to-back. No page
+        // rotation needed (unlike a single-sheet cut-and-fold zine) — every
+        // page sits right-side-up in its imposed position.
+        const n = pages.length;
+        const sheets = n / 4;
+        for (let s = 0; s < sheets; s++) {
+          const front = document.createElement('canvas');
+          front.width = wPx * 2; front.height = hPx;
+          const fctx = front.getContext('2d')!;
+          fctx.drawImage(pages[n - 2 * s - 1], 0, 0); // front-left
+          fctx.drawImage(pages[2 * s], wPx, 0); // front-right
+          addPdfPage(front.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+
+          const back = document.createElement('canvas');
+          back.width = wPx * 2; back.height = hPx;
+          const bctx = back.getContext('2d')!;
+          bctx.drawImage(pages[2 * s + 1], 0, 0); // back-left
+          bctx.drawImage(pages[n - 2 * s - 2], wPx, 0); // back-right
+          addPdfPage(back.toDataURL('image/jpeg', 0.92), paper.wIn * 2, paper.hIn);
+        }
+      }
+
+      const suffix = exportMode === 'booklet' ? '-booklet' : '';
+      pdf!.save(`${(idea?.title || 'zine').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}${suffix}.pdf`);
+      showToast(
+        exportMode === 'booklet'
+          ? 'Booklet PDF downloaded — print double-sided (flip on short edge), fold the stack once, staple the spine.'
+          : 'Zine PDF downloaded'
+      );
       setExportOpen(false);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Export failed');
@@ -326,9 +373,17 @@ export function ZineCreator({ projectId, onExit }: Props) {
               <span key={size} className={`segmented__opt ${paperSize === size ? 'active' : ''}`} onClick={() => setPaperSize(size)}>{size}</span>
             ))}
           </div>
-          <select className="field-input" style={{ width: 'auto' }} value={fontChoice} onChange={(e) => setFontChoice(e.target.value)}>
+          <select className="field-input" style={{ width: 'auto' }} value={fontChoice} onChange={(e) => setFontChoice(e.target.value)} title="Cover font">
             {FONT_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
+          <label className="zine-size-input" title="Header size">
+            H
+            <input type="number" min={12} max={80} value={headerSize} onChange={(e) => setHeaderSize(Number(e.target.value) || 28)} />
+          </label>
+          <label className="zine-size-input" title="Subtext size">
+            S
+            <input type="number" min={8} max={40} value={subSize} onChange={(e) => setSubSize(Number(e.target.value) || 15)} />
+          </label>
           <button className="btn btn-solid" onClick={() => setExportOpen(true)}>Export PDF</button>
         </div>
       </nav>
@@ -338,7 +393,11 @@ export function ZineCreator({ projectId, onExit }: Props) {
           {visibleIds().map((id) => (
             <div key={id} className={`zine-thumb ${selectedId === id ? 'is-selected' : ''}`} onClick={() => setSelectedId(id)}>
               <div className="zine-thumb__boxes">
-                {thumbBoxesFor(id).map((b, i) => <div key={i} style={b.style} />)}
+                {thumbBoxesFor(id).map((b, i) => (
+                  <div key={i} style={b.style}>
+                    {b.photoId != null && <img src={`/files/thumb/${b.photoId}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                  </div>
+                ))}
               </div>
               <div className="zine-thumb__label">{id === 'front' ? 'Front' : id === 'back' ? 'Back' : `Pages ${spreadLabel(id)}`}</div>
             </div>
@@ -352,9 +411,9 @@ export function ZineCreator({ projectId, onExit }: Props) {
                 <div key={p.key} className="zine-page" style={{ width: p.size.w, height: p.size.h, background: p.bgColor, flexDirection: p.images.length > 1 ? 'column' : 'row' }}>
                   {p.cover && (
                     <div style={overlayStyle(p.cover.textVAlign, p.cover.textHAlign)}>
-                      <div style={{ color: '#fff', fontFamily: `"${fontChoice}", sans-serif`, fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>{p.cover.header}</div>
-                      <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: 15, lineHeight: 1.3 }}>{p.cover.sub1}</div>
-                      <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: 15, lineHeight: 1.3 }}>{p.cover.sub2}</div>
+                      <div style={{ color: '#fff', fontFamily: `"${fontChoice}", sans-serif`, fontSize: headerSize, fontWeight: 600, lineHeight: 1.2 }}>{p.cover.header}</div>
+                      <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub1}</div>
+                      <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub2}</div>
                     </div>
                   )}
                   {p.images.map((slotKey) => (
@@ -493,30 +552,54 @@ export function ZineCreator({ projectId, onExit }: Props) {
         </div>
       </div>
 
-      {pickerSlot !== null && (
-        <div className="modal-overlay" onClick={() => setPickerSlot(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-card__title">Choose a frame</div>
-            <div className="zine-picker-grid">
-              {photos.map((p) => (
-                <button key={p.id} className="zine-picker-tile" onClick={() => assignSlot(pickerSlot, p.id)}>
-                  <img src={`/files/thumb/${p.id}`} alt={p.filename} />
-                </button>
-              ))}
-              {photos.length === 0 && <p className="muted">This project has no frames yet.</p>}
-            </div>
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setPickerSlot(null)}>Cancel</button>
+      {pickerSlot !== null && (() => {
+        const usedPhotoIds = new Set(Object.values(slotPhotos));
+        const availablePhotos = photos.filter((p) => !usedPhotoIds.has(p.id));
+        return (
+          <div className="modal-overlay" onClick={() => setPickerSlot(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-card__title">Choose a frame</div>
+              <div className="zine-picker-grid">
+                {availablePhotos.map((p) => (
+                  <button key={p.id} className="zine-picker-tile" onClick={() => assignSlot(pickerSlot, p.id)}>
+                    <img src={`/files/thumb/${p.id}`} alt={p.filename} />
+                  </button>
+                ))}
+                {photos.length === 0 && <p className="muted">This project has no frames yet.</p>}
+                {photos.length > 0 && availablePhotos.length === 0 && <p className="muted">Every frame is already placed — remove one from a slot to reuse it.</p>}
+              </div>
+              <div className="modal-actions">
+                <button className="btn" onClick={() => setPickerSlot(null)}>Cancel</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {exportOpen && (
         <div className="modal-overlay" onClick={() => !exporting && setExportOpen(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-card__title">Export {paperSize} PDF</div>
-            <p className="muted" style={{ margin: 0 }}>{pageCount}-page zine, {paperSize} sheets, ready to lay out and print.</p>
+            <div className="modal-card__title">Export PDF</div>
+
+            <div className="zine-field">
+              <label>Layout</label>
+              <div className="segmented">
+                <span className={`segmented__opt ${exportMode === 'pages' ? 'active' : ''}`} onClick={() => setExportMode('pages')}>Single pages</span>
+                <span className={`segmented__opt ${exportMode === 'booklet' ? 'active' : ''}`} onClick={() => setExportMode('booklet')}>Booklet (fold + staple)</span>
+              </div>
+            </div>
+
+            {exportMode === 'pages' ? (
+              <p className="muted" style={{ margin: 0 }}>
+                {pageCount} {paperSize} sheets, one page per sheet, in reading order — simplest to print, stack, and bind at the edge.
+              </p>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                {pageCount / 4} double-wide {paperSize} sheets ({(PAPER_SIZES[paperSize].wIn * 2).toFixed(2)}×{PAPER_SIZES[paperSize].hIn}in), 2 pages per side, imposed for saddle-stitch
+                binding. Print double-sided (flip on short edge), fold the stack once, staple the spine.
+              </p>
+            )}
+
             <div className="modal-actions">
               <button className="btn" onClick={() => setExportOpen(false)} disabled={exporting}>Close</button>
               <button className="btn btn-solid" onClick={exportPdf} disabled={exporting}>{exporting ? 'Rendering…' : 'Download PDF'}</button>
@@ -578,7 +661,7 @@ interface RenderSpec {
   slotPhotos: Record<string, number>;
   borderColor: string;
   borderPct: number;
-  overlay?: { header: string; sub1: string; sub2: string; vAlign: VAlign; hAlign: HAlign; font: string };
+  overlay?: { header: string; sub1: string; sub2: string; vAlign: VAlign; hAlign: HAlign; font: string; headerSize: number; subSize: number };
 }
 
 async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
@@ -613,7 +696,7 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
 }
 
 function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, heightPx: number, overlay: NonNullable<RenderSpec['overlay']>) {
-  const { header, sub1, sub2, vAlign, hAlign, font } = overlay;
+  const { header, sub1, sub2, vAlign, hAlign, font, headerSize: headerSizeChoice, subSize: subSizeChoice } = overlay;
   ctx.save();
 
   if (vAlign === 'top') {
@@ -634,12 +717,16 @@ function drawCoverOverlay(ctx: CanvasRenderingContext2D, widthPx: number, height
   ctx.textAlign = textAlign;
   const x = hAlign === 'left' ? padding : hAlign === 'center' ? widthPx / 2 : widthPx - padding;
 
-  const headerSize = widthPx * 0.09;
-  const subSize = widthPx * 0.05;
+  // Base fractions are tuned against the editor's default 28px/15px choices —
+  // scale them by how far the user's chosen size is from that default, so
+  // export stays proportional to paper width (bigger paper, bigger text)
+  // while still respecting the header/subtext size sliders.
+  const headerPx = widthPx * 0.09 * (headerSizeChoice / 28);
+  const subPx = widthPx * 0.05 * (subSizeChoice / 15);
   const lines: { text: string; size: number; weight: number; color: string }[] = [
-    { text: header, size: headerSize, weight: 600, color: '#ffffff' },
-    { text: sub1, size: subSize, weight: 400, color: 'rgba(255,255,255,0.85)' },
-    { text: sub2, size: subSize, weight: 400, color: 'rgba(255,255,255,0.85)' },
+    { text: header, size: headerPx, weight: 600, color: '#ffffff' },
+    { text: sub1, size: subPx, weight: 400, color: 'rgba(255,255,255,0.85)' },
+    { text: sub2, size: subPx, weight: 400, color: 'rgba(255,255,255,0.85)' },
   ].filter((l) => l.text);
 
   const lineGap = widthPx * 0.02;
