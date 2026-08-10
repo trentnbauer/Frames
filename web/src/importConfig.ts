@@ -24,6 +24,14 @@ let envGoogle: GoogleDriveConfig | null = null;
 let envDropbox: DropboxConfig | null = null;
 let envSocialHandles: string[] | null = null;
 
+let resolveConfigReady: () => void;
+// Resolves once loadEnvConfig() has finished (success or failure) — lets
+// components that snapshotted a getter in a useState initializer re-read it,
+// since /api/config can't possibly resolve before their first render.
+export const configReady: Promise<void> = new Promise((resolve) => {
+  resolveConfigReady = resolve;
+});
+
 export async function loadEnvConfig(): Promise<void> {
   try {
     const res = await fetch('/api/config');
@@ -34,6 +42,8 @@ export async function loadEnvConfig(): Promise<void> {
     envSocialHandles = data.socialHandles ?? null;
   } catch {
     // Env defaults are optional — localStorage-only config still works.
+  } finally {
+    resolveConfigReady();
   }
 }
 

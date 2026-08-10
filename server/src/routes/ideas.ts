@@ -58,21 +58,23 @@ ideasRouter.get('/:id', (req, res) => {
 });
 
 ideasRouter.patch('/:id', (req, res) => {
-  const { title, notes, light_pref, status } = req.body as {
+  const { title, notes, light_pref, status, zine_state } = req.body as {
     title?: string;
     notes?: string;
     light_pref?: string;
     status?: string;
+    zine_state?: string | null;
   };
 
   const existing = db.prepare('SELECT * FROM ideas WHERE id = ?').get(req.params.id) as IdeaRow | undefined;
   if (!existing) return res.status(404).json({ error: 'Idea not found' });
 
-  db.prepare('UPDATE ideas SET title = ?, notes = ?, light_pref = ?, status = ? WHERE id = ?').run(
+  db.prepare('UPDATE ideas SET title = ?, notes = ?, light_pref = ?, status = ?, zine_state = ? WHERE id = ?').run(
     title ?? existing.title,
     notes !== undefined ? notes : existing.notes,
     light_pref ?? existing.light_pref,
     status ?? existing.status,
+    zine_state !== undefined ? zine_state : existing.zine_state,
     req.params.id
   );
 

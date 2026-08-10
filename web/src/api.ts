@@ -67,7 +67,7 @@ export const api = {
     get: (id: number) => request<{ idea: import('./types').Idea; photos: import('./types').IdeaPhoto[] }>(`/api/ideas/${id}`),
     create: (data: { title: string; notes?: string; light_pref?: string }) =>
       request<{ idea: import('./types').Idea }>('/api/ideas', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<{ title: string; notes: string; light_pref: string; status: string }>) =>
+    update: (id: number, data: Partial<{ title: string; notes: string; light_pref: string; status: string; zine_state: string | null }>) =>
       request<{ idea: import('./types').Idea }>(`/api/ideas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number) => request<void>(`/api/ideas/${id}`, { method: 'DELETE' }),
     addPhoto: (ideaId: number, photoId: number, why?: string) =>

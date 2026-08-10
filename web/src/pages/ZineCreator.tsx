@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import type { Idea, IdeaPhoto } from '../types.js';
 import { useEscapeKey } from '../useEscapeKey.js';
 import { useToast } from '../toast.js';
-import { getSocialHandles } from '../importConfig.js';
+import { configReady, getSocialHandles } from '../importConfig.js';
 
 // Ported from a Claude Design mockup ("Zine Creator") — a manual, page-by-page
 // zine layout tool (covers + interior spreads, each independently laid out),
@@ -82,6 +82,25 @@ function defaultSpread(): SpreadSettings {
   };
 }
 
+// Everything needed to resume editing later — deliberately excludes purely
+// transient UI state (selectedId, which modal is open, measured canvas size).
+// Serialized as opaque JSON into ideas.zine_state; bump `version` if the
+// shape ever changes in a way old saves can't just be spread over.
+interface ZinePersistedState {
+  version: 1;
+  pageCount: number;
+  paperSize: PaperSize;
+  fontChoice: string;
+  headerSize: number;
+  subSize: number;
+  showSocialHandles: boolean;
+  exportMode: 'pages' | 'booklet' | 'zine';
+  coverSettings: { front: CoverSettings; back: CoverSettings };
+  spreadSettings: Record<string, SpreadSettings>;
+  slotPhotos: Record<string, number>;
+  slotTransforms: Record<string, SlotTransform>;
+}
+
 // Per-slot pan/zoom for "Fill" (cover-fit) photos — ox/oy shift the crop
 // window as a fraction of the image's own size (0 = centered, clamped to
 // ±0.4 so the crop can't pan entirely off the image), zoom magnifies on
@@ -156,7 +175,10 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [fontChoice, setFontChoice] = useState('Inter');
   const [headerSize, setHeaderSize] = useState(28);
   const [subSize, setSubSize] = useState(15);
-  const [socialHandles] = useState(() => getSocialHandles());
+  const [socialHandles, setSocialHandlesState] = useState(() => getSocialHandles());
+  useEffect(() => {
+    configReady.then(() => setSocialHandlesState(getSocialHandles()));
+  }, []);
   const [showSocialHandles, setShowSocialHandles] = useState(true);
   const [selectedId, setSelectedId] = useState('front');
   const [coverSettings, setCoverSettings] = useState<{ front: CoverSettings; back: CoverSettings }>(() => ({
@@ -177,6 +199,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [exporting, setExporting] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const [canvasEl, setCanvasEl] = useState<HTMLDivElement | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving'>('idle');
   const showToast = useToast();
 
   // A callback ref, not useRef — this component returns null while `idea`
@@ -193,8 +216,39 @@ export function ZineCreator({ projectId, onExit }: Props) {
     api.ideas.get(projectId).then((res) => {
       setIdea(res.idea);
       setPhotos(res.photos);
+      if (!res.idea.zine_state) return;
+      try {
+        const s = JSON.parse(res.idea.zine_state) as ZinePersistedState;
+        setPageCountState(s.pageCount);
+        setPaperSize(s.paperSize);
+        setFontChoice(s.fontChoice);
+        setHeaderSize(s.headerSize);
+        setSubSize(s.subSize);
+        setShowSocialHandles(s.showSocialHandles);
+        setExportMode(s.exportMode);
+        setCoverSettings(s.coverSettings);
+        setSpreadSettings(s.spreadSettings);
+        setSlotPhotos(s.slotPhotos);
+        setSlotTransforms(s.slotTransforms);
+      } catch {
+        // Corrupt or pre-versioning saved state — ignore, start fresh.
+      }
     });
   }, [projectId]);
+
+  function saveZine() {
+    if (!idea) return;
+    setSaveState('saving');
+    const state: ZinePersistedState = {
+      version: 1, pageCount, paperSize, fontChoice, headerSize, subSize, showSocialHandles, exportMode,
+      coverSettings, spreadSettings, slotPhotos, slotTransforms,
+    };
+    api.ideas
+      .update(idea.id, { zine_state: JSON.stringify(state) })
+      .then(() => showToast('Zine saved — pick up where you left off later'))
+      .catch(() => showToast('Failed to save zine'))
+      .finally(() => setSaveState('idle'));
+  }
 
   // Loaded once, on demand — these display fonts are only used for the
   // zine's own cover text, not the rest of the app's UI.
@@ -520,7 +574,9 @@ export function ZineCreator({ projectId, onExit }: Props) {
           while (pages.length % 4 !== 0) {
             const blank = document.createElement('canvas');
             blank.width = wPx; blank.height = hPx;
-            blank.getContext('2d')!.fillRect(0, 0, wPx, hPx);
+            const blankCtx = blank.getContext('2d')!;
+            blankCtx.fillStyle = '#ffffff';
+            blankCtx.fillRect(0, 0, wPx, hPx);
             pages.push(blank);
           }
           const n = pages.length;
@@ -612,6 +668,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
         <div className="zine-creator__nav-controls">
           <div className="zine-creator__setup-inline">{renderSetupControls()}</div>
           <button type="button" className="zine-creator__setup-toggle" onClick={() => setMobileSetupOpen(true)} title="Zine settings">⚙ Settings</button>
+          <button className="btn" onClick={saveZine} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Saving…' : 'Save'}</button>
           <button className="btn btn-solid" onClick={() => setExportOpen(true)}>Export PDF</button>
         </div>
       </nav>
@@ -638,7 +695,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
               {pageBoxes.map((p) => (
                 <div key={p.key} className="zine-page" style={{ width: p.size.w, height: p.size.h, background: p.bgColor, flexDirection: p.images.length > 1 ? 'column' : 'row' }}>
                   {p.cover && (
-                    <div style={overlayStyle(p.cover.textVAlign, p.cover.textHAlign, p.key === 'back' && showSocialHandles && socialHandles.length > 0 ? p.size.h * SOCIAL_BADGE_RESERVE_FRAC : 0)}>
+                    <div style={overlayStyle(p.cover.textVAlign, p.cover.textHAlign, p.key === 'back' && showSocialHandles && socialHandles.length > 0 && p.cover.textHAlign === 'left' ? p.size.h * SOCIAL_BADGE_RESERVE_FRAC : 0)}>
                       <div style={{ color: '#fff', fontFamily: `"${fontChoice}", sans-serif`, fontSize: headerSize, fontWeight: 600, lineHeight: 1.2 }}>{p.cover.header}</div>
                       <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub1}</div>
                       <div style={{ color: 'rgba(255,255,255,.85)', fontFamily: `"${fontChoice}", sans-serif`, fontSize: subSize, lineHeight: 1.3 }}>{p.cover.sub2}</div>
@@ -1115,7 +1172,7 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
     }
   }
 
-  const reserveBottomPx = spec.socialHandles && spec.socialHandles.length > 0 ? spec.heightPx * SOCIAL_BADGE_RESERVE_FRAC : 0;
+  const reserveBottomPx = spec.socialHandles && spec.socialHandles.length > 0 && spec.overlay?.hAlign === 'left' ? spec.heightPx * SOCIAL_BADGE_RESERVE_FRAC : 0;
   if (spec.overlay) drawCoverOverlay(ctx, spec.widthPx, spec.heightPx, spec.overlay, reserveBottomPx);
   if (spec.socialHandles && spec.socialHandles.length > 0) drawSocialHandles(ctx, spec.widthPx, spec.heightPx, spec.socialHandles);
 

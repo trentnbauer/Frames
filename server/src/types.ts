@@ -44,6 +44,7 @@ export interface IdeaRow {
   light_pref: LightPref;
   status: IdeaStatus;
   created_at: string;
+  zine_state: string | null;
 }
 
 export interface IdeaPhotoRow {

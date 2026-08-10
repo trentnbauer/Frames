@@ -55,6 +55,7 @@ export interface Idea {
   created_at: string;
   photo_count?: number;
   nudge?: Nudge | null;
+  zine_state?: string | null;
 }
 
 export interface IdeaPhoto extends Photo {

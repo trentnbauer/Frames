@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { VisionProviderProfile, VisionProviderType } from '../types.js';
 import { applyAccent, applyTheme, DEFAULT_ACCENT, getStoredAccent, getStoredTheme, type Theme } from '../theme.js';
 import {
+  configReady,
   getDropboxConfig,
   getGoogleDriveConfig,
   getSocialHandles,
@@ -304,6 +305,13 @@ function ImportSourcesForm() {
 function SocialHandlesForm() {
   const [text, setText] = useState(() => getSocialHandles().join('\n'));
   const [saved, setSaved] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    configReady.then(() => {
+      if (!touched) setText(getSocialHandles().join('\n'));
+    });
+  }, [touched]);
 
   function save() {
     const handles = text.split('\n').map((h) => h.trim()).filter(Boolean);
@@ -318,7 +326,10 @@ function SocialHandlesForm() {
         Handles
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setTouched(true);
+            setText(e.target.value);
+          }}
           placeholder={'@yourhandle\nyoursite.com'}
           rows={3}
           style={{ fontFamily: 'inherit', resize: 'vertical' }}
