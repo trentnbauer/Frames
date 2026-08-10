@@ -18,6 +18,7 @@ import { useToast } from '../toast.js';
 const TYPE_LABELS: Record<VisionProviderType, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
+  gemini: 'Google Gemini',
   self_hosted: 'Self-hosted',
 };
 
@@ -382,7 +383,8 @@ function NewProviderForm({ onCreated }: { onCreated: () => void }) {
         <select value={type} onChange={(e) => setType(e.target.value as VisionProviderType)}>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
-          <option value="self_hosted">Self-hosted (OpenAI-compatible)</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="self_hosted">Self-hosted / other (OpenAI-compatible)</option>
         </select>
       </label>
       {type === 'self_hosted' && (

@@ -4,7 +4,7 @@ import type { VisionProviderRow } from '../vision/index.js';
 
 export const visionProvidersRouter = Router();
 
-const VALID_TYPES = ['openai', 'anthropic', 'self_hosted'];
+const VALID_TYPES = ['openai', 'anthropic', 'gemini', 'self_hosted'];
 
 function toClient(row: VisionProviderRow) {
   const { api_key, ...rest } = row;

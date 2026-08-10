@@ -21,6 +21,12 @@ export function seedProvidersFromEnv() {
     model: process.env.FRAMES_ANTHROPIC_MODEL,
   });
 
+  upsert('Gemini (env)', {
+    type: 'gemini',
+    api_key: process.env.FRAMES_GEMINI_API_KEY,
+    model: process.env.FRAMES_GEMINI_MODEL,
+  });
+
   upsert('Self-hosted (env)', {
     type: 'self_hosted',
     base_url: process.env.FRAMES_SELF_HOSTED_BASE_URL,
@@ -30,7 +36,7 @@ export function seedProvidersFromEnv() {
 }
 
 interface EnvProviderSpec {
-  type: 'openai' | 'anthropic' | 'self_hosted';
+  type: 'openai' | 'anthropic' | 'gemini' | 'self_hosted';
   api_key?: string;
   base_url?: string;
   model?: string;

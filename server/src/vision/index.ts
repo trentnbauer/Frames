@@ -2,12 +2,13 @@ import db from '../db.js';
 import type { VisionProvider } from './types.js';
 import { OpenAiVisionProvider } from './openai.js';
 import { AnthropicVisionProvider } from './anthropic.js';
+import { GeminiVisionProvider } from './gemini.js';
 import { SelfHostedVisionProvider } from './selfHosted.js';
 
 export interface VisionProviderRow {
   id: number;
   name: string;
-  type: 'openai' | 'anthropic' | 'self_hosted';
+  type: 'openai' | 'anthropic' | 'gemini' | 'self_hosted';
   base_url: string | null;
   api_key: string | null;
   model: string | null;
@@ -30,6 +31,14 @@ function buildProvider(row: VisionProviderRow): VisionProvider | null {
     if (!row.api_key) return null;
     return new AnthropicVisionProvider(row.api_key, row.model || undefined);
   }
+  if (row.type === 'gemini') {
+    if (!row.api_key) return null;
+    return new GeminiVisionProvider(row.api_key, row.model || undefined);
+  }
+  // Any endpoint speaking the OpenAI-compatible /chat/completions shape —
+  // Ollama, LM Studio, llama.cpp, OpenRouter, Groq, etc. — is already
+  // covered here without needing its own named provider type: point
+  // base_url at it (plus an api_key if it requires one).
   if (row.type === 'self_hosted') {
     if (!row.base_url) return null;
     return new SelfHostedVisionProvider(row.base_url, row.api_key || undefined, row.model || undefined);
