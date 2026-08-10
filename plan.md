@@ -33,8 +33,8 @@ shot and find the projects hiding in them, then know what to go shoot next.
 5. **Curate tags.** Accept or dismiss AI suggestions, add your own, and attach a
    note to a tag on a specific frame (e.g. "this is the cast shadow, not paint").
 6. **Export an idea.** Pull a micro-project back out as a zip of its full-res
-   photos, or as a printable contact-sheet / phone-ready shoot brief — the
-   payoff.
+   photos, as a printable contact-sheet / phone-ready shoot brief, or as a
+   one-sheet 8-page cut-and-fold zine — the payoff.
 
 That's the whole of v1. Everything else is deferred (see Non-goals / Backlog).
 
