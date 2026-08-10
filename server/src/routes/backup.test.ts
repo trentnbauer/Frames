@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,6 +6,7 @@ import os from 'node:os';
 import AdmZip from 'adm-zip';
 import type { Express } from 'express';
 import { createTestApp, tinyJpeg } from '../test/helpers.js';
+import { moveAcrossDevices } from '../lib/moveAcrossDevices.js';
 
 // supertest doesn't buffer unrecognized content-types (application/zip) into
 // res.body by default — needs an explicit binary parser.
@@ -19,6 +20,39 @@ function getZip(app: Express, url: string) {
       res.on('end', () => callback(null, Buffer.concat(chunks)));
     });
 }
+
+describe('moveAcrossDevices', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('falls back to copy + remove when rename fails with EXDEV (crossing a volume boundary)', () => {
+    const srcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'move-src-'));
+    const destParent = fs.mkdtempSync(path.join(os.tmpdir(), 'move-dest-'));
+    const dest = path.join(destParent, 'moved');
+    fs.writeFileSync(path.join(srcDir, 'file.txt'), 'hello');
+
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+    });
+
+    moveAcrossDevices(srcDir, dest);
+
+    expect(renameSpy).toHaveBeenCalled();
+    expect(fs.existsSync(srcDir)).toBe(false);
+    expect(fs.readFileSync(path.join(dest, 'file.txt'), 'utf8')).toBe('hello');
+
+    fs.rmSync(destParent, { recursive: true, force: true });
+  });
+
+  it('rethrows non-EXDEV errors instead of masking them', () => {
+    const srcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'move-src-'));
+    vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    });
+
+    expect(() => moveAcrossDevices(srcDir, '/nowhere')).toThrow('permission denied');
+    fs.rmSync(srcDir, { recursive: true, force: true });
+  });
+});
 
 describe('backup routes', () => {
   let app: Express;

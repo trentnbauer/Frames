@@ -22,6 +22,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
   const [dragOverGrid, setDragOverGrid] = useState(false);
   const [dragOverPhotoId, setDragOverPhotoId] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
   const showToast = useToast();
 
@@ -90,6 +91,13 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   function handleDragStart(e: DragEvent, photoId: number) {
     e.dataTransfer.setData('text/x-frames-photo-id', String(photoId));
     e.dataTransfer.effectAllowed = 'copyMove';
+    setDraggingId(photoId);
+  }
+
+  function handleDragEnd() {
+    setDraggingId(null);
+    setDragOverPhotoId(null);
+    setDragOverGrid(false);
   }
 
   function handleGridDragOver(e: DragEvent) {
@@ -129,7 +137,13 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
     if (!e.dataTransfer.types.includes('text/x-frames-photo-id')) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = photos.some((p) => p.id === photoId) ? 'move' : 'copy';
+    // dataTransfer.getData() isn't readable during dragover (only at drop) in
+    // most browsers, so use the id captured at dragstart to tell "reordering
+    // an existing member" from "dragging in a new suggested photo" for the
+    // cursor icon — checking the target tile's id here was always true (it's
+    // always a member, since it's rendered from `photos`) and showed "move"
+    // even when adding a brand-new photo.
+    e.dataTransfer.dropEffect = draggingId !== null && photos.some((p) => p.id === draggingId) ? 'move' : 'copy';
     setDragOverPhotoId(photoId);
   }
 
@@ -213,6 +227,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
                 className="suggested-strip__tile"
                 draggable
                 onDragStart={(e) => handleDragStart(e, p.id)}
+                onDragEnd={handleDragEnd}
                 onClick={() => setOpenPhotoId(p.id)}
                 title="Drag into the grid below to add"
               >
@@ -244,6 +259,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
             className={`photo-tile-card ${dragOverPhotoId === photo.id ? 'is-drop-target' : ''}`}
             draggable
             onDragStart={(e) => handleDragStart(e, photo.id)}
+            onDragEnd={handleDragEnd}
             onDragOver={(e) => handleTileDragOver(e, photo.id)}
             onDragLeave={() => setDragOverPhotoId((id) => (id === photo.id ? null : id))}
             onDrop={(e) => handleTileDrop(e, photo.id)}

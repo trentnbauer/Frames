@@ -6,6 +6,7 @@ import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import multer from 'multer';
 import db, { DATA_DIR, DB_PATH, PHOTOS_DIR } from '../db.js';
+import { moveAcrossDevices } from '../lib/moveAcrossDevices.js';
 
 export const backupRouter = Router();
 
@@ -25,7 +26,12 @@ backupRouter.get('/export', async (_req, res) => {
 
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
-    throw err;
+    // Streaming failures happen mid-response (can't just res.status().json()
+    // here) — log and tear down the connection instead of throwing, which
+    // would otherwise be an uncaught exception that crashes the whole
+    // process (every other in-flight request too) rather than just this one.
+    console.error('Backup export failed:', err);
+    res.destroy(err);
   });
   archive.on('end', () => fs.rm(tmpDbPath, { force: true }, () => {}));
   archive.pipe(res);
@@ -72,8 +78,8 @@ backupRouter.post('/import', upload.single('backup'), async (req, res) => {
     const backupAsideDir = `${DATA_DIR}.backup-${Date.now()}`;
     fs.renameSync(DATA_DIR, backupAsideDir);
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.renameSync(extractedDb, DB_PATH);
-    fs.renameSync(extractedPhotos, path.join(DATA_DIR, 'photos'));
+    moveAcrossDevices(extractedDb, DB_PATH);
+    moveAcrossDevices(extractedPhotos, path.join(DATA_DIR, 'photos'));
 
     res.json({ ok: true, message: 'Restored. The server is restarting — reload in a few seconds.' });
     // Vitest sets this in every worker process; skip the exit so tests can
