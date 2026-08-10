@@ -4,6 +4,7 @@ import db, { ORIGINALS_DIR, DISPLAY_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
 import { extractPalette } from './palette.js';
+import { hexToColorName } from './colorName.js';
 import { parseFilename } from './filenameParser.js';
 import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
@@ -51,6 +52,8 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(info.lastInsertRowid) as PhotoRow;
 
+  addColorTags(photo.id, derivatives.palette);
+
   // Fire and forget: auto-tagging shouldn't block the upload response.
   autoTagPhoto(photo).catch((err) => {
     console.error(`Auto-tag crashed for photo ${photo.id}:`, err.message);
@@ -66,6 +69,25 @@ const linkTag = db.prepare(`
   INSERT INTO photo_tags (photo_id, tag_id, source, note) VALUES (?, ?, 'ai_suggested', ?)
   ON CONFLICT(photo_id, tag_id) DO NOTHING
 `);
+
+// Turns a photo's extracted palette into plain-English color tags (e.g.
+// "red", "teal") — deduped, since several dominant-color buckets often map
+// to the same name (see hexToColorName). Suggested like AI tags (confirm/
+// dismiss in the UI) since a coarse color bucket is a judgment call, not a
+// hard fact.
+function addColorTags(photoId: number, palette: string[]) {
+  const names = new Set(palette.map(hexToColorName));
+  const tx = db.transaction(() => {
+    for (const name of names) {
+      const slug = slugify(name);
+      if (!slug) continue;
+      insertTag.run(slug, name);
+      const tagRow = findTagBySlug.get(slug) as { id: number };
+      linkTag.run(photoId, tagRow.id, 'dominant color');
+    }
+  });
+  tx();
+}
 
 // Every enabled provider runs against the frame; their suggestions merge
 // (deduped by slug) into one set of ai_suggested tags, noting which
@@ -123,11 +145,11 @@ export async function autoTagPhoto(photo: PhotoRow) {
   tx();
 }
 
-// Photos uploaded before the color-bar feature existed have no palette —
-// this fills them in from their original file, one at a time so a large
-// library doesn't spike memory decoding many images at once. Fire-and-
-// forget from the route; safe to call again mid-run since it only ever
-// selects rows still missing a palette.
+// Photos that predate the color-bar feature (or were added before this
+// server version) have no palette — this fills them in from their
+// original file, one at a time so a large library doesn't spike memory
+// decoding many images at once. Called automatically at boot (see app.ts);
+// safe to call again since it only ever selects rows still missing one.
 export async function backfillPalettes(): Promise<number> {
   const rows = db.prepare("SELECT id, original_path FROM photos WHERE deleted_at IS NULL AND palette IS NULL").all() as {
     id: number;
@@ -138,6 +160,7 @@ export async function backfillPalettes(): Promise<number> {
     try {
       const palette = await extractPalette(path.join(ORIGINALS_DIR, row.original_path));
       db.prepare('UPDATE photos SET palette = ? WHERE id = ?').run(JSON.stringify(palette), row.id);
+      addColorTags(row.id, palette);
       done += 1;
     } catch (err) {
       console.error(`Palette backfill failed for photo ${row.id}:`, err instanceof Error ? err.message : err);

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 net.setDefaultAutoSelectFamily(false);
 import './db.js';
 import { seedProvidersFromEnv } from './lib/envProviders.js';
+import { backfillPalettes } from './lib/ingest.js';
 import { photosRouter } from './routes/photos.js';
 import { tagsRouter } from './routes/tags.js';
 import { ideasRouter } from './routes/ideas.js';
@@ -26,6 +27,12 @@ import { weatherRouter } from './routes/weather.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 seedProvidersFromEnv();
+
+// Fire-and-forget: catches any photo missing a color-bar palette — either
+// uploaded before that feature existed, or (rarely) one whose extraction
+// failed at ingest time. Runs once per boot; a large library only pays
+// this cost the first time a new server version starts.
+backfillPalettes().catch((err) => console.error('Palette backfill crashed:', err.message));
 
 export const app = express();
 app.use(express.json());

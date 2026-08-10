@@ -83,7 +83,8 @@ describe('ideas routes', () => {
     // array (unlike every other photo-returning route), which crashed the
     // Dashboard/ProjectDetail React tree with no error boundary the moment
     // a real idea had a photo — a blank page with no server-visible error.
-    expect(detail.body.photos[0].tags).toEqual([]);
+    // (The one entry is the automatic dominant-color tag from ingest.)
+    expect(detail.body.photos[0].tags).toEqual([expect.objectContaining({ name: 'blue' })]);
 
     const remove = await request(app).delete(`/api/ideas/${ideaId}/photos/${photo.id}`);
     expect(remove.status).toBe(204);

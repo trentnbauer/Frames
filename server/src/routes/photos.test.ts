@@ -30,7 +30,9 @@ describe('photos routes', () => {
     expect(photo.filename).toBe('test-frame.jpg');
     expect(photo.thumb_path).toBeTruthy();
     expect(photo.display_path).toBeTruthy();
-    expect(photo.tags).toEqual([]);
+    // The fixture is a solid near-black square, so ingest auto-tags it with
+    // its one dominant color (see addColorTags in lib/ingest.ts).
+    expect(photo.tags).toEqual([expect.objectContaining({ name: 'black', source: 'ai_suggested' })]);
 
     // Re-uploading identical bytes should dedupe to the same photo id.
     const second = await request(app).post('/api/photos/upload').attach('photos', jpeg, 'test-frame-again.jpg');
@@ -59,23 +61,24 @@ describe('photos routes', () => {
     expect(added.status).toBe(201);
     expect(added.body.slug).toBe('neon-signage');
 
+    // The photo already carries an automatic "black" color tag from ingest
+    // (see addColorTags in lib/ingest.ts) — look up the new tag by name
+    // rather than assuming it's the only one or at a fixed index.
     const withTag = await request(app).get(`/api/photos/${id}`);
-    expect(withTag.body.photo.tags).toHaveLength(1);
-    expect(withTag.body.photo.tags[0]).toMatchObject({ name: 'Neon Signage', source: 'user_added' });
+    const neonTag = withTag.body.photo.tags.find((t: { name: string }) => t.name === 'Neon Signage');
+    expect(neonTag).toMatchObject({ name: 'Neon Signage', source: 'user_added' });
 
-    const noted = await request(app)
-      .patch(`/api/photos/${id}/tags/${withTag.body.photo.tags[0].id}`)
-      .send({ note: 'the cast shadow, not paint' });
+    const noted = await request(app).patch(`/api/photos/${id}/tags/${neonTag.id}`).send({ note: 'the cast shadow, not paint' });
     expect(noted.status).toBe(200);
 
     const afterNote = await request(app).get(`/api/photos/${id}`);
-    expect(afterNote.body.photo.tags[0].note).toBe('the cast shadow, not paint');
+    expect(afterNote.body.photo.tags.find((t: { id: number }) => t.id === neonTag.id).note).toBe('the cast shadow, not paint');
 
-    const removed = await request(app).delete(`/api/photos/${id}/tags/${withTag.body.photo.tags[0].id}`);
+    const removed = await request(app).delete(`/api/photos/${id}/tags/${neonTag.id}`);
     expect(removed.status).toBe(204);
 
     const afterRemove = await request(app).get(`/api/photos/${id}`);
-    expect(afterRemove.body.photo.tags).toEqual([]);
+    expect(afterRemove.body.photo.tags).toEqual([expect.objectContaining({ name: 'black' })]);
   });
 
   it('updates shoot-detail fields and reflects them in shoot-options', async () => {

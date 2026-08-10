@@ -34,8 +34,6 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [importBatch, setImportBatch] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
-  const [paletteBackfillCount, setPaletteBackfillCount] = useState(0);
-  const [backfillingPalettes, setBackfillingPalettes] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showToast = useToast();
 
@@ -73,27 +71,6 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   useEffect(() => {
     api.photos.shootOptions().then(setOptions);
   }, [photos]);
-
-  useEffect(() => {
-    api.photos.paletteBackfillCount().then((r) => setPaletteBackfillCount(r.count));
-  }, []);
-
-  async function backfillPalettes() {
-    setBackfillingPalettes(true);
-    await api.photos.backfillPalette();
-    // The backend processes one photo at a time in the background — poll
-    // until the count hits zero, refreshing the visible photos as we go so
-    // color bars appear without a manual page reload.
-    const timer = setInterval(async () => {
-      const [{ count }] = await Promise.all([api.photos.paletteBackfillCount(), refresh()]);
-      setPaletteBackfillCount(count);
-      if (count === 0) {
-        clearInterval(timer);
-        setBackfillingPalettes(false);
-        showToast('Color bars generated for your library');
-      }
-    }, 2000);
-  }
 
   async function refreshProjectMap() {
     const res = await api.ideas.list();
@@ -330,18 +307,6 @@ export function Library({ onOpenProject, forProjectId }: Props) {
             Photos you import now are added straight to <strong>{forProject.title}</strong>.
           </div>
           <button className="btn btn-accent" onClick={() => onOpenProject(forProject.id)}>Done — back to project</button>
-        </div>
-      )}
-
-      {paletteBackfillCount > 0 && (
-        <div className="suggestion-banner" style={{ marginBottom: 16 }}>
-          <div className="suggestion-banner__text" style={{ fontStyle: 'normal' }}>
-            {paletteBackfillCount} photo{paletteBackfillCount === 1 ? '' : 's'} {paletteBackfillCount === 1 ? 'has' : 'have'} no color bar yet —
-            uploaded before that feature existed.
-          </div>
-          <button className="btn btn-accent" onClick={backfillPalettes} disabled={backfillingPalettes}>
-            {backfillingPalettes ? 'Generating…' : 'Generate color bars'}
-          </button>
         </div>
       )}
 

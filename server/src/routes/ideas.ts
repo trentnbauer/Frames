@@ -148,11 +148,14 @@ ideasRouter.patch('/:id/reorder', (req, res) => {
 ideasRouter.get('/:id/suggested-photos', (req, res) => {
   const ideaId = req.params.id;
 
+  // Excludes the automatic dominant-color tag (see addColorTags in
+  // lib/ingest.ts) — nearly every photo has one, so it would suggest
+  // photos on "both are mostly blue" rather than a real shared subject.
   const dominantTags = db
     .prepare(
       `SELECT DISTINCT pt.tag_id FROM idea_photos ip
        JOIN photo_tags pt ON pt.photo_id = ip.photo_id
-       WHERE ip.idea_id = ?`
+       WHERE ip.idea_id = ? AND pt.note IS NOT 'dominant color'`
     )
     .all(ideaId) as { tag_id: number }[];
 
@@ -166,6 +169,7 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
       `SELECT p.*, COUNT(*) as shared_tag_count FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        WHERE pt.tag_id IN (${placeholders})
+         AND pt.note IS NOT 'dominant color'
          AND p.deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.idea_id = ? AND ip.photo_id = p.id)
        GROUP BY p.id
