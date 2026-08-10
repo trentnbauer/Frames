@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { Photo, ShootOptions } from '../types.js';
+import { pickFromDropbox, pickFromGoogleDrive } from '../importSources.js';
 
 const EMPTY_OPTIONS: ShootOptions = { camera: [], lens: [], film_stock: [], location: [], photoshoot: [] };
 
@@ -33,7 +34,7 @@ export function Import() {
     return () => clearInterval(timer);
   }, [batch]);
 
-  async function handleFiles(files: FileList | null) {
+  async function handleFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     setBusy(true);
     try {
@@ -42,6 +43,15 @@ export function Import() {
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function importFrom(source: 'google' | 'dropbox') {
+    try {
+      const files = source === 'google' ? await pickFromGoogleDrive() : await pickFromDropbox();
+      await handleFiles(files);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Import failed');
     }
   }
 
@@ -73,9 +83,15 @@ export function Import() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="page-title">Import Photos</h1>
-        <div className="page-subtitle">Drop files in, then review the tags Frames suggests before they join a project.</div>
+      <div className="page-header" style={{ marginBottom: 28 }}>
+        <div>
+          <h1 className="page-title">Import Photos</h1>
+          <div className="page-subtitle">Drop files in, then review the tags Frames suggests before they join a project.</div>
+        </div>
+        <div className="page-header__actions">
+          <button className="btn" onClick={() => importFrom('google')}>Import from Google Drive</button>
+          <button className="btn" onClick={() => importFrom('dropbox')}>Import from Dropbox</button>
+        </div>
       </div>
 
       <datalist id="tag-options-list">{tagOptions.map((o) => <option key={o} value={o} />)}</datalist>

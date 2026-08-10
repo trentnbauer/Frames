@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { VisionProviderProfile, VisionProviderType } from '../types.js';
 import { applyAccent, applyTheme, DEFAULT_ACCENT, getStoredAccent, getStoredTheme, type Theme } from '../theme.js';
+import {
+  getDropboxConfig,
+  getGoogleDriveConfig,
+  setDropboxConfig,
+  setGoogleDriveConfig,
+  type DropboxConfig,
+  type GoogleDriveConfig,
+} from '../importConfig.js';
 
 const TYPE_LABELS: Record<VisionProviderType, string> = {
   openai: 'OpenAI',
@@ -83,6 +91,13 @@ export function Settings() {
           />
         </div>
       </div>
+
+      <div className="settings-section-label" style={{ marginTop: 24 }}>Import sources</div>
+      <p className="muted">
+        Google Drive and Dropbox use their own file pickers — Frames never sees your account credentials, only the
+        photos you pick. Needs a free app registration on each service's developer console (below).
+      </p>
+      <ImportSourcesForm />
 
       <h3>Vision auto-tagging</h3>
       <p className="muted">
@@ -172,6 +187,52 @@ function ProviderRow({
           <button onClick={save}>Save</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ImportSourcesForm() {
+  const [google, setGoogle] = useState<GoogleDriveConfig>(() => getGoogleDriveConfig());
+  const [dropbox, setDropbox] = useState<DropboxConfig>(() => getDropboxConfig());
+  const [saved, setSaved] = useState<'google' | 'dropbox' | null>(null);
+
+  function saveGoogle() {
+    setGoogleDriveConfig(google);
+    setSaved('google');
+    setTimeout(() => setSaved(null), 1500);
+  }
+
+  function saveDropbox() {
+    setDropboxConfig(dropbox);
+    setSaved('dropbox');
+    setTimeout(() => setSaved(null), 1500);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 8 }}>
+      <div className="new-provider-form">
+        <h4>Google Drive</h4>
+        <label>
+          API key
+          <input value={google.apiKey} onChange={(e) => setGoogle({ ...google, apiKey: e.target.value })} placeholder="from Google Cloud Console" />
+        </label>
+        <label>
+          OAuth client ID
+          <input value={google.clientId} onChange={(e) => setGoogle({ ...google, clientId: e.target.value })} placeholder="xxxxx.apps.googleusercontent.com" />
+        </label>
+        <button onClick={saveGoogle}>Save</button>
+        {saved === 'google' && <span className="muted"> Saved.</span>}
+      </div>
+
+      <div className="new-provider-form">
+        <h4>Dropbox</h4>
+        <label>
+          App key
+          <input value={dropbox.appKey} onChange={(e) => setDropbox({ appKey: e.target.value })} placeholder="from Dropbox App Console" />
+        </label>
+        <button onClick={saveDropbox}>Save</button>
+        {saved === 'dropbox' && <span className="muted"> Saved.</span>}
+      </div>
     </div>
   );
 }
