@@ -4,18 +4,18 @@ import type { Idea, IdeaPhoto, LightPref, Photo } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
-import { ZineExportModal } from '../components/ZineExportModal.js';
 import { useToast } from '../toast.js';
 
 interface Props {
   projectId: number;
   onBack: () => void;
   onImport: () => void;
+  onOpenZine: () => void;
   onDeleted: () => void;
   onChanged: () => void;
 }
 
-export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChanged }: Props) {
+export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDeleted, onChanged }: Props) {
   const [idea, setIdea] = useState<Idea | null>(null);
   const [photos, setPhotos] = useState<IdeaPhoto[]>([]);
   const [suggested, setSuggested] = useState<Photo[]>([]);
@@ -25,7 +25,6 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [dragOverPhotoId, setDragOverPhotoId] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [zineOpen, setZineOpen] = useState(false);
   const showToast = useToast();
 
   async function refresh() {
@@ -209,7 +208,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
             Contact Sheet / Brief
           </a>
           {photos.length > 0 && (
-            <button className="btn" onClick={() => setZineOpen(true)}>Zine</button>
+            <button className="btn" onClick={onOpenZine}>Zine</button>
           )}
           {isFinished && <a className="btn btn-accent" href={api.ideas.exportUrl(projectId)}>Download Photos</a>}
           {isFinished && <span className="finished-badge">✓ Finished</span>}
@@ -294,8 +293,6 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
           onNavigate={setOpenPhotoId}
         />
       )}
-
-      <ZineExportModal open={zineOpen} idea={idea} photos={photos} onClose={() => setZineOpen(false)} />
     </div>
   );
 }

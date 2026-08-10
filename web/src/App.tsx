@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { Library } from './pages/Library.js';
 import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
+import { ZineCreator } from './pages/ZineCreator.js';
 import { NewProjectModal } from './components/NewProjectModal.js';
 import { useToast } from './toast.js';
 
@@ -52,6 +53,11 @@ export default function App() {
     setMobileNavOpen(false);
   }
 
+  function goToZine(projectId: number) {
+    navigate({ screen: 'zine', projectId });
+    setMobileNavOpen(false);
+  }
+
   async function handleProjectCreated(idea: Idea) {
     // Generate-Project already shows its own richer toast (with the matched
     // photo count) via its onCreated callback — only show a generic one for
@@ -64,6 +70,10 @@ export default function App() {
     setNewProjectRequest(null);
     await refreshIdeas();
     goTo('project', idea.id);
+  }
+
+  if (route.screen === 'zine' && route.projectId !== null) {
+    return <ZineCreator projectId={route.projectId} onExit={() => goTo('project', route.projectId)} />;
   }
 
   return (
@@ -141,6 +151,7 @@ export default function App() {
               projectId={route.projectId}
               onBack={() => goTo('dashboard')}
               onImport={() => goToLibraryFor(route.projectId!)}
+              onOpenZine={() => goToZine(route.projectId!)}
               onDeleted={() => {
                 refreshIdeas();
                 goTo('dashboard');

@@ -594,3 +594,67 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 /* ---------- Search ---------- */
 
 .search-input { width: 100%; max-width: 360px; margin-bottom: 20px; }
+
+/* ---------- Zine Creator (full-screen takeover) ---------- */
+
+.zine-creator { height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); overflow: hidden; }
+.zine-creator__nav {
+  flex: none; display: flex; align-items: center; padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+}
+.zine-creator__brand { font: 600 15px/1 Inter, sans-serif; }
+.zine-creator__nav-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.zine-creator__body { flex: 1; display: flex; min-height: 0; }
+
+.zine-creator__thumbs {
+  width: 150px; flex: none; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  border-right: 1px solid color-mix(in srgb, var(--text) 12%, transparent); background: var(--surface);
+}
+.zine-thumb { padding: 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+.zine-thumb:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.zine-thumb.is-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.zine-thumb__boxes { display: flex; gap: 4px; justify-content: center; }
+.zine-thumb__label { margin-top: 6px; text-align: center; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; opacity: .65; }
+
+.zine-creator__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.zine-creator__canvas-wrap { flex: 1; min-height: 0; padding: 24px 24px 48px; overflow: hidden; box-sizing: border-box; }
+.zine-creator__canvas-measure { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+.zine-page {
+  position: relative; display: flex; overflow: hidden; flex: none; border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent), 0 6px 18px rgba(0, 0, 0, .35);
+}
+.zine-slot-wrap { flex: 1 1 0; min-height: 0; min-width: 0; box-sizing: border-box; }
+.zine-slot { position: relative; width: 100%; height: 100%; display: block; }
+.zine-slot--empty {
+  border: 1.5px dashed color-mix(in srgb, var(--text) 25%, transparent); background: color-mix(in srgb, var(--text) 4%, transparent);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.zine-slot__plus { font-size: 28px; opacity: .35; }
+.zine-slot--filled img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+.zine-slot__delete {
+  position: absolute; top: 6px; right: 6px; z-index: 2; width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: rgba(0, 0, 0, .55); color: #fff; font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.zine-slot-empty { flex: 1; display: flex; align-items: center; justify-content: center; opacity: .4; font-size: 13px; }
+
+.zine-creator__panel {
+  flex: none; border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  padding: 12px 20px; display: flex; gap: 16px 24px; flex-wrap: wrap; align-items: flex-start; row-gap: 12px;
+  background: var(--surface); max-height: 220px; overflow-y: auto;
+}
+.zine-creator__panel-title { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .55; flex: none; align-self: flex-start; }
+.zine-field-sm { width: 150px; }
+.zine-field { display: flex; flex-direction: column; gap: 5px; }
+.zine-field label { font-size: 12px; color: color-mix(in srgb, var(--text) 70%, transparent); }
+.zine-color-input { width: 40px; height: 32px; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; background: none; padding: 2px; }
+.zine-color-input--sm { width: 32px; height: 28px; }
+.zine-range { width: 100%; accent-color: var(--accent); }
+.zine-range--sm { width: 110px; }
+.zine-border-row { display: flex; align-items: center; gap: 8px; }
+
+.zine-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
+.zine-picker-tile { padding: 0; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; overflow: hidden; cursor: pointer; background: none; aspect-ratio: 1; }
+.zine-picker-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }

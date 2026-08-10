@@ -33,6 +33,11 @@ describe('parseRoute', () => {
     expect(parseRoute()).toEqual({ screen: 'project', projectId: 42 });
   });
 
+  it('parses a zine creator path with its project id', () => {
+    setPath('/projects/42/zine');
+    expect(parseRoute()).toEqual({ screen: 'zine', projectId: 42 });
+  });
+
   it('falls back to dashboard for an unrecognized path', () => {
     setPath('/totally/unknown/route');
     expect(parseRoute()).toEqual({ screen: 'dashboard', projectId: null });
@@ -50,6 +55,11 @@ describe('navigate', () => {
   it('pushes a project path when projectId is set', () => {
     navigate({ screen: 'project', projectId: 7 });
     expect(window.location.pathname).toBe('/projects/7');
+  });
+
+  it('pushes a zine path when screen is zine', () => {
+    navigate({ screen: 'zine', projectId: 7 });
+    expect(window.location.pathname).toBe('/projects/7/zine');
   });
 
   it('pushes a library path with a project query param when forProjectId is set', () => {

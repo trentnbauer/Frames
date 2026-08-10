@@ -2,7 +2,7 @@
 // the browser's back/forward buttons step through app views instead of
 // leaving the SPA entirely.
 
-export type Screen = 'dashboard' | 'library' | 'settings' | 'project';
+export type Screen = 'dashboard' | 'library' | 'settings' | 'project' | 'zine';
 
 export interface Route {
   screen: Screen;
@@ -13,7 +13,7 @@ export interface Route {
   forProjectId?: number | null;
 }
 
-const SCREEN_PATHS: Record<Exclude<Screen, 'project'>, string> = {
+const SCREEN_PATHS: Record<Exclude<Screen, 'project' | 'zine'>, string> = {
   dashboard: '/',
   library: '/library',
   settings: '/settings',
@@ -21,6 +21,9 @@ const SCREEN_PATHS: Record<Exclude<Screen, 'project'>, string> = {
 
 export function parseRoute(): Route {
   const { pathname, search } = window.location;
+
+  const zineMatch = pathname.match(/^\/projects\/(\d+)\/zine$/);
+  if (zineMatch) return { screen: 'zine', projectId: Number(zineMatch[1]) };
 
   const projectMatch = pathname.match(/^\/projects\/(\d+)$/);
   if (projectMatch) return { screen: 'project', projectId: Number(projectMatch[1]) };
@@ -40,9 +43,9 @@ export function parseRoute(): Route {
 }
 
 function pathFor(route: Route): string {
-  if (route.projectId != null) return `/projects/${route.projectId}`;
+  if (route.projectId != null) return route.screen === 'zine' ? `/projects/${route.projectId}/zine` : `/projects/${route.projectId}`;
   if (route.screen === 'library' && route.forProjectId != null) return `/library?project=${route.forProjectId}`;
-  return SCREEN_PATHS[route.screen as Exclude<Screen, 'project'>];
+  return SCREEN_PATHS[route.screen as Exclude<Screen, 'project' | 'zine'>];
 }
 
 export function navigate(route: Route) {
