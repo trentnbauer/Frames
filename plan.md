@@ -44,11 +44,21 @@ That's the whole of v1. Everything else is deferred (see Non-goals / Backlog).
 Tagging photos and filling ideas are the same relationship seen from two sides,
 so the app can nudge you both ways:
 
-- **Gap finder:** "6 frames tagged `neon` aren't in any idea — start one?"
-- **Idea filler:** open an idea, see loosely-matching frames that might belong.
+- **Gap finder, realized as combo suggestions:** rather than a standalone
+  tagged-but-unclaimed-frames page, this nudge lives on the Dashboard as the
+  rotating suggested-project banner (see **Combo suggestions** below) —
+  sharper than a plain gap finder because it crosses a structured field too,
+  not just a bare tag.
+- **Idea filler:** open an idea, see loosely-matching frames that might
+  belong — the "+Add N Suggested Photos" button.
 
 The goal is a tool that makes you re-examine your own contact sheets — not one
 that thinks for you and closes the loop.
+
+A dedicated **orphan view** (frames with no tags and no idea) was tried and
+pulled from v1's UI — nothing currently surfaces those frames beyond browsing
+the library unfiltered. Worth revisiting if untagged/unclaimed frames start
+actually getting lost in practice.
 
 ---
 
@@ -185,8 +195,6 @@ upload — that trade-off is yours to make, not the app's to gate.
 - [ ] Tag editor: accept / dismiss / add, plus per-photo-tag note
 - [ ] Ideas: create / edit (title, notes, light_pref, status)
 - [ ] Drop photos into ideas / remove (many-to-many), with per-membership `why` note
-- [ ] Gap finder: tagged-but-in-no-idea view
-- [ ] Orphan view: frames with no tags and no idea, so nothing good gets lost
 - [ ] Combo suggestions: cross-join city / camera / lens / film_stock against
       subject tags into two-colour combo chips, each with a "start an idea"
 - [ ] Export an idea as a zip of its full-res photos
