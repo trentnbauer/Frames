@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import type { ComboSuggestion, Idea, IdeaPhoto } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
+import { useToast } from '../toast.js';
 
 interface Props {
   ideas: Idea[];
@@ -18,6 +19,8 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [combos, setCombos] = useState<ComboSuggestion[]>([]);
   const [comboIndex, setComboIndex] = useState(0);
+  const [search, setSearch] = useState('');
+  const showToast = useToast();
 
   useEffect(() => {
     Promise.all(ideas.map((idea) => api.ideas.get(idea.id).then((res) => [idea.id, res.photos] as const))).then((pairs) => {
@@ -41,18 +44,26 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
 
   const suggestion = combos[comboIndex % Math.max(combos.length, 1)];
 
+  const visibleIdeas = useMemo(
+    () => ideas.filter((i) => i.title.toLowerCase().includes(search.trim().toLowerCase())),
+    [ideas, search]
+  );
+
   async function generateFromSuggestion() {
     if (!suggestion) return;
-    const title = `${cap(suggestion.main)} ${suggestion.connector} ${suggestion.location}`;
+    const title = `${cap(suggestion.main)} ${suggestion.connector} ${suggestion.type === 'tag_tag' ? cap(suggestion.secondary) : suggestion.secondary}`;
     onGenerateProject(title, async (idea) => {
       const matches = await api.photos.list(
         suggestion.type === 'tag_location'
-          ? { tag: suggestion.slug, location: suggestion.location }
-          : { camera: suggestion.main, location: suggestion.location }
+          ? { tag: suggestion.slug, location: suggestion.secondary }
+          : suggestion.type === 'camera_location'
+            ? { camera: suggestion.main, location: suggestion.secondary }
+            : { tag: suggestion.slug, tag2: suggestion.secondarySlug }
       );
       for (const photo of matches.photos) {
         await api.ideas.addPhoto(idea.id, photo.id);
       }
+      showToast(`Created "${title}" with ${matches.photos.length} photo${matches.photos.length === 1 ? '' : 's'}`);
     });
   }
 
@@ -74,15 +85,24 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
           <div>
             <div className="suggestion-banner__label">Suggested project</div>
             <div className="suggestion-banner__text" key={comboIndex}>
-              {cap(suggestion.main)} {suggestion.connector} {suggestion.location}
+              {cap(suggestion.main)} {suggestion.connector} {suggestion.type === 'tag_tag' ? cap(suggestion.secondary) : suggestion.secondary}
             </div>
           </div>
           <button className="btn btn-accent" onClick={generateFromSuggestion}>Generate Project</button>
         </div>
       )}
 
+      {ideas.length > 0 && (
+        <input
+          className="field-input search-input"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search projects…"
+        />
+      )}
+
       <div className="project-grid">
-        {ideas.map((idea) => {
+        {visibleIdeas.map((idea) => {
           const photos = details[idea.id] ?? [];
           const tagPreview = Array.from(new Set(photos.flatMap((p) => p.tags.map((t) => t.name)))).slice(0, 3);
           return (
@@ -117,6 +137,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
           );
         })}
         {ideas.length === 0 && <p className="muted">No projects yet. Start one from a tag you keep noticing.</p>}
+        {ideas.length > 0 && visibleIdeas.length === 0 && <p className="muted">No projects match "{search}".</p>}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ export interface PhotoRow {
   season: string | null;
   tagging_status: TaggingStatus;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface TagRow {

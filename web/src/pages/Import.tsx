@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { Photo, ShootOptions } from '../types.js';
 import { pickFromDropbox, pickFromGoogleDrive } from '../importSources.js';
+import { useToast } from '../toast.js';
 
 const EMPTY_OPTIONS: ShootOptions = { camera: [], lens: [], film_stock: [], location: [], photoshoot: [] };
 
@@ -12,6 +13,7 @@ export function Import() {
   const [tagOptions, setTagOptions] = useState<string[]>([]);
   const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const showToast = useToast();
 
   async function refreshOptions() {
     const [shoot, tags] = await Promise.all([api.photos.shootOptions(), api.tags.list()]);
@@ -40,6 +42,11 @@ export function Import() {
     try {
       const res = await api.photos.upload(Array.from(files));
       setBatch((prev) => [...prev, ...res.results.map((r) => r.photo)]);
+      const dupes = res.results.filter((r) => r.wasDuplicate).length;
+      showToast(
+        `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'}` +
+          (dupes ? ` (${dupes} already in Library)` : '')
+      );
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';

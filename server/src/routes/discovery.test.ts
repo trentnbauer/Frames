@@ -37,10 +37,10 @@ describe('discovery routes', () => {
     expect(types).toContain('camera_location');
 
     const tagCombo = res.body.combos.find((c: { type: string }) => c.type === 'tag_location');
-    expect(tagCombo).toMatchObject({ main: 'signage', slug: 'signage', location: 'Melbourne CBD', count: 1 });
+    expect(tagCombo).toMatchObject({ main: 'signage', slug: 'signage', secondary: 'Melbourne CBD', count: 1 });
 
     const cameraCombo = res.body.combos.find((c: { type: string }) => c.type === 'camera_location');
-    expect(cameraCombo).toMatchObject({ main: 'Minolta SRT303', location: 'Melbourne CBD', count: 1 });
+    expect(cameraCombo).toMatchObject({ main: 'Minolta SRT303', secondary: 'Melbourne CBD', count: 1 });
   });
 
   it('increments count when another photo shares the same combo', async () => {
@@ -51,5 +51,30 @@ describe('discovery routes', () => {
     const res = await request(app).get('/api/combo-suggestions');
     const cameraCombo = res.body.combos.find((c: { type: string }) => c.type === 'camera_location');
     expect(cameraCombo.count).toBe(2);
+  });
+
+  it('surfaces tag x tag co-occurrence once two tags share 2+ photos', async () => {
+    const a = await uploadPhoto(app, 60, 'cooc-a.jpg');
+    const b = await uploadPhoto(app, 61, 'cooc-b.jpg');
+    for (const p of [a, b]) {
+      await request(app).post(`/api/photos/${p.id}/tags`).send({ name: 'night', source: 'user_added' });
+      await request(app).post(`/api/photos/${p.id}/tags`).send({ name: 'wet', source: 'user_added' });
+    }
+
+    const res = await request(app).get('/api/combo-suggestions');
+    const pair = res.body.combos.find((c: { type: string }) => c.type === 'tag_tag');
+    expect(pair).toBeTruthy();
+    expect([pair.main, pair.secondary].sort()).toEqual(['night', 'wet']);
+    expect(pair.count).toBe(2);
+  });
+
+  it('excludes soft-deleted photos from combo suggestions', async () => {
+    const photo = await uploadPhoto(app, 62, 'trashed-combo.jpg');
+    await request(app).patch(`/api/photos/${photo.id}`).send({ camera: 'OnlyOnTrashed', location: 'Nowhereville' });
+    await request(app).delete(`/api/photos/${photo.id}`);
+
+    const res = await request(app).get('/api/combo-suggestions');
+    const found = res.body.combos.find((c: { main: string }) => c.main === 'OnlyOnTrashed');
+    expect(found).toBeUndefined();
   });
 });

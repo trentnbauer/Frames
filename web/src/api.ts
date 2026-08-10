@@ -13,11 +13,23 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   photos: {
-    list: (params?: { tag?: string; camera?: string; location?: string; limit?: number; offset?: number }) => {
+    list: (params?: {
+      tag?: string;
+      tag2?: string;
+      camera?: string;
+      location?: string;
+      q?: string;
+      trashed?: boolean;
+      limit?: number;
+      offset?: number;
+    }) => {
       const qs = new URLSearchParams();
       if (params?.tag) qs.set('tag', params.tag);
+      if (params?.tag2) qs.set('tag2', params.tag2);
       if (params?.camera) qs.set('camera', params.camera);
       if (params?.location) qs.set('location', params.location);
+      if (params?.q) qs.set('q', params.q);
+      if (params?.trashed) qs.set('trashed', 'true');
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.offset) qs.set('offset', String(params.offset));
       const suffix = qs.toString() ? `?${qs}` : '';
@@ -34,6 +46,9 @@ export const api = {
     update: (id: number, data: Partial<{ camera: string; lens: string; film_stock: string; location: string; photoshoot: string }>) =>
       request<{ photo: import('./types').Photo }>(`/api/photos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number) => request<void>(`/api/photos/${id}`, { method: 'DELETE' }),
+    restore: (id: number) => request<{ photo: import('./types').Photo }>(`/api/photos/${id}/restore`, { method: 'POST' }),
+    deletePermanently: (id: number) => request<void>(`/api/photos/${id}/permanent`, { method: 'DELETE' }),
+    retag: (id: number) => request<{ ok: boolean }>(`/api/photos/${id}/retag`, { method: 'POST' }),
     shootOptions: () => request<import('./types').ShootOptions>('/api/photos/shoot-options'),
     addTag: (photoId: number, name: string, source?: 'user_confirmed' | 'user_added') =>
       request(`/api/photos/${photoId}/tags`, { method: 'POST', body: JSON.stringify({ name, source }) }),

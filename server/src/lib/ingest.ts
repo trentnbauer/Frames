@@ -67,8 +67,9 @@ const linkTag = db.prepare(`
 
 // Every enabled provider runs against the frame; their suggestions merge
 // (deduped by slug) into one set of ai_suggested tags, noting which
-// provider(s) proposed each one.
-async function autoTagPhoto(photo: PhotoRow) {
+// provider(s) proposed each one. Exported so it can be re-run on demand
+// (see routes/photos.ts's /retag), not just at ingest time.
+export async function autoTagPhoto(photo: PhotoRow) {
   const providers = getEnabledProviders();
   if (providers.length === 0 || !photo.display_path) {
     db.prepare("UPDATE photos SET tagging_status = 'skipped' WHERE id = ?").run(photo.id);

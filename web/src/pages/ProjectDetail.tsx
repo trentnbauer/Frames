@@ -4,6 +4,7 @@ import type { Idea, IdeaPhoto, LightPref, Photo } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
+import { useToast } from '../toast.js';
 
 interface Props {
   projectId: number;
@@ -21,6 +22,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
   const [dragOverGrid, setDragOverGrid] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const showToast = useToast();
 
   async function refresh() {
     try {
@@ -64,20 +66,24 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
 
   async function markFinished() {
     await updateField('status', 'done');
+    showToast('Marked as finished');
   }
 
   async function addPhotoById(photoId: number) {
     await api.ideas.addPhoto(projectId, photoId);
     await refresh();
     onChanged();
+    showToast('Added to project');
   }
 
   async function addSuggested() {
+    const count = suggested.length;
     for (const p of suggested) {
       await api.ideas.addPhoto(projectId, p.id);
     }
     await refresh();
     onChanged();
+    showToast(`Added ${count} suggested photo${count === 1 ? '' : 's'}`);
   }
 
   function handleDragStart(e: DragEvent, photoId: number) {
@@ -102,8 +108,10 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
 
   async function deleteProject() {
     if (!confirm(`Delete project "${idea?.title}"? This does not delete the photos.`)) return;
+    const title = idea?.title;
     await api.ideas.delete(projectId);
     onDeleted();
+    showToast(`Deleted "${title}"`);
   }
 
   const isFinished = idea.status === 'done';
@@ -207,6 +215,8 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
           photoId={openPhotoId}
           onClose={() => setOpenPhotoId(null)}
           onChanged={refresh}
+          navIds={visible.map((p) => p.id)}
+          onNavigate={setOpenPhotoId}
         />
       )}
     </div>

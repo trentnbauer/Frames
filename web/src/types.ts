@@ -28,6 +28,7 @@ export interface Photo {
   season: string | null;
   tagging_status: TaggingStatus;
   created_at: string;
+  deleted_at: string | null;
   tags: PhotoTag[];
 }
 
@@ -69,11 +70,12 @@ export interface VisionProviderProfile {
 }
 
 export interface ComboSuggestion {
-  type: 'tag_location' | 'camera_location';
+  type: 'tag_location' | 'camera_location' | 'tag_tag';
   main: string;
   slug?: string;
   connector: string;
-  location: string;
+  secondary: string;
+  secondarySlug?: string;
   count: number;
 }
 

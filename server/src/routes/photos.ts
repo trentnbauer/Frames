@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import multer from 'multer';
-import db from '../db.js';
-import { ingestPhoto } from '../lib/ingest.js';
+import db, { ORIGINALS_DIR, THUMBS_DIR, DISPLAY_DIR } from '../db.js';
+import { ingestPhoto, autoTagPhoto } from '../lib/ingest.js';
 import { withTags } from '../lib/withTags.js';
 import { slugify, type PhotoRow } from '../types.js';
 
@@ -25,7 +27,7 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
 });
 
 photosRouter.get('/', (req, res) => {
-  const { tag, camera, location, untagged, orphan } = req.query;
+  const { tag, tag2, camera, location, untagged, orphan, q, trashed } = req.query;
 
   // Pagination is opt-in via `limit` — omit it and every match comes back
   // unpaginated, which several callers rely on (combo-suggestion matching,
@@ -40,33 +42,40 @@ photosRouter.get('/', (req, res) => {
   const pageClause = limit ? 'LIMIT ? OFFSET ?' : '';
   const pageParams = limit ? [limit, offset] : [];
 
+  const trashClause = trashed === 'true' ? 'p.deleted_at IS NOT NULL' : 'p.deleted_at IS NULL';
+
   let rows: PhotoRow[];
   let total: number;
 
   if (untagged === 'true') {
-    const where = 'WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)';
+    const where = `WHERE ${trashClause} AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
       .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
       .all(...pageParams) as PhotoRow[];
   } else if (orphan === 'true') {
-    const where = `WHERE NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
+    const where = `WHERE ${trashClause}
+                     AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
                      AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
       .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
       .all(...pageParams) as PhotoRow[];
   } else {
-    // Composable filters: tag (via join), camera, location — combinable for
-    // combo-suggestion lookups like "photos shot on X in Y".
+    // Composable filters: tag/tag2 (via join, AND'd — tag2 powers tag x tag
+    // co-occurrence suggestions), camera, location, q (filename search).
     const joins: string[] = [];
-    const where: string[] = [];
+    const where: string[] = [trashClause];
     const params: string[] = [];
 
     if (typeof tag === 'string' && tag) {
       joins.push('JOIN photo_tags pt ON pt.photo_id = p.id JOIN tags t ON t.id = pt.tag_id');
       where.push('t.slug = ?');
       params.push(tag);
+    }
+    if (typeof tag2 === 'string' && tag2) {
+      where.push('EXISTS (SELECT 1 FROM photo_tags pt2 JOIN tags t2 ON t2.id = pt2.tag_id WHERE pt2.photo_id = p.id AND t2.slug = ?)');
+      params.push(tag2);
     }
     if (typeof camera === 'string' && camera) {
       where.push('p.camera = ?');
@@ -76,9 +85,13 @@ photosRouter.get('/', (req, res) => {
       where.push('p.location = ?');
       params.push(location);
     }
+    if (typeof q === 'string' && q.trim()) {
+      where.push('p.filename LIKE ?');
+      params.push(`%${q.trim()}%`);
+    }
 
     const joinClause = joins.join(' ');
-    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereClause = `WHERE ${where.join(' AND ')}`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${joinClause} ${whereClause}`).get(...params) as { c: number }).c;
     rows = db
       .prepare(`SELECT p.* FROM photos p ${joinClause} ${whereClause} ORDER BY p.created_at DESC ${pageClause}`)
@@ -119,10 +132,56 @@ photosRouter.get('/:id', (req, res) => {
   res.json({ photo: withTags(photo), ideas });
 });
 
+// Soft delete: hides the photo everywhere (Library, idea grids, discovery)
+// without touching the original file, so it's recoverable. Permanent
+// removal is a separate, explicit action (see /:id/permanent below).
 photosRouter.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM photos WHERE id = ?').run(req.params.id);
+  const result = db.prepare("UPDATE photos SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Photo not found' });
   res.status(204).end();
+});
+
+photosRouter.post('/:id/restore', (req, res) => {
+  const result = db.prepare('UPDATE photos SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Photo not found in trash' });
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow;
+  res.json({ photo: withTags(photo) });
+});
+
+// Actually removes the row and every file on disk — only reachable from
+// the Trash view, and only for photos already soft-deleted.
+photosRouter.delete('/:id/permanent', (req, res) => {
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id) as PhotoRow | undefined;
+  if (!photo) return res.status(404).json({ error: 'Photo not found in trash' });
+
+  db.prepare('DELETE FROM photos WHERE id = ?').run(photo.id);
+
+  for (const [dir, file] of [
+    [ORIGINALS_DIR, photo.original_path],
+    [THUMBS_DIR, photo.thumb_path],
+    [DISPLAY_DIR, photo.display_path],
+  ] as const) {
+    if (!file) continue;
+    fs.rm(path.join(dir, file), { force: true }, () => {});
+  }
+
+  res.status(204).end();
+});
+
+// Re-run vision tagging — e.g. after adding a provider that wasn't
+// enabled when this photo was first uploaded, or after a provider
+// failed. Fires async like ingest does; poll GET /:id for the result.
+photosRouter.post('/:id/retag', (req, res) => {
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow | undefined;
+  if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+  db.prepare("UPDATE photos SET tagging_status = 'pending' WHERE id = ?").run(photo.id);
+  autoTagPhoto({ ...photo, tagging_status: 'pending' }).catch((err) => {
+    console.error(`Re-tag crashed for photo ${photo.id}:`, err.message);
+    db.prepare("UPDATE photos SET tagging_status = 'failed' WHERE id = ?").run(photo.id);
+  });
+
+  res.status(202).json({ ok: true });
 });
 
 // Shoot-detail fields: filename-parsed as a best-effort guess (camera,

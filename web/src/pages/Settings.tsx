@@ -10,6 +10,7 @@ import {
   type DropboxConfig,
   type GoogleDriveConfig,
 } from '../importConfig.js';
+import { useToast } from '../toast.js';
 
 const TYPE_LABELS: Record<VisionProviderType, string> = {
   openai: 'OpenAI',
@@ -21,6 +22,7 @@ export function Settings() {
   const [providers, setProviders] = useState<VisionProviderProfile[]>([]);
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
   const [accent, setAccent] = useState<string>(() => getStoredAccent());
+  const showToast = useToast();
 
   async function refresh() {
     const res = await api.visionProviders.list();
@@ -50,6 +52,7 @@ export function Settings() {
     if (!confirm(`Remove provider "${p.name}"?`)) return;
     await api.visionProviders.remove(p.id);
     await refresh();
+    showToast(`Removed "${p.name}"`);
   }
 
   const enabledCount = providers.filter((p) => p.enabled).length;
@@ -243,6 +246,7 @@ function NewProviderForm({ onCreated }: { onCreated: () => void }) {
   const [baseUrl, setBaseUrl] = useState('');
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const showToast = useToast();
 
   async function create() {
     if (!name.trim()) return;
@@ -257,6 +261,7 @@ function NewProviderForm({ onCreated }: { onCreated: () => void }) {
       enabled: true,
     });
 
+    showToast(`Added "${name.trim()}"`);
     setName('');
     setBaseUrl('');
     setModel('');

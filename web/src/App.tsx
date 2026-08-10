@@ -8,6 +8,7 @@ import { Import } from './pages/Import.js';
 import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { NewProjectModal } from './components/NewProjectModal.js';
+import { useToast } from './toast.js';
 
 interface NewProjectRequest {
   initialTitle?: string;
@@ -20,6 +21,7 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [newProjectRequest, setNewProjectRequest] = useState<NewProjectRequest | null>(null);
+  const showToast = useToast();
 
   async function refreshIdeas() {
     const res = await api.ideas.list();
@@ -47,7 +49,14 @@ export default function App() {
   }
 
   async function handleProjectCreated(idea: Idea) {
-    await newProjectRequest?.onCreated?.(idea);
+    // Generate-Project already shows its own richer toast (with the matched
+    // photo count) via its onCreated callback — only show a generic one for
+    // the plain "+ New Idea" path, so the user doesn't see two toasts.
+    if (newProjectRequest?.onCreated) {
+      await newProjectRequest.onCreated(idea);
+    } else {
+      showToast(`Created "${idea.title}"`);
+    }
     setNewProjectRequest(null);
     await refreshIdeas();
     goTo('project', idea.id);

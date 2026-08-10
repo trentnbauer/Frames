@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
+import { ToastProvider } from './toast.js';
 import { applyAccent, applyTheme, getStoredAccent, getStoredTheme } from './theme.js';
 import './styles.css';
 
@@ -13,7 +14,9 @@ applyAccent(getStoredAccent());
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );

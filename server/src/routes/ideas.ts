@@ -8,9 +8,13 @@ import type { IdeaRow, PhotoRow } from '../types.js';
 export const ideasRouter = Router();
 
 function withPhotoCount(idea: IdeaRow) {
-  const { count } = db.prepare('SELECT COUNT(*) as count FROM idea_photos WHERE idea_id = ?').get(idea.id) as {
-    count: number;
-  };
+  const { count } = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM idea_photos ip
+       JOIN photos p ON p.id = ip.photo_id
+       WHERE ip.idea_id = ? AND p.deleted_at IS NULL`
+    )
+    .get(idea.id) as { count: number };
   return { ...idea, photo_count: count };
 }
 
@@ -39,7 +43,7 @@ ideasRouter.get('/:id', (req, res) => {
     .prepare(
       `SELECT p.*, ip.why, ip.position FROM idea_photos ip
        JOIN photos p ON p.id = ip.photo_id
-       WHERE ip.idea_id = ? ORDER BY ip.position ASC, ip.created_at ASC`
+       WHERE ip.idea_id = ? AND p.deleted_at IS NULL ORDER BY ip.position ASC, ip.created_at ASC`
     )
     .all(idea.id) as PhotoRow[];
 
@@ -134,6 +138,7 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
       `SELECT p.*, COUNT(*) as shared_tag_count FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        WHERE pt.tag_id IN (${placeholders})
+         AND p.deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.idea_id = ? AND ip.photo_id = p.id)
        GROUP BY p.id
        ORDER BY shared_tag_count DESC, p.created_at DESC
@@ -151,7 +156,7 @@ ideasRouter.get('/:id/export', async (req, res) => {
   const photos = db
     .prepare(
       `SELECT p.* FROM idea_photos ip JOIN photos p ON p.id = ip.photo_id
-       WHERE ip.idea_id = ? ORDER BY ip.position ASC`
+       WHERE ip.idea_id = ? AND p.deleted_at IS NULL ORDER BY ip.position ASC`
     )
     .all(idea.id) as PhotoRow[];
 
