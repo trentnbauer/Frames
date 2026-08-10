@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, IdeaPhoto } from '../types.js';
 import { useEscapeKey } from '../useEscapeKey.js';
@@ -142,11 +142,22 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [slotPhotos, setSlotPhotos] = useState<Record<string, number>>({});
   const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [mobileSetupOpen, setMobileSetupOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'pages' | 'booklet' | 'zine'>('zine');
   const [exporting, setExporting] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasEl, setCanvasEl] = useState<HTMLDivElement | null>(null);
   const showToast = useToast();
+
+  // A callback ref, not useRef — this component returns null while `idea`
+  // is still loading, so the canvas-measure div doesn't exist on first
+  // commit. A plain useRef + `useEffect(..., [])` would attach its
+  // ResizeObserver to a null element on that first pass and then never
+  // retry once the real DOM mounts on a later render, leaving canvasSize
+  // stuck at its fallback default forever (the page would then render at
+  // that fallback's aspect-correct but wildly wrong absolute size). A
+  // callback ref fires exactly when the node actually mounts/unmounts.
+  const canvasRef = useCallback((el: HTMLDivElement | null) => setCanvasEl(el), []);
 
   useEffect(() => {
     api.ideas.get(projectId).then((res) => {
@@ -168,20 +179,20 @@ export function ZineCreator({ projectId, onExit }: Props) {
   }, []);
 
   useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
+    if (!canvasEl) return;
     const measure = () => {
-      const r = el.getBoundingClientRect();
+      const r = canvasEl.getBoundingClientRect();
       setCanvasSize((s) => (Math.abs(s.w - r.width) > 1 || Math.abs(s.h - r.height) > 1 ? { w: r.width, h: r.height } : s));
     };
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(canvasEl);
     measure();
     return () => ro.disconnect();
-  }, []);
+  }, [canvasEl]);
 
   useEscapeKey(pickerSlot !== null, () => setPickerSlot(null));
   useEscapeKey(exportOpen, () => setExportOpen(false));
+  useEscapeKey(mobileSetupOpen, () => setMobileSetupOpen(false));
 
   function visibleIds(): string[] {
     const n = (pageCount - 2) / 2;
@@ -520,33 +531,42 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const selectedSpread = !selectedIsCover ? spreadSettings[selectedId] : null;
   const pageBoxes = canvasPagesForSelected();
 
+  function renderSetupControls() {
+    return (
+      <>
+        <div className="zine-page-stepper" title="Add or remove pages (in fours — a Zine sheet holds 8, a Booklet sheet holds 4)">
+          <button type="button" onClick={() => changePageCount(-4)} disabled={pageCount <= MIN_PAGE_COUNT}>−</button>
+          <span>{pageCount} pages</span>
+          <button type="button" onClick={() => changePageCount(4)} disabled={pageCount >= MAX_PAGE_COUNT}>+</button>
+        </div>
+        <div className="segmented">
+          {(Object.keys(PAPER_SIZES) as PaperSize[]).map((size) => (
+            <span key={size} className={`segmented__opt ${paperSize === size ? 'active' : ''}`} onClick={() => setPaperSize(size)}>{size}</span>
+          ))}
+        </div>
+        <select className="field-input" style={{ width: 'auto' }} value={fontChoice} onChange={(e) => setFontChoice(e.target.value)} title="Cover font">
+          {FONT_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <label className="zine-size-input" title="Header size">
+          H
+          <input type="number" min={12} max={80} value={headerSize} onChange={(e) => setHeaderSize(Number(e.target.value) || 28)} />
+        </label>
+        <label className="zine-size-input" title="Subtext size">
+          S
+          <input type="number" min={8} max={40} value={subSize} onChange={(e) => setSubSize(Number(e.target.value) || 15)} />
+        </label>
+      </>
+    );
+  }
+
   return (
     <div className="zine-creator">
       <nav className="zine-creator__nav">
-        <button className="back-link" onClick={onExit} style={{ marginRight: 12 }}>← {idea.title}</button>
+        <button className="back-link zine-creator__back" onClick={onExit}>← {idea.title}</button>
         <span className="zine-creator__brand">Zine Creator</span>
         <div className="zine-creator__nav-controls">
-          <div className="zine-page-stepper" title="Add or remove pages (in fours — a Zine sheet holds 8, a Booklet sheet holds 4)">
-            <button type="button" onClick={() => changePageCount(-4)} disabled={pageCount <= MIN_PAGE_COUNT}>−</button>
-            <span>{pageCount} pages</span>
-            <button type="button" onClick={() => changePageCount(4)} disabled={pageCount >= MAX_PAGE_COUNT}>+</button>
-          </div>
-          <div className="segmented">
-            {(Object.keys(PAPER_SIZES) as PaperSize[]).map((size) => (
-              <span key={size} className={`segmented__opt ${paperSize === size ? 'active' : ''}`} onClick={() => setPaperSize(size)}>{size}</span>
-            ))}
-          </div>
-          <select className="field-input" style={{ width: 'auto' }} value={fontChoice} onChange={(e) => setFontChoice(e.target.value)} title="Cover font">
-            {FONT_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <label className="zine-size-input" title="Header size">
-            H
-            <input type="number" min={12} max={80} value={headerSize} onChange={(e) => setHeaderSize(Number(e.target.value) || 28)} />
-          </label>
-          <label className="zine-size-input" title="Subtext size">
-            S
-            <input type="number" min={8} max={40} value={subSize} onChange={(e) => setSubSize(Number(e.target.value) || 15)} />
-          </label>
+          <div className="zine-creator__setup-inline">{renderSetupControls()}</div>
+          <button type="button" className="zine-creator__setup-toggle" onClick={() => setMobileSetupOpen(true)} title="Zine settings">⚙ Settings</button>
           <button className="btn btn-solid" onClick={() => setExportOpen(true)}>Export PDF</button>
         </div>
       </nav>
@@ -768,6 +788,18 @@ export function ZineCreator({ projectId, onExit }: Props) {
           </div>
         );
       })()}
+
+      {mobileSetupOpen && (
+        <div className="modal-overlay" onClick={() => setMobileSetupOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-card__title">Zine settings</div>
+            <div className="zine-creator__setup-modal-controls">{renderSetupControls()}</div>
+            <div className="modal-actions">
+              <button className="btn btn-solid" onClick={() => setMobileSetupOpen(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {exportOpen && (
         <div className="modal-overlay" onClick={() => !exporting && setExportOpen(false)}>
