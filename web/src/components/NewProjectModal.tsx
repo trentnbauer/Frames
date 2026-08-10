@@ -33,7 +33,8 @@ export function NewProjectModal({ open, initialTitle, onClose, onCreated }: Prop
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-card__title">New micro-project</div>
+        <div className="modal-card__title">New idea</div>
+        <p className="muted" style={{ margin: '-4px 0 0' }}>Becomes a project once you drop photos into it.</p>
 
         <div className="modal-field">
           <label>Name</label>
@@ -68,7 +69,7 @@ export function NewProjectModal({ open, initialTitle, onClose, onCreated }: Prop
         <div className="modal-actions">
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className={`btn ${title.trim() ? 'btn-solid' : ''}`} disabled={!title.trim()} onClick={create}>
-            Create project
+            Create idea
           </button>
         </div>
       </div>

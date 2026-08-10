@@ -65,7 +65,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         </div>
         <div className="page-header__actions">
           <button className="btn" onClick={onImport}>Import Photos</button>
-          <button className="btn btn-accent" onClick={onNewProject}>+ New Project</button>
+          <button className="btn btn-accent" onClick={onNewProject}>+ New Idea</button>
         </div>
       </div>
 
@@ -100,7 +100,10 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
                 })}
               </div>
               <div className="project-card__body">
-                <div className="project-card__name">{idea.title}</div>
+                <div className="project-card__name">
+                  {idea.title}
+                  {!idea.photo_count && <span className="idea-badge">IDEA</span>}
+                </div>
                 <div className="project-card__meta">
                   {idea.photo_count ?? 0} photo{idea.photo_count === 1 ? '' : 's'} · {relativeTime(idea.created_at)}
                 </div>

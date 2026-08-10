@@ -255,6 +255,12 @@ button { cursor: pointer; }
 /* ---------- Photo grid (Library + Project) ---------- */
 
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
+.photo-grid--dropzone { border-radius: 10px; transition: background .12s, box-shadow .12s; }
+.photo-grid--dropzone.is-drag-over {
+  background: rgba(145, 132, 217, .08);
+  outline: 2px dashed var(--accent);
+  outline-offset: 6px;
+}
 .photo-tile-card {
   border-radius: 8px; overflow: hidden; position: relative;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); background: var(--surface);
@@ -380,6 +386,12 @@ button { cursor: pointer; }
   background: transparent; border: none; color: var(--text); width: 100%; padding: 0; display: block;
 }
 .editable-title:focus { outline: none; }
+.idea-badge {
+  flex: none; font: 600 10px/1 Inter, sans-serif; letter-spacing: .06em;
+  padding: 3px 7px; border-radius: 4px; color: color-mix(in srgb, var(--text) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); vertical-align: middle; margin-left: 8px;
+}
+.project-card__name .idea-badge { margin-left: 6px; }
 .editable-desc {
   font: 400 14px/1.5 Inter, sans-serif; color: color-mix(in srgb, var(--text) 65%, transparent); max-width: 560px;
   margin-bottom: 10px; background: transparent; border: none; width: 100%; resize: vertical; padding: 0; font-family: inherit;
@@ -394,7 +406,8 @@ button { cursor: pointer; }
 .suggested-strip { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
 .suggested-strip__title { font: 500 14px/1.2 Inter, sans-serif; }
 .suggested-strip__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
-.suggested-strip__tile { position: relative; border: none; padding: 0; border-radius: 6px; overflow: hidden; }
+.suggested-strip__tile { position: relative; border: none; padding: 0; border-radius: 6px; overflow: hidden; cursor: grab; }
+.suggested-strip__tile:active { cursor: grabbing; }
 .suggested-strip__tile img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; }
 
 /* ---------- Photo detail modal (kept: correction path) ---------- */

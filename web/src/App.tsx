@@ -107,8 +107,8 @@ export default function App() {
           <span className="nav-item__icon">S</span>
           {!sidebarCollapsed && <span>Settings</span>}
         </button>
-        <button className="sidebar__new-project" onClick={() => openNewProject()} title="New Project">
-          {sidebarCollapsed ? '+' : '+ New Project'}
+        <button className="sidebar__new-project" onClick={() => openNewProject()} title="New Idea">
+          {sidebarCollapsed ? '+' : '+ New Idea'}
         </button>
       </div>
 

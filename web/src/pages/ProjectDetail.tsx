@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import { api } from '../api.js';
 import type { Idea, IdeaPhoto, LightPref, Photo } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
@@ -19,6 +19,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
   const [suggested, setSuggested] = useState<Photo[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
+  const [dragOverGrid, setDragOverGrid] = useState(false);
 
   async function refresh() {
     const [detail, sug] = await Promise.all([api.ideas.get(projectId), api.ideas.suggestedPhotos(projectId)]);
@@ -50,12 +51,38 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
     await updateField('status', 'done');
   }
 
+  async function addPhotoById(photoId: number) {
+    await api.ideas.addPhoto(projectId, photoId);
+    await refresh();
+    onChanged();
+  }
+
   async function addSuggested() {
     for (const p of suggested) {
       await api.ideas.addPhoto(projectId, p.id);
     }
     await refresh();
     onChanged();
+  }
+
+  function handleDragStart(e: DragEvent, photoId: number) {
+    e.dataTransfer.setData('text/x-frames-photo-id', String(photoId));
+    e.dataTransfer.effectAllowed = 'copy';
+  }
+
+  function handleGridDragOver(e: DragEvent) {
+    if (!e.dataTransfer.types.includes('text/x-frames-photo-id')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragOverGrid(true);
+  }
+
+  function handleGridDrop(e: DragEvent) {
+    e.preventDefault();
+    setDragOverGrid(false);
+    const raw = e.dataTransfer.getData('text/x-frames-photo-id');
+    const photoId = Number(raw);
+    if (raw && !Number.isNaN(photoId)) addPhotoById(photoId);
   }
 
   async function deleteProject() {
@@ -72,11 +99,15 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
 
       <div className="project-header">
         <div style={{ flex: 1, minWidth: 260 }}>
-          <input
-            className="editable-title"
-            defaultValue={idea.title}
-            onBlur={(e) => e.target.value !== idea.title && updateField('title', e.target.value)}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <input
+              className="editable-title"
+              style={{ marginBottom: 0 }}
+              defaultValue={idea.title}
+              onBlur={(e) => e.target.value !== idea.title && updateField('title', e.target.value)}
+            />
+            {photos.length === 0 && <span className="idea-badge">IDEA</span>}
+          </div>
           <textarea
             className="editable-desc"
             defaultValue={idea.notes ?? ''}
@@ -105,11 +136,18 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
 
       {suggested.length > 0 && (
         <div className="suggested-strip">
-          <div className="suggested-strip__title muted">Photos elsewhere that might belong here</div>
+          <div className="suggested-strip__title muted">Photos elsewhere that might belong here — drag one in, or click to view</div>
           <div className="suggested-strip__grid">
             {suggested.map((p) => (
-              <button key={p.id} className="suggested-strip__tile" onClick={() => setOpenPhotoId(p.id)}>
-                <img src={`/files/thumb/${p.id}`} alt={p.filename} />
+              <button
+                key={p.id}
+                className="suggested-strip__tile"
+                draggable
+                onDragStart={(e) => handleDragStart(e, p.id)}
+                onClick={() => setOpenPhotoId(p.id)}
+                title="Drag into the grid below to add"
+              >
+                <img src={`/files/thumb/${p.id}`} alt={p.filename} draggable={false} />
               </button>
             ))}
           </div>
@@ -125,7 +163,12 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
         </div>
       )}
 
-      <div className="photo-grid">
+      <div
+        className={`photo-grid photo-grid--dropzone ${dragOverGrid ? 'is-drag-over' : ''}`}
+        onDragOver={handleGridDragOver}
+        onDragLeave={() => setDragOverGrid(false)}
+        onDrop={handleGridDrop}
+      >
         {visible.map((photo) => (
           <div key={photo.id} className="photo-tile-card">
             <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
@@ -139,7 +182,9 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
             </div>
           </div>
         ))}
-        {visible.length === 0 && <p className="muted">Nothing dropped in yet.</p>}
+        {visible.length === 0 && (
+          <p className="muted">{suggested.length > 0 ? 'Nothing dropped in yet — drag a suggestion down here.' : 'Nothing dropped in yet.'}</p>
+        )}
       </div>
 
       {openPhotoId !== null && (
