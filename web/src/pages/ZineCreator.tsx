@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { Idea, IdeaPhoto } from '../types.js';
 import { useEscapeKey } from '../useEscapeKey.js';
@@ -82,6 +82,22 @@ function defaultSpread(): SpreadSettings {
   };
 }
 
+// Per-slot pan/zoom for "Fill" (cover-fit) photos — ox/oy shift the crop
+// window as a fraction of the image's own size (0 = centered, clamped to
+// ±0.4 so the crop can't pan entirely off the image), zoom magnifies on
+// top of the base cover-fit scale. "Whole photo" (contain) mode always
+// shows the full image, so it has nothing to pan/zoom.
+interface SlotTransform {
+  ox: number;
+  oy: number;
+  zoom: number;
+}
+const DEFAULT_TRANSFORM: SlotTransform = { ox: 0, oy: 0, zoom: 1 };
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
 function imageSlotsFor(mode: ImageMode, baseKey: string): string[] {
   if (mode === 'none') return [];
   return mode === 'landscape2' ? [`${baseKey}-0`, `${baseKey}-1`] : [`${baseKey}-0`];
@@ -153,6 +169,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
     return m;
   });
   const [slotPhotos, setSlotPhotos] = useState<Record<string, number>>({});
+  const [slotTransforms, setSlotTransforms] = useState<Record<string, SlotTransform>>({});
   const [pickerSlot, setPickerSlot] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [mobileSetupOpen, setMobileSetupOpen] = useState(false);
@@ -255,11 +272,25 @@ export function ZineCreator({ projectId, onExit }: Props) {
       delete next[slotKey];
       return next;
     });
+    setSlotTransforms((s) => {
+      if (!(slotKey in s)) return s;
+      const next = { ...s };
+      delete next[slotKey];
+      return next;
+    });
   }
 
   function assignSlot(slotKey: string, photoId: number) {
     setSlotPhotos((s) => ({ ...s, [slotKey]: photoId }));
     setPickerSlot(null);
+  }
+
+  function getTransform(slotKey: string): SlotTransform {
+    return slotTransforms[slotKey] ?? DEFAULT_TRANSFORM;
+  }
+
+  function updateTransform(slotKey: string, patch: Partial<SlotTransform>) {
+    setSlotTransforms((s) => ({ ...s, [slotKey]: { ...(s[slotKey] ?? DEFAULT_TRANSFORM), ...patch } }));
   }
 
   interface PageBox {
@@ -351,20 +382,20 @@ export function ZineCreator({ projectId, onExit }: Props) {
     if (owner.part === 'cover') {
       const st = coverSettings[owner.id as 'front' | 'back'];
       return renderPageCanvas({
-        widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), imageFit: st.imageFit, slotPhotos,
+        widthPx, heightPx, bgColor: st.bgColor, images: imageSlotsFor(st.imageMode, `${owner.id}-img`), imageFit: st.imageFit, slotPhotos, slotTransforms,
         borderColor: st.borderColor, borderPct: st.borderPct,
         overlay: { header: st.header, sub1: st.sub1, sub2: st.sub2, vAlign: st.textVAlign, hAlign: st.textHAlign, font: fontChoice, headerSize, subSize },
         socialHandles: owner.id === 'back' && showSocialHandles ? socialHandles : undefined,
       });
     }
     const st = spreadSettings[owner.id];
-    if (owner.part === 'L') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${owner.id}-L`), imageFit: st.fitL, slotPhotos, borderColor: st.borderL.color, borderPct: st.borderL.pct });
-    if (owner.part === 'R') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${owner.id}-R`), imageFit: st.fitR, slotPhotos, borderColor: st.borderR.color, borderPct: st.borderR.pct });
+    if (owner.part === 'L') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeL, `${owner.id}-L`), imageFit: st.fitL, slotPhotos, slotTransforms, borderColor: st.borderL.color, borderPct: st.borderL.pct });
+    if (owner.part === 'R') return renderPageCanvas({ widthPx, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeR, `${owner.id}-R`), imageFit: st.fitR, slotPhotos, slotTransforms, borderColor: st.borderR.color, borderPct: st.borderR.pct });
 
     const cacheKey = `${owner.id}-${widthPx}x${heightPx}`;
     let wide = wideCache.get(cacheKey);
     if (!wide) {
-      wide = await renderPageCanvas({ widthPx: widthPx * 2, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${owner.id}-span`), imageFit: st.fitSpan, slotPhotos, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
+      wide = await renderPageCanvas({ widthPx: widthPx * 2, heightPx, bgColor: '#ffffff', images: imageSlotsFor(st.modeSpan, `${owner.id}-span`), imageFit: st.fitSpan, slotPhotos, slotTransforms, borderColor: st.borderSpan.color, borderPct: st.borderSpan.pct });
       wideCache.set(cacheKey, wide);
     }
     return owner.part === 'span-left' ? sliceCanvas(wide, 0, 0, widthPx, heightPx) : sliceCanvas(wide, widthPx, 0, widthPx, heightPx);
@@ -615,7 +646,15 @@ export function ZineCreator({ projectId, onExit }: Props) {
                   )}
                   {p.images.map((slotKey) => (
                     <div key={slotKey} className="zine-slot-wrap" style={{ padding: `${p.borderPct}%`, background: p.borderColor }}>
-                      <ZineImageSlot photoId={slotPhotos[slotKey]} fit={p.imageFit} fillColor={p.borderColor} onPick={() => setPickerSlot(slotKey)} onClear={() => clearSlot(slotKey)} />
+                      <ZineImageSlot
+                        photoId={slotPhotos[slotKey]}
+                        fit={p.imageFit}
+                        fillColor={p.borderColor}
+                        transform={getTransform(slotKey)}
+                        onPick={() => setPickerSlot(slotKey)}
+                        onClear={() => clearSlot(slotKey)}
+                        onTransformChange={(patch) => updateTransform(slotKey, patch)}
+                      />
                     </div>
                   ))}
                   {p.images.length === 0 && <div className="zine-slot-empty">No image</div>}
@@ -881,7 +920,14 @@ export function ZineCreator({ projectId, onExit }: Props) {
   );
 }
 
-function ZineImageSlot({ photoId, fit, fillColor, onPick, onClear }: { photoId: number | undefined; fit: ImageFit; fillColor: string; onPick: () => void; onClear: () => void }) {
+function ZineImageSlot({
+  photoId, fit, fillColor, transform, onPick, onClear, onTransformChange,
+}: {
+  photoId: number | undefined; fit: ImageFit; fillColor: string; transform: SlotTransform;
+  onPick: () => void; onClear: () => void; onTransformChange: (patch: Partial<SlotTransform>) => void;
+}) {
+  const drag = useRef<{ startX: number; startY: number; startOx: number; startOy: number; moved: boolean } | null>(null);
+
   if (photoId == null) {
     return (
       <button className="zine-slot zine-slot--empty" onClick={onPick} type="button">
@@ -889,10 +935,81 @@ function ZineImageSlot({ photoId, fit, fillColor, onPick, onClear }: { photoId: 
       </button>
     );
   }
+
+  const pannable = fit === 'cover';
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pannable) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { startX: e.clientX, startY: e.clientY, startOx: transform.ox, startOy: transform.oy, moved: false };
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.startX;
+    const dy = e.clientY - drag.current.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.current.moved = true;
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Drag right -> reveal more of the image's left side (the photo
+    // appears to move with the cursor), so ox moves opposite to dx.
+    const nextOx = clamp(drag.current.startOx + dx / rect.width / transform.zoom, -0.4, 0.4);
+    const nextOy = clamp(drag.current.startOy + dy / rect.height / transform.zoom, -0.4, 0.4);
+    onTransformChange({ ox: nextOx, oy: nextOy });
+  }
+
+  function handlePointerUp() {
+    drag.current = null;
+  }
+
+  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (!pannable) return;
+    e.preventDefault();
+    onTransformChange({ zoom: clamp(transform.zoom - e.deltaY * 0.001, 1, 3) });
+  }
+
+  // The click handler lives on this same div (not the <img>) because it's
+  // also the pointer-capture target: once setPointerCapture is called here,
+  // the browser can retarget the matching click event to this element
+  // rather than the img, and a click handler on the img would then never
+  // fire at all. Attaching it here means retargeting doesn't matter.
+  function handleSlotClick(e: React.MouseEvent) {
+    if (drag.current?.moved) { e.preventDefault(); e.stopPropagation(); return; }
+    onPick();
+  }
+
+  const isAdjusted = transform.ox !== 0 || transform.oy !== 0 || transform.zoom !== 1;
+
   return (
-    <div className="zine-slot zine-slot--filled" style={{ background: fillColor }}>
-      <img src={`/files/display/${photoId}`} alt="" onClick={onPick} style={{ objectFit: fit }} />
+    <div
+      className="zine-slot zine-slot--filled"
+      style={{ background: fillColor, cursor: pannable ? 'grab' : 'default' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onWheel={handleWheel}
+      onClick={handleSlotClick}
+    >
+      <img
+        src={`/files/display/${photoId}`}
+        alt=""
+        draggable={false}
+        style={{
+          objectFit: fit,
+          objectPosition: pannable ? `${50 - transform.ox * 100}% ${50 - transform.oy * 100}%` : '50% 50%',
+          transform: pannable && transform.zoom !== 1 ? `scale(${transform.zoom})` : undefined,
+        }}
+      />
       <button type="button" className="zine-slot__delete" onClick={(e) => { e.stopPropagation(); onClear(); }} title="Remove image">×</button>
+      {pannable && (
+        <div className="zine-slot__zoom" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom - 0.2, 1, 3) })} title="Zoom out">−</button>
+          <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom + 0.2, 1, 3) })} title="Zoom in">+</button>
+          {isAdjusted && (
+            <button type="button" onClick={() => onTransformChange({ ox: 0, oy: 0, zoom: 1 })} title="Reset position">⟲</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -908,11 +1025,17 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-function drawCoverFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+// ox/oy/zoom mirror the live preview's object-position + transform:scale
+// pan/zoom (see ZineImageSlot) — same sign convention, so what you drag
+// into place while editing is exactly what prints.
+function drawCoverFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number, ox = 0, oy = 0, zoom = 1) {
   if (dw <= 0 || dh <= 0) return;
-  const scale = Math.max(dw / img.width, dh / img.height);
+  const scale = Math.max(dw / img.width, dh / img.height) * zoom;
   const sw = dw / scale, sh = dh / scale;
-  const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+  const cx = img.width / 2 - ox * img.width;
+  const cy = img.height / 2 - oy * img.height;
+  const sx = clamp(cx - sw / 2, 0, Math.max(0, img.width - sw));
+  const sy = clamp(cy - sh / 2, 0, Math.max(0, img.height - sh));
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
@@ -941,6 +1064,7 @@ interface RenderSpec {
   images: string[];
   imageFit: ImageFit;
   slotPhotos: Record<string, number>;
+  slotTransforms: Record<string, SlotTransform>;
   borderColor: string;
   borderPct: number;
   overlay?: { header: string; sub1: string; sub2: string; vAlign: VAlign; hAlign: HAlign; font: string; headerSize: number; subSize: number };
@@ -974,8 +1098,12 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
         ctx.fillRect(0, cellY, spec.widthPx, cellH);
         const img = await loadImage(`/files/display/${photoId}`);
         if (img) {
-          const draw = spec.imageFit === 'contain' ? drawContainFit : drawCoverFit;
-          draw(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx);
+          if (spec.imageFit === 'contain') {
+            drawContainFit(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx);
+          } else {
+            const t = spec.slotTransforms[spec.images[i]] ?? DEFAULT_TRANSFORM;
+            drawCoverFit(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx, t.ox, t.oy, t.zoom);
+          }
         }
       }
     }
