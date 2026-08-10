@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 
 :root {
-  --accent: #9184d9;
+  --accent: #5f6068;
 }
 :root[data-theme="dark"] {
   --bg: #1a1b1e;
@@ -21,7 +21,7 @@ body {
   color: var(--text);
 }
 
-::selection { background: rgba(145, 132, 217, .3); }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 
 .scrollarea::-webkit-scrollbar { width: 10px; height: 10px; }
 .scrollarea::-webkit-scrollbar-thumb { background: rgba(160, 160, 165, .2); border-radius: 5px; }
@@ -121,7 +121,7 @@ button { cursor: pointer; }
   color: color-mix(in srgb, var(--text) 60%, transparent);
   background: transparent; border: none; width: 100%; text-align: left; white-space: nowrap; overflow: hidden;
 }
-.nav-item.active { color: var(--text); background: rgba(145, 132, 217, .14); }
+.nav-item.active { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .nav-item__icon {
   width: 20px; height: 20px; flex: none; border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
@@ -140,7 +140,7 @@ button { cursor: pointer; }
   color: color-mix(in srgb, var(--text) 60%, transparent);
   background: transparent; border: none; width: 100%; text-align: left;
 }
-.sidebar__project-row.active { color: var(--text); background: rgba(145, 132, 217, .14); }
+.sidebar__project-row.active { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .sidebar__project-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar__project-row-count { font: 400 11px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, var(--text) 35%, transparent); }
 
@@ -159,7 +159,7 @@ button { cursor: pointer; }
   border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; margin-top: 12px;
   background: transparent;
 }
-.sidebar__new-project:hover { background: rgba(145, 132, 217, .12); }
+.sidebar__new-project:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 .main-scroll { flex: 1; overflow-y: auto; }
 .main-content { padding: 48px 56px 64px; max-width: 1280px; }
@@ -182,7 +182,7 @@ button { cursor: pointer; }
 .btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-accent { color: var(--accent); border-color: var(--accent); }
-.btn-accent:hover { background: rgba(145, 132, 217, .12); }
+.btn-accent:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .btn-solid { background: var(--accent); border-color: var(--accent); color: #161826; }
 .btn-solid:hover { filter: brightness(1.08); }
 .btn-danger { color: #d66f6f; border-color: color-mix(in srgb, #d66f6f 40%, transparent); }
@@ -286,7 +286,7 @@ button { cursor: pointer; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
 .photo-grid--dropzone { border-radius: 10px; transition: background .12s, box-shadow .12s; }
 .photo-grid--dropzone.is-drag-over {
-  background: rgba(145, 132, 217, .08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   outline: 2px dashed var(--accent);
   outline-offset: 6px;
 }
@@ -331,7 +331,7 @@ button { cursor: pointer; }
   cursor: pointer; font: 500 12px/1 Inter, sans-serif; padding: 5px 12px; border-radius: 20px; border: 1px solid transparent;
   background: color-mix(in srgb, var(--text) 6%, transparent); color: color-mix(in srgb, var(--text) 60%, transparent);
 }
-.chip.active { color: var(--accent); border-color: var(--accent); background: rgba(145, 132, 217, .1); }
+.chip.active { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .chip-bar__clear { cursor: pointer; font: 500 12px/1 Inter, sans-serif; color: color-mix(in srgb, var(--text) 50%, transparent); margin-left: 6px; background: none; border: none; }
 .chip-bar__clear:hover { color: var(--text); }
 
@@ -561,11 +561,14 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 .backup-actions .file-button { display: inline-flex; align-items: center; }
 .backup-actions button:disabled, .backup-actions .file-button[aria-disabled="true"] { opacity: 0.6; cursor: default; }
 
+/* Fixed green/grey regardless of the user's accent color — an on/off
+   toggle should read as on/off at a glance, not blend into whatever
+   accent happens to be chosen. */
 .toggle { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; cursor: pointer; }
 .toggle input { opacity: 0; width: 0; height: 0; }
-.toggle span { position: absolute; inset: 0; background: color-mix(in srgb, var(--text) 20%, transparent); border-radius: 20px; transition: background .15s; }
+.toggle span { position: absolute; inset: 0; background: #8e8e93; border-radius: 20px; transition: background .15s; }
 .toggle span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform .15s; }
-.toggle input:checked + span { background: var(--accent); }
+.toggle input:checked + span { background: #34c759; }
 .toggle input:checked + span::before { transform: translateX(14px); }
 
 /* ---------- Toasts ---------- */

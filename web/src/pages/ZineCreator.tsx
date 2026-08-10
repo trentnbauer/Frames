@@ -901,10 +901,15 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
       const cellY = i * (cellH + gap);
       // CSS `padding: pct%` is always relative to the box's *width*, on every side.
       const padPx = (spec.borderPct / 100) * spec.widthPx;
-      ctx.fillStyle = spec.borderColor;
-      ctx.fillRect(0, cellY, spec.widthPx, cellH);
       const photoId = spec.slotPhotos[spec.images[i]];
+      // Only paint the border-color fill when there's actually a photo to
+      // frame — otherwise an empty slot on a cover overwrote the cover's
+      // own bgColor with the (often white) border color, and the text
+      // overlay's contrast scrim on top of that read as a washed-out gray
+      // gradient instead of showing the intended solid cover color.
       if (photoId != null) {
+        ctx.fillStyle = spec.borderColor;
+        ctx.fillRect(0, cellY, spec.widthPx, cellH);
         const img = await loadImage(`/files/display/${photoId}`);
         if (img) {
           const draw = spec.imageFit === 'contain' ? drawContainFit : drawCoverFit;
