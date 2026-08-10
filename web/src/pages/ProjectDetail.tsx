@@ -146,6 +146,9 @@ export function ProjectDetail({ projectId, onBack, onImport, onDeleted, onChange
           <select className="light-pref-select" value={idea.light_pref} onChange={(e) => updateField('light_pref', e.target.value as LightPref)}>
             {LIGHT_PREFS.map((lp) => <option key={lp} value={lp}>{lp.replace('_', ' ')}</option>)}
           </select>
+          <a className="btn" href={api.ideas.briefUrl(projectId)} target="_blank" rel="noopener noreferrer">
+            Contact Sheet / Brief
+          </a>
           {isFinished && <a className="btn btn-accent" href={api.ideas.exportUrl(projectId)}>Download Photos</a>}
           {isFinished && <span className="finished-badge">✓ Finished</span>}
           {!isFinished && <button className="btn" onClick={markFinished}>Mark as Finished</button>}

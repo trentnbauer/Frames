@@ -129,6 +129,38 @@ describe('ideas routes', () => {
     expect(zip.status).toBe(400);
   });
 
+  it('renders a printable brief with the idea title, notes, light pref and frame captions', async () => {
+    const ideaRes = await request(app)
+      .post('/api/ideas')
+      .send({ title: 'Neon <script>alert(1)</script>', notes: 'Shoot low, shoot wide', light_pref: 'night' });
+    const ideaId = ideaRes.body.idea.id;
+    const photo = await uploadPhoto(app, 50, 'brief-me.jpg');
+    await request(app).post(`/api/ideas/${ideaId}/photos`).send({ photoId: photo.id, why: 'strong reflection' });
+
+    const res = await request(app).get(`/api/ideas/${ideaId}/brief`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.text).toContain('Night');
+    expect(res.text).toContain('Shoot low, shoot wide');
+    expect(res.text).toContain('strong reflection');
+    expect(res.text).toContain(`/files/thumb/${photo.id}`);
+    // Title is escaped, not injected as raw HTML.
+    expect(res.text).not.toContain('<script>alert(1)</script>');
+    expect(res.text).toContain('&lt;script&gt;');
+  });
+
+  it('404s a brief for a missing idea', async () => {
+    const res = await request(app).get('/api/ideas/999999/brief');
+    expect(res.status).toBe(404);
+  });
+
+  it('renders a brief for an idea with no frames yet', async () => {
+    const ideaRes = await request(app).post('/api/ideas').send({ title: 'Empty brief' });
+    const res = await request(app).get(`/api/ideas/${ideaRes.body.idea.id}/brief`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('No frames in this idea yet');
+  });
+
   it('deletes an idea without deleting its photos', async () => {
     const ideaRes = await request(app).post('/api/ideas').send({ title: 'Throwaway' });
     const ideaId = ideaRes.body.idea.id;

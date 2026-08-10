@@ -78,6 +78,7 @@ export const api = {
       request<void>(`/api/ideas/${ideaId}/photos/${photoId}`, { method: 'DELETE' }),
     suggestedPhotos: (ideaId: number) => request<{ photos: import('./types').Photo[] }>(`/api/ideas/${ideaId}/suggested-photos`),
     exportUrl: (ideaId: number) => `/api/ideas/${ideaId}/export`,
+    briefUrl: (ideaId: number) => `/api/ideas/${ideaId}/brief`,
   },
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),

@@ -149,6 +149,102 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
   res.json({ photos: rows.map(withTags) });
 });
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
+const LIGHT_PREF_LABELS: Record<string, string> = {
+  any: 'Any light',
+  overcast: 'Overcast',
+  raking_sun: 'Raking sun',
+  golden_hour: 'Golden hour',
+  dark: 'Dark',
+  night: 'Night',
+};
+
+// Self-contained, server-rendered (not React) so it opens cleanly in its own
+// tab with none of the app shell — a phone-ready shoot card up top (title,
+// rule/notes, light preference, frame count — the bits worth reading before
+// you leave the house) followed by a printable contact-sheet grid of every
+// frame currently in the idea, each captioned with its own "why".
+ideasRouter.get('/:id/brief', (req, res) => {
+  const idea = db.prepare('SELECT * FROM ideas WHERE id = ?').get(req.params.id) as IdeaRow | undefined;
+  if (!idea) return res.status(404).send('Idea not found');
+
+  const photos = db
+    .prepare(
+      `SELECT p.*, ip.why, ip.position FROM idea_photos ip
+       JOIN photos p ON p.id = ip.photo_id
+       WHERE ip.idea_id = ? AND p.deleted_at IS NULL ORDER BY ip.position ASC, ip.created_at ASC`
+    )
+    .all(idea.id) as (PhotoRow & { why: string | null })[];
+
+  const title = escapeHtml(idea.title);
+  const notes = idea.notes ? escapeHtml(idea.notes) : '';
+  const lightLabel = LIGHT_PREF_LABELS[idea.light_pref] ?? idea.light_pref;
+
+  const tiles = photos
+    .map((p) => {
+      const details = [p.camera, p.location].filter(Boolean).map((s) => escapeHtml(s as string));
+      const why = p.why ? `<div class="brief-tile__why">${escapeHtml(p.why)}</div>` : '';
+      return `
+        <figure class="brief-tile">
+          <img src="/files/thumb/${p.id}" alt="${escapeHtml(p.filename)}" />
+          <figcaption>
+            ${details.length ? `<div class="brief-tile__details">${details.join(' · ')}</div>` : ''}
+            ${why}
+          </figcaption>
+        </figure>`;
+    })
+    .join('\n');
+
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title} — Frames brief</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; color: #1a1a1a; background: #fff; }
+  .brief-card { border: 1px solid #ddd; border-radius: 10px; padding: 20px; margin-bottom: 28px; max-width: 640px; }
+  .brief-card h1 { margin: 0 0 4px; font-size: 22px; }
+  .brief-card__meta { font-size: 13px; color: #666; margin-bottom: 14px; }
+  .brief-card__light { display: inline-block; background: #eef; border-radius: 20px; padding: 4px 12px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .brief-card__notes { font-size: 15px; line-height: 1.5; white-space: pre-wrap; }
+  .print-btn { border: none; background: #2a2a2a; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-bottom: 20px; }
+  .brief-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; max-width: 1100px; }
+  .brief-tile { margin: 0; border: 1px solid #e4e4e4; border-radius: 8px; overflow: hidden; break-inside: avoid; }
+  .brief-tile img { width: 100%; height: 160px; object-fit: cover; display: block; background: #f2f2f2; }
+  .brief-tile figcaption { padding: 8px; font-size: 12px; color: #444; }
+  .brief-tile__details { font-weight: 600; margin-bottom: 2px; }
+  .brief-tile__why { color: #777; font-style: italic; }
+  .brief-empty { color: #777; font-size: 14px; }
+  @media print {
+    .print-btn { display: none; }
+    body { padding: 0; }
+    .brief-card { border: none; padding: 0; margin-bottom: 18px; }
+    .brief-grid { gap: 8px; }
+  }
+</style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">Print</button>
+  <div class="brief-card">
+    <h1>${title}</h1>
+    <div class="brief-card__meta">${photos.length} frame${photos.length === 1 ? '' : 's'} · ${escapeHtml(idea.status)}</div>
+    <div class="brief-card__light">${escapeHtml(lightLabel)}</div>
+    ${notes ? `<div class="brief-card__notes">${notes}</div>` : ''}
+  </div>
+  ${photos.length > 0 ? `<div class="brief-grid">${tiles}</div>` : '<p class="brief-empty">No frames in this idea yet.</p>'}
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
 ideasRouter.get('/:id/export', async (req, res) => {
   const idea = db.prepare('SELECT * FROM ideas WHERE id = ?').get(req.params.id) as IdeaRow | undefined;
   if (!idea) return res.status(404).json({ error: 'Idea not found' });
