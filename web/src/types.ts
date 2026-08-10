@@ -21,7 +21,10 @@ export interface Photo {
   width: number | null;
   height: number | null;
   camera: string | null;
+  lens: string | null;
   film_stock: string | null;
+  location: string | null;
+  photoshoot: string | null;
   season: string | null;
   tagging_status: TaggingStatus;
   created_at: string;
@@ -64,3 +67,21 @@ export interface VisionProviderProfile {
   hasApiKey: boolean;
   created_at: string;
 }
+
+export interface ComboSuggestion {
+  type: 'tag_location' | 'camera_location';
+  main: string;
+  slug?: string;
+  connector: string;
+  location: string;
+  count: number;
+}
+
+export interface ShootOptions {
+  camera: string[];
+  lens: string[];
+  film_stock: string[];
+  location: string[];
+  photoshoot: string[];
+}
+

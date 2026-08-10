@@ -27,7 +27,7 @@ discoveryRouter.get('/gap-finder', (_req, res) => {
 discoveryRouter.get('/combo-suggestions', (_req, res) => {
   const tagLocation = db
     .prepare(
-      `SELECT t.name as tag, p.location as location, COUNT(*) as count
+      `SELECT t.name as tag, t.slug as slug, p.location as location, COUNT(*) as count
        FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        JOIN tags t ON t.id = pt.tag_id
@@ -37,7 +37,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
        ORDER BY count DESC
        LIMIT 20`
     )
-    .all() as { tag: string; location: string; count: number }[];
+    .all() as { tag: string; slug: string; location: string; count: number }[];
 
   const cameraLocation = db
     .prepare(
@@ -52,7 +52,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
     .all() as { camera: string; location: string; count: number }[];
 
   const combos = [
-    ...tagLocation.map((r) => ({ type: 'tag_location' as const, main: r.tag, connector: 'at', location: r.location, count: r.count })),
+    ...tagLocation.map((r) => ({ type: 'tag_location' as const, main: r.tag, slug: r.slug, connector: 'at', location: r.location, count: r.count })),
     ...cameraLocation.map((r) => ({ type: 'camera_location' as const, main: r.camera, connector: 'at', location: r.location, count: r.count })),
   ];
 

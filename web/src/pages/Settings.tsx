@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { VisionProviderProfile, VisionProviderType } from '../types.js';
+import { applyTheme, getStoredTheme, type Theme } from '../theme.js';
 
 const TYPE_LABELS: Record<VisionProviderType, string> = {
   openai: 'OpenAI',
@@ -10,6 +11,7 @@ const TYPE_LABELS: Record<VisionProviderType, string> = {
 
 export function Settings() {
   const [providers, setProviders] = useState<VisionProviderProfile[]>([]);
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
 
   async function refresh() {
     const res = await api.visionProviders.list();
@@ -19,6 +21,11 @@ export function Settings() {
   useEffect(() => {
     refresh();
   }, []);
+
+  function setThemeAndApply(next: Theme) {
+    applyTheme(next);
+    setTheme(next);
+  }
 
   async function toggle(p: VisionProviderProfile) {
     await api.visionProviders.update(p.id, { enabled: !p.enabled });
@@ -35,7 +42,22 @@ export function Settings() {
 
   return (
     <div className="settings-page">
-      <h2>Settings</h2>
+      <h1 className="page-title">Settings</h1>
+
+      <div className="settings-section-label" style={{ marginTop: 8 }}>Appearance</div>
+      <div className="appearance-row">
+        <div>
+          <div className="appearance-row__title">Theme</div>
+          <div className="appearance-row__sub">
+            {theme === 'dark' ? 'Dark — matches the app default' : 'Light — muted, high-contrast surfaces'}
+          </div>
+        </div>
+        <div className="segmented">
+          <span className={`segmented__opt ${theme === 'dark' ? 'active' : ''}`} onClick={() => setThemeAndApply('dark')}>Dark</span>
+          <span className={`segmented__opt ${theme === 'light' ? 'active' : ''}`} onClick={() => setThemeAndApply('light')}>Light</span>
+        </div>
+      </div>
+
       <h3>Vision auto-tagging</h3>
       <p className="muted">
         Bring your own keys, or point at a self-hosted model — Ollama, LM Studio, llama.cpp server, anything

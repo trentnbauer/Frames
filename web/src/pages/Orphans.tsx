@@ -18,9 +18,11 @@ export function Orphans() {
   }, []);
 
   return (
-    <div className="orphans-page">
-      <h2>Orphans</h2>
-      <p className="muted">Frames with no tags and no idea — nothing good should get lost here.</p>
+    <div>
+      <div style={{ marginBottom: 28 }}>
+        <h1 className="page-title">Orphans</h1>
+        <div className="page-subtitle">Frames with no tags and no project — nothing good should get lost here.</div>
+      </div>
       <div className="photo-grid">
         {photos.map((p) => (
           <PhotoCard key={p.id} photo={p} onClick={() => setOpenPhotoId(p.id)} />

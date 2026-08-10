@@ -13,9 +13,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   photos: {
-    list: (params?: { tag?: string; untagged?: boolean; orphan?: boolean }) => {
+    list: (params?: { tag?: string; camera?: string; location?: string; untagged?: boolean; orphan?: boolean }) => {
       const qs = new URLSearchParams();
       if (params?.tag) qs.set('tag', params.tag);
+      if (params?.camera) qs.set('camera', params.camera);
+      if (params?.location) qs.set('location', params.location);
       if (params?.untagged) qs.set('untagged', 'true');
       if (params?.orphan) qs.set('orphan', 'true');
       const suffix = qs.toString() ? `?${qs}` : '';
@@ -27,9 +29,12 @@ export const api = {
       for (const f of files) form.append('photos', f);
       const res = await fetch('/api/photos/upload', { method: 'POST', body: form });
       if (!res.ok) throw new Error('Upload failed');
-      return res.json();
+      return res.json() as Promise<{ results: { photo: import('./types').Photo; wasDuplicate: boolean }[] }>;
     },
+    update: (id: number, data: Partial<{ camera: string; lens: string; film_stock: string; location: string; photoshoot: string }>) =>
+      request<{ photo: import('./types').Photo }>(`/api/photos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number) => request<void>(`/api/photos/${id}`, { method: 'DELETE' }),
+    shootOptions: () => request<import('./types').ShootOptions>('/api/photos/shoot-options'),
     addTag: (photoId: number, name: string, source?: 'user_confirmed' | 'user_added') =>
       request(`/api/photos/${photoId}/tags`, { method: 'POST', body: JSON.stringify({ name, source }) }),
     confirmTag: (photoId: number, tagId: number) =>
@@ -56,11 +61,13 @@ export const api = {
       request(`/api/ideas/${ideaId}/photos/${photoId}`, { method: 'PATCH', body: JSON.stringify({ why }) }),
     removePhoto: (ideaId: number, photoId: number) =>
       request<void>(`/api/ideas/${ideaId}/photos/${photoId}`, { method: 'DELETE' }),
+    suggestedPhotos: (ideaId: number) => request<{ photos: import('./types').Photo[] }>(`/api/ideas/${ideaId}/suggested-photos`),
     exportUrl: (ideaId: number) => `/api/ideas/${ideaId}/export`,
   },
   discovery: {
     gapFinder: () => request<{ gaps: { id: number; slug: string; name: string; unclaimed_count: number }[] }>('/api/gap-finder'),
     orphans: () => request<{ photos: import('./types').Photo[] }>('/api/orphans'),
+    comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
   },
   visionProviders: {
     list: () => request<{ providers: import('./types').VisionProviderProfile[] }>('/api/vision-providers'),

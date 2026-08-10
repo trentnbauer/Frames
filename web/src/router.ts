@@ -1,18 +1,18 @@
 // Small hand-rolled router: no dependency, just enough History API wiring so
 // the browser's back/forward buttons step through app views instead of
-// leaving the SPA entirely (there was previously no URL state at all).
+// leaving the SPA entirely.
 
-export type Tab = 'grid' | 'ideas' | 'gaps' | 'orphans' | 'settings';
+export type Screen = 'dashboard' | 'library' | 'import' | 'orphans' | 'settings' | 'project';
 
 export interface Route {
-  tab: Tab;
-  ideaId: number | null;
+  screen: Screen;
+  projectId: number | null;
 }
 
-const TAB_PATHS: Record<Tab, string> = {
-  grid: '/',
-  ideas: '/ideas',
-  gaps: '/gaps',
+const SCREEN_PATHS: Record<Exclude<Screen, 'project'>, string> = {
+  dashboard: '/',
+  library: '/library',
+  import: '/import',
   orphans: '/orphans',
   settings: '/settings',
 };
@@ -20,15 +20,17 @@ const TAB_PATHS: Record<Tab, string> = {
 export function parseRoute(): Route {
   const { pathname } = window.location;
 
-  const ideaMatch = pathname.match(/^\/ideas\/(\d+)$/);
-  if (ideaMatch) return { tab: 'ideas', ideaId: Number(ideaMatch[1]) };
+  const projectMatch = pathname.match(/^\/projects\/(\d+)$/);
+  if (projectMatch) return { screen: 'project', projectId: Number(projectMatch[1]) };
 
-  const tab = (Object.keys(TAB_PATHS) as Tab[]).find((t) => TAB_PATHS[t] === pathname) ?? 'grid';
-  return { tab, ideaId: null };
+  const screen = (Object.keys(SCREEN_PATHS) as (keyof typeof SCREEN_PATHS)[]).find(
+    (s) => SCREEN_PATHS[s] === pathname
+  );
+  return { screen: screen ?? 'dashboard', projectId: null };
 }
 
 function pathFor(route: Route): string {
-  return route.ideaId != null ? `/ideas/${route.ideaId}` : TAB_PATHS[route.tab];
+  return route.projectId != null ? `/projects/${route.projectId}` : SCREEN_PATHS[route.screen as Exclude<Screen, 'project'>];
 }
 
 export function navigate(route: Route) {

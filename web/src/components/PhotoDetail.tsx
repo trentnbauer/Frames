@@ -55,12 +55,30 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea }: Prop
     await refresh();
   }
 
-  async function addToIdea() {
+  async function addToProject() {
     if (!selectedIdeaId) return;
     await api.ideas.addPhoto(Number(selectedIdeaId), photo!.id);
     await refresh();
     onAddedToIdea?.(Number(selectedIdeaId));
   }
+
+  async function removeFromProject(ideaId: number) {
+    await api.ideas.removePhoto(ideaId, photo!.id);
+    await refresh();
+    onChanged();
+  }
+
+  async function setWhy(ideaId: number, why: string) {
+    await api.ideas.setWhy(ideaId, photo!.id, why);
+    await refresh();
+  }
+
+  async function updateField(field: 'camera' | 'lens' | 'film_stock' | 'location' | 'photoshoot', value: string) {
+    await api.photos.update(photo!.id, { [field]: value });
+    await refresh();
+  }
+
+  const metaLine = [photo.camera, photo.lens, photo.film_stock, photo.location, photo.season].filter(Boolean).join(' · ');
 
   return (
     <div className="photo-detail-overlay" onClick={onClose}>
@@ -70,9 +88,7 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea }: Prop
 
         <div className="photo-detail__meta">
           <div>{photo.filename}</div>
-          <div className="photo-detail__meta-sub">
-            {[photo.camera, photo.film_stock, photo.season].filter(Boolean).join(' · ') || 'No metadata parsed'}
-          </div>
+          <div className="photo-detail__meta-sub">{metaLine || 'No shoot details yet'}</div>
         </div>
 
         <section>
@@ -100,21 +116,38 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea }: Prop
         </section>
 
         <section>
-          <h3>In ideas</h3>
-          {memberIdeas.length === 0 && <p className="muted">Not in any idea yet.</p>}
-          <ul>
-            {memberIdeas.map((i) => (
-              <li key={i.id}>{i.title}{i.why ? ` — ${i.why}` : ''}</li>
-            ))}
-          </ul>
+          <h3>Shoot details</h3>
+          <div className="import-row__fields-grid" style={{ marginBottom: 8 }}>
+            <input className="field-input" defaultValue={photo.camera ?? ''} placeholder="Camera model" onBlur={(e) => e.target.value !== (photo.camera ?? '') && updateField('camera', e.target.value)} />
+            <input className="field-input" defaultValue={photo.lens ?? ''} placeholder="Lens" onBlur={(e) => e.target.value !== (photo.lens ?? '') && updateField('lens', e.target.value)} />
+            <input className="field-input" defaultValue={photo.film_stock ?? ''} placeholder="Film stock" onBlur={(e) => e.target.value !== (photo.film_stock ?? '') && updateField('film_stock', e.target.value)} />
+            <input className="field-input" defaultValue={photo.location ?? ''} placeholder="Location" onBlur={(e) => e.target.value !== (photo.location ?? '') && updateField('location', e.target.value)} />
+          </div>
+          <input className="field-input" defaultValue={photo.photoshoot ?? ''} placeholder="Photoshoot" onBlur={(e) => e.target.value !== (photo.photoshoot ?? '') && updateField('photoshoot', e.target.value)} />
+        </section>
+
+        <section>
+          <h3>In projects</h3>
+          {memberIdeas.length === 0 && <p className="muted">Not in any project yet.</p>}
+          {memberIdeas.map((i) => (
+            <div key={i.id} className="add-tag-row" style={{ alignItems: 'center' }}>
+              <span style={{ flex: 'none', fontWeight: 600, fontSize: 13 }}>{i.title}</span>
+              <input
+                defaultValue={i.why ?? ''}
+                placeholder="why this frame belongs…"
+                onBlur={(e) => e.target.value !== (i.why ?? '') && setWhy(i.id, e.target.value)}
+              />
+              <button className="btn btn-danger" onClick={() => removeFromProject(i.id)}>Remove</button>
+            </div>
+          ))}
           <div className="add-tag-row">
             <select value={selectedIdeaId} onChange={(e) => setSelectedIdeaId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Add to idea…</option>
+              <option value="">Add to project…</option>
               {allIdeas.map((idea) => (
                 <option key={idea.id} value={idea.id}>{idea.title}</option>
               ))}
             </select>
-            <button onClick={addToIdea} disabled={!selectedIdeaId}>Drop in</button>
+            <button onClick={addToProject} disabled={!selectedIdeaId}>Drop in</button>
           </div>
         </section>
       </div>
