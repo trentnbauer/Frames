@@ -13,6 +13,17 @@ services:
     environment:
       - PORT=4000
       - DATA_DIR=/data
+      # Optional vision-provider / import-button env vars — see .env.example.
+      # - FRAMES_OPENAI_API_KEY=${FRAMES_OPENAI_API_KEY:-}
+      # - FRAMES_OPENAI_MODEL=${FRAMES_OPENAI_MODEL:-}
+      # - FRAMES_ANTHROPIC_API_KEY=${FRAMES_ANTHROPIC_API_KEY:-}
+      # - FRAMES_ANTHROPIC_MODEL=${FRAMES_ANTHROPIC_MODEL:-}
+      # - FRAMES_SELF_HOSTED_BASE_URL=${FRAMES_SELF_HOSTED_BASE_URL:-}
+      # - FRAMES_SELF_HOSTED_API_KEY=${FRAMES_SELF_HOSTED_API_KEY:-}
+      # - FRAMES_SELF_HOSTED_MODEL=${FRAMES_SELF_HOSTED_MODEL:-}
+      # - FRAMES_GOOGLE_API_KEY=${FRAMES_GOOGLE_API_KEY:-}
+      # - FRAMES_GOOGLE_CLIENT_ID=${FRAMES_GOOGLE_CLIENT_ID:-}
+      # - FRAMES_DROPBOX_APP_KEY=${FRAMES_DROPBOX_APP_KEY:-}
     volumes:
       - ./server/src:/app/server/src
       - ./data:/data

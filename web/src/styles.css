@@ -513,6 +513,14 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
   background: var(--accent); border: none; color: #161826; padding: 8px 12px; border-radius: 4px; align-self: flex-start;
 }
 
+.backup-actions { display: flex; gap: 8px; align-items: center; }
+.backup-actions button, .backup-actions .file-button {
+  background: var(--accent); border: none; color: #161826; padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 14px; font-family: inherit;
+}
+.backup-actions .file-button { display: inline-flex; align-items: center; }
+.backup-actions button:disabled, .backup-actions .file-button[aria-disabled="true"] { opacity: 0.6; cursor: default; }
+
 .toggle { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; cursor: pointer; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle span { position: absolute; inset: 0; background: color-mix(in srgb, var(--text) 20%, transparent); border-radius: 20px; transition: background .15s; }

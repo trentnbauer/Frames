@@ -120,6 +120,58 @@ export function Settings() {
       </div>
 
       <NewProviderForm onCreated={refresh} />
+
+      <div className="settings-section-label" style={{ marginTop: 24 }}>Backup</div>
+      <BackupSection />
+    </div>
+  );
+}
+
+function BackupSection() {
+  const [importing, setImporting] = useState(false);
+  const showToast = useToast();
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const ok = confirm(
+      'This replaces your entire photo library and database with the contents of this backup file. ' +
+        'Your current data is moved aside (not deleted) as a safety net, but everything added since this ' +
+        'backup was made will be gone from the app. The server will restart. Continue?'
+    );
+    if (!ok) return;
+
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('backup', file);
+      const res = await fetch('/api/backup/import', { method: 'POST', body: formData });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Import failed: ${res.status}`);
+      showToast(body.message || 'Restored — reload in a few seconds.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Import failed');
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 8 }}>
+      <p className="muted">
+        Export a full snapshot of your database and photo library as a zip, or restore from one. Restoring
+        replaces everything currently in Frames.
+      </p>
+      <div className="backup-actions">
+        <button type="button" onClick={() => (window.location.href = '/api/backup/export')}>
+          Export backup
+        </button>
+        <label className="file-button">
+          {importing ? 'Restoring…' : 'Import backup'}
+          <input type="file" accept=".zip" onChange={handleImport} disabled={importing} style={{ display: 'none' }} />
+        </label>
+      </div>
     </div>
   );
 }

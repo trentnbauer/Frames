@@ -3,14 +3,19 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import './db.js';
+import { seedProvidersFromEnv } from './lib/envProviders.js';
 import { photosRouter } from './routes/photos.js';
 import { tagsRouter } from './routes/tags.js';
 import { ideasRouter } from './routes/ideas.js';
 import { discoveryRouter } from './routes/discovery.js';
 import { visionProvidersRouter } from './routes/visionProviders.js';
 import { filesRouter } from './routes/files.js';
+import { configRouter } from './routes/config.js';
+import { backupRouter } from './routes/backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+seedProvidersFromEnv();
 
 export const app = express();
 app.use(express.json());
@@ -20,6 +25,8 @@ app.use('/api/tags', tagsRouter);
 app.use('/api/ideas', ideasRouter);
 app.use('/api/vision-providers', visionProvidersRouter);
 app.use('/api', discoveryRouter);
+app.use('/api/config', configRouter);
+app.use('/api/backup', backupRouter);
 app.use('/files', filesRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
