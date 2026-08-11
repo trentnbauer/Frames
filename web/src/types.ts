@@ -95,9 +95,18 @@ export interface ComboSuggestion {
   count: number;
 }
 
+export interface MapPoint {
+  id: number;
+  filename: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface NearDuplicateGroup {
   id: number;
   filename: string;
+  width: number | null;
+  height: number | null;
 }
 
 export interface ShootOptions {

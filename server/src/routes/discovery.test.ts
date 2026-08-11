@@ -88,9 +88,15 @@ describe('discovery routes', () => {
 
     const res = await request(app).get('/api/near-duplicates');
     expect(res.status).toBe(200);
-    const group = (res.body.groups as { id: number }[][]).find((g) => g.some((p) => p.id === a.id));
+    const group = (res.body.groups as { id: number; width: number; height: number }[][]).find((g) => g.some((p) => p.id === a.id));
     expect(group).toBeTruthy();
     expect(group!.map((p) => p.id)).toContain(b.id);
+    // width/height ride along so the client can pick "largest" within a
+    // group (see Library.tsx's keepLargestInGroup) without a second fetch.
+    for (const p of group!) {
+      expect(typeof p.width).toBe('number');
+      expect(typeof p.height).toBe('number');
+    }
   });
 
   it('excludes soft-deleted photos from near-duplicate groups', async () => {
@@ -100,5 +106,36 @@ describe('discovery routes', () => {
     const res = await request(app).get('/api/near-duplicates');
     const allIds = (res.body.groups as { id: number }[][]).flatMap((g) => g.map((p) => p.id));
     expect(allIds).not.toContain(trashed.id);
+  });
+
+  it('surfaces photos taken on this month+day in a previous year, not this year or other days', async () => {
+    // No fixture carries real EXIF, so taken_at has to be set directly —
+    // same DB singleton the app under test already initialized against
+    // this test file's isolated DATA_DIR (see helpers.ts).
+    const { default: db } = await import('../db.js');
+
+    // SQLite's 'now' is UTC — build all reference dates from UTC parts too,
+    // or this flakes depending on the machine's local timezone/time of day.
+    const now = new Date();
+    const [y, m, d] = [now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()];
+
+    const sameDayPastYear = await uploadPhoto(app, 80, 'anniversary.jpg');
+    const pastYearIso = new Date(Date.UTC(y - 3, m, d, 12)).toISOString();
+    db.prepare('UPDATE photos SET taken_at = ? WHERE id = ?').run(pastYearIso, sameDayPastYear.id);
+
+    const sameDayThisYear = await uploadPhoto(app, 81, 'today-this-year.jpg');
+    const thisYearIso = new Date(Date.UTC(y, m, d, 12)).toISOString();
+    db.prepare('UPDATE photos SET taken_at = ? WHERE id = ?').run(thisYearIso, sameDayThisYear.id);
+
+    const differentDay = await uploadPhoto(app, 82, 'unrelated-day.jpg');
+    const otherDayIso = new Date(Date.UTC(y - 1, (m + 6) % 12, 1, 12)).toISOString();
+    db.prepare('UPDATE photos SET taken_at = ? WHERE id = ?').run(otherDayIso, differentDay.id);
+
+    const res = await request(app).get('/api/on-this-day');
+    expect(res.status).toBe(200);
+    const ids = res.body.photos.map((p: { id: number }) => p.id);
+    expect(ids).toContain(sameDayPastYear.id);
+    expect(ids).not.toContain(sameDayThisYear.id);
+    expect(ids).not.toContain(differentDay.id);
   });
 });

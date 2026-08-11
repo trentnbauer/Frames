@@ -1,3 +1,10 @@
+# Frames has no built-in login, users, or access control of any kind — every
+# route (view/delete photos, restore-from-backup which replaces the entire
+# library, vision-provider API keys) is open to anyone who can reach this
+# port. The `ports: 4000:4000` mapping below exposes it directly on the
+# host's network. Do not put this on the open internet as-is — put it behind
+# a reverse proxy (Caddy, nginx, Traefik) with auth (basic auth, oauth2-proxy,
+# Authelia, etc.) or keep it on a private network / VPN / Tailscale only.
 services:
   app:
     build: .

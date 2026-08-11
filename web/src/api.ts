@@ -49,7 +49,12 @@ export const api = {
       for (const f of files) form.append('photos', f);
       const res = await fetch('/api/photos/upload', { method: 'POST', body: form });
       if (!res.ok) throw new Error('Upload failed');
-      return res.json() as Promise<{ results: { photo: import('./types').Photo; wasDuplicate: boolean }[] }>;
+      return res.json() as Promise<{
+        results: (
+          | { ok: true; photo: import('./types').Photo; wasDuplicate: boolean }
+          | { ok: false; filename: string; error: string }
+        )[];
+      }>;
     },
     update: (id: number, data: Partial<{ camera: string; lens: string; film_stock: string; location: string; photoshoot: string }>) =>
       request<{ photo: import('./types').Photo }>(`/api/photos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -99,6 +104,8 @@ export const api = {
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
     nearDuplicates: () => request<{ groups: import('./types').NearDuplicateGroup[][] }>('/api/near-duplicates'),
+    onThisDay: () => request<{ photos: import('./types').Photo[] }>('/api/on-this-day'),
+    mapPoints: () => request<{ points: import('./types').MapPoint[] }>('/api/map-points'),
   },
   config: {
     get: () =>

@@ -1,8 +1,41 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { hammingDistance } from '../lib/phash.js';
+import { withTags } from '../lib/withTags.js';
+import type { PhotoRow } from '../types.js';
 
 export const discoveryRouter = Router();
+
+// Photos taken on this month+day in a previous year — an "on this day"
+// callback, only possible because EXIF capture date is now stored
+// separately from upload date. strftime('%m-%d', ...) ignores the year on
+// both sides of the comparison.
+discoveryRouter.get('/on-this-day', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT p.* FROM photos p
+       WHERE p.deleted_at IS NULL AND p.taken_at IS NOT NULL
+         AND strftime('%m-%d', p.taken_at) = strftime('%m-%d', 'now')
+         AND strftime('%Y', p.taken_at) != strftime('%Y', 'now')
+       ORDER BY p.taken_at DESC`
+    )
+    .all() as PhotoRow[];
+  res.json({ photos: rows.map(withTags) });
+});
+
+// Lightweight pin list for the map view — just the fields a marker needs,
+// not the full photo row (tags, palette, etc.), since a library-wide map
+// can have hundreds of points and doesn't need any of that until a pin is
+// actually clicked (Photo Detail fetches the full record then).
+discoveryRouter.get('/map-points', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, filename, latitude, longitude FROM photos
+       WHERE deleted_at IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL`
+    )
+    .all();
+  res.json({ points: rows });
+});
 
 // Same frame re-scanned, a re-export at a different size/quality, a
 // near-identical burst-shot twin — anything closer than this on the 64-bit
@@ -15,8 +48,8 @@ const NEAR_DUPLICATE_THRESHOLD = 6;
 // reasoning already applied to Library.tsx's client-side multi-tag filter.
 discoveryRouter.get('/near-duplicates', (_req, res) => {
   const rows = db
-    .prepare(`SELECT id, filename, phash FROM photos WHERE deleted_at IS NULL AND phash IS NOT NULL`)
-    .all() as { id: number; filename: string; phash: string }[];
+    .prepare(`SELECT id, filename, phash, width, height FROM photos WHERE deleted_at IS NULL AND phash IS NOT NULL`)
+    .all() as { id: number; filename: string; phash: string; width: number | null; height: number | null }[];
 
   const parent = new Map<number, number>();
   for (const r of rows) parent.set(r.id, r.id);
@@ -45,11 +78,11 @@ discoveryRouter.get('/near-duplicates', (_req, res) => {
     }
   }
 
-  const groups = new Map<number, { id: number; filename: string }[]>();
+  const groups = new Map<number, { id: number; filename: string; width: number | null; height: number | null }[]>();
   for (const r of rows) {
     const root = find(r.id);
     if (!groups.has(root)) groups.set(root, []);
-    groups.get(root)!.push({ id: r.id, filename: r.filename });
+    groups.get(root)!.push({ id: r.id, filename: r.filename, width: r.width, height: r.height });
   }
 
   const clusters = Array.from(groups.values())

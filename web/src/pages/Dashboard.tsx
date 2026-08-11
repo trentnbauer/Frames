@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import type { ComboSuggestion, Idea, IdeaPhoto } from '../types.js';
+import type { ComboSuggestion, Idea, IdeaPhoto, Photo } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { useToast } from '../toast.js';
 import { getStoredLocation, setStoredLocation } from '../weatherLocation.js';
 import { ColorDot } from '../components/ColorDot.js';
 import { COLOR_TAG_NAMES } from '../colorNames.js';
+import { PhotoDetail } from '../components/PhotoDetail.js';
 
 interface Props {
   ideas: Idea[];
@@ -88,6 +89,7 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
       </div>
 
       <WeatherWidget onOpenProject={onOpenProject} />
+      <OnThisDayWidget />
       <NudgeDigest ideas={ideas} onOpenProject={onOpenProject} />
 
       {suggestion && (
@@ -184,6 +186,48 @@ function NudgeDigest({ ideas, onOpenProject }: { ideas: Idea[]; onOpenProject: (
           <span className="muted">{idea.nudge!.message}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+// A film-archive callback made possible by storing EXIF capture date
+// separately from upload date (see taken_at) — only ever shows something
+// on days that actually have a photo from a previous year, so it stays
+// invisible (no empty-state clutter) most days.
+function OnThisDayWidget() {
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
+
+  async function refresh() {
+    const res = await api.discovery.onThisDay();
+    setPhotos(res.photos);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  if (photos.length === 0) return null;
+
+  const thisYear = new Date().getFullYear();
+
+  return (
+    <div className="weather-widget">
+      <div className="weather-widget__head">
+        <div className="weather-widget__title">On this day</div>
+      </div>
+      <div className="on-this-day__grid">
+        {photos.map((p) => {
+          const years = p.taken_at ? thisYear - new Date(p.taken_at).getFullYear() : null;
+          return (
+            <button key={p.id} className="on-this-day__tile" onClick={() => setOpenPhotoId(p.id)} title={p.filename}>
+              <img src={`/files/thumb/${p.id}`} alt={p.filename} />
+              {!!years && years > 0 && <span className="on-this-day__years">{years}y ago</span>}
+            </button>
+          );
+        })}
+      </div>
+      {openPhotoId !== null && <PhotoDetail photoId={openPhotoId} onClose={() => setOpenPhotoId(null)} onChanged={refresh} />}
     </div>
   );
 }

@@ -53,10 +53,18 @@ backupRouter.post('/import', upload.single('backup'), async (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'No backup file uploaded' });
 
+  // multer (dest: os.tmpdir() above) already writes the upload to a
+  // random-named file directly under the OS tmp dir, but file.path is
+  // still a value derived from request data — re-deriving it from just the
+  // basename before any filesystem call anchors it back under tmpdir
+  // regardless, so a crafted upload can't smuggle a path-traversal segment
+  // into where these operations read from or delete.
+  const uploadPath = path.join(os.tmpdir(), path.basename(file.path));
+
   const extractDir = path.join(os.tmpdir(), `frames-restore-${Date.now()}`);
 
   try {
-    const zip = new AdmZip(file.path);
+    const zip = new AdmZip(uploadPath);
     zip.extractAllTo(extractDir, true);
 
     const extractedDb = path.join(extractDir, 'frames.db');
@@ -88,7 +96,7 @@ backupRouter.post('/import', upload.single('backup'), async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Import failed' });
   } finally {
-    fs.rm(file.path, { force: true }, () => {});
+    fs.rm(uploadPath, { force: true }, () => {});
     fs.rm(extractDir, { recursive: true, force: true }, () => {});
   }
 });
