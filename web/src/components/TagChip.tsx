@@ -13,7 +13,11 @@ export function TagChip({ tag, onConfirm, onDismiss, onNoteChange }: Props) {
   // model could get wrong — asking the user to confirm it the same way
   // as a fallible vision-model suggestion is busywork with nothing to
   // actually resolve, so it skips the pending/confirm treatment entirely.
-  const isColorTag = tag.note === 'dominant color';
+  // The note is user-editable (below), so the marker is a deliberately
+  // unnatural string — a plain phrase like "dominant color" could plausibly
+  // be typed as a genuine note on a real suggested tag, silently marking
+  // it "confirmed" without the user ever actually confirming it.
+  const isColorTag = tag.note === 'auto:dominant-color';
   const isSuggestion = tag.source === 'ai_suggested' && !isColorTag;
 
   return (

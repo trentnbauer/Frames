@@ -15,7 +15,7 @@ discoveryRouter.get('/gap-finder', (_req, res) => {
        JOIN tags t ON t.id = pt.tag_id
        JOIN photos p ON p.id = pt.photo_id
        WHERE p.deleted_at IS NULL
-         AND pt.note IS NOT 'dominant color'
+         AND pt.note IS NOT 'auto:dominant-color'
          AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = pt.photo_id)
        GROUP BY t.id
        HAVING unclaimed_count > 0
@@ -39,7 +39,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
        FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        JOIN tags t ON t.id = pt.tag_id
-       WHERE p.deleted_at IS NULL AND p.location IS NOT NULL AND p.location != '' AND pt.note IS NOT 'dominant color'
+       WHERE p.deleted_at IS NULL AND p.location IS NOT NULL AND p.location != '' AND pt.note IS NOT 'auto:dominant-color'
        GROUP BY t.id, p.location
        HAVING count > 0
        ORDER BY count DESC
@@ -53,7 +53,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
        FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        JOIN tags t ON t.id = pt.tag_id
-       WHERE p.deleted_at IS NULL AND p.season IS NOT NULL AND p.season != '' AND pt.note IS NOT 'dominant color'
+       WHERE p.deleted_at IS NULL AND p.season IS NOT NULL AND p.season != '' AND pt.note IS NOT 'auto:dominant-color'
        GROUP BY t.id, p.season
        HAVING count > 0
        ORDER BY count DESC
@@ -67,7 +67,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
        FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        JOIN tags t ON t.id = pt.tag_id
-       WHERE p.deleted_at IS NULL AND p.film_stock IS NOT NULL AND p.film_stock != '' AND pt.note IS NOT 'dominant color'
+       WHERE p.deleted_at IS NULL AND p.film_stock IS NOT NULL AND p.film_stock != '' AND pt.note IS NOT 'auto:dominant-color'
        GROUP BY t.id, p.film_stock
        HAVING count > 0
        ORDER BY count DESC
@@ -96,7 +96,7 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
        JOIN tags ta ON ta.id = pta.tag_id
        JOIN tags tb ON tb.id = ptb.tag_id
        JOIN photos p ON p.id = pta.photo_id
-       WHERE p.deleted_at IS NULL AND pta.note IS NOT 'dominant color' AND ptb.note IS NOT 'dominant color'
+       WHERE p.deleted_at IS NULL AND pta.note IS NOT 'auto:dominant-color' AND ptb.note IS NOT 'auto:dominant-color'
        GROUP BY pta.tag_id, ptb.tag_id
        HAVING count >= 2
        ORDER BY count DESC
@@ -123,7 +123,7 @@ discoveryRouter.get('/orphans', (_req, res) => {
     .prepare(
       `SELECT p.* FROM photos p
        WHERE p.deleted_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.note IS NOT 'dominant color')
+         AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.note IS NOT 'auto:dominant-color')
          AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)
        ORDER BY p.created_at DESC`
     )

@@ -48,14 +48,17 @@ photosRouter.get('/', (req, res) => {
   let total: number;
 
   if (untagged === 'true') {
-    const where = `WHERE ${trashClause} AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)`;
+    // The automatic dominant-color tag doesn't count as "tagged" — every
+    // photo gets one, so counting it here would mean no photo could ever
+    // be untagged again (same reasoning as /api/orphans in discovery.ts).
+    const where = `WHERE ${trashClause} AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.note IS NOT 'auto:dominant-color')`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
       .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
       .all(...pageParams) as PhotoRow[];
   } else if (orphan === 'true') {
     const where = `WHERE ${trashClause}
-                     AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id)
+                     AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.note IS NOT 'auto:dominant-color')
                      AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
@@ -140,18 +143,31 @@ photosRouter.get('/:id', (req, res) => {
   res.json({ photo: withTags(photo), ideas });
 });
 
+// Trashing/restoring/permanently-removing a photo changes what's visibly
+// in every idea it's a member of, the same as adding/removing it directly
+// — so those ideas' updated_at needs to move too, or "sort by updated"
+// silently goes stale for this path. Reads idea_photos rather than
+// requiring callers to know which ideas are affected; must run BEFORE an
+// actual DELETE FROM photos, since the ON DELETE CASCADE on idea_photos
+// would otherwise remove the very rows this looks up.
+const touchIdeasForPhoto = db.prepare(
+  "UPDATE ideas SET updated_at = datetime('now') WHERE id IN (SELECT idea_id FROM idea_photos WHERE photo_id = ?)"
+);
+
 // Soft delete: hides the photo everywhere (Library, idea grids, discovery)
 // without touching the original file, so it's recoverable. Permanent
 // removal is a separate, explicit action (see /:id/permanent below).
 photosRouter.delete('/:id', (req, res) => {
   const result = db.prepare("UPDATE photos SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Photo not found' });
+  touchIdeasForPhoto.run(req.params.id);
   res.status(204).end();
 });
 
 photosRouter.post('/:id/restore', (req, res) => {
   const result = db.prepare('UPDATE photos SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Photo not found in trash' });
+  touchIdeasForPhoto.run(req.params.id);
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow;
   res.json({ photo: withTags(photo) });
 });
@@ -162,6 +178,7 @@ photosRouter.delete('/:id/permanent', (req, res) => {
   const photo = db.prepare('SELECT * FROM photos WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id) as PhotoRow | undefined;
   if (!photo) return res.status(404).json({ error: 'Photo not found in trash' });
 
+  touchIdeasForPhoto.run(photo.id);
   db.prepare('DELETE FROM photos WHERE id = ?').run(photo.id);
 
   for (const [dir, file] of [

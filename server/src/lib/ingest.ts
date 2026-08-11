@@ -103,7 +103,7 @@ function addColorTags(photoId: number, palette: string[]) {
       if (!slug) continue;
       insertTag.run(slug, name);
       const tagRow = findTagBySlug.get(slug) as { id: number };
-      linkTag.run(photoId, tagRow.id, 'dominant color');
+      linkTag.run(photoId, tagRow.id, 'auto:dominant-color');
     }
   });
   tx();

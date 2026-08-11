@@ -463,7 +463,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
               <div className="photo-tile-card__tags">
                 {photo.tags.slice(0, 3).map((t) => (
                   <span key={t.id} className="tag-pill-soft">
-                    {t.note === 'dominant color' && <ColorDot name={t.name} />}
+                    {t.note === 'auto:dominant-color' && <ColorDot name={t.name} />}
                     {t.name}
                   </span>
                 ))}

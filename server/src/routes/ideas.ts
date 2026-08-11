@@ -163,7 +163,7 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
     .prepare(
       `SELECT DISTINCT pt.tag_id FROM idea_photos ip
        JOIN photo_tags pt ON pt.photo_id = ip.photo_id
-       WHERE ip.idea_id = ? AND pt.note IS NOT 'dominant color'`
+       WHERE ip.idea_id = ? AND pt.note IS NOT 'auto:dominant-color'`
     )
     .all(ideaId) as { tag_id: number }[];
 
@@ -177,7 +177,7 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
       `SELECT p.*, COUNT(*) as shared_tag_count FROM photos p
        JOIN photo_tags pt ON pt.photo_id = p.id
        WHERE pt.tag_id IN (${placeholders})
-         AND pt.note IS NOT 'dominant color'
+         AND pt.note IS NOT 'auto:dominant-color'
          AND p.deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.idea_id = ? AND ip.photo_id = p.id)
        GROUP BY p.id
