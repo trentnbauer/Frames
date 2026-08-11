@@ -3,6 +3,9 @@
 CREATE TABLE IF NOT EXISTS photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content_hash TEXT UNIQUE NOT NULL,
+  -- *_path columns are bare filenames within their fixed directory
+  -- (ORIGINALS_DIR / THUMBS_DIR / DISPLAY_DIR), not absolute paths — keeps
+  -- the DB portable across DATA_DIR locations (host vs container, etc).
   original_path TEXT NOT NULL,
   thumb_path TEXT,
   display_path TEXT,
@@ -10,7 +13,10 @@ CREATE TABLE IF NOT EXISTS photos (
   width INTEGER,
   height INTEGER,
   camera TEXT,
+  lens TEXT,
   film_stock TEXT,
+  location TEXT,
+  photoshoot TEXT,
   season TEXT,
   tagging_status TEXT NOT NULL DEFAULT 'pending' CHECK (tagging_status IN ('pending', 'tagged', 'failed', 'skipped')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -62,7 +68,13 @@ CREATE TABLE IF NOT EXISTS idea_references (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
+CREATE TABLE IF NOT EXISTS vision_providers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('openai', 'anthropic', 'self_hosted')),
+  base_url TEXT,
+  api_key TEXT,
+  model TEXT,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -12,7 +12,12 @@ export function streamZip(res: Response, zipName: string, photos: ExportPhoto[])
 
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', (err) => {
-    throw err;
+    // Streaming failure happens mid-response, after headers are already
+    // sent — throwing here is an uncaught exception in an async event
+    // callback, which crashes the whole process (every in-flight request,
+    // not just this one). Log and tear down just this connection instead.
+    console.error('Idea export failed:', err);
+    res.destroy(err);
   });
   archive.pipe(res);
 

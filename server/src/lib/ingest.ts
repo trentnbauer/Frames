@@ -1,15 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import db, { ORIGINALS_DIR } from '../db.js';
+import db, { ORIGINALS_DIR, DISPLAY_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
+import { extractPalette } from './palette.js';
+import { computePerceptualHash } from './phash.js';
+import { hexToColorName } from './colorName.js';
+import { extractExifFields, reverseGeocode } from './exif.js';
 import { parseFilename } from './filenameParser.js';
-import { getVisionProvider } from '../vision/index.js';
+import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
 
 const insertPhoto = db.prepare(`
-  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, film_stock, season, tagging_status)
-  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @film_stock, @season, 'pending')
+  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, lens, location, film_stock, season, palette, taken_at, latitude, longitude, phash, tagging_status)
+  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @lens, @location, @film_stock, @season, @palette, @taken_at, @latitude, @longitude, @phash, 'pending')
 `);
 
 const findByHash = db.prepare('SELECT * FROM photos WHERE content_hash = ?');
@@ -33,26 +37,52 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 
   const derivatives = await generateDerivatives(originalPath, hash);
   const parsed = parseFilename(originalFilename);
+  // Local-buffer parsing only (no network) — fast enough to await inline
+  // alongside derivative generation, unlike the GPS reverse-geocode below.
+  const exif = await extractExifFields(buffer);
 
   const info = insertPhoto.run({
     content_hash: hash,
-    original_path: originalPath,
-    thumb_path: derivatives.thumbPath,
-    display_path: derivatives.displayPath,
+    original_path: path.basename(originalPath),
+    thumb_path: path.basename(derivatives.thumbPath),
+    display_path: path.basename(derivatives.displayPath),
     filename: originalFilename,
     width: derivatives.width,
     height: derivatives.height,
-    camera: parsed.camera,
+    // Filename wins when it matched: a scanned negative/print's own EXIF
+    // usually names the SCANNER (Epson V600, Noritsu, Frontier...), not
+    // the film camera the user already named in the filename.
+    camera: parsed.camera ?? exif.camera,
+    lens: exif.lens,
+    location: null,
     film_stock: parsed.filmStock,
     season: parsed.season,
+    palette: JSON.stringify(derivatives.palette),
+    taken_at: exif.takenAt,
+    latitude: exif.latitude,
+    longitude: exif.longitude,
+    phash: derivatives.phash,
   });
 
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(info.lastInsertRowid) as PhotoRow;
 
+  addColorTags(photo.id, derivatives.palette);
+
+  // Fire and forget, same as auto-tagging: a network round-trip
+  // shouldn't hold up the upload response or serialize a batch upload
+  // behind Nominatim's rate limit.
+  if (exif.latitude != null && exif.longitude != null) {
+    reverseGeocode(exif.latitude, exif.longitude)
+      .then((place) => {
+        if (place) db.prepare('UPDATE photos SET location = ? WHERE id = ?').run(place, photo.id);
+      })
+      .catch((err) => console.error(`Reverse geocode failed for photo ${photo.id}:`, err.message));
+  }
+
   // Fire and forget: auto-tagging shouldn't block the upload response.
   autoTagPhoto(photo).catch((err) => {
-    console.error(`Auto-tag failed for photo ${photo.id}:`, err.message);
-    db.prepare("UPDATE photos SET tagging_status = 'failed' WHERE id = ?").run(photo.id);
+    console.error(`Auto-tag crashed for photo ${photo.id}:`, err.message);
+    db.prepare("UPDATE photos SET tagging_status = 'failed', tagging_error = ? WHERE id = ?").run(err.message, photo.id);
   });
 
   return { photo, wasDuplicate: false };
@@ -61,29 +91,112 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 const insertTag = db.prepare('INSERT INTO tags (slug, name) VALUES (?, ?) ON CONFLICT(slug) DO NOTHING');
 const findTagBySlug = db.prepare('SELECT id FROM tags WHERE slug = ?');
 const linkTag = db.prepare(`
-  INSERT INTO photo_tags (photo_id, tag_id, source) VALUES (?, ?, 'ai_suggested')
+  INSERT INTO photo_tags (photo_id, tag_id, source, note) VALUES (?, ?, 'ai_suggested', ?)
   ON CONFLICT(photo_id, tag_id) DO NOTHING
 `);
 
-async function autoTagPhoto(photo: PhotoRow) {
-  const provider = getVisionProvider();
-  if (!provider || !photo.display_path) {
-    db.prepare("UPDATE photos SET tagging_status = 'skipped' WHERE id = ?").run(photo.id);
-    return;
-  }
-
-  const buffer = fs.readFileSync(photo.display_path);
-  const tagNames = await provider.tagImage(buffer, 'image/jpeg');
-
-  const tx = db.transaction((names: string[]) => {
+// Turns a photo's extracted palette into plain-English color tags (e.g.
+// "red", "teal") — deduped, since several dominant-color buckets often map
+// to the same name (see hexToColorName). Suggested like AI tags (confirm/
+// dismiss in the UI) since a coarse color bucket is a judgment call, not a
+// hard fact.
+function addColorTags(photoId: number, palette: string[]) {
+  const names = new Set(palette.map(hexToColorName));
+  const tx = db.transaction(() => {
     for (const name of names) {
       const slug = slugify(name);
       if (!slug) continue;
       insertTag.run(slug, name);
       const tagRow = findTagBySlug.get(slug) as { id: number };
-      linkTag.run(photo.id, tagRow.id);
+      linkTag.run(photoId, tagRow.id, 'auto:dominant-color');
     }
-    db.prepare("UPDATE photos SET tagging_status = 'tagged' WHERE id = ?").run(photo.id);
   });
-  tx(tagNames);
+  tx();
+}
+
+// Every enabled provider runs against the frame; their suggestions merge
+// (deduped by slug) into one set of ai_suggested tags, noting which
+// provider(s) proposed each one. Exported so it can be re-run on demand
+// (see routes/photos.ts's /retag), not just at ingest time.
+export async function autoTagPhoto(photo: PhotoRow) {
+  const providers = getEnabledProviders();
+  if (providers.length === 0 || !photo.display_path) {
+    db.prepare("UPDATE photos SET tagging_status = 'skipped', tagging_error = NULL WHERE id = ?").run(photo.id);
+    return;
+  }
+
+  const buffer = fs.readFileSync(path.join(DISPLAY_DIR, photo.display_path));
+
+  const results = await Promise.allSettled(providers.map((p) => p.instance.tagImage(buffer, 'image/jpeg')));
+
+  const bySlug = new Map<string, { name: string; sources: string[] }>();
+  let anySucceeded = false;
+  const failures: string[] = [];
+
+  results.forEach((result, i) => {
+    const provider = providers[i];
+    if (result.status === 'rejected') {
+      const message = result.reason?.message ?? String(result.reason);
+      console.error(`Vision provider "${provider.name}" failed for photo ${photo.id}:`, message);
+      failures.push(`${provider.name}: ${message}`);
+      return;
+    }
+    anySucceeded = true;
+    for (const name of result.value) {
+      const slug = slugify(name);
+      if (!slug) continue;
+      const existing = bySlug.get(slug);
+      if (existing) {
+        existing.sources.push(provider.name);
+      } else {
+        bySlug.set(slug, { name, sources: [provider.name] });
+      }
+    }
+  });
+
+  // Surfaced to the user in the UI even when other providers succeeded,
+  // since a failing provider (e.g. a bad API key) is worth knowing about
+  // regardless of whether a different one covered for it.
+  const taggingError = failures.length > 0 ? failures.join('; ') : null;
+
+  const tx = db.transaction(() => {
+    for (const [slug, { name, sources }] of bySlug) {
+      insertTag.run(slug, name);
+      const tagRow = findTagBySlug.get(slug) as { id: number };
+      linkTag.run(photo.id, tagRow.id, `via ${sources.join(', ')}`);
+    }
+    db.prepare('UPDATE photos SET tagging_status = ?, tagging_error = ? WHERE id = ?').run(anySucceeded ? 'tagged' : 'failed', taggingError, photo.id);
+  });
+  tx();
+}
+
+// Photos that predate the color-bar or near-duplicate-detection features
+// (or were added before this server version) are missing a palette and/or
+// a phash — this fills either in from the original file, one photo at a
+// time so a large library doesn't spike memory decoding many images at
+// once. Called automatically at boot (see app.ts); safe to call again
+// since it only ever selects rows still missing one or the other.
+export async function backfillDerivedFields(): Promise<number> {
+  const rows = db
+    .prepare("SELECT id, original_path, palette, phash FROM photos WHERE deleted_at IS NULL AND (palette IS NULL OR phash IS NULL)")
+    .all() as { id: number; original_path: string; palette: string | null; phash: string | null }[];
+  let done = 0;
+  for (const row of rows) {
+    const fullPath = path.join(ORIGINALS_DIR, row.original_path);
+    try {
+      if (row.palette === null) {
+        const palette = await extractPalette(fullPath);
+        db.prepare('UPDATE photos SET palette = ? WHERE id = ?').run(JSON.stringify(palette), row.id);
+        addColorTags(row.id, palette);
+      }
+      if (row.phash === null) {
+        const phash = await computePerceptualHash(fullPath);
+        db.prepare('UPDATE photos SET phash = ? WHERE id = ?').run(phash, row.id);
+      }
+      done += 1;
+    } catch (err) {
+      console.error(`Derived-field backfill failed for photo ${row.id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return done;
 }

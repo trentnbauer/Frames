@@ -33,7 +33,8 @@ shot and find the projects hiding in them, then know what to go shoot next.
 5. **Curate tags.** Accept or dismiss AI suggestions, add your own, and attach a
    note to a tag on a specific frame (e.g. "this is the cast shadow, not paint").
 6. **Export an idea.** Pull a micro-project back out as a zip of its full-res
-   photos — the payoff. (Richer export formats come later; see Backlog.)
+   photos, as a printable contact-sheet / phone-ready shoot brief, or as a
+   one-sheet 8-page cut-and-fold zine — the payoff.
 
 That's the whole of v1. Everything else is deferred (see Non-goals / Backlog).
 
@@ -44,11 +45,21 @@ That's the whole of v1. Everything else is deferred (see Non-goals / Backlog).
 Tagging photos and filling ideas are the same relationship seen from two sides,
 so the app can nudge you both ways:
 
-- **Gap finder:** "6 frames tagged `neon` aren't in any idea — start one?"
-- **Idea filler:** open an idea, see loosely-matching frames that might belong.
+- **Gap finder, realized as combo suggestions:** rather than a standalone
+  tagged-but-unclaimed-frames page, this nudge lives on the Dashboard as the
+  rotating suggested-project banner (see **Combo suggestions** below) —
+  sharper than a plain gap finder because it crosses a structured field too,
+  not just a bare tag.
+- **Idea filler:** open an idea, see loosely-matching frames that might
+  belong — the "+Add N Suggested Photos" button.
 
 The goal is a tool that makes you re-examine your own contact sheets — not one
 that thinks for you and closes the loop.
+
+A dedicated **orphan view** (frames with no tags and no idea) was tried and
+pulled from v1's UI — nothing currently surfaces those frames beyond browsing
+the library unfiltered. Worth revisiting if untagged/unclaimed frames start
+actually getting lost in practice.
 
 ---
 
@@ -101,10 +112,10 @@ ideas **collect photos**.
   constraint — deliberately unstructured), a status, and one structured field
   worth having early: `light_pref`
   (`any / overcast / raking_sun / golden_hour / dark / night`), which powers the
-  future "what can I shoot today?" view at no cost now.
+  "what can I shoot today?" view.
 - **idea_photos** — the "drop into an idea" join. Many-to-many. Includes a
-  `position` field reserved for hand-sequencing later (ignored in v1), and a
-  `why` note — a one-liner on *why* this frame belongs to this project
+  `position` field, used for drag-to-reorder frame sequencing within an idea,
+  and a `why` note — a one-liner on *why* this frame belongs to this project
   ("the wide half of the diptych") that captures the reasoning holding the set
   together.
 - **ideas** also carry optional **reference** slots — a couple of pinned
@@ -171,44 +182,57 @@ upload — that trade-off is yours to make, not the app's to gate.
 
 ## v1 checklist
 
-- [ ] Upload endpoint + on-disk storage, content-hash dedupe
-- [ ] Generate derivatives on ingest: thumb (grid) + display (single-frame view);
+- [x] Upload endpoint + on-disk storage, content-hash dedupe
+- [x] Generate derivatives on ingest: thumb (grid) + display (single-frame view);
       keep original untouched for export
-- [ ] Filename parser (best-effort city / camera / lens / film / season)
-- [ ] Upload form: city / camera / lens / film_stock (pre-filled from filename
+- [x] Filename parser (best-effort city / camera / lens / film / season)
+- [x] Upload form: city / camera / lens / film_stock (pre-filled from filename
       parse, editable) + tags, filled out at upload time
-- [ ] Vision auto-tag on ingest, tags stored as `ai_suggested`; multiple
+- [x] Vision auto-tag on ingest, tags stored as `ai_suggested`; multiple
       provider profiles (OpenAI / Anthropic / self-hosted OpenAI-compatible
       endpoint), each independently toggled on/off, all enabled ones run per
       photo with suggestions merged
-- [ ] Photo grid with tag filter
-- [ ] Tag editor: accept / dismiss / add, plus per-photo-tag note
-- [ ] Ideas: create / edit (title, notes, light_pref, status)
-- [ ] Drop photos into ideas / remove (many-to-many), with per-membership `why` note
-- [ ] Gap finder: tagged-but-in-no-idea view
-- [ ] Orphan view: frames with no tags and no idea, so nothing good gets lost
-- [ ] Combo suggestions: cross-join city / camera / lens / film_stock against
+- [x] Photo grid with tag filter
+- [x] Tag editor: accept / dismiss / add, plus per-photo-tag note
+- [x] Ideas: create / edit (title, notes, light_pref, status)
+- [x] Drop photos into ideas / remove (many-to-many), with per-membership `why` note
+- [x] Combo suggestions: cross-join city / camera / lens / film_stock against
       subject tags into two-colour combo chips, each with a "start an idea"
-- [ ] Export an idea as a zip of its full-res photos
+- [x] Export an idea as a zip of its full-res photos
 
-## Roadmap (v2, in priority order — only if v1 earns it)
+## v2 (shipped, was: roadmap in priority order)
 
-1. **Contact-sheet / brief export.** The richer versions of v1's zip: a printable
-   grid of an idea's frames, and the idea's rule + light + notes as a phone-ready
-   shoot card. Serves the "get the project out" payoff.
-2. **"What can I shoot today?"** — `light_pref` crossed with live weather +
-   location. "It's overcast in Ballarat — here are the 3 projects you can shoot
-   right now." The one genuinely novel feature; the north star.
-3. **Tag co-occurrence view.** Extends v1's deterministic **combo suggestions**
+1. [x] **Contact-sheet / brief export.** `GET /api/ideas/:id/brief` — a
+   printable grid of an idea's frames plus the idea's rule + light + notes as
+   a phone-ready shoot card, opened in its own tab.
+2. [x] **"What can I shoot today?"** — `light_pref` crossed with live weather
+   (Open-Meteo, keyless) for a location you set once. Dashboard widget shows
+   today's light conditions and every active idea that fits.
+3. [x] **Tag co-occurrence view.** Extends **combo suggestions**
    (structured field × subject tag) to fuzzier subject-tag × subject-tag
-   clustering — "`signage` frames are often also `night` + `wet` — start a
-   project from that cluster?" The engine that *generates* ideas rather than you
-   naming them all by hand. The intellectual core.
-4. **Idea progress nudges.** Uses the existing `status` field: "6 frames in — you
-   wanted a roll." Closes the loop between planning and shooting.
-5. **Frame sequencing within an idea.** Drag frames into narrative order to build
-   a photo-essay. Uses the reserved `position` field. A whole interaction
-   surface, so it waits.
+   clustering (`tag_tag` combos) — "`signage` frames are often also `night` +
+   `wet` — start a project from that cluster?"
+4. [x] **Idea progress nudges.** Uses the existing `status` field: active
+   ideas get nudged when they've sat empty a week, gone quiet for two weeks,
+   or grown large enough to wrap up — surfaced as a Dashboard digest and an
+   inline note on the project card.
+5. [x] **Frame sequencing within an idea.** Drag one frame onto another in the
+   project grid to reorder; persisted via the `position` field.
+
+## Since v2
+
+Operational features beyond the original roadmap, needed to make a
+container deployment self-sufficient:
+
+- **Vision providers from env vars.** `FRAMES_OPENAI_*` / `FRAMES_ANTHROPIC_*`
+  / `FRAMES_SELF_HOSTED_*` seed provider profiles on boot, so a fresh
+  container ships working auto-tagging with no manual Settings step.
+  `FRAMES_GOOGLE_*` / `FRAMES_DROPBOX_APP_KEY` do the same for the import
+  buttons' public app credentials.
+- **Full backup export / import.** A zip of the whole database + photo
+  library, downloadable from Settings; importing replaces everything
+  currently in Frames (old data is moved aside, never deleted, then the
+  server restarts against the restored data).
 
 ## Non-goals — and why
 

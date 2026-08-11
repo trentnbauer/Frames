@@ -1,53 +1,173 @@
-import { useState } from 'react';
-import { PhotoGrid } from './pages/PhotoGrid.js';
-import { Ideas } from './pages/Ideas.js';
-import { IdeaDetail } from './pages/IdeaDetail.js';
-import { GapFinder } from './pages/GapFinder.js';
-import { Orphans } from './pages/Orphans.js';
+import { useEffect, useState } from 'react';
+import { api } from './api.js';
+import type { Idea } from './types.js';
+import { navigate, parseRoute, type Route } from './router.js';
+import { Dashboard } from './pages/Dashboard.js';
+import { Library } from './pages/Library.js';
 import { Settings } from './pages/Settings.js';
+import { ProjectDetail } from './pages/ProjectDetail.js';
+import { ZineCreator } from './pages/ZineCreator.js';
+import { NewProjectModal } from './components/NewProjectModal.js';
+import { useToast } from './toast.js';
 
-type Tab = 'grid' | 'ideas' | 'gaps' | 'orphans' | 'settings';
+interface NewProjectRequest {
+  initialTitle?: string;
+  onCreated?: (idea: Idea) => void | Promise<void>;
+}
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('grid');
-  const [openIdeaId, setOpenIdeaId] = useState<number | null>(null);
+  const [route, setRoute] = useState<Route>(() => parseRoute());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [newProjectRequest, setNewProjectRequest] = useState<NewProjectRequest | null>(null);
+  const showToast = useToast();
 
-  function goToIdea(id: number) {
-    setOpenIdeaId(id);
-    setTab('ideas');
+  async function refreshIdeas() {
+    const res = await api.ideas.list();
+    setIdeas(res.ideas);
+  }
+
+  useEffect(() => {
+    refreshIdeas();
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setRoute(parseRoute());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  function goTo(screen: Route['screen'], projectId: number | null = null) {
+    navigate({ screen, projectId });
+    setMobileNavOpen(false);
+  }
+
+  function goToLibraryFor(forProjectId: number) {
+    navigate({ screen: 'library', projectId: null, forProjectId });
+    setMobileNavOpen(false);
+  }
+
+  function openNewProject(request: NewProjectRequest = {}) {
+    setNewProjectRequest(request);
+    setMobileNavOpen(false);
+  }
+
+  function goToZine(projectId: number) {
+    navigate({ screen: 'zine', projectId });
+    setMobileNavOpen(false);
+  }
+
+  async function handleProjectCreated(idea: Idea) {
+    // Generate-Project already shows its own richer toast (with the matched
+    // photo count) via its onCreated callback — only show a generic one for
+    // the plain "+ New Idea" path, so the user doesn't see two toasts.
+    if (newProjectRequest?.onCreated) {
+      await newProjectRequest.onCreated(idea);
+    } else {
+      showToast(`Created "${idea.title}"`);
+    }
+    setNewProjectRequest(null);
+    await refreshIdeas();
+    goTo('project', idea.id);
+  }
+
+  if (route.screen === 'zine' && route.projectId !== null) {
+    return <ZineCreator projectId={route.projectId} onExit={() => goTo('project', route.projectId)} />;
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Frames</h1>
-        <nav>
-          <button className={tab === 'grid' ? 'active' : ''} onClick={() => setTab('grid')}>Photos</button>
-          <button
-            className={tab === 'ideas' ? 'active' : ''}
-            onClick={() => {
-              setOpenIdeaId(null);
-              setTab('ideas');
-            }}
-          >
-            Ideas
-          </button>
-          <button className={tab === 'gaps' ? 'active' : ''} onClick={() => setTab('gaps')}>Gap finder</button>
-          <button className={tab === 'orphans' ? 'active' : ''} onClick={() => setTab('orphans')}>Orphans</button>
-          <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button>
-        </nav>
-      </header>
+    <div className="app-shell">
+      <div className="mobile-topbar">
+        <button className="mobile-topbar__hamburger" onClick={() => setMobileNavOpen((o) => !o)} title="Menu">
+          <span className="mobile-topbar__hamburger-bars" />
+        </button>
+        <div className="mobile-topbar__brand">Frames</div>
+      </div>
+      <div className={`sidebar-backdrop ${mobileNavOpen ? 'visible' : ''}`} onClick={() => setMobileNavOpen(false)} />
 
-      <main className="app-main">
-        {tab === 'grid' && <PhotoGrid onAddedToIdea={goToIdea} />}
-        {tab === 'ideas' && openIdeaId === null && <Ideas onOpenIdea={(id) => setOpenIdeaId(id)} />}
-        {tab === 'ideas' && openIdeaId !== null && (
-          <IdeaDetail ideaId={openIdeaId} onBack={() => setOpenIdeaId(null)} />
+      <div className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: sidebarCollapsed ? 72 : 232 }}>
+        <div className="sidebar__brand">
+          <div className="sidebar__brand-dot" />
+          {!sidebarCollapsed && <div className="sidebar__brand-name">Frames</div>}
+          <button className="sidebar__collapse" onClick={() => setSidebarCollapsed((c) => !c)} title="Collapse sidebar">
+            <div className="sidebar__collapse-arrow" style={{ transform: `rotate(${sidebarCollapsed ? '-45deg' : '135deg'})` }} />
+          </button>
+        </div>
+
+        <button className={`nav-item ${route.screen === 'dashboard' ? 'active' : ''}`} onClick={() => goTo('dashboard')} title="Dashboard">
+          <span className="nav-item__icon">D</span>
+          {!sidebarCollapsed && <span>Dashboard</span>}
+        </button>
+        <button className={`nav-item ${route.screen === 'library' ? 'active' : ''}`} onClick={() => goTo('library')} title="Library">
+          <span className="nav-item__icon">L</span>
+          {!sidebarCollapsed && <span>Library</span>}
+        </button>
+        {!sidebarCollapsed && (
+          <>
+            <div className="sidebar__section-label">Projects</div>
+            <div className="sidebar__projects scrollarea">
+              {ideas.map((idea) => (
+                <button
+                  key={idea.id}
+                  className={`sidebar__project-row ${route.screen === 'project' && route.projectId === idea.id ? 'active' : ''}`}
+                  onClick={() => goTo('project', idea.id)}
+                >
+                  <span className="sidebar__project-row-name">{idea.title}</span>
+                  <span className="sidebar__project-row-count">{idea.photo_count ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
-        {tab === 'gaps' && <GapFinder onStartIdea={goToIdea} />}
-        {tab === 'orphans' && <Orphans />}
-        {tab === 'settings' && <Settings />}
-      </main>
+
+        <div className="sidebar__spacer" />
+        <button className="sidebar__settings-row" onClick={() => goTo('settings')} title="Settings">
+          <span className="nav-item__icon">S</span>
+          {!sidebarCollapsed && <span>Settings</span>}
+        </button>
+        <button className="sidebar__new-project" onClick={() => openNewProject()} title="New Idea">
+          {sidebarCollapsed ? '+' : '+ New Idea'}
+        </button>
+      </div>
+
+      <div className="main-scroll scrollarea">
+        <div className="main-content">
+          {route.screen === 'dashboard' && (
+            <Dashboard
+              ideas={ideas}
+              onOpenProject={(id) => goTo('project', id)}
+              onImport={() => goTo('library')}
+              onNewProject={() => openNewProject()}
+              onGenerateProject={(title, onCreated) => openNewProject({ initialTitle: title, onCreated })}
+            />
+          )}
+          {route.screen === 'library' && (
+            <Library onOpenProject={(id) => goTo('project', id)} forProjectId={route.forProjectId ?? null} />
+          )}
+          {route.screen === 'settings' && <Settings />}
+          {route.screen === 'project' && route.projectId !== null && (
+            <ProjectDetail
+              projectId={route.projectId}
+              onBack={() => goTo('dashboard')}
+              onImport={() => goToLibraryFor(route.projectId!)}
+              onOpenZine={() => goToZine(route.projectId!)}
+              onDeleted={() => {
+                refreshIdeas();
+                goTo('dashboard');
+              }}
+              onChanged={refreshIdeas}
+            />
+          )}
+        </div>
+      </div>
+
+      <NewProjectModal
+        open={newProjectRequest !== null}
+        initialTitle={newProjectRequest?.initialTitle}
+        onClose={() => setNewProjectRequest(null)}
+        onCreated={handleProjectCreated}
+      />
     </div>
   );
 }

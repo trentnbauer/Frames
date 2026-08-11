@@ -13,10 +13,21 @@ export interface PhotoRow {
   width: number | null;
   height: number | null;
   camera: string | null;
+  lens: string | null;
   film_stock: string | null;
+  location: string | null;
+  photoshoot: string | null;
   season: string | null;
   tagging_status: TaggingStatus;
+  tagging_error: string | null;
+  palette: string | null;
+  taken_at: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_favorite: number;
+  phash: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface TagRow {
@@ -40,6 +51,8 @@ export interface IdeaRow {
   light_pref: LightPref;
   status: IdeaStatus;
   created_at: string;
+  updated_at: string;
+  zine_state: string | null;
 }
 
 export interface IdeaPhotoRow {
@@ -55,5 +68,11 @@ export function slugify(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    // Trimming leading/trailing dashes with a plain `/^-+|-+$/` is the
+    // textbook polynomial-ReDoS pattern (ambiguous where a trailing run can
+    // start matching) — the negative lookbehind removes that ambiguity by
+    // only allowing the trailing branch to start at the true beginning of
+    // the run, same technique CodeQL's own docs recommend for the
+    // equivalent whitespace-trim case.
+    .replace(/^-+|(?<!-)-+$/g, '');
 }

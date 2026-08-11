@@ -1,6 +1,8 @@
 import sharp from 'sharp';
 import path from 'node:path';
 import { THUMBS_DIR, DISPLAY_DIR } from '../db.js';
+import { extractPalette } from './palette.js';
+import { computePerceptualHash } from './phash.js';
 
 const THUMB_WIDTH = 400;
 const DISPLAY_WIDTH = 1600;
@@ -10,6 +12,8 @@ export interface Derivatives {
   displayPath: string;
   width: number;
   height: number;
+  palette: string[];
+  phash: string;
 }
 
 export async function generateDerivatives(originalPath: string, baseName: string): Promise<Derivatives> {
@@ -24,10 +28,15 @@ export async function generateDerivatives(originalPath: string, baseName: string
   const displayPath = path.join(DISPLAY_DIR, displayFile);
   await sharp(originalPath).rotate().resize({ width: DISPLAY_WIDTH, withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(displayPath);
 
+  const palette = await extractPalette(originalPath);
+  const phash = await computePerceptualHash(originalPath);
+
   return {
     thumbPath,
     displayPath,
     width: meta.width ?? 0,
     height: meta.height ?? 0,
+    palette,
+    phash,
   };
 }

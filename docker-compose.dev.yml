@@ -1,0 +1,34 @@
+# Dev stack: backend runs in Docker (API + SQLite + derivatives), frontend
+# stays on the host via `npm run dev:web` for fast Vite hot-reload.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up --build -d
+#   npm run dev:web    # separately, on the host — proxies to :4000 below
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: frames-server-dev
+    environment:
+      - PORT=4000
+      - DATA_DIR=/data
+      # Optional vision-provider / import-button env vars — see .env.example.
+      # - FRAMES_OPENAI_API_KEY=${FRAMES_OPENAI_API_KEY:-}
+      # - FRAMES_OPENAI_MODEL=${FRAMES_OPENAI_MODEL:-}
+      # - FRAMES_ANTHROPIC_API_KEY=${FRAMES_ANTHROPIC_API_KEY:-}
+      # - FRAMES_ANTHROPIC_MODEL=${FRAMES_ANTHROPIC_MODEL:-}
+      # - FRAMES_GEMINI_API_KEY=${FRAMES_GEMINI_API_KEY:-}
+      # - FRAMES_GEMINI_MODEL=${FRAMES_GEMINI_MODEL:-}
+      # - FRAMES_SELF_HOSTED_BASE_URL=${FRAMES_SELF_HOSTED_BASE_URL:-}
+      # - FRAMES_SELF_HOSTED_API_KEY=${FRAMES_SELF_HOSTED_API_KEY:-}
+      # - FRAMES_SELF_HOSTED_MODEL=${FRAMES_SELF_HOSTED_MODEL:-}
+      # - FRAMES_GOOGLE_API_KEY=${FRAMES_GOOGLE_API_KEY:-}
+      # - FRAMES_GOOGLE_CLIENT_ID=${FRAMES_GOOGLE_CLIENT_ID:-}
+      # - FRAMES_DROPBOX_APP_KEY=${FRAMES_DROPBOX_APP_KEY:-}
+      # - FRAMES_SOCIAL_HANDLES=${FRAMES_SOCIAL_HANDLES:-}
+    volumes:
+      - ./server/src:/app/server/src
+      - ./data:/data
+    ports:
+      - "4000:4000"
