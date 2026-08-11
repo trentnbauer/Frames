@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { api } from '../api.js';
-import type { Photo, ShootOptions, Tag } from '../types.js';
+import type { NearDuplicateGroup, Photo, ShootOptions, Tag } from '../types.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
 import { ColorDot } from '../components/ColorDot.js';
 import { COLOR_TAG_NAMES } from '../colorNames.js';
@@ -23,6 +23,8 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeCamera, setActiveCamera] = useState('');
   const [activeLocation, setActiveLocation] = useState('');
+  const [activeFavorite, setActiveFavorite] = useState(false);
+  const [sort, setSort] = useState<'created_at' | 'taken_at'>('created_at');
   const [search, setSearch] = useState('');
   const [options, setOptions] = useState<ShootOptions>(EMPTY_OPTIONS);
   const [projectByPhoto, setProjectByPhoto] = useState<Record<number, string>>({});
@@ -30,6 +32,8 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showTrash, setShowTrash] = useState(false);
   const [trashPhotos, setTrashPhotos] = useState<Photo[]>([]);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<NearDuplicateGroup[][]>([]);
   const [allIdeas, setAllIdeas] = useState<{ id: number; title: string }[]>([]);
   const [bulkIdeaId, setBulkIdeaId] = useState<number | ''>('');
   const [bulkTag, setBulkTag] = useState('');
@@ -39,7 +43,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showToast = useToast();
 
-  const hasFilters = activeTags.length > 0 || !!activeCamera || !!activeLocation || !!search.trim();
+  const hasFilters = activeTags.length > 0 || !!activeCamera || !!activeLocation || !!search.trim() || activeFavorite;
 
   // Multi-tag AND filtering (beyond the first tag) happens client-side on
   // top of an unpaginated, server-filtered result — camera/location/search
@@ -56,11 +60,13 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         camera: activeCamera || undefined,
         location: activeLocation || undefined,
         q: search.trim() || undefined,
+        favorite: activeFavorite || undefined,
+        sort,
       });
       setPhotos(res.photos);
       setTotal(res.total);
     } else {
-      const res = await api.photos.list({ limit: PAGE_SIZE, offset: 0 });
+      const res = await api.photos.list({ limit: PAGE_SIZE, offset: 0, sort });
       setPhotos(res.photos);
       setTotal(res.total);
     }
@@ -68,7 +74,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
 
   useEffect(() => {
     refresh();
-  }, [activeTags, activeCamera, activeLocation, search]);
+  }, [activeTags, activeCamera, activeLocation, activeFavorite, search, sort]);
 
   useEffect(() => {
     api.photos.shootOptions().then(setOptions);
@@ -178,7 +184,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   async function loadMore() {
     setLoadingMore(true);
     try {
-      const res = await api.photos.list({ limit: PAGE_SIZE, offset: photos.length });
+      const res = await api.photos.list({ limit: PAGE_SIZE, offset: photos.length, sort });
       setPhotos((prev) => [...prev, ...res.photos]);
       setTotal(res.total);
     } finally {
@@ -194,7 +200,30 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     setActiveTags([]);
     setActiveCamera('');
     setActiveLocation('');
+    setActiveFavorite(false);
     setSearch('');
+  }
+
+  async function toggleFavorite(photoId: number, e: MouseEvent) {
+    e.stopPropagation();
+    await api.photos.favorite(photoId);
+    await refresh();
+  }
+
+  async function refreshDuplicates() {
+    const res = await api.discovery.nearDuplicates();
+    setDuplicateGroups(res.groups);
+  }
+
+  useEffect(() => {
+    if (showDuplicates) refreshDuplicates();
+  }, [showDuplicates]);
+
+  async function trashFromDuplicates(id: number) {
+    if (!confirm('Move this photo to trash? You can restore it later, or delete it forever from Trash.')) return;
+    await api.photos.delete(id);
+    await refreshDuplicates();
+    showToast('Moved to trash');
   }
 
   const visible = useMemo(
@@ -268,6 +297,59 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     showToast('Permanently deleted');
   }
 
+  if (showDuplicates) {
+    const allIds = duplicateGroups.flatMap((g) => g.map((p) => p.id));
+    return (
+      <div>
+        <div className="page-header" style={{ marginBottom: 28 }}>
+          <div>
+            <h1 className="page-title">Possible Duplicates</h1>
+            <div className="page-subtitle">
+              {duplicateGroups.length} group{duplicateGroups.length === 1 ? '' : 's'} of near-identical photos
+            </div>
+          </div>
+          <div className="page-header__actions">
+            <button className="btn" onClick={() => setShowDuplicates(false)}>← Back to Library</button>
+          </div>
+        </div>
+        {duplicateGroups.map((group, i) => (
+          <div key={i} className="duplicate-group">
+            <div className="duplicate-group__label muted">Group {i + 1} · {group.length} photos</div>
+            <div className="photo-grid">
+              {group.map((p) => (
+                <div key={p.id} className="photo-tile-card">
+                  <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(p.id)}>
+                    <img src={`/files/thumb/${p.id}`} alt={p.filename} loading="lazy" />
+                  </button>
+                  <div className="photo-tile-card__meta">
+                    <div className="photo-tile-card__filename">{p.filename}</div>
+                    <button
+                      className="btn btn-danger"
+                      style={{ padding: '4px 10px', fontSize: 12, marginTop: 6 }}
+                      onClick={() => trashFromDuplicates(p.id)}
+                    >
+                      Trash this one
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {duplicateGroups.length === 0 && <p className="muted">No likely duplicates found.</p>}
+        {openPhotoId !== null && (
+          <PhotoDetail
+            photoId={openPhotoId}
+            onClose={() => setOpenPhotoId(null)}
+            onChanged={refreshDuplicates}
+            navIds={allIds}
+            onNavigate={setOpenPhotoId}
+          />
+        )}
+      </div>
+    );
+  }
+
   if (showTrash) {
     return (
       <div>
@@ -322,6 +404,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         <div className="page-header__actions">
           <button className="btn" onClick={() => importFrom('google')}>Import from Google Drive</button>
           <button className="btn" onClick={() => importFrom('dropbox')}>Import from Dropbox</button>
+          <button className="btn" onClick={() => setShowDuplicates(true)}>Possible Duplicates</button>
           <button className="btn" onClick={() => setShowTrash(true)}>Trash</button>
         </div>
       </div>
@@ -426,6 +509,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
           <option value="">Location: all</option>
           {options.location.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
+        <select className="field-input" style={{ width: 'auto' }} value={sort} onChange={(e) => setSort(e.target.value as 'created_at' | 'taken_at')}>
+          <option value="created_at">Sort: Newest imported</option>
+          <option value="taken_at">Sort: Date taken</option>
+        </select>
+        <span className={`chip ${activeFavorite ? 'active' : ''}`} onClick={() => setActiveFavorite((v) => !v)}>★ Favorites</span>
         {hasFilters && <span className="chip-bar__clear" onClick={clearFilters}>Clear filters</span>}
       </div>
 
@@ -456,6 +544,13 @@ export function Library({ onOpenProject, forProjectId }: Props) {
               <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
             </button>
             {projectByPhoto[photo.id] && <span className="photo-tile-card__badge">{projectByPhoto[photo.id]}</span>}
+            <button
+              className={`photo-tile-card__favorite ${photo.is_favorite ? 'is-active' : ''}`}
+              onClick={(e) => toggleFavorite(photo.id, e)}
+              title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
+            >
+              ★
+            </button>
             <button className="photo-tile-card__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
             <PaletteBar palette={photo.palette} />
             <div className="photo-tile-card__meta">

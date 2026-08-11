@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 net.setDefaultAutoSelectFamily(false);
 import './db.js';
 import { seedProvidersFromEnv } from './lib/envProviders.js';
-import { backfillPalettes } from './lib/ingest.js';
+import { backfillDerivedFields } from './lib/ingest.js';
+import { startWatchFolder } from './lib/watchFolder.js';
 import { photosRouter } from './routes/photos.js';
 import { tagsRouter } from './routes/tags.js';
 import { ideasRouter } from './routes/ideas.js';
@@ -28,11 +29,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 seedProvidersFromEnv();
 
-// Fire-and-forget: catches any photo missing a color-bar palette — either
-// uploaded before that feature existed, or (rarely) one whose extraction
-// failed at ingest time. Runs once per boot; a large library only pays
-// this cost the first time a new server version starts.
-backfillPalettes().catch((err) => console.error('Palette backfill crashed:', err.message));
+// Fire-and-forget: catches any photo missing a color-bar palette or
+// near-duplicate hash — either uploaded before those features existed, or
+// (rarely) one whose extraction failed at ingest time. Runs once per boot;
+// a large library only pays this cost the first time a new server version
+// starts.
+backfillDerivedFields().catch((err) => console.error('Derived-field backfill crashed:', err.message));
+
+// Opt-in: only starts if FRAMES_WATCH_DIR points at an existing directory,
+// so self-hosters who don't want it pay nothing.
+const watchDir = process.env.FRAMES_WATCH_DIR;
+if (watchDir && fs.existsSync(watchDir)) {
+  startWatchFolder(watchDir);
+} else if (watchDir) {
+  console.error(`FRAMES_WATCH_DIR is set to "${watchDir}" but that directory doesn't exist — watch folder not started.`);
+}
 
 export const app = express();
 app.use(express.json());

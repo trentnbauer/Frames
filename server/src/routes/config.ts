@@ -21,5 +21,6 @@ configRouter.get('/', (_req, res) => {
         : null,
     dropbox: process.env.FRAMES_DROPBOX_APP_KEY ? { appKey: process.env.FRAMES_DROPBOX_APP_KEY } : null,
     socialHandles: socialHandles.length ? socialHandles : null,
+    watchFolder: process.env.FRAMES_WATCH_DIR || null,
   });
 });

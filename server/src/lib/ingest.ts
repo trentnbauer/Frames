@@ -4,6 +4,7 @@ import db, { ORIGINALS_DIR, DISPLAY_DIR } from '../db.js';
 import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
 import { extractPalette } from './palette.js';
+import { computePerceptualHash } from './phash.js';
 import { hexToColorName } from './colorName.js';
 import { extractExifFields, reverseGeocode } from './exif.js';
 import { parseFilename } from './filenameParser.js';
@@ -11,8 +12,8 @@ import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
 
 const insertPhoto = db.prepare(`
-  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, lens, location, film_stock, season, palette, tagging_status)
-  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @lens, @location, @film_stock, @season, @palette, 'pending')
+  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, lens, location, film_stock, season, palette, taken_at, latitude, longitude, phash, tagging_status)
+  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @lens, @location, @film_stock, @season, @palette, @taken_at, @latitude, @longitude, @phash, 'pending')
 `);
 
 const findByHash = db.prepare('SELECT * FROM photos WHERE content_hash = ?');
@@ -57,6 +58,10 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
     film_stock: parsed.filmStock,
     season: parsed.season,
     palette: JSON.stringify(derivatives.palette),
+    taken_at: exif.takenAt,
+    latitude: exif.latitude,
+    longitude: exif.longitude,
+    phash: derivatives.phash,
   });
 
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(info.lastInsertRowid) as PhotoRow;
@@ -165,25 +170,32 @@ export async function autoTagPhoto(photo: PhotoRow) {
   tx();
 }
 
-// Photos that predate the color-bar feature (or were added before this
-// server version) have no palette — this fills them in from their
-// original file, one at a time so a large library doesn't spike memory
-// decoding many images at once. Called automatically at boot (see app.ts);
-// safe to call again since it only ever selects rows still missing one.
-export async function backfillPalettes(): Promise<number> {
-  const rows = db.prepare("SELECT id, original_path FROM photos WHERE deleted_at IS NULL AND palette IS NULL").all() as {
-    id: number;
-    original_path: string;
-  }[];
+// Photos that predate the color-bar or near-duplicate-detection features
+// (or were added before this server version) are missing a palette and/or
+// a phash — this fills either in from the original file, one photo at a
+// time so a large library doesn't spike memory decoding many images at
+// once. Called automatically at boot (see app.ts); safe to call again
+// since it only ever selects rows still missing one or the other.
+export async function backfillDerivedFields(): Promise<number> {
+  const rows = db
+    .prepare("SELECT id, original_path, palette, phash FROM photos WHERE deleted_at IS NULL AND (palette IS NULL OR phash IS NULL)")
+    .all() as { id: number; original_path: string; palette: string | null; phash: string | null }[];
   let done = 0;
   for (const row of rows) {
+    const fullPath = path.join(ORIGINALS_DIR, row.original_path);
     try {
-      const palette = await extractPalette(path.join(ORIGINALS_DIR, row.original_path));
-      db.prepare('UPDATE photos SET palette = ? WHERE id = ?').run(JSON.stringify(palette), row.id);
-      addColorTags(row.id, palette);
+      if (row.palette === null) {
+        const palette = await extractPalette(fullPath);
+        db.prepare('UPDATE photos SET palette = ? WHERE id = ?').run(JSON.stringify(palette), row.id);
+        addColorTags(row.id, palette);
+      }
+      if (row.phash === null) {
+        const phash = await computePerceptualHash(fullPath);
+        db.prepare('UPDATE photos SET phash = ? WHERE id = ?').run(phash, row.id);
+      }
       done += 1;
     } catch (err) {
-      console.error(`Palette backfill failed for photo ${row.id}:`, err instanceof Error ? err.message : err);
+      console.error(`Derived-field backfill failed for photo ${row.id}:`, err instanceof Error ? err.message : err);
     }
   }
   return done;

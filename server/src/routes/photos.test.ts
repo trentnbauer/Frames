@@ -212,4 +212,42 @@ describe('photos routes', () => {
     const res = await request(app).get('/api/photos/999999');
     expect(res.status).toBe(404);
   });
+
+  it('toggles the favorite flag on and off', async () => {
+    const fresh = await tinyJpeg(10);
+    const uploaded = await request(app).post('/api/photos/upload').attach('photos', fresh, 'fave.jpg');
+    const id = uploaded.body.results[0].photo.id;
+    expect(uploaded.body.results[0].photo.is_favorite).toBe(false);
+
+    const on = await request(app).post(`/api/photos/${id}/favorite`);
+    expect(on.status).toBe(200);
+    expect(on.body.photo.is_favorite).toBe(true);
+
+    const off = await request(app).post(`/api/photos/${id}/favorite`);
+    expect(off.body.photo.is_favorite).toBe(false);
+
+    const missing = await request(app).post('/api/photos/999999/favorite');
+    expect(missing.status).toBe(404);
+  });
+
+  it('filters to only favorited photos', async () => {
+    const fresh = await tinyJpeg(11);
+    const uploaded = await request(app).post('/api/photos/upload').attach('photos', fresh, 'fave-filter.jpg');
+    const id = uploaded.body.results[0].photo.id;
+    await request(app).post(`/api/photos/${id}/favorite`);
+
+    const res = await request(app).get('/api/photos').query({ favorite: 'true' });
+    expect(res.body.photos.every((p: { is_favorite: boolean }) => p.is_favorite)).toBe(true);
+    expect(res.body.photos.some((p: { id: number }) => p.id === id)).toBe(true);
+  });
+
+  it('sorts by taken_at, falling back to created_at for undated photos', async () => {
+    // None of these fixtures carry EXIF data, so every photo has a null
+    // taken_at — sort=taken_at should still return every photo (via the
+    // created_at tiebreak) rather than dropping the undated ones.
+    const before = await request(app).get('/api/photos');
+    const sorted = await request(app).get('/api/photos').query({ sort: 'taken_at' });
+    expect(sorted.status).toBe(200);
+    expect(sorted.body.total).toBe(before.body.total);
+  });
 });

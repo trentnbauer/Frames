@@ -125,6 +125,12 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
     await refresh();
   }
 
+  async function toggleFavorite() {
+    await api.photos.favorite(photo!.id);
+    await refresh();
+    onChanged();
+  }
+
   async function retag() {
     setRetagging(true);
     await api.photos.retag(photo!.id);
@@ -150,7 +156,12 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
     }, 1500);
   }
 
-  const metaLine = [photo.camera, photo.lens, photo.film_stock, photo.location, photo.season].filter(Boolean).join(' · ');
+  const takenAtLabel = photo.taken_at ? new Date(photo.taken_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+  const metaLine = [takenAtLabel, photo.camera, photo.lens, photo.film_stock, photo.location, photo.season].filter(Boolean).join(' · ');
+  const mapUrl =
+    photo.latitude != null && photo.longitude != null
+      ? `https://www.openstreetmap.org/?mlat=${photo.latitude}&mlon=${photo.longitude}#map=15/${photo.latitude}/${photo.longitude}`
+      : null;
 
   return (
     <div className="photo-detail-overlay" onClick={onClose}>
@@ -168,11 +179,28 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
         <div className="photo-detail__meta">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div>{photo.filename}</div>
+            <button
+              className={`photo-tile-card__favorite photo-detail__favorite ${photo.is_favorite ? 'is-active' : ''}`}
+              onClick={toggleFavorite}
+              title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
+            >
+              ★
+            </button>
             <button className="link-button" style={{ marginLeft: 'auto' }} onClick={retag} disabled={retagging || photo.tagging_status === 'pending'}>
               {retagging || photo.tagging_status === 'pending' ? 'Tagging…' : 'Re-tag'}
             </button>
           </div>
-          <div className="photo-detail__meta-sub">{metaLine || 'No shoot details yet'}</div>
+          <div className="photo-detail__meta-sub">
+            {metaLine || 'No shoot details yet'}
+            {mapUrl && (
+              <>
+                {' · '}
+                <a className="link-button" style={{ marginLeft: 0 }} href={mapUrl} target="_blank" rel="noopener noreferrer">
+                  View on map ↗
+                </a>
+              </>
+            )}
+          </div>
           {photo.tagging_status === 'failed' && photo.tagging_error && (
             <div className="photo-detail__tagging-error">Tagging failed: {photo.tagging_error}</div>
           )}

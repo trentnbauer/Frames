@@ -1,7 +1,63 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { hammingDistance } from '../lib/phash.js';
 
 export const discoveryRouter = Router();
+
+// Same frame re-scanned, a re-export at a different size/quality, a
+// near-identical burst-shot twin — anything closer than this on the 64-bit
+// average hash (see lib/phash.ts) is grouped as a likely duplicate.
+const NEAR_DUPLICATE_THRESHOLD = 6;
+
+// Groups photos into near-duplicate clusters via union-find over pairwise
+// Hamming distance. O(n^2) comparisons, computed on demand rather than
+// maintained incrementally — fine at personal-library scale, same
+// reasoning already applied to Library.tsx's client-side multi-tag filter.
+discoveryRouter.get('/near-duplicates', (_req, res) => {
+  const rows = db
+    .prepare(`SELECT id, filename, phash FROM photos WHERE deleted_at IS NULL AND phash IS NOT NULL`)
+    .all() as { id: number; filename: string; phash: string }[];
+
+  const parent = new Map<number, number>();
+  for (const r of rows) parent.set(r.id, r.id);
+
+  function find(x: number): number {
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    while (parent.get(x) !== root) {
+      const next = parent.get(x)!;
+      parent.set(x, root);
+      x = next;
+    }
+    return root;
+  }
+  function union(a: number, b: number) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    for (let j = i + 1; j < rows.length; j++) {
+      if (hammingDistance(rows[i].phash, rows[j].phash) <= NEAR_DUPLICATE_THRESHOLD) {
+        union(rows[i].id, rows[j].id);
+      }
+    }
+  }
+
+  const groups = new Map<number, { id: number; filename: string }[]>();
+  for (const r of rows) {
+    const root = find(r.id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root)!.push({ id: r.id, filename: r.filename });
+  }
+
+  const clusters = Array.from(groups.values())
+    .filter((g) => g.length > 1)
+    .sort((a, b) => b.length - a.length);
+
+  res.json({ groups: clusters });
+});
 
 // Gap finder: tags with frames not yet claimed by any idea. Excludes the
 // automatic dominant-color tags (see addColorTags in lib/ingest.ts) — they

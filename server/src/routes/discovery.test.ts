@@ -77,4 +77,28 @@ describe('discovery routes', () => {
     const found = res.body.combos.find((c: { main: string }) => c.main === 'OnlyOnTrashed');
     expect(found).toBeUndefined();
   });
+
+  it('groups visually near-identical photos as near-duplicates', async () => {
+    // Solid-color fixtures are pixel-uniform, so their 8x8-grayscale average
+    // hash is identical regardless of the specific color (every pixel sits
+    // exactly at the mean) — a convenient, deterministic way to exercise
+    // the clustering without needing real photographic near-duplicates.
+    const a = await uploadPhoto(app, 70, 'dup-a.jpg');
+    const b = await uploadPhoto(app, 71, 'dup-b.jpg');
+
+    const res = await request(app).get('/api/near-duplicates');
+    expect(res.status).toBe(200);
+    const group = (res.body.groups as { id: number }[][]).find((g) => g.some((p) => p.id === a.id));
+    expect(group).toBeTruthy();
+    expect(group!.map((p) => p.id)).toContain(b.id);
+  });
+
+  it('excludes soft-deleted photos from near-duplicate groups', async () => {
+    const trashed = await uploadPhoto(app, 72, 'dup-trashed.jpg');
+    await request(app).delete(`/api/photos/${trashed.id}`);
+
+    const res = await request(app).get('/api/near-duplicates');
+    const allIds = (res.body.groups as { id: number }[][]).flatMap((g) => g.map((p) => p.id));
+    expect(allIds).not.toContain(trashed.id);
+  });
 });

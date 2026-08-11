@@ -27,7 +27,14 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
 });
 
 photosRouter.get('/', (req, res) => {
-  const { tag, tag2, camera, location, season, film_stock, untagged, orphan, q, trashed } = req.query;
+  const { tag, tag2, camera, location, season, film_stock, untagged, orphan, q, trashed, favorite, sort } = req.query;
+
+  // Default order is upload order (created_at); sort=taken_at switches to
+  // EXIF capture date, falling back to created_at for photos with no
+  // capture date (and as a tiebreak for two equal dates) — NULL sorts
+  // last in a DESC ORDER BY, so undated photos naturally fall to the
+  // bottom rather than needing a separate "unknown date" bucket.
+  const orderClause = sort === 'taken_at' ? 'ORDER BY p.taken_at DESC, p.created_at DESC' : 'ORDER BY p.created_at DESC';
 
   // Pagination is opt-in via `limit` — omit it and every match comes back
   // unpaginated, which several callers rely on (combo-suggestion matching,
@@ -54,7 +61,7 @@ photosRouter.get('/', (req, res) => {
     const where = `WHERE ${trashClause} AND NOT EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.note IS NOT 'auto:dominant-color')`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
-      .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
+      .prepare(`SELECT p.* FROM photos p ${where} ${orderClause} ${pageClause}`)
       .all(...pageParams) as PhotoRow[];
   } else if (orphan === 'true') {
     const where = `WHERE ${trashClause}
@@ -62,7 +69,7 @@ photosRouter.get('/', (req, res) => {
                      AND NOT EXISTS (SELECT 1 FROM idea_photos ip WHERE ip.photo_id = p.id)`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${where}`).get() as { c: number }).c;
     rows = db
-      .prepare(`SELECT p.* FROM photos p ${where} ORDER BY p.created_at DESC ${pageClause}`)
+      .prepare(`SELECT p.* FROM photos p ${where} ${orderClause} ${pageClause}`)
       .all(...pageParams) as PhotoRow[];
   } else {
     // Composable filters: tag/tag2 (via join, AND'd — tag2 powers tag x tag
@@ -100,12 +107,15 @@ photosRouter.get('/', (req, res) => {
       where.push('p.filename LIKE ?');
       params.push(`%${q.trim()}%`);
     }
+    if (favorite === 'true') {
+      where.push('p.is_favorite = 1');
+    }
 
     const joinClause = joins.join(' ');
     const whereClause = `WHERE ${where.join(' AND ')}`;
     total = (db.prepare(`SELECT COUNT(*) as c FROM photos p ${joinClause} ${whereClause}`).get(...params) as { c: number }).c;
     rows = db
-      .prepare(`SELECT p.* FROM photos p ${joinClause} ${whereClause} ORDER BY p.created_at DESC ${pageClause}`)
+      .prepare(`SELECT p.* FROM photos p ${joinClause} ${whereClause} ${orderClause} ${pageClause}`)
       .all(...params, ...pageParams) as PhotoRow[];
   }
 
@@ -207,6 +217,17 @@ photosRouter.post('/:id/retag', (req, res) => {
   });
 
   res.status(202).json({ ok: true });
+});
+
+// Manual star/pick flag — independent of tags and project membership, for
+// flagging the best frames in a roll before deciding what they're for.
+photosRouter.post('/:id/favorite', (req, res) => {
+  const existing = db.prepare('SELECT is_favorite FROM photos WHERE id = ?').get(req.params.id) as { is_favorite: number } | undefined;
+  if (!existing) return res.status(404).json({ error: 'Photo not found' });
+
+  db.prepare('UPDATE photos SET is_favorite = ? WHERE id = ?').run(existing.is_favorite ? 0 : 1, req.params.id);
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(req.params.id) as PhotoRow;
+  res.json({ photo: withTags(photo) });
 });
 
 // Shoot-detail fields: filename-parsed as a best-effort guess (camera,

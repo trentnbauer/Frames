@@ -7,7 +7,7 @@ describe('config route', () => {
   it('returns null for all when no env vars are set', async () => {
     const { app, cleanup } = await createTestApp();
     const res = await request(app).get('/api/config');
-    expect(res.body).toEqual({ googleDrive: null, dropbox: null, socialHandles: null });
+    expect(res.body).toEqual({ googleDrive: null, dropbox: null, socialHandles: null, watchFolder: null });
     cleanup();
   });
 
@@ -37,6 +37,7 @@ describe('config route', () => {
         googleDrive: { apiKey: 'AIza-env', clientId: 'client.apps.googleusercontent.com' },
         dropbox: { appKey: 'dbx-env' },
         socialHandles: ['@yourhandle', 'yoursite.com', '@another'],
+        watchFolder: null,
       });
     });
   });

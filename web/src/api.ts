@@ -22,6 +22,8 @@ export const api = {
       film_stock?: string;
       q?: string;
       trashed?: boolean;
+      favorite?: boolean;
+      sort?: 'created_at' | 'taken_at';
       limit?: number;
       offset?: number;
     }) => {
@@ -34,6 +36,8 @@ export const api = {
       if (params?.film_stock) qs.set('film_stock', params.film_stock);
       if (params?.q) qs.set('q', params.q);
       if (params?.trashed) qs.set('trashed', 'true');
+      if (params?.favorite) qs.set('favorite', 'true');
+      if (params?.sort) qs.set('sort', params.sort);
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.offset) qs.set('offset', String(params.offset));
       const suffix = qs.toString() ? `?${qs}` : '';
@@ -53,6 +57,7 @@ export const api = {
     restore: (id: number) => request<{ photo: import('./types').Photo }>(`/api/photos/${id}/restore`, { method: 'POST' }),
     deletePermanently: (id: number) => request<void>(`/api/photos/${id}/permanent`, { method: 'DELETE' }),
     retag: (id: number) => request<{ ok: boolean }>(`/api/photos/${id}/retag`, { method: 'POST' }),
+    favorite: (id: number) => request<{ photo: import('./types').Photo }>(`/api/photos/${id}/favorite`, { method: 'POST' }),
     shootOptions: () => request<import('./types').ShootOptions>('/api/photos/shoot-options'),
     addTag: (photoId: number, name: string, source?: 'user_confirmed' | 'user_added') =>
       request(`/api/photos/${photoId}/tags`, { method: 'POST', body: JSON.stringify({ name, source }) }),
@@ -65,6 +70,11 @@ export const api = {
   },
   tags: {
     list: () => request<{ tags: import('./types').Tag[] }>('/api/tags'),
+    rename: (id: number, name: string) =>
+      request<{ tag: import('./types').Tag }>(`/api/tags/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+    merge: (fromId: number, intoId: number) =>
+      request<{ tag: import('./types').Tag }>('/api/tags/merge', { method: 'POST', body: JSON.stringify({ fromId, intoId }) }),
+    remove: (id: number) => request<void>(`/api/tags/${id}`, { method: 'DELETE' }),
   },
   ideas: {
     list: () => request<{ ideas: import('./types').Idea[] }>('/api/ideas'),
@@ -88,6 +98,16 @@ export const api = {
   },
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
+    nearDuplicates: () => request<{ groups: import('./types').NearDuplicateGroup[][] }>('/api/near-duplicates'),
+  },
+  config: {
+    get: () =>
+      request<{
+        googleDrive: { apiKey: string; clientId: string } | null;
+        dropbox: { appKey: string } | null;
+        socialHandles: string[] | null;
+        watchFolder: string | null;
+      }>('/api/config'),
   },
   weather: {
     today: (location: string) =>

@@ -21,6 +21,11 @@ export interface PhotoRow {
   tagging_status: TaggingStatus;
   tagging_error: string | null;
   palette: string | null;
+  taken_at: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_favorite: number;
+  phash: string | null;
   created_at: string;
   deleted_at: string | null;
 }

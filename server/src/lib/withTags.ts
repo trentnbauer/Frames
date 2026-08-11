@@ -7,7 +7,11 @@ import type { PhotoRow, PhotoTagRow, TagRow } from '../types.js';
 // into an actual array, so every caller gets it ready to use.
 export function withTags<T extends PhotoRow>(
   photo: T
-): Omit<T, 'palette'> & { tags: (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[]; palette: string[] | null } {
+): Omit<T, 'palette' | 'is_favorite'> & {
+  tags: (TagRow & Pick<PhotoTagRow, 'source' | 'note'>)[];
+  palette: string[] | null;
+  is_favorite: boolean;
+} {
   const tags = db
     .prepare(
       `SELECT t.id, t.slug, t.name, pt.source, pt.note
@@ -26,5 +30,5 @@ export function withTags<T extends PhotoRow>(
     }
   }
 
-  return { ...photo, tags, palette };
+  return { ...photo, tags, palette, is_favorite: Boolean(photo.is_favorite) };
 }

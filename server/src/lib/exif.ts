@@ -5,9 +5,10 @@ export interface ExifFields {
   lens: string | null;
   latitude: number | null;
   longitude: number | null;
+  takenAt: string | null;
 }
 
-const EMPTY: ExifFields = { camera: null, lens: null, latitude: null, longitude: null };
+const EMPTY: ExifFields = { camera: null, lens: null, latitude: null, longitude: null, takenAt: null };
 
 // Local-buffer parsing only, no network — safe to await inline during
 // ingest alongside derivative generation. Camera is a fallback, not an
@@ -31,7 +32,13 @@ export async function extractExifFields(buffer: Buffer): Promise<ExifFields> {
   const latitude = typeof output.latitude === 'number' ? output.latitude : null;
   const longitude = typeof output.longitude === 'number' ? output.longitude : null;
 
-  return { camera: combineCamera(make, model), lens, latitude, longitude };
+  // DateTimeOriginal (when the shutter fired) over CreateDate (when the
+  // file was written, e.g. by a scanner) — same "prefer the fact closest
+  // to the actual moment" reasoning as the camera-vs-scanner fallback below.
+  const rawDate = output.DateTimeOriginal ?? output.CreateDate;
+  const takenAt = rawDate instanceof Date && !isNaN(rawDate.getTime()) ? rawDate.toISOString() : null;
+
+  return { camera: combineCamera(make, model), lens, latitude, longitude, takenAt };
 }
 
 function combineCamera(make: string | null, model: string | null): string | null {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import type { VisionProviderProfile, VisionProviderType } from '../types.js';
+import type { Tag, VisionProviderProfile, VisionProviderType } from '../types.js';
 import { applyAccent, applyTheme, DEFAULT_ACCENT, getStoredAccent, getStoredTheme, type Theme } from '../theme.js';
 import {
   configReady,
@@ -99,12 +99,22 @@ export function Settings() {
         </div>
       </div>
 
+      <div className="settings-section-label" style={{ marginTop: 24 }}>Tags</div>
+      <p className="muted">
+        Rename a tag, merge two that mean the same thing, or delete one entirely — changes apply everywhere the
+        tag is used across the library.
+      </p>
+      <TagManagementSection />
+
       <div className="settings-section-label" style={{ marginTop: 24 }}>Import sources</div>
       <p className="muted">
         Google Drive and Dropbox use their own file pickers — Frames never sees your account credentials, only the
         photos you pick. Needs a free app registration on each service's developer console (below).
       </p>
       <ImportSourcesForm />
+
+      <div className="settings-section-label" style={{ marginTop: 24 }}>Auto-import</div>
+      <WatchFolderStatus />
 
       <div className="settings-section-label" style={{ marginTop: 24 }}>Social handles</div>
       <p className="muted">
@@ -184,6 +194,89 @@ function BackupSection() {
         </label>
       </div>
     </div>
+  );
+}
+
+function TagManagementSection() {
+  const [tags, setTags] = useState<Tag[]>([]);
+  const showToast = useToast();
+
+  async function refresh() {
+    setTags((await api.tags.list()).tags);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function rename(tag: Tag, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === tag.name) return;
+    try {
+      await api.tags.rename(tag.id, trimmed);
+      await refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Rename failed');
+      await refresh();
+    }
+  }
+
+  async function mergeInto(tag: Tag, intoId: number) {
+    const into = tags.find((t) => t.id === intoId);
+    if (!into) return;
+    if (!confirm(`Merge "${tag.name}" into "${into.name}"? This can't be undone.`)) return;
+    await api.tags.merge(tag.id, intoId);
+    showToast(`Merged "${tag.name}" into "${into.name}"`);
+    await refresh();
+  }
+
+  async function remove(tag: Tag) {
+    if (!confirm(`Delete tag "${tag.name}" from all ${tag.photo_count} photo${tag.photo_count === 1 ? '' : 's'}? This can't be undone.`)) return;
+    await api.tags.remove(tag.id);
+    showToast(`Deleted "${tag.name}"`);
+    await refresh();
+  }
+
+  return (
+    <div className="tag-manage-list">
+      {tags.map((tag) => (
+        <div key={tag.id} className="tag-manage-row">
+          <input className="field-input" defaultValue={tag.name} onBlur={(e) => rename(tag, e.target.value)} />
+          <span className="muted tag-manage-row__count">{tag.photo_count} photo{tag.photo_count === 1 ? '' : 's'}</span>
+          <select value="" onChange={(e) => e.target.value && mergeInto(tag, Number(e.target.value))}>
+            <option value="">Merge into…</option>
+            {tags.filter((t) => t.id !== tag.id).map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <button className="danger" onClick={() => remove(tag)}>Delete</button>
+        </div>
+      ))}
+      {tags.length === 0 && <p className="muted">No tags yet.</p>}
+    </div>
+  );
+}
+
+function WatchFolderStatus() {
+  const [watchFolder, setWatchFolder] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    api.config.get().then((c) => setWatchFolder(c.watchFolder));
+  }, []);
+
+  return (
+    <p className="muted">
+      {watchFolder === undefined ? (
+        'Checking…'
+      ) : watchFolder ? (
+        <>Watching <code>{watchFolder}</code> — image files dropped there are imported automatically.</>
+      ) : (
+        <>
+          Not configured. Set the <code>FRAMES_WATCH_DIR</code> environment variable to a folder (e.g. a phone-sync
+          or scanner output directory) to have Frames import new files from it automatically.
+        </>
+      )}
+    </p>
   );
 }
 
