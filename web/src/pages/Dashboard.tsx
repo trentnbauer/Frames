@@ -7,6 +7,7 @@ import { getStoredLocation, setStoredLocation } from '../weatherLocation.js';
 import { ColorDot } from '../components/ColorDot.js';
 import { COLOR_TAG_NAMES } from '../colorNames.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
+import { PaletteBar } from './Library.js';
 
 interface Props {
   ideas: Idea[];
@@ -88,21 +89,19 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         </div>
       </div>
 
-      <WeatherWidget onOpenProject={onOpenProject} />
-      <OnThisDayWidget />
-      <NudgeDigest ideas={ideas} onOpenProject={onOpenProject} />
-
-      {suggestion && (
-        <div className="suggestion-banner">
-          <div>
-            <div className="suggestion-banner__label">Suggested project</div>
-            <div className="suggestion-banner__text" key={comboIndex}>
+      <div className="dashboard-strip">
+        <WeatherWidget onOpenProject={onOpenProject} />
+        <OnThisDayWidget />
+        {suggestion && (
+          <div className="weather-widget suggestion-widget">
+            <div className="weather-widget__title">Suggested project</div>
+            <div className="suggestion-widget__headline" key={comboIndex}>
               {cap(suggestion.main)} {suggestion.connector} {suggestion.type === 'tag_tag' ? cap(suggestion.secondary) : suggestion.secondary}
             </div>
+            <button className="btn btn-accent suggestion-widget__cta" onClick={generateFromSuggestion}>Generate Project</button>
           </div>
-          <button className="btn btn-accent" onClick={generateFromSuggestion}>Generate Project</button>
-        </div>
-      )}
+        )}
+      </div>
 
       {ideas.length > 0 && (
         <input
@@ -133,18 +132,22 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
                     <span>No photos yet</span>
                   </div>
                 ) : (
-                  Array.from({ length: 4 }).map((_, i) => {
+                  Array.from({ length: 3 }).map((_, i) => {
                     const photo = photos[i];
                     return (
                       <div
                         key={i}
                         className="project-card__cover-tile"
-                        style={photo ? { backgroundImage: `url(/files/thumb/${photo.id})` } : undefined}
+                        style={{
+                          ...(photo ? { backgroundImage: `url(/files/thumb/${photo.id})` } : {}),
+                          ...(i === 0 ? { gridRow: '1 / -1' } : {}),
+                        }}
                       />
                     );
                   })
                 )}
               </div>
+              <PaletteBar palette={photos[0]?.palette ?? null} />
               <div className="project-card__body">
                 <div className="project-card__name">
                   {idea.title}
@@ -169,23 +172,6 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
         {ideas.length === 0 && <p className="muted">No projects yet. Start one from a tag you keep noticing.</p>}
         {ideas.length > 0 && visibleIdeas.length === 0 && <p className="muted">No projects match "{search}".</p>}
       </div>
-    </div>
-  );
-}
-
-function NudgeDigest({ ideas, onOpenProject }: { ideas: Idea[]; onOpenProject: (id: number) => void }) {
-  const nudged = ideas.filter((i) => i.nudge);
-  if (nudged.length === 0) return null;
-
-  return (
-    <div className="nudge-digest">
-      <div className="nudge-digest__title">Needs attention</div>
-      {nudged.map((idea) => (
-        <button key={idea.id} className="nudge-digest__row" onClick={() => onOpenProject(idea.id)}>
-          <span className="nudge-digest__idea">{idea.title}</span>
-          <span className="muted">{idea.nudge!.message}</span>
-        </button>
-      ))}
     </div>
   );
 }

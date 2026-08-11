@@ -72,6 +72,74 @@ const PAPER_SIZES: Record<PaperSize, { wIn: number; hIn: number }> = {
   A3: { wIn: 11.69, hIn: 16.54 },
   A2: { wIn: 16.54, hIn: 23.39 },
 };
+// Picture-based layout picker (cover Image / spread Left/Right/Spanning
+// image) — replaces a text segmented control ("Portrait" / "Landscape ×1" /
+// "Landscape ×2") with icon tiles that show the layout directly. Deliberately
+// only 4 icons for the 4 real ImageMode values (no separate "stacked" icon
+// for landscape2) — that distinction doesn't exist as a real mode, and an
+// icon suggesting it would promise behavior the app doesn't have.
+const IMAGE_MODE_LABELS: Record<ImageMode, string> = {
+  none: 'No image',
+  portrait: 'Portrait',
+  landscape1: 'Landscape ×1',
+  landscape2: 'Landscape ×2',
+};
+
+function ImageModeIcon({ mode }: { mode: ImageMode }) {
+  if (mode === 'none') return <span className="zine-mode-tile__icon zine-mode-tile__icon--none" />;
+  if (mode === 'landscape2') {
+    return (
+      <span className="zine-mode-tile__icon-row">
+        <span className="zine-mode-tile__icon zine-mode-tile__icon--bar" />
+        <span className="zine-mode-tile__icon zine-mode-tile__icon--bar" />
+      </span>
+    );
+  }
+  return <span className={`zine-mode-tile__icon zine-mode-tile__icon--${mode}`} />;
+}
+
+function ModePicker({ value, onChange, options }: { value: ImageMode; onChange: (m: ImageMode) => void; options: ImageMode[] }) {
+  return (
+    <div className="zine-mode-picker">
+      {options.map((m) => (
+        <button
+          key={m}
+          type="button"
+          className={`zine-mode-tile ${value === m ? 'is-active' : ''}`}
+          onClick={() => onChange(m)}
+          title={IMAGE_MODE_LABELS[m]}
+        >
+          <ImageModeIcon mode={m} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// One 3×3 grid replaces the old two separate vertical/horizontal segmented
+// rows — a position is a single click instead of two.
+const TEXT_POSITIONS: { v: VAlign; h: HAlign }[] = [
+  { v: 'top', h: 'left' }, { v: 'top', h: 'center' }, { v: 'top', h: 'right' },
+  { v: 'middle', h: 'left' }, { v: 'middle', h: 'center' }, { v: 'middle', h: 'right' },
+  { v: 'bottom', h: 'left' }, { v: 'bottom', h: 'center' }, { v: 'bottom', h: 'right' },
+];
+
+function TextPositionGrid({ vAlign, hAlign, onChange }: { vAlign: VAlign; hAlign: HAlign; onChange: (v: VAlign, h: HAlign) => void }) {
+  return (
+    <div className="zine-pos-grid">
+      {TEXT_POSITIONS.map(({ v, h }) => (
+        <button
+          key={`${v}-${h}`}
+          type="button"
+          className={`zine-pos-cell ${vAlign === v && hAlign === h ? 'is-active' : ''}`}
+          onClick={() => onChange(v, h)}
+          title={`${v} ${h}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function defaultCover(header: string, sub1: string, sub2: string): CoverSettings {
   return { header, sub1, sub2, imageMode: 'portrait', imageFit: 'cover', borderPct: 0, borderColor: '#ffffff', bgColor: '#161826', textVAlign: 'bottom', textHAlign: 'left' };
 }
@@ -287,8 +355,19 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const [canvasEl, setCanvasEl] = useState<HTMLDivElement | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [showDocSettings, setShowDocSettings] = useState(false);
   const [history, setHistory] = useState<{ past: ZineDoc[]; future: ZineDoc[] }>({ past: [], future: [] });
   const showToast = useToast();
+
+  // Autosave already covers "did my edit get saved" — a visible Save button
+  // next to Export invited a wrong click before exporting, so it's replaced
+  // with a passive "Saved Ns ago" status that needs its own ticking clock.
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   // A callback ref, not useRef — this component returns null while `idea`
   // is still loading, so the canvas-measure div doesn't exist on first
@@ -390,6 +469,8 @@ export function ZineCreator({ projectId, onExit }: Props) {
       .update(idea.id, { zine_state: JSON.stringify(state) })
       .then(() => {
         setSaveState('saved');
+        setLastSavedAt(Date.now());
+        setNowTick(Date.now());
         if (opts.toast) showToast('Zine saved — pick up where you left off later');
         setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2000);
       })
@@ -397,10 +478,6 @@ export function ZineCreator({ projectId, onExit }: Props) {
         setSaveState('idle');
         if (opts.toast) showToast('Failed to save zine');
       });
-  }
-
-  function saveZine() {
-    persistZine({ toast: true });
   }
 
   const loadedRef = useRef(false);
@@ -978,6 +1055,10 @@ export function ZineCreator({ projectId, onExit }: Props) {
   const selectedSpread = !selectedIsCover ? spreadSettings[selectedId] : null;
   const pageBoxes = canvasPagesForSelected();
 
+  // Header/subtext size (H/S) moved out of here into the cover panel's Text
+  // section, alongside the header/subtext content fields they size — this
+  // popover now only holds true document-level settings (page count, paper,
+  // font), matching the "A4 · 8 pages · Inter ▾" summary that triggers it.
   function renderSetupControls() {
     return (
       <>
@@ -994,16 +1075,18 @@ export function ZineCreator({ projectId, onExit }: Props) {
         <select className="field-input" style={{ width: 'auto' }} value={fontChoice} onChange={(e) => setFontChoice(e.target.value)} title="Cover font">
           {FONT_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
-        <label className="zine-size-input" title="Header size">
-          H
-          <input type="number" min={12} max={80} value={headerSize} onChange={(e) => setHeaderSize(Number(e.target.value) || 28)} />
-        </label>
-        <label className="zine-size-input" title="Subtext size">
-          S
-          <input type="number" min={8} max={40} value={subSize} onChange={(e) => setSubSize(Number(e.target.value) || 15)} />
-        </label>
       </>
     );
+  }
+
+  function saveStatusLabel(): string | null {
+    if (saveState === 'saving') return 'Saving…';
+    if (lastSavedAt == null) return null;
+    const diffSec = Math.max(0, Math.round((nowTick - lastSavedAt) / 1000));
+    if (diffSec < 5) return 'Saved just now';
+    if (diffSec < 60) return `Saved ${diffSec}s ago`;
+    const diffMin = Math.round(diffSec / 60);
+    return `Saved ${diffMin} min ago`;
   }
 
   return (
@@ -1013,17 +1096,36 @@ export function ZineCreator({ projectId, onExit }: Props) {
           <span aria-hidden="true">←</span>
           <span className="zine-creator__back-label">{idea.title}</span>
         </button>
-        <span className="zine-creator__brand">Zine Creator</span>
+        <span className="zine-creator__brand">Zine</span>
+
+        {/* Document settings (page count, paper, font) collapse into one
+            summary control — this used to be 5 separate always-visible
+            controls sharing the toolbar with every action button. */}
+        <div className="zine-creator__setup-inline zine-doc-settings">
+          <button type="button" className="btn zine-doc-settings__summary" onClick={() => setShowDocSettings((v) => !v)}>
+            {paperSize} · {pageCount} pages · {fontChoice} <span aria-hidden="true">▾</span>
+          </button>
+          {showDocSettings && (
+            <>
+              <div className="import-menu__backdrop" onClick={() => setShowDocSettings(false)} />
+              <div className="zine-doc-settings__dropdown" onClick={(e) => e.stopPropagation()}>
+                {renderSetupControls()}
+              </div>
+            </>
+          )}
+        </div>
+        <button type="button" className="zine-creator__setup-toggle" onClick={() => setMobileSetupOpen(true)} title="Zine settings">⚙ Settings</button>
+
         <div className="zine-creator__nav-controls">
-          <div className="zine-creator__setup-inline">{renderSetupControls()}</div>
-          <button type="button" className="zine-creator__setup-toggle" onClick={() => setMobileSetupOpen(true)} title="Zine settings">⚙ Settings</button>
           <div className="zine-undo-group">
             <button type="button" className="btn" onClick={undo} disabled={history.past.length === 0} title="Undo (Ctrl+Z)">↺</button>
             <button type="button" className="btn" onClick={redo} disabled={history.future.length === 0} title="Redo (Ctrl+Shift+Z)">↻</button>
           </div>
           <button type="button" className="btn" onClick={autoFillSlots} title="Fill every empty slot with unplaced frames">Auto-fill</button>
           <button type="button" className="btn" onClick={() => setTemplatesOpen(true)}>Templates</button>
-          <button className="btn" onClick={saveZine} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : 'Save'}</button>
+          {/* Autosave already runs — a Save button next to Export invited a
+              wrong click before exporting, so it's a passive status instead. */}
+          {saveStatusLabel() && <span className="zine-save-status">{saveStatusLabel()}</span>}
           <button className="btn btn-solid" onClick={() => setExportOpen(true)}>Export PDF</button>
         </div>
       </nav>
@@ -1094,22 +1196,35 @@ export function ZineCreator({ projectId, onExit }: Props) {
 
             {selectedCover && (
               <>
+                <div className="zine-creator__panel-group">Text</div>
                 <div className="modal-field zine-field-sm"><label>Header</label><input value={selectedCover.header} onChange={(e) => updateCover(selectedId as 'front' | 'back', { header: e.target.value })} /></div>
                 <div className="modal-field zine-field-sm"><label>Subtext</label><input value={selectedCover.sub1} onChange={(e) => updateCover(selectedId as 'front' | 'back', { sub1: e.target.value })} /></div>
                 <div className="modal-field zine-field-sm"><label>Subtext</label><input value={selectedCover.sub2} onChange={(e) => updateCover(selectedId as 'front' | 'back', { sub2: e.target.value })} /></div>
                 <div className="zine-field">
-                  <label>Cover color</label>
-                  <input type="color" value={selectedCover.bgColor} onChange={(e) => updateCover(selectedId as 'front' | 'back', { bgColor: e.target.value })} className="zine-color-input" />
+                  <label>Position</label>
+                  <TextPositionGrid
+                    vAlign={selectedCover.textVAlign}
+                    hAlign={selectedCover.textHAlign}
+                    onChange={(v, h) => updateCover(selectedId as 'front' | 'back', { textVAlign: v, textHAlign: h })}
+                  />
                 </div>
+                <label className="zine-size-input" title="Header size">
+                  H
+                  <input type="number" min={12} max={80} value={headerSize} onChange={(e) => setHeaderSize(Number(e.target.value) || 28)} />
+                </label>
+                <label className="zine-size-input" title="Subtext size">
+                  S
+                  <input type="number" min={8} max={40} value={subSize} onChange={(e) => setSubSize(Number(e.target.value) || 15)} />
+                </label>
+
+                <div className="zine-creator__panel-group">Layout</div>
                 <div className="zine-field">
                   <label>Image</label>
-                  <div className="segmented">
-                    {(['none', 'portrait', 'landscape1', 'landscape2'] as ImageMode[]).map((m) => (
-                      <span key={m} className={`segmented__opt ${selectedCover.imageMode === m ? 'active' : ''}`} onClick={() => updateCover(selectedId as 'front' | 'back', { imageMode: m })}>
-                        {m === 'none' ? 'None' : m === 'portrait' ? 'Portrait' : m === 'landscape1' ? 'Landscape ×1' : 'Landscape ×2'}
-                      </span>
-                    ))}
-                  </div>
+                  <ModePicker
+                    value={selectedCover.imageMode}
+                    onChange={(m) => updateCover(selectedId as 'front' | 'back', { imageMode: m })}
+                    options={['none', 'portrait', 'landscape1', 'landscape2']}
+                  />
                 </div>
                 {selectedCover.imageMode !== 'none' && (
                   <div className="zine-field">
@@ -1120,6 +1235,12 @@ export function ZineCreator({ projectId, onExit }: Props) {
                     </div>
                   </div>
                 )}
+
+                <div className="zine-creator__panel-group">Paper &amp; border</div>
+                <div className="zine-field">
+                  <label>Cover color</label>
+                  <input type="color" value={selectedCover.bgColor} onChange={(e) => updateCover(selectedId as 'front' | 'back', { bgColor: e.target.value })} className="zine-color-input" />
+                </div>
                 <div className="zine-field">
                   <label>Border color</label>
                   <input type="color" value={selectedCover.borderColor} onChange={(e) => updateCover(selectedId as 'front' | 'back', { borderColor: e.target.value })} className="zine-color-input" />
@@ -1127,22 +1248,6 @@ export function ZineCreator({ projectId, onExit }: Props) {
                 <div className="zine-field" style={{ width: 180 }}>
                   <label>Border {selectedCover.borderPct}%</label>
                   <input type="range" min={0} max={30} step={1} value={selectedCover.borderPct} onChange={(e) => updateCover(selectedId as 'front' | 'back', { borderPct: Number(e.target.value) })} className="zine-range" />
-                </div>
-                <div className="zine-field">
-                  <label>Text vertical</label>
-                  <div className="segmented">
-                    {(['top', 'middle', 'bottom'] as VAlign[]).map((v) => (
-                      <span key={v} className={`segmented__opt ${selectedCover.textVAlign === v ? 'active' : ''}`} onClick={() => updateCover(selectedId as 'front' | 'back', { textVAlign: v })}>{v[0].toUpperCase() + v.slice(1)}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="zine-field">
-                  <label>Text horizontal</label>
-                  <div className="segmented">
-                    {(['left', 'center', 'right'] as HAlign[]).map((h) => (
-                      <span key={h} className={`segmented__opt ${selectedCover.textHAlign === h ? 'active' : ''}`} onClick={() => updateCover(selectedId as 'front' | 'back', { textHAlign: h })}>{h[0].toUpperCase() + h.slice(1)}</span>
-                    ))}
-                  </div>
                 </div>
                 {selectedId === 'back' && socialHandles.length > 0 && (
                   <div className="zine-field">
@@ -1161,8 +1266,9 @@ export function ZineCreator({ projectId, onExit }: Props) {
 
             {selectedSpread && (
               <>
+                <div className="zine-creator__panel-group">Layout</div>
                 <div className="zine-field">
-                  <label>Layout</label>
+                  <label>Spread</label>
                   <div className="segmented">
                     <span className={`segmented__opt ${selectedSpread.spanMode === 'split' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { spanMode: 'split' })}>Two pages</span>
                     <span className={`segmented__opt ${selectedSpread.spanMode === 'span' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { spanMode: 'span' })}>Spans spread</span>
@@ -1173,13 +1279,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
                   <>
                     <div className="zine-field">
                       <label>Left page</label>
-                      <div className="segmented">
-                        {(['portrait', 'landscape1', 'landscape2'] as ImageMode[]).map((m) => (
-                          <span key={m} className={`segmented__opt ${selectedSpread.modeL === m ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { modeL: m })}>
-                            {m === 'portrait' ? 'Portrait' : m === 'landscape1' ? 'Landscape ×1' : 'Landscape ×2'}
-                          </span>
-                        ))}
-                      </div>
+                      <ModePicker value={selectedSpread.modeL} onChange={(m) => updateSpread(selectedId, { modeL: m })} options={['portrait', 'landscape1', 'landscape2']} />
                     </div>
                     <div className="zine-field">
                       <label>Left border</label>
@@ -1198,13 +1298,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
                     </div>
                     <div className="zine-field">
                       <label>Right page</label>
-                      <div className="segmented">
-                        {(['portrait', 'landscape1', 'landscape2'] as ImageMode[]).map((m) => (
-                          <span key={m} className={`segmented__opt ${selectedSpread.modeR === m ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { modeR: m })}>
-                            {m === 'portrait' ? 'Portrait' : m === 'landscape1' ? 'Landscape ×1' : 'Landscape ×2'}
-                          </span>
-                        ))}
-                      </div>
+                      <ModePicker value={selectedSpread.modeR} onChange={(m) => updateSpread(selectedId, { modeR: m })} options={['portrait', 'landscape1', 'landscape2']} />
                     </div>
                     <div className="zine-field">
                       <label>Right border</label>
@@ -1228,10 +1322,7 @@ export function ZineCreator({ projectId, onExit }: Props) {
                   <>
                     <div className="zine-field">
                       <label>Spanning image</label>
-                      <div className="segmented">
-                        <span className={`segmented__opt ${selectedSpread.modeSpan === 'landscape1' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { modeSpan: 'landscape1' })}>1 image</span>
-                        <span className={`segmented__opt ${selectedSpread.modeSpan === 'landscape2' ? 'active' : ''}`} onClick={() => updateSpread(selectedId, { modeSpan: 'landscape2' })}>2 images stacked</span>
-                      </div>
+                      <ModePicker value={selectedSpread.modeSpan} onChange={(m) => updateSpread(selectedId, { modeSpan: m })} options={['landscape1', 'landscape2']} />
                     </div>
                     <div className="zine-field">
                       <label>Border</label>

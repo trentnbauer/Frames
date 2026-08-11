@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PhotoTag } from '../types.js';
 import { ColorDot } from './ColorDot.js';
 
@@ -19,6 +20,11 @@ export function TagChip({ tag, onConfirm, onDismiss, onNoteChange }: Props) {
   // it "confirmed" without the user ever actually confirming it.
   const isColorTag = tag.note === 'auto:dominant-color';
   const isSuggestion = tag.source === 'ai_suggested' && !isColorTag;
+  // Starts open when a real note already exists, so an existing note stays
+  // visible without an extra click — otherwise the input (which used to
+  // sit always-open, tripling each chip's width and burying the tag names)
+  // stays collapsed until deliberately opened.
+  const [noteOpen, setNoteOpen] = useState(!!tag.note && !isColorTag);
 
   return (
     <div className={`tag-chip ${isSuggestion ? 'tag-chip--suggested' : 'tag-chip--confirmed'}`}>
@@ -31,18 +37,25 @@ export function TagChip({ tag, onConfirm, onDismiss, onNoteChange }: Props) {
           ✓
         </button>
       )}
+      {onNoteChange && !isColorTag && !noteOpen && (
+        <button className="tag-chip__note-toggle" title="Add a note" onClick={() => setNoteOpen(true)}>
+          ⋯
+        </button>
+      )}
       {onDismiss && (
         <button className="tag-chip__dismiss" title="Remove this tag" onClick={onDismiss}>
           ×
         </button>
       )}
-      {onNoteChange && (
+      {onNoteChange && !isColorTag && noteOpen && (
         <input
           className="tag-chip__note"
           placeholder="note…"
+          autoFocus={!tag.note}
           defaultValue={tag.note ?? ''}
           onBlur={(e) => {
             if (e.target.value !== (tag.note ?? '')) onNoteChange(e.target.value);
+            if (!e.target.value) setNoteOpen(false);
           }}
         />
       )}

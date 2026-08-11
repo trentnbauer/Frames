@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 
 :root {
-  --accent: #5f6068;
+  --accent: #d99a4e;
 }
 :root[data-theme="dark"] {
   --bg: #1a1b1e;
@@ -122,12 +122,16 @@ button { cursor: pointer; }
   background: transparent; border: none; width: 100%; text-align: left; white-space: nowrap; overflow: hidden;
 }
 .nav-item.active { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.nav-item__icon {
-  width: 20px; height: 20px; flex: none; border-radius: 5px;
-  display: flex; align-items: center; justify-content: center;
-  font: 600 10px/1 Inter, sans-serif;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
+.nav-item__icon { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.nav-item__count { margin-left: auto; font: 400 11px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, currentColor 55%, transparent); }
+
+.nav-icon--grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2.5px; width: 100%; height: 100%; }
+.nav-icon--grid span { background: currentColor; border-radius: 1.5px; }
+.nav-icon--bars { display: flex; flex-direction: column; justify-content: space-between; width: 100%; height: 100%; }
+.nav-icon--bars span { height: 3.5px; background: currentColor; border-radius: 1.5px; }
+.nav-icon--bars-thin span { height: 2px; }
+.nav-icon--pin { width: 100%; height: 100%; border: 1.5px solid currentColor; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.nav-icon--pin span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
 .sidebar__section-label {
   font: 600 10.5px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase;
@@ -143,6 +147,12 @@ button { cursor: pointer; }
 .sidebar__project-row.active { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .sidebar__project-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar__project-row-count { font: 400 11px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, var(--text) 35%, transparent); }
+.sidebar__project-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex: none;
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+.sidebar__project-dot--filled { background: var(--accent); }
+.sidebar__project-dot--empty { background: none; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--text) 30%, transparent); }
 
 .sidebar__spacer { flex: 1; }
 .sidebar__settings-row {
@@ -223,16 +233,21 @@ button { cursor: pointer; }
   color: #fff; padding: 3px 5px; border-radius: 4px; background: rgba(22, 24, 38, .72); text-align: center;
 }
 
+/* ---------- Dashboard widget strip ---------- */
+
+/* Weather / on-this-day / suggestion widgets used to stack full-width,
+   pushing the project grid below the fold — collapsed into one row so
+   the grid starts right under it. */
+.dashboard-strip { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 16px; margin-bottom: 32px; align-items: stretch; }
+.dashboard-strip > .weather-widget { margin-bottom: 0; height: 100%; box-sizing: border-box; }
+@media (max-width: 900px) { .dashboard-strip { grid-template-columns: 1fr; } }
+
+.suggestion-widget { display: flex; flex-direction: column; gap: 9px; }
+.suggestion-widget__headline { font: 500 17px/1.25 Inter, sans-serif; }
+.suggestion-widget__cta { margin-top: auto; align-self: flex-start; }
+
 /* ---------- Idea progress nudges ---------- */
 
-.nudge-digest { margin-bottom: 20px; }
-.nudge-digest__title { font: 600 10.5px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
-.nudge-digest__row {
-  display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left;
-  background: var(--surface); border: none; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; cursor: pointer;
-}
-.nudge-digest__row:hover { filter: brightness(1.08); }
-.nudge-digest__idea { font-weight: 600; flex: none; }
 .project-card__nudge {
   font-size: 12px; margin-top: 6px; padding: 4px 8px; border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
@@ -290,7 +305,7 @@ button { cursor: pointer; }
 }
 .project-card:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 40%, transparent); }
 .project-card__cover {
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr;
   height: 152px; gap: 1px; background: var(--bg);
 }
 .project-card__cover-tile { background-size: cover; background-position: center; background-color: color-mix(in srgb, var(--text) 8%, transparent); }
@@ -306,7 +321,8 @@ button { cursor: pointer; }
 
 .tag-pill {
   display: inline-flex; align-items: center; font: 500 11px/1 Inter, sans-serif; letter-spacing: .02em;
-  padding: 3px 9px; border-radius: 6px; background: #3f424d; color: #f3f5fe;
+  padding: 3px 9px; border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 9%, transparent); color: color-mix(in srgb, var(--text) 80%, transparent);
 }
 
 /* Marks a dominant-color tag ("red", "teal", ...) wherever it appears
@@ -373,7 +389,65 @@ button { cursor: pointer; }
   margin-bottom: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .photo-tile-card__tags { display: flex; gap: 5px; flex-wrap: wrap; }
-.tag-pill-soft { font: 500 10px/1 Inter, sans-serif; padding: 2px 7px; border-radius: 5px; background: #2b2741; color: #d2cefd; }
+.tag-pill-soft {
+  font: 500 10px/1 Inter, sans-serif; padding: 2px 7px; border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 8%, transparent); color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
+/* Library grid tiles: keep each photo's native aspect ratio (a fixed
+   150px object-fit:cover crop is the wrong default for a scan library where
+   portrait/landscape mix freely) with select/delete/filename/tags revealed
+   on hover instead of always-on. Deliberately its own class set, not a
+   restyle of .photo-tile-card* — ProjectDetail's reorderable grid still
+   depends on that class's fixed-height, always-visible-meta behavior. */
+.library-tile { border-radius: 8px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); }
+.library-tile__frame { position: relative; }
+.library-tile__img-btn { display: block; width: 100%; padding: 0; border: none; background: var(--bg); }
+.library-tile__img-btn img { display: block; width: 100%; height: auto; }
+.library-tile__scrim {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .12s;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, .4) 0%, transparent 30%, transparent 55%, rgba(0, 0, 0, .68) 100%);
+}
+.library-tile:hover .library-tile__scrim, .library-tile:focus-within .library-tile__scrim { opacity: 1; }
+.library-tile__select {
+  position: absolute; top: 8px; left: 8px; z-index: 2; width: 22px; height: 22px; opacity: 0; transition: opacity .12s;
+  display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  background: rgba(22, 24, 38, .72); border: none; padding: 0; cursor: pointer;
+}
+.library-tile__select input { width: 14px; height: 14px; cursor: pointer; }
+.library-tile:hover .library-tile__select, .library-tile:focus-within .library-tile__select { opacity: 1; }
+.library-tile__favorite {
+  position: absolute; top: 8px; right: 8px; z-index: 2; width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  background: rgba(22, 24, 38, .55); color: rgba(233, 233, 237, .6); font: 500 13px/1 Inter, sans-serif; border: none;
+}
+.library-tile__favorite:hover { color: rgba(233, 233, 237, .9); }
+.library-tile__favorite.is-active { color: #f5c344; }
+.library-tile__delete {
+  position: absolute; top: 8px; right: 34px; z-index: 2; width: 22px; height: 22px; opacity: 0; transition: opacity .12s;
+  display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  background: rgba(22, 24, 38, .72); color: rgba(233, 233, 237, .85); font: 500 13px/1 Inter, sans-serif; border: none;
+}
+.library-tile__delete:hover { background: rgba(180, 60, 60, .85); color: #fff; }
+.library-tile:hover .library-tile__delete, .library-tile:focus-within .library-tile__delete { opacity: 1; }
+.library-tile__overlay-meta {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 1; pointer-events: none;
+  display: flex; flex-direction: column; gap: 5px; opacity: 0; transition: opacity .12s;
+}
+.library-tile:hover .library-tile__overlay-meta, .library-tile:focus-within .library-tile__overlay-meta { opacity: 1; }
+.library-tile__badge {
+  align-self: flex-start; font: 500 10.5px/1 Inter, sans-serif; padding: 3px 8px; border-radius: 5px;
+  background: rgba(22, 24, 38, .6); color: rgba(233, 233, 237, .85);
+}
+.library-tile__filename {
+  font: 400 11px/1 ui-monospace, Menlo, monospace; color: rgba(255, 255, 255, .85);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.library-tile__tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.library-tile__tag {
+  display: inline-flex; align-items: center; font: 500 10px/1 Inter, sans-serif; padding: 3px 7px; border-radius: 4px;
+  background: rgba(0, 0, 0, .5); color: rgba(255, 255, 255, .85);
+}
 
 /* ---------- Filter chip bar ---------- */
 
@@ -385,19 +459,39 @@ button { cursor: pointer; }
 .chip.active { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .chip-bar__clear { cursor: pointer; font: 500 12px/1 Inter, sans-serif; color: color-mix(in srgb, var(--text) 50%, transparent); margin-left: 6px; background: none; border: none; }
 .chip-bar__clear:hover { color: var(--text); }
+/* Every tag in the library renders as a chip here, so the row can run many
+   lines — sticking it to the top of the scroll container keeps filters
+   reachable without following the header off-screen. */
+.chip-bar--sticky { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 4px; }
+
+.btn__count { margin-left: 6px; font: 400 11px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, var(--text) 40%, transparent); }
+
+/* ---------- Import menu + page-wide drag overlay ---------- */
+
+.import-menu { position: relative; display: inline-block; }
+.import-menu__backdrop { position: fixed; inset: 0; z-index: 8; }
+.import-menu__dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 9; min-width: 190px;
+  display: flex; flex-direction: column; padding: 6px; border-radius: 8px; background: var(--surface);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .35), 0 0 0 1px color-mix(in srgb, var(--text) 15%, transparent);
+}
+.import-menu__dropdown button {
+  text-align: left; font: 500 13px/1 Inter, sans-serif; padding: 9px 10px; border-radius: 6px;
+  background: none; border: none; color: var(--text);
+}
+.import-menu__dropdown button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+
+.page-drop-overlay {
+  position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(2px);
+  outline: 2px dashed var(--accent); outline-offset: -18px; pointer-events: none;
+}
+.page-drop-overlay__icon { width: 48px; height: 48px; border: 2px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.page-drop-overlay__title { font: 500 18px/1.3 Inter, sans-serif; }
 
 /* ---------- Import page ---------- */
 
-.dropzone-lg {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  padding: 80px 24px; border: 1.5px dashed color-mix(in srgb, var(--text) 20%, transparent); border-radius: 14px;
-  width: 100%; background: transparent;
-}
-.dropzone-lg.has-batch { padding: 40px 24px; }
-.dropzone-lg__icon { width: 40px; height: 40px; border: 1.5px solid var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .dropzone-lg__icon-arrow { width: 12px; height: 12px; border-left: 1.5px solid var(--accent); border-top: 1.5px solid var(--accent); transform: rotate(45deg) translate(1px, 1px); }
-.dropzone-lg__title { font: 500 15px/1.3 Inter, sans-serif; margin-bottom: 4px; }
-.dropzone-lg__hint { font: 400 13px/1.4 Inter, sans-serif; color: color-mix(in srgb, var(--text) 50%, transparent); }
 
 /* One block per file picked, showing immediately on selection (before the
    batched upload request even resolves) via a local object-URL preview,
@@ -562,12 +656,35 @@ button { cursor: pointer; }
   background: var(--surface);
   border-radius: 10px;
   width: 100%;
-  max-width: 720px;
-  max-height: 100%;
-  overflow-y: auto;
-  padding: 20px;
+  max-width: 1100px;
+  height: min(760px, 100%);
+  display: flex;
+  overflow: hidden;
   position: relative;
   box-shadow: 0 16px 40px rgba(0, 0, 0, .5), 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+.photo-detail__stage {
+  flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; background: #0c0d0f;
+}
+.photo-detail__image { display: block; width: 100%; height: 100%; object-fit: contain; }
+.photo-detail__nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0, 0, 0, .55); color: #fff; border: none; font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.photo-detail__nav:hover:not(:disabled) { background: rgba(0, 0, 0, .75); }
+.photo-detail__nav:disabled { opacity: .3; cursor: not-allowed; }
+.photo-detail__nav--prev { left: 16px; }
+.photo-detail__nav--next { right: 16px; }
+.photo-detail__counter {
+  position: absolute; left: 16px; bottom: 18px; font: 400 11.5px/1 ui-monospace, Menlo, monospace; color: rgba(255, 255, 255, .55);
+}
+.photo-detail__palette { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; margin: 0; }
+
+.photo-detail__rail {
+  width: 380px; flex: none; border-left: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  overflow-y: auto; padding: 20px; box-sizing: border-box; position: relative;
 }
 
 .photo-detail__close {
@@ -575,20 +692,18 @@ button { cursor: pointer; }
   background: none; border: none; color: color-mix(in srgb, var(--text) 70%, transparent); font-size: 22px;
 }
 
-.photo-detail__image {
-  display: block;
-  width: 100%;
-  max-height: 55vh;
-  object-fit: contain;
-  background: #000;
-  border-radius: 8px;
-  margin-bottom: 12px;
+@media (max-width: 780px) {
+  .photo-detail-overlay { padding: 0; }
+  .photo-detail { border-radius: 0; flex-direction: column; height: 100%; max-width: none; }
+  .photo-detail__stage { min-height: 40vh; }
+  .photo-detail__rail { width: 100%; }
 }
 
-@media (max-width: 480px) {
-  .photo-detail-overlay { padding: 0; }
-  .photo-detail { border-radius: 0; padding: 14px; }
+.photo-detail__suggestions {
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
+.photo-detail__suggestions-label { font: 500 12px/1 Inter, sans-serif; color: var(--accent); margin-bottom: 8px; }
 
 .photo-detail__meta { margin-bottom: 16px; }
 .photo-detail__meta-sub { color: color-mix(in srgb, var(--text) 55%, transparent); font-size: 13px; }
@@ -608,13 +723,19 @@ button { cursor: pointer; }
   background: transparent; border: none; border-bottom: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
   color: var(--text); width: 90px; font-size: 12px;
 }
+.tag-chip__note-toggle { background: none; border: none; color: color-mix(in srgb, var(--text) 45%, transparent); padding: 0 2px; font-weight: 700; }
+.tag-chip__note-toggle:hover { color: var(--text); }
 
-.add-tag-row { display: flex; gap: 6px; margin: 8px 0; }
+/* min-width:0 on the input/select — flex:1 alone doesn't let a text input
+   shrink below its content/attribute-derived intrinsic width, which on the
+   narrow (380px) Photo Detail rail pushed the trailing button past the
+   card's edge (clipped, since the card itself is overflow:hidden). */
+.add-tag-row { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
 .add-tag-row input, .add-tag-row select {
-  flex: 1; background: var(--bg); border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  flex: 1; min-width: 0; background: var(--bg); border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   color: var(--text); padding: 6px; border-radius: 4px;
 }
-.add-tag-row button { background: var(--accent); border: none; color: #161826; padding: 6px 12px; border-radius: 4px; }
+.add-tag-row button { flex: none; background: var(--accent); border: none; color: #161826; padding: 6px 12px; border-radius: 4px; }
 
 .muted { color: color-mix(in srgb, var(--text) 55%, transparent); }
 
@@ -686,6 +807,20 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
   .toast { max-width: none; }
 }
 
+/* ---------- Selection dock (Library bulk actions) ---------- */
+
+/* Rendered after the grid and stuck to the bottom of the scroll container
+   (not inserted before the grid) — that way appearing/disappearing never
+   shifts the grid, and it can't scroll out of view while it's up. */
+.selection-dock {
+  position: sticky; bottom: 20px; z-index: 6; margin-top: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 10px;
+  background: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .4), 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
+}
+.selection-dock__count { font: 500 13.5px/1 Inter, sans-serif; flex: none; }
+.selection-dock__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.selection-dock__fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; width: 100%; }
+
 /* ---------- Search ---------- */
 
 .search-input { width: 100%; max-width: 360px; margin-bottom: 20px; }
@@ -694,7 +829,7 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 
 .zine-creator { height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); overflow: hidden; }
 .zine-creator__nav {
-  flex: none; display: flex; align-items: center; padding: 10px 16px;
+  flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 .zine-creator__brand { font: 600 15px/1 Inter, sans-serif; }
@@ -758,8 +893,11 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 }
 .zine-template-save-row input:focus { border-color: var(--accent); outline: none; }
 
-.zine-creator__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.zine-creator__canvas-wrap { flex: 1; min-height: 0; padding: 24px 24px 48px; overflow: hidden; box-sizing: border-box; }
+/* Row, not column — the inspector sits beside the spread, not below it (a
+   bottom panel scrolled its own contents and stole height from the page
+   being laid out; a right rail keeps the spread's full height). */
+.zine-creator__main { flex: 1; min-width: 0; display: flex; flex-direction: row; }
+.zine-creator__canvas-wrap { flex: 1; min-width: 0; min-height: 0; padding: 24px 24px 48px; overflow: hidden; box-sizing: border-box; }
 .zine-creator__canvas-measure { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
 
 .zine-page {
@@ -853,12 +991,17 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 .zine-checkbox input { cursor: pointer; }
 
 .zine-creator__panel {
-  flex: none; border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  padding: 12px 20px; display: flex; gap: 16px 24px; flex-wrap: wrap; align-items: flex-start; row-gap: 12px;
-  background: var(--surface); max-height: 220px; overflow-y: auto;
+  flex: none; width: 290px; border-left: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; align-items: stretch;
+  background: var(--surface); overflow-y: auto; box-sizing: border-box;
 }
-.zine-creator__panel-title { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .55; flex: none; align-self: flex-start; }
-.zine-field-sm { width: 150px; }
+.zine-creator__panel-title { font: 500 14px/1 Inter, sans-serif; flex: none; }
+.zine-creator__panel-group {
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase; opacity: .55; flex: none;
+  margin-top: 6px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+.zine-creator__panel-group:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.zine-field-sm { width: 100%; }
 .zine-field { display: flex; flex-direction: column; gap: 5px; }
 .zine-field label { font-size: 12px; color: color-mix(in srgb, var(--text) 70%, transparent); }
 .zine-color-input { width: 40px; height: 32px; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; background: none; padding: 2px; }
@@ -866,6 +1009,42 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 .zine-range { width: 100%; accent-color: var(--accent); }
 .zine-range--sm { width: 110px; }
 .zine-border-row { display: flex; align-items: center; gap: 8px; }
+
+/* Picture-based layout picker — 4 icon tiles instead of a text segmented
+   control ("Portrait" / "Landscape ×1" / "Landscape ×2"). */
+.zine-mode-picker { display: flex; gap: 6px; }
+.zine-mode-tile {
+  flex: 1; height: 44px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  background: none; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;
+}
+.zine-mode-tile.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.zine-mode-tile__icon { background: color-mix(in srgb, var(--text) 25%, transparent); border-radius: 2px; }
+.zine-mode-tile.is-active .zine-mode-tile__icon { background: var(--accent); }
+.zine-mode-tile__icon--none { width: 16px; height: 2px; }
+.zine-mode-tile__icon--portrait { width: 12px; height: 26px; }
+.zine-mode-tile__icon--landscape1 { width: 26px; height: 26px; }
+.zine-mode-tile__icon-row { display: flex; gap: 3px; }
+.zine-mode-tile__icon--bar { width: 11px; height: 22px; }
+
+/* One 3×3 grid for text position, replacing separate vertical/horizontal
+   segmented rows — a position is one click instead of two. */
+.zine-pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 3px; width: 66px; height: 66px; }
+.zine-pos-cell { background: color-mix(in srgb, var(--text) 7%, transparent); border: none; border-radius: 2px; padding: 0; cursor: pointer; }
+.zine-pos-cell:hover { background: color-mix(in srgb, var(--text) 14%, transparent); }
+.zine-pos-cell.is-active { background: var(--accent); }
+
+/* ---------- Zine Creator: document-settings dropdown + save status ---------- */
+
+.zine-doc-settings { position: relative; display: inline-block; }
+.zine-doc-settings__summary {
+  font: 500 12.5px/1 Inter, sans-serif; color: color-mix(in srgb, var(--text) 85%, transparent);
+}
+.zine-doc-settings__dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 9; min-width: 320px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px; border-radius: 8px;
+  background: var(--surface); box-shadow: 0 12px 30px rgba(0, 0, 0, .35), 0 0 0 1px color-mix(in srgb, var(--text) 15%, transparent);
+}
+.zine-save-status { font: 400 12px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, var(--text) 40%, transparent); flex: none; }
 
 .zine-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
 .zine-picker-tile { padding: 0; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 6px; overflow: hidden; cursor: pointer; background: none; aspect-ratio: 1; }
@@ -898,8 +1077,18 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
     padding: 10px 12px; gap: 10px;
   }
   .zine-thumb { flex: none; }
+  /* The right-rail inspector only fits desktop-width spreads — narrow
+     screens go back to a full-width panel below the canvas. */
+  .zine-creator__main { flex-direction: column; }
   .zine-creator__canvas-wrap { padding: 16px 12px 28px; }
-  .zine-creator__panel { padding: 12px; gap: 12px 16px; }
+  .zine-creator__panel {
+    width: 100%; flex-direction: row; flex-wrap: wrap; row-gap: 12px; align-items: flex-start;
+    border-left: none; border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    padding: 12px; gap: 12px 16px; max-height: 220px;
+  }
+  .zine-creator__panel-group { width: 100%; margin-top: 0; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+  .zine-creator__panel-group:first-of-type { border-top: none; }
+  .zine-field-sm { width: 150px; }
 }
 
 /* ---------- Favorite star (Library tile + Photo Detail) ---------- */

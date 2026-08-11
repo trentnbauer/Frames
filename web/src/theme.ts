@@ -2,7 +2,7 @@ export type Theme = 'dark' | 'light';
 
 const THEME_KEY = 'frames-theme';
 const ACCENT_KEY = 'frames-accent';
-export const DEFAULT_ACCENT = '#5f6068';
+export const DEFAULT_ACCENT = '#d99a4e';
 
 export function getStoredTheme(): Theme {
   const stored = localStorage.getItem(THEME_KEY);
