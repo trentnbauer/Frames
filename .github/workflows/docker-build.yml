@@ -1,0 +1,57 @@
+name: Build Docker image
+
+# Manual only — this publishes an image, so it shouldn't fire on every push.
+# Run it from the Actions tab (or `gh workflow run docker-build.yml`) when
+# you want to cut a new image, optionally at a specific tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (in addition to "latest")'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine tags
+        id: tags
+        run: |
+          # GHCR (like most registries) requires a lowercase image name —
+          # github.repository preserves the repo's actual case ("Frames"),
+          # which would make the push fail.
+          IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          TAGS="${{ env.REGISTRY }}/$IMAGE_NAME:latest"
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/$IMAGE_NAME:${{ inputs.tag }}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
