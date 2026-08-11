@@ -505,7 +505,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         <div className="upload-preview-grid">
           {uploadingPreviews.map((p, i) => (
             <div key={i} className="upload-tile">
-              <img src={p.url} alt={p.name} />
+              {/* p.url is a blob: URL from URL.createObjectURL() on the
+                  locally-selected File object, never server/network data,
+                  and React sets it as a plain `src` attribute (not
+                  innerHTML) — no HTML is parsed from this value. */}
+              <img src={p.url /* codeql[js/xss-through-dom] */} alt={p.name} />
               <div className="upload-tile__spinner" />
               <div className="upload-tile__name">{p.name}</div>
             </div>
