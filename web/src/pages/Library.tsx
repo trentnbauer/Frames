@@ -39,6 +39,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [bulkTag, setBulkTag] = useState('');
   const [importBatch, setImportBatch] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadingPreviews, setUploadingPreviews] = useState<{ url: string; name: string }[]>([]);
   const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showToast = useToast();
@@ -119,9 +120,16 @@ export function Library({ onOpenProject, forProjectId }: Props) {
 
   async function handleFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    // Instant local previews (object URLs, not yet-uploaded thumbnails) so
+    // the grid of spinning blocks appears immediately on selection rather
+    // than waiting on the single batched upload response, which only
+    // resolves once every file in the batch has finished.
+    const previews = fileArray.map((f) => ({ url: URL.createObjectURL(f), name: f.name }));
+    setUploadingPreviews(previews);
     setUploading(true);
     try {
-      const res = await api.photos.upload(Array.from(files));
+      const res = await api.photos.upload(fileArray);
       setImportBatch((prev) => [...prev, ...res.results.map((r) => r.photo)]);
       const dupes = res.results.filter((r) => r.wasDuplicate).length;
 
@@ -142,6 +150,8 @@ export function Library({ onOpenProject, forProjectId }: Props) {
       await refresh();
     } finally {
       setUploading(false);
+      setUploadingPreviews([]);
+      for (const p of previews) URL.revokeObjectURL(p.url);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
@@ -482,10 +492,26 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
         <div className="dropzone-lg__icon"><div className="dropzone-lg__icon-arrow" /></div>
         <div className="dropzone-lg__title">
-          {uploading ? 'Uploading…' : importBatch.length > 0 ? 'Import more photos' : 'Drop photos to import'}
+          {uploading
+            ? `Uploading ${uploadingPreviews.length} photo${uploadingPreviews.length === 1 ? '' : 's'}…`
+            : importBatch.length > 0
+              ? 'Import more photos'
+              : 'Drop photos to import'}
         </div>
         <div className="dropzone-lg__hint">Drag and drop, or click to choose files from your desktop</div>
       </div>
+
+      {uploadingPreviews.length > 0 && (
+        <div className="upload-preview-grid">
+          {uploadingPreviews.map((p, i) => (
+            <div key={i} className="upload-tile">
+              <img src={p.url} alt={p.name} />
+              <div className="upload-tile__spinner" />
+              <div className="upload-tile__name">{p.name}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <input
         className="field-input search-input"
