@@ -63,8 +63,11 @@ export function getGoogleDriveConfig(): GoogleDriveConfig {
 export function setGoogleDriveConfig(config: GoogleDriveConfig) {
   // config.apiKey is a public Google API key + OAuth client ID (see the
   // file-level comment above) — not a secret, so plain localStorage is the
-  // intended storage, same as every other value in this file.
-  localStorage.setItem(GOOGLE_KEY, JSON.stringify(config)); // codeql[js/clear-text-storage-of-sensitive-data]
+  // intended storage, same as every other value in this file. CodeQL's
+  // js/clear-text-storage-of-sensitive-data alert here is a false positive
+  // (dismissed on GitHub — an inline `codeql[...]` comment was tried first
+  // but wasn't actually honored by a fresh scan).
+  localStorage.setItem(GOOGLE_KEY, JSON.stringify(config));
 }
 
 export function getDropboxConfig(): DropboxConfig {
