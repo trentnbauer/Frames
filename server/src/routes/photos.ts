@@ -7,20 +7,36 @@ import { ingestPhoto, autoTagPhoto } from '../lib/ingest.js';
 import { withTags } from '../lib/withTags.js';
 import { slugify, type PhotoRow } from '../types.js';
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  // Client-side accept="image/*" is only a UI hint, not a security
+  // boundary — reject non-images server-side too, before they ever reach
+  // sharp (which throws on an unsupported format; letting that reach
+  // ingestPhoto unhandled is what used to crash the whole process).
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith('image/')),
+});
 
 export const photosRouter = Router();
 
 photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
   const files = req.files as Express.Multer.File[] | undefined;
   if (!files || files.length === 0) {
-    return res.status(400).json({ error: 'No files uploaded' });
+    return res.status(400).json({ error: 'No image files uploaded' });
   }
 
   const results = [];
   for (const file of files) {
-    const { photo, wasDuplicate } = await ingestPhoto(file.buffer, file.originalname);
-    results.push({ photo: withTags(photo), wasDuplicate });
+    try {
+      const { photo, wasDuplicate } = await ingestPhoto(file.buffer, file.originalname);
+      results.push({ ok: true as const, photo: withTags(photo), wasDuplicate });
+    } catch (err) {
+      // One corrupt/unreadable file (bad mimetype header, truncated upload,
+      // a format sharp can't decode) shouldn't fail the whole batch when
+      // the other files in it are fine.
+      console.error(`Failed to ingest "${file.originalname}":`, err instanceof Error ? err.message : err);
+      results.push({ ok: false as const, filename: file.originalname, error: err instanceof Error ? err.message : 'Ingest failed' });
+    }
   }
 
   res.status(201).json({ results });

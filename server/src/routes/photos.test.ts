@@ -44,6 +44,44 @@ describe('photos routes', () => {
     expect(list.body.total).toBe(1);
   });
 
+  it('rejects a non-image upload without crashing the process', async () => {
+    // A file whose mimetype claims "image/jpeg" but whose bytes are not a
+    // decodable image (bypasses multer's fileFilter, which only checks the
+    // mimetype header) used to throw inside an unguarded async route
+    // handler — an unhandled rejection that took the whole server down,
+    // not just this request. Regression test for that crash.
+    const res = await request(app)
+      .post('/api/photos/upload')
+      .attach('photos', Buffer.from('not a real image'), { filename: 'spoofed.jpg', contentType: 'image/jpeg' });
+    expect(res.status).toBe(201);
+    expect(res.body.results).toEqual([expect.objectContaining({ ok: false, filename: 'spoofed.jpg' })]);
+
+    // The server is still alive and serving requests normally afterward.
+    const health = await request(app).get('/api/photos');
+    expect(health.status).toBe(200);
+  });
+
+  it('rejects an honestly-labeled non-image file via the mimetype filter', async () => {
+    const res = await request(app)
+      .post('/api/photos/upload')
+      .attach('photos', Buffer.from('just some text'), { filename: 'notes.txt', contentType: 'text/plain' });
+    expect(res.status).toBe(400);
+  });
+
+  it('processes the rest of a batch when one file in it is unreadable', async () => {
+    const goodJpeg = await tinyJpeg(30);
+    const res = await request(app)
+      .post('/api/photos/upload')
+      .attach('photos', goodJpeg, 'good.jpg')
+      .attach('photos', Buffer.from('garbage'), { filename: 'bad.jpg', contentType: 'image/jpeg' });
+    expect(res.status).toBe(201);
+    expect(res.body.results).toHaveLength(2);
+    const good = res.body.results.find((r: { filename?: string; photo?: { filename: string } }) => r.photo?.filename === 'good.jpg');
+    const bad = res.body.results.find((r: { filename?: string }) => r.filename === 'bad.jpg');
+    expect(good.ok).toBe(true);
+    expect(bad.ok).toBe(false);
+  });
+
   it('serves thumb and display derivatives', async () => {
     const list = await request(app).get('/api/photos');
     const id = list.body.photos[0].id;

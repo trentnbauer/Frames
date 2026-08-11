@@ -1,4 +1,12 @@
 import express from 'express';
+// Express 4 does not catch a rejected promise thrown inside an async route
+// handler — it becomes an unhandled rejection, which crashes the whole
+// process (verified live: uploading one non-image file to /api/photos/upload
+// took the entire server down, not just that request). This patches
+// Express's router so those errors route to the error-handling middleware
+// below like any other error, instead of killing the process. Side-effect
+// import — must run before any router/route is defined.
+import 'express-async-errors';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import fs from 'node:fs';

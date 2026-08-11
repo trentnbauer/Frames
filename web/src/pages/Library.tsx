@@ -130,20 +130,24 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     setUploading(true);
     try {
       const res = await api.photos.upload(fileArray);
-      setImportBatch((prev) => [...prev, ...res.results.map((r) => r.photo)]);
-      const dupes = res.results.filter((r) => r.wasDuplicate).length;
+      const succeeded = res.results.filter((r) => r.ok);
+      const failed = res.results.filter((r) => !r.ok);
+      setImportBatch((prev) => [...prev, ...succeeded.map((r) => r.photo)]);
+      const dupes = succeeded.filter((r) => r.wasDuplicate).length;
 
       if (forProjectId != null) {
-        for (const r of res.results) await api.ideas.addPhoto(forProjectId, r.photo.id);
+        for (const r of succeeded) await api.ideas.addPhoto(forProjectId, r.photo.id);
         showToast(
-          `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'} and added to "${forProject?.title ?? 'project'}"` +
-            (dupes ? ` (${dupes} already in Library)` : '')
+          `Imported ${succeeded.length} photo${succeeded.length === 1 ? '' : 's'} and added to "${forProject?.title ?? 'project'}"` +
+            (dupes ? ` (${dupes} already in Library)` : '') +
+            (failed.length ? ` — ${failed.length} failed (not an image?)` : '')
         );
         await refreshProjectMap();
       } else {
         showToast(
-          `Imported ${res.results.length} photo${res.results.length === 1 ? '' : 's'}` +
-            (dupes ? ` (${dupes} already in Library)` : '')
+          `Imported ${succeeded.length} photo${succeeded.length === 1 ? '' : 's'}` +
+            (dupes ? ` (${dupes} already in Library)` : '') +
+            (failed.length ? ` — ${failed.length} failed (not an image?)` : '')
         );
       }
 
