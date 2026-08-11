@@ -68,5 +68,11 @@ export function slugify(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    // Trimming leading/trailing dashes with a plain `/^-+|-+$/` is the
+    // textbook polynomial-ReDoS pattern (ambiguous where a trailing run can
+    // start matching) — the negative lookbehind removes that ambiguity by
+    // only allowing the trailing branch to start at the true beginning of
+    // the run, same technique CodeQL's own docs recommend for the
+    // equivalent whitespace-trim case.
+    .replace(/^-+|(?<!-)-+$/g, '');
 }

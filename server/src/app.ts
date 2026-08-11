@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -47,6 +48,14 @@ if (watchDir && fs.existsSync(watchDir)) {
 
 export const app = express();
 app.use(express.json());
+
+// This is a self-hosted, single-/few-user tool, not a public multi-tenant
+// service — the ceiling here exists to satisfy "every route reachable
+// without a rate limiter is a DoS risk" (a real class of bug in general,
+// and one every handler below was flagged for) rather than to defend
+// against real abuse, so it's set generous: a Library grid page alone can
+// fire 100+ /files/thumb requests on a single load.
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 3000, standardHeaders: true, legacyHeaders: false }));
 
 app.use('/api/photos', photosRouter);
 app.use('/api/tags', tagsRouter);
