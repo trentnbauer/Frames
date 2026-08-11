@@ -34,7 +34,11 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
       // One corrupt/unreadable file (bad mimetype header, truncated upload,
       // a format sharp can't decode) shouldn't fail the whole batch when
       // the other files in it are fine.
-      console.error(`Failed to ingest "${file.originalname}":`, err instanceof Error ? err.message : err);
+      // file.originalname is fully attacker-controlled (the uploaded
+      // file's own name) — passed as a separate trailing argument here
+      // rather than interpolated into the format-string argument, so it's
+      // never at risk of being parsed for %-style format specifiers.
+      console.error('Failed to ingest file:', file.originalname, err instanceof Error ? err.message : err);
       results.push({ ok: false as const, filename: file.originalname, error: err instanceof Error ? err.message : 'Ingest failed' });
     }
   }

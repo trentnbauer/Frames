@@ -607,8 +607,12 @@ export function Library({ onOpenProject, forProjectId }: Props) {
               {/* p.url is a blob: URL from URL.createObjectURL() on the
                   locally-selected File object, never server/network data,
                   and React sets it as a plain `src` attribute (not
-                  innerHTML) — no HTML is parsed from this value. */}
-              <img src={p.url /* codeql[js/xss-through-dom] */} alt={p.name} />
+                  innerHTML) — no HTML is parsed from this value. CodeQL's
+                  js/xss-through-dom alert on this line is a false positive
+                  (dismissed on GitHub, not suppressed inline — an inline
+                  `codeql[...]` comment here was tried first but wasn't
+                  actually honored by a fresh scan). */}
+              <img src={p.url} alt={p.name} />
               <div className="upload-tile__spinner" />
               <div className="upload-tile__name">{p.name}</div>
             </div>
