@@ -47,6 +47,34 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
     )
     .all() as { tag: string; slug: string; location: string; count: number }[];
 
+  const tagSeason = db
+    .prepare(
+      `SELECT t.name as tag, t.slug as slug, p.season as season, COUNT(*) as count
+       FROM photos p
+       JOIN photo_tags pt ON pt.photo_id = p.id
+       JOIN tags t ON t.id = pt.tag_id
+       WHERE p.deleted_at IS NULL AND p.season IS NOT NULL AND p.season != '' AND pt.note IS NOT 'dominant color'
+       GROUP BY t.id, p.season
+       HAVING count > 0
+       ORDER BY count DESC
+       LIMIT 20`
+    )
+    .all() as { tag: string; slug: string; season: string; count: number }[];
+
+  const tagFilmStock = db
+    .prepare(
+      `SELECT t.name as tag, t.slug as slug, p.film_stock as film_stock, COUNT(*) as count
+       FROM photos p
+       JOIN photo_tags pt ON pt.photo_id = p.id
+       JOIN tags t ON t.id = pt.tag_id
+       WHERE p.deleted_at IS NULL AND p.film_stock IS NOT NULL AND p.film_stock != '' AND pt.note IS NOT 'dominant color'
+       GROUP BY t.id, p.film_stock
+       HAVING count > 0
+       ORDER BY count DESC
+       LIMIT 20`
+    )
+    .all() as { tag: string; slug: string; film_stock: string; count: number }[];
+
   const cameraLocation = db
     .prepare(
       `SELECT p.camera as camera, p.location as location, COUNT(*) as count
@@ -80,6 +108,8 @@ discoveryRouter.get('/combo-suggestions', (_req, res) => {
     ...tagLocation.map((r) => ({ type: 'tag_location' as const, main: r.tag, slug: r.slug, connector: 'at', secondary: r.location, count: r.count })),
     ...cameraLocation.map((r) => ({ type: 'camera_location' as const, main: r.camera, connector: 'at', secondary: r.location, count: r.count })),
     ...tagTag.map((r) => ({ type: 'tag_tag' as const, main: r.tagA, slug: r.slugA, connector: '+', secondary: r.tagB, secondarySlug: r.slugB, count: r.count })),
+    ...tagSeason.map((r) => ({ type: 'tag_season' as const, main: r.tag, slug: r.slug, connector: 'in', secondary: r.season, count: r.count })),
+    ...tagFilmStock.map((r) => ({ type: 'tag_film_stock' as const, main: r.tag, slug: r.slug, connector: 'on', secondary: r.film_stock, count: r.count })),
   ];
 
   res.json({ combos });

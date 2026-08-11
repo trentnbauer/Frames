@@ -8,6 +8,10 @@ import type { IdeaRow, PhotoRow } from '../types.js';
 
 export const ideasRouter = Router();
 
+// Bumped on any meaningful edit (title/notes/status/zine layout, photo
+// membership/reorder) — drives sidebar/Dashboard ordering, see GET '/'.
+const touchIdea = db.prepare("UPDATE ideas SET updated_at = datetime('now') WHERE id = ?");
+
 ideasRouter.get('/', (_req, res) => {
   const rows = db
     .prepare(
@@ -18,7 +22,7 @@ ideasRouter.get('/', (_req, res) => {
        LEFT JOIN idea_photos ip ON ip.idea_id = i.id
        LEFT JOIN photos p ON p.id = ip.photo_id
        GROUP BY i.id
-       ORDER BY i.created_at DESC`
+       ORDER BY i.updated_at DESC`
     )
     .all() as (IdeaRow & { photo_count: number; last_activity: string | null })[];
 
@@ -69,7 +73,7 @@ ideasRouter.patch('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM ideas WHERE id = ?').get(req.params.id) as IdeaRow | undefined;
   if (!existing) return res.status(404).json({ error: 'Idea not found' });
 
-  db.prepare('UPDATE ideas SET title = ?, notes = ?, light_pref = ?, status = ?, zine_state = ? WHERE id = ?').run(
+  db.prepare("UPDATE ideas SET title = ?, notes = ?, light_pref = ?, status = ?, zine_state = ?, updated_at = datetime('now') WHERE id = ?").run(
     title ?? existing.title,
     notes !== undefined ? notes : existing.notes,
     light_pref ?? existing.light_pref,
@@ -103,6 +107,7 @@ ideasRouter.post('/:id/photos', (req, res) => {
     `INSERT INTO idea_photos (idea_id, photo_id, position, why) VALUES (?, ?, ?, ?)
      ON CONFLICT(idea_id, photo_id) DO UPDATE SET why = excluded.why`
   ).run(ideaId, photoId, count, why ?? null);
+  touchIdea.run(ideaId);
 
   res.status(201).json({ ok: true });
 });
@@ -114,11 +119,13 @@ ideasRouter.patch('/:id/photos/:photoId', (req, res) => {
     req.params.id,
     req.params.photoId
   );
+  touchIdea.run(req.params.id);
   res.status(200).json({ ok: true });
 });
 
 ideasRouter.delete('/:id/photos/:photoId', (req, res) => {
   db.prepare('DELETE FROM idea_photos WHERE idea_id = ? AND photo_id = ?').run(req.params.id, req.params.photoId);
+  touchIdea.run(req.params.id);
   res.status(204).end();
 });
 
@@ -135,6 +142,7 @@ ideasRouter.patch('/:id/reorder', (req, res) => {
   const ideaId = req.params.id;
   const reorder = db.transaction((ids: number[]) => {
     ids.forEach((photoId, index) => update.run(index, ideaId, photoId));
+    touchIdea.run(ideaId);
   });
   reorder(photoIds);
 

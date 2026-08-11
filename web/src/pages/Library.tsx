@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { api } from '../api.js';
 import type { Photo, ShootOptions, Tag } from '../types.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
+import { ColorDot } from '../components/ColorDot.js';
+import { COLOR_TAG_NAMES } from '../colorNames.js';
 import { pickFromDropbox, pickFromGoogleDrive } from '../importSources.js';
 import { useToast } from '../toast.js';
 
@@ -412,6 +414,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
       <div className="chip-bar" style={{ alignItems: 'center' }}>
         {tags.map((t) => (
           <span key={t.id} className={`chip ${activeTags.includes(t.slug) ? 'active' : ''}`} onClick={() => toggleTag(t.slug)}>
+            {COLOR_TAG_NAMES.has(t.slug) && <ColorDot name={t.slug} />}
             {t.name}
           </span>
         ))}
@@ -459,7 +462,10 @@ export function Library({ onOpenProject, forProjectId }: Props) {
               <div className="photo-tile-card__filename">{photo.filename}</div>
               <div className="photo-tile-card__tags">
                 {photo.tags.slice(0, 3).map((t) => (
-                  <span key={t.id} className="tag-pill-soft">{t.name}</span>
+                  <span key={t.id} className="tag-pill-soft">
+                    {t.note === 'dominant color' && <ColorDot name={t.name} />}
+                    {t.name}
+                  </span>
                 ))}
               </div>
             </div>

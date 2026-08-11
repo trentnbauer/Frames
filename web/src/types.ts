@@ -55,6 +55,7 @@ export interface Idea {
   light_pref: LightPref;
   status: IdeaStatus;
   created_at: string;
+  updated_at: string;
   photo_count?: number;
   nudge?: Nudge | null;
   zine_state?: string | null;
@@ -81,7 +82,7 @@ export interface VisionProviderProfile {
 }
 
 export interface ComboSuggestion {
-  type: 'tag_location' | 'camera_location' | 'tag_tag';
+  type: 'tag_location' | 'camera_location' | 'tag_tag' | 'tag_season' | 'tag_film_stock';
   main: string;
   slug?: string;
   connector: string;

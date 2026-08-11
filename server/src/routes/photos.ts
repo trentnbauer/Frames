@@ -27,7 +27,7 @@ photosRouter.post('/upload', upload.array('photos', 100), async (req, res) => {
 });
 
 photosRouter.get('/', (req, res) => {
-  const { tag, tag2, camera, location, untagged, orphan, q, trashed } = req.query;
+  const { tag, tag2, camera, location, season, film_stock, untagged, orphan, q, trashed } = req.query;
 
   // Pagination is opt-in via `limit` — omit it and every match comes back
   // unpaginated, which several callers rely on (combo-suggestion matching,
@@ -84,6 +84,14 @@ photosRouter.get('/', (req, res) => {
     if (typeof location === 'string' && location) {
       where.push('p.location = ?');
       params.push(location);
+    }
+    if (typeof season === 'string' && season) {
+      where.push('p.season = ?');
+      params.push(season);
+    }
+    if (typeof film_stock === 'string' && film_stock) {
+      where.push('p.film_stock = ?');
+      params.push(film_stock);
     }
     if (typeof q === 'string' && q.trim()) {
       where.push('p.filename LIKE ?');

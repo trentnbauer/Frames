@@ -4,6 +4,7 @@ import type { Idea, IdeaPhoto, LightPref, Photo } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
+import { ColorDot } from '../components/ColorDot.js';
 import { useToast } from '../toast.js';
 
 interface Props {
@@ -70,6 +71,11 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
   async function markFinished() {
     await updateField('status', 'done');
     showToast('Marked as finished');
+  }
+
+  async function reopenProject() {
+    await updateField('status', 'active');
+    showToast('Reopened — back in progress');
   }
 
   async function addPhotoById(photoId: number) {
@@ -185,6 +191,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
               className="editable-title"
               style={{ marginBottom: 0 }}
               defaultValue={idea.title}
+              title={idea.title}
               onBlur={(e) => e.target.value !== idea.title && updateField('title', e.target.value)}
             />
             {photos.length === 0 && <span className="idea-badge">IDEA</span>}
@@ -212,6 +219,7 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
           )}
           {isFinished && <a className="btn btn-accent" href={api.ideas.exportUrl(projectId)}>Download Photos</a>}
           {isFinished && <span className="finished-badge">✓ Finished</span>}
+          {isFinished && <button className="btn" onClick={reopenProject}>Reopen</button>}
           {!isFinished && <button className="btn" onClick={markFinished}>Mark as Finished</button>}
           {suggested.length > 0 && (
             <button className="btn" onClick={addSuggested}>+ Add {suggested.length} Suggested Photo{suggested.length === 1 ? '' : 's'}</button>
@@ -274,7 +282,12 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
             <div className="photo-tile-card__meta">
               <div className="photo-tile-card__filename">{photo.filename}</div>
               <div className="photo-tile-card__tags">
-                {photo.tags.slice(0, 3).map((t) => <span key={t.id} className="tag-pill-soft">{t.name}</span>)}
+                {photo.tags.slice(0, 3).map((t) => (
+                  <span key={t.id} className="tag-pill-soft">
+                    {t.note === 'dominant color' && <ColorDot name={t.name} />}
+                    {t.name}
+                  </span>
+                ))}
               </div>
             </div>
           </div>

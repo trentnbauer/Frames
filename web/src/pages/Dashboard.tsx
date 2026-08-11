@@ -4,6 +4,8 @@ import type { ComboSuggestion, Idea, IdeaPhoto } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { useToast } from '../toast.js';
 import { getStoredLocation, setStoredLocation } from '../weatherLocation.js';
+import { ColorDot } from '../components/ColorDot.js';
+import { COLOR_TAG_NAMES } from '../colorNames.js';
 
 interface Props {
   ideas: Idea[];
@@ -59,7 +61,11 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
           ? { tag: suggestion.slug, location: suggestion.secondary }
           : suggestion.type === 'camera_location'
             ? { camera: suggestion.main, location: suggestion.secondary }
-            : { tag: suggestion.slug, tag2: suggestion.secondarySlug }
+            : suggestion.type === 'tag_season'
+              ? { tag: suggestion.slug, season: suggestion.secondary }
+              : suggestion.type === 'tag_film_stock'
+                ? { tag: suggestion.slug, film_stock: suggestion.secondary }
+                : { tag: suggestion.slug, tag2: suggestion.secondarySlug }
       );
       for (const photo of matches.photos) {
         await api.ideas.addPhoto(idea.id, photo.id);
@@ -108,20 +114,34 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
       <div className="project-grid">
         {visibleIdeas.map((idea) => {
           const photos = details[idea.id] ?? [];
-          const tagPreview = Array.from(new Set(photos.flatMap((p) => p.tags.map((t) => t.name)))).slice(0, 3);
+          // Subject tags first, color tags only filling leftover slots — a
+          // color tag appears on nearly every photo, so an unweighted
+          // Set().slice(3) would show almost nothing but colors.
+          const uniqueTagNames = Array.from(new Set(photos.flatMap((p) => p.tags.map((t) => t.name))));
+          const tagPreview = [
+            ...uniqueTagNames.filter((t) => !COLOR_TAG_NAMES.has(t)),
+            ...uniqueTagNames.filter((t) => COLOR_TAG_NAMES.has(t)),
+          ].slice(0, 3);
           return (
             <button key={idea.id} className="project-card" onClick={() => onOpenProject(idea.id)}>
               <div className="project-card__cover">
-                {Array.from({ length: 4 }).map((_, i) => {
-                  const photo = photos[i];
-                  return (
-                    <div
-                      key={i}
-                      className="project-card__cover-tile"
-                      style={photo ? { backgroundImage: `url(/files/thumb/${photo.id})` } : undefined}
-                    />
-                  );
-                })}
+                {photos.length === 0 ? (
+                  <div className="project-card__cover-empty">
+                    <span className="project-card__cover-empty-icon">🖼</span>
+                    <span>No photos yet</span>
+                  </div>
+                ) : (
+                  Array.from({ length: 4 }).map((_, i) => {
+                    const photo = photos[i];
+                    return (
+                      <div
+                        key={i}
+                        className="project-card__cover-tile"
+                        style={photo ? { backgroundImage: `url(/files/thumb/${photo.id})` } : undefined}
+                      />
+                    );
+                  })
+                )}
               </div>
               <div className="project-card__body">
                 <div className="project-card__name">
@@ -134,7 +154,10 @@ export function Dashboard({ ideas, onOpenProject, onImport, onNewProject, onGene
                 {idea.nudge && <div className={`project-card__nudge project-card__nudge--${idea.nudge.type}`}>{idea.nudge.message}</div>}
                 <div>
                   {tagPreview.map((t) => (
-                    <span key={t} className="tag-pill" style={{ marginRight: 6 }}>{t}</span>
+                    <span key={t} className="tag-pill" style={{ marginRight: 6 }}>
+                      {COLOR_TAG_NAMES.has(t) && <ColorDot name={t} />}
+                      {t}
+                    </span>
                   ))}
                 </div>
               </div>

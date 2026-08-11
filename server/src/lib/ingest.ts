@@ -5,13 +5,14 @@ import { hashBuffer } from './hash.js';
 import { generateDerivatives } from './derivatives.js';
 import { extractPalette } from './palette.js';
 import { hexToColorName } from './colorName.js';
+import { extractExifFields, reverseGeocode } from './exif.js';
 import { parseFilename } from './filenameParser.js';
 import { getEnabledProviders } from '../vision/index.js';
 import { slugify, type PhotoRow } from '../types.js';
 
 const insertPhoto = db.prepare(`
-  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, film_stock, season, palette, tagging_status)
-  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @film_stock, @season, @palette, 'pending')
+  INSERT INTO photos (content_hash, original_path, thumb_path, display_path, filename, width, height, camera, lens, location, film_stock, season, palette, tagging_status)
+  VALUES (@content_hash, @original_path, @thumb_path, @display_path, @filename, @width, @height, @camera, @lens, @location, @film_stock, @season, @palette, 'pending')
 `);
 
 const findByHash = db.prepare('SELECT * FROM photos WHERE content_hash = ?');
@@ -35,6 +36,9 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
 
   const derivatives = await generateDerivatives(originalPath, hash);
   const parsed = parseFilename(originalFilename);
+  // Local-buffer parsing only (no network) — fast enough to await inline
+  // alongside derivative generation, unlike the GPS reverse-geocode below.
+  const exif = await extractExifFields(buffer);
 
   const info = insertPhoto.run({
     content_hash: hash,
@@ -44,7 +48,12 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
     filename: originalFilename,
     width: derivatives.width,
     height: derivatives.height,
-    camera: parsed.camera,
+    // Filename wins when it matched: a scanned negative/print's own EXIF
+    // usually names the SCANNER (Epson V600, Noritsu, Frontier...), not
+    // the film camera the user already named in the filename.
+    camera: parsed.camera ?? exif.camera,
+    lens: exif.lens,
+    location: null,
     film_stock: parsed.filmStock,
     season: parsed.season,
     palette: JSON.stringify(derivatives.palette),
@@ -53,6 +62,17 @@ export async function ingestPhoto(buffer: Buffer, originalFilename: string): Pro
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(info.lastInsertRowid) as PhotoRow;
 
   addColorTags(photo.id, derivatives.palette);
+
+  // Fire and forget, same as auto-tagging: a network round-trip
+  // shouldn't hold up the upload response or serialize a batch upload
+  // behind Nominatim's rate limit.
+  if (exif.latitude != null && exif.longitude != null) {
+    reverseGeocode(exif.latitude, exif.longitude)
+      .then((place) => {
+        if (place) db.prepare('UPDATE photos SET location = ? WHERE id = ?').run(place, photo.id);
+      })
+      .catch((err) => console.error(`Reverse geocode failed for photo ${photo.id}:`, err.message));
+  }
 
   // Fire and forget: auto-tagging shouldn't block the upload response.
   autoTagPhoto(photo).catch((err) => {

@@ -18,6 +18,8 @@ export const api = {
       tag2?: string;
       camera?: string;
       location?: string;
+      season?: string;
+      film_stock?: string;
       q?: string;
       trashed?: boolean;
       limit?: number;
@@ -28,6 +30,8 @@ export const api = {
       if (params?.tag2) qs.set('tag2', params.tag2);
       if (params?.camera) qs.set('camera', params.camera);
       if (params?.location) qs.set('location', params.location);
+      if (params?.season) qs.set('season', params.season);
+      if (params?.film_stock) qs.set('film_stock', params.film_stock);
       if (params?.q) qs.set('q', params.q);
       if (params?.trashed) qs.set('trashed', 'true');
       if (params?.limit) qs.set('limit', String(params.limit));

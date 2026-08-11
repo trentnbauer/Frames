@@ -993,7 +993,10 @@ export function ZineCreator({ projectId, onExit }: Props) {
   return (
     <div className="zine-creator">
       <nav className="zine-creator__nav">
-        <button className="back-link zine-creator__back" onClick={onExit}>← {idea.title}</button>
+        <button className="back-link zine-creator__back" onClick={onExit} title={idea.title}>
+          <span aria-hidden="true">←</span>
+          <span className="zine-creator__back-label">{idea.title}</span>
+        </button>
         <span className="zine-creator__brand">Zine Creator</span>
         <div className="zine-creator__nav-controls">
           <div className="zine-creator__setup-inline">{renderSetupControls()}</div>
@@ -1378,6 +1381,7 @@ function ZineImageSlot({
     return (
       <button className="zine-slot zine-slot--empty" onClick={onPick} type="button">
         <span className="zine-slot__plus">+</span>
+        <span className="zine-slot__label">Add photo</span>
       </button>
     );
   }

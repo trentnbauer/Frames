@@ -170,7 +170,10 @@ button { cursor: pointer; }
 .page-title { font: 500 32px/1.15 Inter, sans-serif; letter-spacing: -.015em; margin: 0; }
 .page-subtitle { font: 400 14px/1.4 Inter, sans-serif; color: color-mix(in srgb, var(--text) 55%, transparent); margin-top: 6px; }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 36px; flex-wrap: wrap; }
-.page-header__actions { display: flex; gap: 10px; flex: none; }
+/* flex: 0 1 auto, not "none" (0 0 auto) — flex-shrink:0 would keep this
+   box at its full unwrapped width forever, so flex-wrap on its own
+   children never gets a narrow-enough box to actually wrap inside. */
+.page-header__actions { display: flex; gap: 10px; flex: 0 1 auto; flex-wrap: wrap; min-width: 0; }
 
 /* ---------- Buttons ---------- */
 
@@ -181,9 +184,17 @@ button { cursor: pointer; }
 }
 .btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn-accent { color: var(--accent); border-color: var(--accent); }
-.btn-accent:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.btn-solid { background: var(--accent); border-color: var(--accent); color: #161826; }
+/* Text blends toward --text rather than sitting purely on --accent — a
+   muted/low-saturation accent (the app default, or a user's own choice)
+   would otherwise render this the same as a disabled button. The
+   permanent (not just hover) background tint keeps it visually distinct
+   from a plain .btn even when that blend lands close to --text. */
+.btn-accent { color: color-mix(in srgb, var(--accent) 55%, var(--text) 45%); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.btn-accent:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+/* --accent-ink (theme.ts) is computed per-accent from relative luminance,
+   so text stays readable whether the accent is light, dark, or the
+   default desaturated grey — a hardcoded dark ink assumed a light accent. */
+.btn-solid { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #161826); }
 .btn-solid:hover { filter: brightness(1.08); }
 .btn-danger { color: #d66f6f; border-color: color-mix(in srgb, #d66f6f 40%, transparent); }
 
@@ -272,6 +283,12 @@ button { cursor: pointer; }
   height: 152px; gap: 1px; background: var(--bg);
 }
 .project-card__cover-tile { background-size: cover; background-position: center; background-color: color-mix(in srgb, var(--text) 8%, transparent); }
+.project-card__cover-empty {
+  grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent); color: color-mix(in srgb, var(--text) 40%, transparent);
+  font: 500 12px/1 Inter, sans-serif;
+}
+.project-card__cover-empty-icon { font-size: 22px; opacity: .6; }
 .project-card__body { padding: 14px 16px 16px; }
 .project-card__name { font: 500 16px/1.25 Inter, sans-serif; margin-bottom: 3px; }
 .project-card__meta { font: 400 11.5px/1 ui-monospace, Menlo, monospace; color: color-mix(in srgb, var(--text) 40%, transparent); margin-bottom: 11px; }
@@ -279,6 +296,16 @@ button { cursor: pointer; }
 .tag-pill {
   display: inline-flex; align-items: center; font: 500 11px/1 Inter, sans-serif; letter-spacing: .02em;
   padding: 3px 9px; border-radius: 6px; background: #3f424d; color: #f3f5fe;
+}
+
+/* Marks a dominant-color tag ("red", "teal", ...) wherever it appears
+   next to real subject tags — a small swatch of the color itself, so
+   "what's in this photo" and "what color is this photo" don't blend
+   into one indistinguishable row of pills. */
+.color-tag-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; flex: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent);
+  vertical-align: middle;
 }
 
 /* ---------- Photo grid (Library + Project) ---------- */
@@ -431,12 +458,13 @@ button { cursor: pointer; }
 }
 .back-link:hover { color: var(--text); }
 .project-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 16px; flex-wrap: wrap; }
-.project-header__actions { display: flex; gap: 10px; flex: none; flex-wrap: wrap; align-items: center; }
+.project-header__actions { display: flex; gap: 10px; flex: 0 1 auto; flex-wrap: wrap; align-items: center; min-width: 0; }
 .finished-badge { display: flex; align-items: center; font: 500 13px/1 Inter, sans-serif; color: color-mix(in srgb, var(--text) 55%, transparent); padding: 0 4px; }
 
 .editable-title {
   font: 500 32px/1.15 Inter, sans-serif; letter-spacing: -.015em; margin-bottom: 8px;
-  background: transparent; border: none; color: var(--text); width: 100%; padding: 0; display: block;
+  background: transparent; border: none; color: var(--text); width: 100%; min-width: 0; padding: 0; display: block;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .editable-title:focus { outline: none; }
 .idea-badge {
@@ -683,11 +711,18 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 }
 .zine-slot-wrap { flex: 1 1 0; min-height: 0; min-width: 0; box-sizing: border-box; }
 .zine-slot { position: relative; width: 100%; height: 100%; display: block; }
+/* Neutral mid-grey at fixed opacity, not blended with --text/--accent —
+   this slot sits on the cover's chosen border/frame color (often white,
+   sometimes black, always user-chosen), so it needs to stay visible
+   against literally any backdrop rather than one tuned for the app's own
+   dark surfaces. */
 .zine-slot--empty {
-  border: 1.5px dashed color-mix(in srgb, var(--text) 25%, transparent); background: color-mix(in srgb, var(--text) 4%, transparent);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  border: 2px dashed rgba(128, 128, 128, .6); background: rgba(128, 128, 128, .12);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0;
 }
-.zine-slot__plus { font-size: 28px; opacity: .35; }
+.zine-slot--empty:hover { background: rgba(128, 128, 128, .2); }
+.zine-slot__plus { font-size: 32px; line-height: 1; color: rgba(110, 110, 110, .9); }
+.zine-slot__label { font: 500 12px/1 Inter, sans-serif; letter-spacing: .02em; color: rgba(110, 110, 110, .9); }
 .zine-slot--filled { touch-action: none; overflow: hidden; }
 .zine-slot--filled img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; user-select: none; }
 .zine-slot__delete {
@@ -734,9 +769,12 @@ button.danger { background: transparent; border: 1px solid color-mix(in srgb, #d
 
 /* ---------- Zine Creator: mobile ---------- */
 
-.zine-creator__back {
-  max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; margin-right: 12px;
-}
+/* text-overflow has no effect directly on a flex container's own inline
+   content in any browser (.back-link is display:inline-flex) — it needs
+   an inner block-level element to actually truncate against, hence the
+   separate label span below rather than putting these properties here. */
+.zine-creator__back { max-width: 40vw; flex: none; margin-right: 12px; }
+.zine-creator__back-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; min-width: 0; }
 .zine-creator__setup-toggle {
   display: none; align-items: center; gap: 6px; font: 500 13px/1 Inter, sans-serif; color: var(--text);
   background: transparent; border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: 8px; padding: 8px 12px; cursor: pointer;
