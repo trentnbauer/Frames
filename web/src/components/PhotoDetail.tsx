@@ -48,6 +48,15 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
 
   useEscapeKey(true, onClose);
 
+  function navigateBy(delta: number) {
+    if (!navIds || !onNavigate) return;
+    const idx = navIds.indexOf(photoId);
+    if (idx === -1) return;
+    const nextIdx = idx + delta;
+    if (nextIdx < 0 || nextIdx >= navIds.length) return;
+    onNavigate(navIds[nextIdx]);
+  }
+
   useEffect(() => {
     if (!navIds || !onNavigate || navIds.length === 0) return;
     const handler = (e: KeyboardEvent) => {
@@ -60,17 +69,18 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
       const isEditable =
         active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active as HTMLElement)?.isContentEditable;
       if (isEditable) return;
-      const idx = navIds.indexOf(photoId);
-      if (idx === -1) return;
-      const nextIdx = e.key === 'ArrowRight' ? idx + 1 : idx - 1;
-      if (nextIdx < 0 || nextIdx >= navIds.length) return;
-      onNavigate(navIds[nextIdx]);
+      navigateBy(e.key === 'ArrowRight' ? 1 : -1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [navIds, onNavigate, photoId]);
 
   if (!photo) return null;
+
+  const navIdx = navIds ? navIds.indexOf(photoId) : -1;
+  const isColorTag = (t: Photo['tags'][number]) => t.note === 'auto:dominant-color';
+  const suggestedTags = photo.tags.filter((t) => t.source === 'ai_suggested' && !isColorTag(t));
+  const confirmedTags = photo.tags.filter((t) => !(t.source === 'ai_suggested' && !isColorTag(t)));
 
   async function addTag() {
     if (!newTag.trim()) return;
@@ -90,6 +100,12 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
 
   async function dismissTag(tagId: number) {
     await api.photos.removeTag(photo!.id, tagId);
+    await refresh();
+    onChanged();
+  }
+
+  async function acceptAllSuggestions() {
+    for (const t of suggestedTags) await api.photos.confirmTag(photo!.id, t.id);
     await refresh();
     onChanged();
   }
@@ -166,105 +182,157 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
   return (
     <div className="photo-detail-overlay" onClick={onClose}>
       <div className="photo-detail" onClick={(e) => e.stopPropagation()}>
-        <button className="photo-detail__close" onClick={onClose}>×</button>
-        <img className="photo-detail__image" src={`/files/display/${photo.id}`} alt={photo.filename} />
-        {photo.palette && photo.palette.length > 0 && (
-          <div className="palette-bar palette-bar--lg">
-            {photo.palette.map((color, i) => (
-              <span key={i} className="palette-bar__swatch" style={{ background: color }} />
-            ))}
-          </div>
-        )}
-
-        <div className="photo-detail__meta">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div>{photo.filename}</div>
-            <button
-              className={`photo-tile-card__favorite photo-detail__favorite ${photo.is_favorite ? 'is-active' : ''}`}
-              onClick={toggleFavorite}
-              title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
-            >
-              ★
-            </button>
-            <button className="link-button" style={{ marginLeft: 'auto' }} onClick={retag} disabled={retagging || photo.tagging_status === 'pending'}>
-              {retagging || photo.tagging_status === 'pending' ? 'Tagging…' : 'Re-tag'}
-            </button>
-          </div>
-          <div className="photo-detail__meta-sub">
-            {metaLine || 'No shoot details yet'}
-            {mapUrl && (
-              <>
-                {' · '}
-                <a className="link-button" style={{ marginLeft: 0 }} href={mapUrl} target="_blank" rel="noopener noreferrer">
-                  View on map ↗
-                </a>
-              </>
-            )}
-          </div>
-          {photo.tagging_status === 'failed' && photo.tagging_error && (
-            <div className="photo-detail__tagging-error">Tagging failed: {photo.tagging_error}</div>
+        {/* Image left, everything else in a fixed-width right rail — the
+            old single scrolling column capped the image at 55vh and put
+            tags/shoot details/projects below it, so correcting a tag meant
+            scrolling past the very photo you were judging it against. */}
+        <div className="photo-detail__stage">
+          <img className="photo-detail__image" src={`/files/display/${photo.id}`} alt={photo.filename} />
+          {navIds && onNavigate && navIds.length > 1 && (
+            <>
+              <button
+                className="photo-detail__nav photo-detail__nav--prev"
+                onClick={() => navigateBy(-1)}
+                disabled={navIdx <= 0}
+                title="Previous photo"
+              >
+                ‹
+              </button>
+              <button
+                className="photo-detail__nav photo-detail__nav--next"
+                onClick={() => navigateBy(1)}
+                disabled={navIdx === -1 || navIdx >= navIds.length - 1}
+                title="Next photo"
+              >
+                ›
+              </button>
+              {navIdx !== -1 && <div className="photo-detail__counter">{navIdx + 1} of {navIds.length} · ← → to move</div>}
+            </>
+          )}
+          {photo.palette && photo.palette.length > 0 && (
+            <div className="palette-bar photo-detail__palette">
+              {photo.palette.map((color, i) => (
+                <span key={i} className="palette-bar__swatch" style={{ background: color }} />
+              ))}
+            </div>
           )}
         </div>
 
-        <section>
-          <h3>Tags</h3>
-          <div className="tag-chip-list">
-            {photo.tags.map((tag) => (
-              <TagChip
-                key={tag.id}
-                tag={tag}
-                onConfirm={tag.source === 'ai_suggested' ? () => confirmTag(tag.id) : undefined}
-                onDismiss={() => dismissTag(tag.id)}
-                onNoteChange={(note) => setNote(tag.id, note)}
-              />
-            ))}
-          </div>
-          <div className="add-tag-row">
-            <input
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              placeholder="add a tag…"
-              onKeyDown={(e) => e.key === 'Enter' && addTag()}
-            />
-            <button onClick={addTag}>Add</button>
-          </div>
-        </section>
+        <div className="photo-detail__rail scrollarea">
+          <button className="photo-detail__close" onClick={onClose}>×</button>
 
-        <section>
-          <h3>Shoot details</h3>
-          <div className="import-row__fields-grid" style={{ marginBottom: 8 }}>
-            <input className="field-input" defaultValue={photo.camera ?? ''} placeholder="Camera model" onBlur={(e) => e.target.value !== (photo.camera ?? '') && updateField('camera', e.target.value)} />
-            <input className="field-input" defaultValue={photo.lens ?? ''} placeholder="Lens" onBlur={(e) => e.target.value !== (photo.lens ?? '') && updateField('lens', e.target.value)} />
-            <input className="field-input" defaultValue={photo.film_stock ?? ''} placeholder="Film stock" onBlur={(e) => e.target.value !== (photo.film_stock ?? '') && updateField('film_stock', e.target.value)} />
-            <input className="field-input" defaultValue={photo.location ?? ''} placeholder="Location" onBlur={(e) => e.target.value !== (photo.location ?? '') && updateField('location', e.target.value)} />
-          </div>
-          <input className="field-input" defaultValue={photo.photoshoot ?? ''} placeholder="Photoshoot" onBlur={(e) => e.target.value !== (photo.photoshoot ?? '') && updateField('photoshoot', e.target.value)} />
-        </section>
-
-        <section>
-          <h3>In projects</h3>
-          {memberIdeas.length === 0 && <p className="muted">Not in any project yet.</p>}
-          {memberIdeas.map((i) => (
-            <div key={i.id} className="add-tag-row" style={{ alignItems: 'center' }}>
-              <span style={{ flex: 'none', fontWeight: 600, fontSize: 13 }}>{i.title}</span>
-              <input
-                defaultValue={i.why ?? ''}
-                placeholder="why this frame belongs…"
-                onBlur={(e) => e.target.value !== (i.why ?? '') && setWhy(i.id, e.target.value)}
-              />
-              <button className="btn btn-danger" onClick={() => removeFromProject(i.id, i.title)}>Remove</button>
+          <div className="photo-detail__meta" style={{ paddingRight: 26 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{photo.filename}</div>
+              <button
+                className={`photo-tile-card__favorite photo-detail__favorite ${photo.is_favorite ? 'is-active' : ''}`}
+                onClick={toggleFavorite}
+                title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
+              >
+                ★
+              </button>
+              <button className="link-button" style={{ marginLeft: 'auto' }} onClick={retag} disabled={retagging || photo.tagging_status === 'pending'}>
+                {retagging || photo.tagging_status === 'pending' ? 'Tagging…' : 'Re-tag'}
+              </button>
             </div>
-          ))}
-          <div className="add-tag-row">
-            <select value={selectedIdeaId} onChange={(e) => setSelectedIdeaId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Add to project…</option>
-              {allIdeas.map((idea) => (
-                <option key={idea.id} value={idea.id}>{idea.title}</option>
-              ))}
-            </select>
-            <button onClick={addToProject} disabled={!selectedIdeaId}>Drop in</button>
+            <div className="photo-detail__meta-sub">
+              {metaLine || 'No shoot details yet'}
+              {mapUrl && (
+                <>
+                  {' · '}
+                  <a className="link-button" style={{ marginLeft: 0 }} href={mapUrl} target="_blank" rel="noopener noreferrer">
+                    View on map ↗
+                  </a>
+                </>
+              )}
+            </div>
+            {photo.tagging_status === 'failed' && photo.tagging_error && (
+              <div className="photo-detail__tagging-error">Tagging failed: {photo.tagging_error}</div>
+            )}
           </div>
-        </section>
+
+          <section>
+            <h3>Tags</h3>
+            {/* Triaging AI suggestions is the app's core loop — suggested
+                tags get their own accented block with a bulk Accept all,
+                instead of differing from confirmed tags only by a dashed
+                border. */}
+            {suggestedTags.length > 0 && (
+              <div className="photo-detail__suggestions">
+                <div className="photo-detail__suggestions-label">
+                  {suggestedTags.length} suggestion{suggestedTags.length === 1 ? '' : 's'}
+                </div>
+                <div className="tag-chip-list">
+                  {suggestedTags.map((tag) => (
+                    <TagChip
+                      key={tag.id}
+                      tag={tag}
+                      onConfirm={() => confirmTag(tag.id)}
+                      onDismiss={() => dismissTag(tag.id)}
+                      onNoteChange={(note) => setNote(tag.id, note)}
+                    />
+                  ))}
+                </div>
+                <button className="link-button" style={{ marginLeft: 0 }} onClick={acceptAllSuggestions}>Accept all</button>
+              </div>
+            )}
+            <div className="tag-chip-list">
+              {confirmedTags.map((tag) => (
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  onDismiss={() => dismissTag(tag.id)}
+                  onNoteChange={(note) => setNote(tag.id, note)}
+                />
+              ))}
+            </div>
+            <div className="add-tag-row">
+              <input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="add a tag…"
+                onKeyDown={(e) => e.key === 'Enter' && addTag()}
+              />
+              <button onClick={addTag}>Add</button>
+            </div>
+          </section>
+
+          <section>
+            <h3>Shoot details</h3>
+            <div className="import-row__fields-grid" style={{ marginBottom: 8 }}>
+              <input className="field-input" defaultValue={photo.camera ?? ''} placeholder="Camera model" onBlur={(e) => e.target.value !== (photo.camera ?? '') && updateField('camera', e.target.value)} />
+              <input className="field-input" defaultValue={photo.lens ?? ''} placeholder="Lens" onBlur={(e) => e.target.value !== (photo.lens ?? '') && updateField('lens', e.target.value)} />
+              <input className="field-input" defaultValue={photo.film_stock ?? ''} placeholder="Film stock" onBlur={(e) => e.target.value !== (photo.film_stock ?? '') && updateField('film_stock', e.target.value)} />
+              <input className="field-input" defaultValue={photo.location ?? ''} placeholder="Location" onBlur={(e) => e.target.value !== (photo.location ?? '') && updateField('location', e.target.value)} />
+            </div>
+            <input className="field-input" defaultValue={photo.photoshoot ?? ''} placeholder="Photoshoot" onBlur={(e) => e.target.value !== (photo.photoshoot ?? '') && updateField('photoshoot', e.target.value)} />
+          </section>
+
+          <section>
+            <h3>In projects</h3>
+            {memberIdeas.length === 0 && <p className="muted">Not in any project yet.</p>}
+            {memberIdeas.map((i) => (
+              <div key={i.id} className="add-tag-row" style={{ alignItems: 'center' }}>
+                <span style={{ flex: 'none', fontWeight: 600, fontSize: 13 }}>{i.title}</span>
+                <input
+                  defaultValue={i.why ?? ''}
+                  placeholder="why this frame belongs…"
+                  onBlur={(e) => e.target.value !== (i.why ?? '') && setWhy(i.id, e.target.value)}
+                />
+                <button className="btn btn-danger" onClick={() => removeFromProject(i.id, i.title)}>Remove</button>
+              </div>
+            ))}
+            <div className="add-tag-row">
+              <select value={selectedIdeaId} onChange={(e) => setSelectedIdeaId(e.target.value ? Number(e.target.value) : '')}>
+                <option value="">Add to project…</option>
+                {allIdeas.map((idea) => (
+                  <option key={idea.id} value={idea.id}>{idea.title}</option>
+                ))}
+              </select>
+              <button onClick={addToProject} disabled={!selectedIdeaId}>Drop in</button>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

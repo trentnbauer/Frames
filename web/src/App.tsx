@@ -21,6 +21,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [libraryTotal, setLibraryTotal] = useState<number | null>(null);
   const [newProjectRequest, setNewProjectRequest] = useState<NewProjectRequest | null>(null);
   const showToast = useToast();
 
@@ -31,6 +32,7 @@ export default function App() {
 
   useEffect(() => {
     refreshIdeas();
+    api.photos.list({ limit: 1 }).then((res) => setLibraryTotal(res.total)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -96,39 +98,58 @@ export default function App() {
           </button>
         </div>
 
-        <button className={`nav-item ${route.screen === 'dashboard' ? 'active' : ''}`} onClick={() => goTo('dashboard')} title="Dashboard">
-          <span className="nav-item__icon">D</span>
-          {!sidebarCollapsed && <span>Dashboard</span>}
+        <button className={`nav-item ${route.screen === 'dashboard' ? 'active' : ''}`} onClick={() => goTo('dashboard')} title="Projects">
+          <span className="nav-item__icon">
+            <span className="nav-icon--grid"><span /><span /><span /><span /></span>
+          </span>
+          {!sidebarCollapsed && <span>Projects</span>}
         </button>
         <button className={`nav-item ${route.screen === 'library' ? 'active' : ''}`} onClick={() => goTo('library')} title="Library">
-          <span className="nav-item__icon">L</span>
+          <span className="nav-item__icon">
+            <span className="nav-icon--bars"><span /><span /><span /></span>
+          </span>
           {!sidebarCollapsed && <span>Library</span>}
+          {!sidebarCollapsed && libraryTotal !== null && <span className="nav-item__count">{libraryTotal}</span>}
         </button>
         <button className={`nav-item ${route.screen === 'map' ? 'active' : ''}`} onClick={() => goTo('map')} title="Map">
-          <span className="nav-item__icon">M</span>
+          <span className="nav-item__icon">
+            <span className="nav-icon--pin"><span /></span>
+          </span>
           {!sidebarCollapsed && <span>Map</span>}
         </button>
         {!sidebarCollapsed && (
           <>
             <div className="sidebar__section-label">Projects</div>
             <div className="sidebar__projects scrollarea">
-              {ideas.map((idea) => (
-                <button
-                  key={idea.id}
-                  className={`sidebar__project-row ${route.screen === 'project' && route.projectId === idea.id ? 'active' : ''}`}
-                  onClick={() => goTo('project', idea.id)}
-                >
-                  <span className="sidebar__project-row-name">{idea.title}</span>
-                  <span className="sidebar__project-row-count">{idea.photo_count ?? 0}</span>
-                </button>
-              ))}
+              {ideas.map((idea) => {
+                const isActive = route.screen === 'project' && route.projectId === idea.id;
+                const dotClass = !idea.photo_count
+                  ? 'sidebar__project-dot sidebar__project-dot--empty'
+                  : isActive || idea.nudge
+                    ? 'sidebar__project-dot sidebar__project-dot--filled'
+                    : 'sidebar__project-dot';
+                return (
+                  <button
+                    key={idea.id}
+                    className={`sidebar__project-row ${isActive ? 'active' : ''}`}
+                    onClick={() => goTo('project', idea.id)}
+                    title={idea.nudge?.message}
+                  >
+                    <span className={dotClass} />
+                    <span className="sidebar__project-row-name">{idea.title}</span>
+                    <span className="sidebar__project-row-count">{idea.photo_count ?? 0}</span>
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
 
         <div className="sidebar__spacer" />
         <button className="sidebar__settings-row" onClick={() => goTo('settings')} title="Settings">
-          <span className="nav-item__icon">S</span>
+          <span className="nav-item__icon">
+            <span className="nav-icon--bars nav-icon--bars-thin"><span /><span /><span /></span>
+          </span>
           {!sidebarCollapsed && <span>Settings</span>}
         </button>
         <button className="sidebar__new-project" onClick={() => openNewProject()} title="New Idea">

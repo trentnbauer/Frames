@@ -46,7 +46,10 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadingPreviews, setUploadingPreviews] = useState<{ url: string; name: string }[]>([]);
   const [newTagValues, setNewTagValues] = useState<Record<number, string>>({});
+  const [showImportMenu, setShowImportMenu] = useState(false);
+  const [isDraggingOverPage, setIsDraggingOverPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
   const showToast = useToast();
 
   const hasFilters = activeTags.length > 0 || !!activeCamera || !!activeLocation || !!search.trim() || activeFavorite;
@@ -165,6 +168,45 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     }
   }
 
+  // Drag-and-drop works from anywhere on the page, not just the (now
+  // removed) dedicated dropzone — a window-level counter tracks nested
+  // dragenter/dragleave pairs fired as the pointer crosses child elements,
+  // since a naive show-on-enter/hide-on-leave flickers on every boundary.
+  useEffect(() => {
+    function onDragEnter(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      dragCounter.current += 1;
+      setIsDraggingOverPage(true);
+    }
+    function onDragOver(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+    }
+    function onDragLeave(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      if (dragCounter.current === 0) setIsDraggingOverPage(false);
+    }
+    function onDrop(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsDraggingOverPage(false);
+      if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    }
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [forProjectId, forProject]);
+
   async function importFrom(source: 'google' | 'dropbox') {
     try {
       const files = source === 'google' ? await pickFromGoogleDrive() : await pickFromDropbox();
@@ -234,9 +276,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     setDuplicateGroups(res.groups);
   }
 
+  // Fetched once on mount (not lazily on opening the Duplicates view) so the
+  // header's "Duplicates N" count is accurate before the user ever opens it.
   useEffect(() => {
-    if (showDuplicates) refreshDuplicates();
-  }, [showDuplicates]);
+    refreshDuplicates();
+  }, []);
 
   async function trashFromDuplicates(id: number) {
     if (!confirm('Move this photo to trash? You can restore it later, or delete it forever from Trash.')) return;
@@ -458,36 +502,43 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     );
   }
 
+  // Own class set (not the shared .photo-tile-card* also used by
+  // ProjectDetail's reorderable grid) — this grid keeps each photo's native
+  // aspect ratio instead of a fixed cropped height, so the two can't share
+  // sizing rules.
   function renderTile(photo: Photo) {
     return (
-      <div key={photo.id} className="photo-tile-card">
-        <button className="photo-tile-card__select" onClick={(e) => toggleSelect(photo.id, e)} title="Select">
-          <input type="checkbox" checked={selectedIds.has(photo.id)} readOnly />
-        </button>
-        <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
-          <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
-        </button>
-        {projectByPhoto[photo.id] && <span className="photo-tile-card__badge">{projectByPhoto[photo.id]}</span>}
-        <button
-          className={`photo-tile-card__favorite ${photo.is_favorite ? 'is-active' : ''}`}
-          onClick={(e) => toggleFavorite(photo.id, e)}
-          title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
-        >
-          ★
-        </button>
-        <button className="photo-tile-card__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
-        <PaletteBar palette={photo.palette} />
-        <div className="photo-tile-card__meta">
-          <div className="photo-tile-card__filename">{photo.filename}</div>
-          <div className="photo-tile-card__tags">
-            {photo.tags.slice(0, 3).map((t) => (
-              <span key={t.id} className="tag-pill-soft">
-                {t.note === 'auto:dominant-color' && <ColorDot name={t.name} />}
-                {t.name}
-              </span>
-            ))}
+      <div key={photo.id} className="library-tile">
+        <div className="library-tile__frame">
+          <button className="library-tile__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
+            <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
+          </button>
+          <div className="library-tile__scrim" />
+          <button className="library-tile__select" onClick={(e) => toggleSelect(photo.id, e)} title="Select">
+            <input type="checkbox" checked={selectedIds.has(photo.id)} readOnly />
+          </button>
+          <button
+            className={`library-tile__favorite ${photo.is_favorite ? 'is-active' : ''}`}
+            onClick={(e) => toggleFavorite(photo.id, e)}
+            title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
+          >
+            ★
+          </button>
+          <button className="library-tile__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
+          <div className="library-tile__overlay-meta">
+            {projectByPhoto[photo.id] && <span className="library-tile__badge">{projectByPhoto[photo.id]}</span>}
+            <div className="library-tile__filename">{photo.filename}</div>
+            <div className="library-tile__tags">
+              {photo.tags.slice(0, 3).map((t) => (
+                <span key={t.id} className="library-tile__tag">
+                  {t.note === 'auto:dominant-color' && <ColorDot name={t.name} />}
+                  {t.name}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
+        <PaletteBar palette={photo.palette} />
       </div>
     );
   }
@@ -511,12 +562,34 @@ export function Library({ onOpenProject, forProjectId }: Props) {
           </div>
         </div>
         <div className="page-header__actions">
-          <button className="btn" onClick={() => importFrom('google')}>Import from Google Drive</button>
-          <button className="btn" onClick={() => importFrom('dropbox')}>Import from Dropbox</button>
-          <button className="btn" onClick={() => setShowDuplicates(true)}>Possible Duplicates</button>
+          <button className="btn" onClick={() => setShowDuplicates(true)}>
+            Duplicates {duplicateGroups.length > 0 && <span className="btn__count">{duplicateGroups.length}</span>}
+          </button>
           <button className="btn" onClick={() => setShowTrash(true)}>Trash</button>
+          <div className="import-menu">
+            <button className="btn btn-accent" onClick={() => setShowImportMenu((v) => !v)}>Import ▾</button>
+            {showImportMenu && (
+              <>
+                <div className="import-menu__backdrop" onClick={() => setShowImportMenu(false)} />
+                <div className="import-menu__dropdown">
+                  <button onClick={() => { setShowImportMenu(false); fileInputRef.current?.click(); }}>From files…</button>
+                  <button onClick={() => { setShowImportMenu(false); importFrom('google'); }}>From Google Drive</button>
+                  <button onClick={() => { setShowImportMenu(false); importFrom('dropbox'); }}>From Dropbox</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
+
+      {isDraggingOverPage && (
+        <div className="page-drop-overlay">
+          <div className="page-drop-overlay__icon"><div className="dropzone-lg__icon-arrow" /></div>
+          <div className="page-drop-overlay__title">Drop to import{forProject ? ` into "${forProject.title}"` : ''}</div>
+        </div>
+      )}
 
       <datalist id="tag-options-list">{tags.map((t) => <option key={t.id} value={t.name} />)}</datalist>
       <datalist id="camera-options-list">{options.camera.map((o) => <option key={o} value={o} />)}</datalist>
@@ -579,26 +652,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         </>
       )}
 
-      <div
-        className={`dropzone-lg ${importBatch.length > 0 ? 'has-batch' : ''}`}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          handleFiles(e.dataTransfer.files);
-        }}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
-        <div className="dropzone-lg__icon"><div className="dropzone-lg__icon-arrow" /></div>
-        <div className="dropzone-lg__title">
-          {uploading
-            ? `Uploading ${uploadingPreviews.length} photo${uploadingPreviews.length === 1 ? '' : 's'}…`
-            : importBatch.length > 0
-              ? 'Import more photos'
-              : 'Drop photos to import'}
+      {uploading && (
+        <div className="import-status-row">
+          <div className="import-status-row__label">Uploading {uploadingPreviews.length} photo{uploadingPreviews.length === 1 ? '' : 's'}…</div>
         </div>
-        <div className="dropzone-lg__hint">Drag and drop, or click to choose files from your desktop</div>
-      </div>
+      )}
 
       {uploadingPreviews.length > 0 && (
         <div className="upload-preview-grid">
@@ -627,7 +685,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         placeholder="Search filename, camera, lens, location…"
       />
 
-      <div className="chip-bar" style={{ alignItems: 'center' }}>
+      <div className="chip-bar chip-bar--sticky" style={{ alignItems: 'center' }}>
         {tags.map((t) => (
           <span key={t.id} className={`chip ${activeTags.includes(t.slug) ? 'active' : ''}`} onClick={() => toggleTag(t.slug)}>
             {COLOR_TAG_NAMES.has(t.slug) && <ColorDot name={t.slug} />}
@@ -649,40 +707,6 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         <span className={`chip ${activeFavorite ? 'active' : ''}`} onClick={() => setActiveFavorite((v) => !v)}>★ Favorites</span>
         {hasFilters && <span className="chip-bar__clear" onClick={clearFilters}>Clear filters</span>}
       </div>
-
-      {selectedIds.size > 0 && (
-        <div className="suggestion-banner" style={{ flexWrap: 'wrap', gap: 12 }}>
-          <div className="suggestion-banner__text" style={{ fontStyle: 'normal' }}>{selectedIds.size} selected</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select value={bulkIdeaId} onChange={(e) => setBulkIdeaId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Add to project…</option>
-              {allIdeas.map((idea) => <option key={idea.id} value={idea.id}>{idea.title}</option>)}
-            </select>
-            <button className="btn" onClick={bulkAddToProject} disabled={!bulkIdeaId}>Add</button>
-            <input value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} placeholder="tag name…" style={{ width: 120 }} />
-            <button className="btn" onClick={bulkAddTag} disabled={!bulkTag.trim()}>Tag</button>
-            <button className="btn" onClick={() => setShowBulkFields((v) => !v)}>{showBulkFields ? 'Hide details' : 'Set details…'}</button>
-            <button className="btn btn-danger" onClick={bulkDelete}>Delete {selectedIds.size}</button>
-            <span className="chip-bar__clear" onClick={() => setSelectedIds(new Set())}>Clear selection</span>
-          </div>
-          {showBulkFields && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
-              <input className="field-input" value={bulkCamera} onChange={(e) => setBulkCamera(e.target.value)} list="camera-options-list" placeholder="Camera model" style={{ width: 160 }} />
-              <input className="field-input" value={bulkLens} onChange={(e) => setBulkLens(e.target.value)} list="lens-options-list" placeholder="Lens" style={{ width: 160 }} />
-              <input className="field-input" value={bulkFilmStock} onChange={(e) => setBulkFilmStock(e.target.value)} list="film-options-list" placeholder="Film stock" style={{ width: 160 }} />
-              <input className="field-input" value={bulkLocation} onChange={(e) => setBulkLocation(e.target.value)} list="location-options-list" placeholder="Location" style={{ width: 160 }} />
-              <button
-                className="btn btn-accent"
-                onClick={bulkSetFields}
-                disabled={![bulkCamera, bulkLens, bulkFilmStock, bulkLocation].some((v) => v.trim())}
-              >
-                Apply to {selectedIds.size}
-              </button>
-              <span className="muted" style={{ fontSize: 12 }}>Blank fields are left unchanged</span>
-            </div>
-          )}
-        </div>
-      )}
 
       {sort === 'taken_at' && timelineGroups.length > 0 ? (
         timelineGroups.map(([label, groupPhotos]) => (
@@ -706,6 +730,43 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         </div>
       )}
 
+      {/* Sticky-bottom, not inline before the grid — a bar that pushed the
+          grid down on appearing (and scrolled out of view with it) meant
+          selection and actions were rarely on screen together. */}
+      {selectedIds.size > 0 && (
+        <div className="selection-dock">
+          <div className="selection-dock__count">{selectedIds.size} selected</div>
+          <div className="selection-dock__actions">
+            <select value={bulkIdeaId} onChange={(e) => setBulkIdeaId(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">Add to project…</option>
+              {allIdeas.map((idea) => <option key={idea.id} value={idea.id}>{idea.title}</option>)}
+            </select>
+            <button className="btn" onClick={bulkAddToProject} disabled={!bulkIdeaId}>Add</button>
+            <input value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} placeholder="tag name…" style={{ width: 120 }} />
+            <button className="btn" onClick={bulkAddTag} disabled={!bulkTag.trim()}>Tag</button>
+            <button className="btn" onClick={() => setShowBulkFields((v) => !v)}>{showBulkFields ? 'Hide details' : 'Set details…'}</button>
+            <button className="btn btn-danger" onClick={bulkDelete}>Delete {selectedIds.size}</button>
+            <span className="chip-bar__clear" onClick={() => setSelectedIds(new Set())}>Clear selection</span>
+          </div>
+          {showBulkFields && (
+            <div className="selection-dock__fields">
+              <input className="field-input" value={bulkCamera} onChange={(e) => setBulkCamera(e.target.value)} list="camera-options-list" placeholder="Camera model" style={{ width: 160 }} />
+              <input className="field-input" value={bulkLens} onChange={(e) => setBulkLens(e.target.value)} list="lens-options-list" placeholder="Lens" style={{ width: 160 }} />
+              <input className="field-input" value={bulkFilmStock} onChange={(e) => setBulkFilmStock(e.target.value)} list="film-options-list" placeholder="Film stock" style={{ width: 160 }} />
+              <input className="field-input" value={bulkLocation} onChange={(e) => setBulkLocation(e.target.value)} list="location-options-list" placeholder="Location" style={{ width: 160 }} />
+              <button
+                className="btn btn-accent"
+                onClick={bulkSetFields}
+                disabled={![bulkCamera, bulkLens, bulkFilmStock, bulkLocation].some((v) => v.trim())}
+              >
+                Apply to {selectedIds.size}
+              </button>
+              <span className="muted" style={{ fontSize: 12 }}>Blank fields are left unchanged</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {openPhotoId !== null && (
         <PhotoDetail
           photoId={openPhotoId}
@@ -723,7 +784,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
 // A Lomography-style color-bar strip: equal-width swatches of the photo's
 // dominant colors, most-prominent first. Renders nothing for photos that
 // predate this feature (palette null) rather than an empty/broken bar.
-function PaletteBar({ palette }: { palette: string[] | null }) {
+export function PaletteBar({ palette }: { palette: string[] | null }) {
   if (!palette || palette.length === 0) return null;
   return (
     <div className="palette-bar">
