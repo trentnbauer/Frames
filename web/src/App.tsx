@@ -4,6 +4,7 @@ import type { Idea } from './types.js';
 import { navigate, parseRoute, type Route } from './router.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Library } from './pages/Library.js';
+import { Map } from './pages/Map.js';
 import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { ZineCreator } from './pages/ZineCreator.js';
@@ -103,6 +104,10 @@ export default function App() {
           <span className="nav-item__icon">L</span>
           {!sidebarCollapsed && <span>Library</span>}
         </button>
+        <button className={`nav-item ${route.screen === 'map' ? 'active' : ''}`} onClick={() => goTo('map')} title="Map">
+          <span className="nav-item__icon">M</span>
+          {!sidebarCollapsed && <span>Map</span>}
+        </button>
         {!sidebarCollapsed && (
           <>
             <div className="sidebar__section-label">Projects</div>
@@ -145,6 +150,7 @@ export default function App() {
           {route.screen === 'library' && (
             <Library onOpenProject={(id) => goTo('project', id)} forProjectId={route.forProjectId ?? null} />
           )}
+          {route.screen === 'map' && <Map />}
           {route.screen === 'settings' && <Settings />}
           {route.screen === 'project' && route.projectId !== null && (
             <ProjectDetail

@@ -120,8 +120,12 @@ photosRouter.get('/', (req, res) => {
       params.push(film_stock);
     }
     if (typeof q === 'string' && q.trim()) {
-      where.push('p.filename LIKE ?');
-      params.push(`%${q.trim()}%`);
+      // Beyond just the filename — a scanned roll's camera/lens/location/
+      // photoshoot name is often what someone actually remembers about it,
+      // not the hash-derived or scanner-assigned filename.
+      where.push('(p.filename LIKE ? OR p.camera LIKE ? OR p.lens LIKE ? OR p.location LIKE ? OR p.photoshoot LIKE ? OR p.film_stock LIKE ?)');
+      const term = `%${q.trim()}%`;
+      params.push(term, term, term, term, term, term);
     }
     if (favorite === 'true') {
       where.push('p.is_favorite = 1');

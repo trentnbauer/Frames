@@ -92,14 +92,18 @@ describe('photos routes', () => {
   });
 
   it('adds, confirms, and removes tags on a photo (the correction path)', async () => {
-    const list = await request(app).get('/api/photos');
-    const id = list.body.photos[0].id;
+    // A dedicated fresh upload rather than reaching for photos[0] — which
+    // photo that is depends on upload order across every other test in
+    // this file (newest-first), so it's not a stable thing to assume.
+    const fresh = await tinyJpeg(90);
+    const uploaded = await request(app).post('/api/photos/upload').attach('photos', fresh, 'correction-path.jpg');
+    const id = uploaded.body.results[0].photo.id;
 
     const added = await request(app).post(`/api/photos/${id}/tags`).send({ name: 'Neon Signage', source: 'user_added' });
     expect(added.status).toBe(201);
     expect(added.body.slug).toBe('neon-signage');
 
-    // The photo already carries an automatic "black" color tag from ingest
+    // The photo already carries an automatic dominant-color tag from ingest
     // (see addColorTags in lib/ingest.ts) — look up the new tag by name
     // rather than assuming it's the only one or at a fixed index.
     const withTag = await request(app).get(`/api/photos/${id}`);
@@ -115,8 +119,10 @@ describe('photos routes', () => {
     const removed = await request(app).delete(`/api/photos/${id}/tags/${neonTag.id}`);
     expect(removed.status).toBe(204);
 
+    // Only the automatic color tag is left — the user-added one is gone,
+    // whatever specific color this fixture's seed happens to produce.
     const afterRemove = await request(app).get(`/api/photos/${id}`);
-    expect(afterRemove.body.photo.tags).toEqual([expect.objectContaining({ name: 'black' })]);
+    expect(afterRemove.body.photo.tags).toEqual([expect.objectContaining({ source: 'ai_suggested', note: 'auto:dominant-color' })]);
   });
 
   it('updates shoot-detail fields and reflects them in shoot-options', async () => {
@@ -173,6 +179,24 @@ describe('photos routes', () => {
 
     const none = await request(app).get('/api/photos').query({ q: 'nonexistent-filename-xyz' });
     expect(none.body.photos).toEqual([]);
+  });
+
+  it('search also matches camera, lens, location, photoshoot, and film stock — not just filename', async () => {
+    const fresh = await tinyJpeg(40);
+    const uploaded = await request(app).post('/api/photos/upload').attach('photos', fresh, 'unremarkable-name.jpg');
+    const id = uploaded.body.results[0].photo.id;
+    await request(app).patch(`/api/photos/${id}`).send({
+      camera: 'Distinctive Camera Model',
+      lens: 'Distinctive Lens',
+      location: 'Distinctive City',
+      photoshoot: 'Distinctive Shoot',
+      film_stock: 'Distinctive Stock',
+    });
+
+    for (const term of ['Distinctive Camera', 'Distinctive Lens', 'Distinctive City', 'Distinctive Shoot', 'Distinctive Stock']) {
+      const res = await request(app).get('/api/photos').query({ q: term });
+      expect(res.body.photos.some((p: { id: number }) => p.id === id)).toBe(true);
+    }
   });
 
   it('soft-deletes a photo: hidden from listing, still fetchable by id, restorable', async () => {

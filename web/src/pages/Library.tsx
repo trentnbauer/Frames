@@ -37,6 +37,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [allIdeas, setAllIdeas] = useState<{ id: number; title: string }[]>([]);
   const [bulkIdeaId, setBulkIdeaId] = useState<number | ''>('');
   const [bulkTag, setBulkTag] = useState('');
+  const [showBulkFields, setShowBulkFields] = useState(false);
+  const [bulkCamera, setBulkCamera] = useState('');
+  const [bulkLens, setBulkLens] = useState('');
+  const [bulkFilmStock, setBulkFilmStock] = useState('');
+  const [bulkLocation, setBulkLocation] = useState('');
   const [importBatch, setImportBatch] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadingPreviews, setUploadingPreviews] = useState<{ url: string; name: string }[]>([]);
@@ -240,12 +245,40 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     showToast('Moved to trash');
   }
 
+  // "Best" here just means highest pixel count — a proxy for "the original
+  // full-res scan" vs. a smaller re-export/re-share of the same frame, not
+  // actual sharpness/quality judgment (that'd need real image analysis).
+  async function keepLargestInGroup(group: NearDuplicateGroup[]) {
+    const sorted = [...group].sort((a, b) => (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0));
+    const [keep, ...rest] = sorted;
+    if (!confirm(`Keep "${keep.filename}" (largest) and move the other ${rest.length} to trash?`)) return;
+    for (const p of rest) await api.photos.delete(p.id);
+    await refreshDuplicates();
+    showToast(`Kept "${keep.filename}", trashed ${rest.length}`);
+  }
+
   const visible = useMemo(
     () => photos.filter((p) => activeTags.length === 0 || activeTags.every((t) => p.tags.some((pt) => pt.slug === t))),
     [photos, activeTags]
   );
   const visibleIds = useMemo(() => visible.map((p) => p.id), [visible]);
   const canLoadMore = !hasFilters && photos.length < total;
+
+  // "visible" is already ordered by the server (taken_at DESC when
+  // sort==='taken_at') — grouping here just buckets consecutive same-month
+  // photos under a shared header rather than re-sorting anything.
+  const timelineGroups = useMemo(() => {
+    const groups: [string, Photo[]][] = [];
+    for (const photo of visible) {
+      const label = photo.taken_at
+        ? new Date(photo.taken_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : 'Undated';
+      const last = groups[groups.length - 1];
+      if (last && last[0] === label) last[1].push(photo);
+      else groups.push([label, [photo]]);
+    }
+    return groups;
+  }, [visible]);
 
   async function deletePhoto(id: number) {
     if (!confirm('Move this photo to trash? You can restore it later, or delete it forever from Trash.')) return;
@@ -289,6 +322,29 @@ export function Library({ onOpenProject, forProjectId }: Props) {
     await refresh();
   }
 
+  // Only fields the user actually typed something into get applied — an
+  // empty bulk field means "leave this alone", not "clear it", since a
+  // camera/lens/location bulk-set is meant for a batch that shares those
+  // details (a whole scanned roll), not a blanket wipe of unrelated ones.
+  async function bulkSetFields() {
+    const updates: Record<string, string> = {};
+    if (bulkCamera.trim()) updates.camera = bulkCamera.trim();
+    if (bulkLens.trim()) updates.lens = bulkLens.trim();
+    if (bulkFilmStock.trim()) updates.film_stock = bulkFilmStock.trim();
+    if (bulkLocation.trim()) updates.location = bulkLocation.trim();
+    if (Object.keys(updates).length === 0) return;
+
+    for (const id of selectedIds) await api.photos.update(id, updates);
+    showToast(`Updated shoot details on ${selectedIds.size} photo${selectedIds.size === 1 ? '' : 's'}`);
+    setSelectedIds(new Set());
+    setBulkCamera('');
+    setBulkLens('');
+    setBulkFilmStock('');
+    setBulkLocation('');
+    setShowBulkFields(false);
+    await refresh();
+  }
+
   async function bulkDelete() {
     if (!confirm(`Move ${selectedIds.size} photo${selectedIds.size === 1 ? '' : 's'} to trash?`)) return;
     for (const id of selectedIds) await api.photos.delete(id);
@@ -328,7 +384,12 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         </div>
         {duplicateGroups.map((group, i) => (
           <div key={i} className="duplicate-group">
-            <div className="duplicate-group__label muted">Group {i + 1} · {group.length} photos</div>
+            <div className="duplicate-group__label muted">
+              Group {i + 1} · {group.length} photos
+              <button className="btn" style={{ marginLeft: 12, padding: '3px 10px', fontSize: 12 }} onClick={() => keepLargestInGroup(group)}>
+                Keep largest, trash rest
+              </button>
+            </div>
             <div className="photo-grid">
               {group.map((p) => (
                 <div key={p.id} className="photo-tile-card">
@@ -392,6 +453,40 @@ export function Library({ onOpenProject, forProjectId }: Props) {
             </div>
           ))}
           {trashPhotos.length === 0 && <p className="muted">Trash is empty.</p>}
+        </div>
+      </div>
+    );
+  }
+
+  function renderTile(photo: Photo) {
+    return (
+      <div key={photo.id} className="photo-tile-card">
+        <button className="photo-tile-card__select" onClick={(e) => toggleSelect(photo.id, e)} title="Select">
+          <input type="checkbox" checked={selectedIds.has(photo.id)} readOnly />
+        </button>
+        <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
+          <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
+        </button>
+        {projectByPhoto[photo.id] && <span className="photo-tile-card__badge">{projectByPhoto[photo.id]}</span>}
+        <button
+          className={`photo-tile-card__favorite ${photo.is_favorite ? 'is-active' : ''}`}
+          onClick={(e) => toggleFavorite(photo.id, e)}
+          title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
+        >
+          ★
+        </button>
+        <button className="photo-tile-card__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
+        <PaletteBar palette={photo.palette} />
+        <div className="photo-tile-card__meta">
+          <div className="photo-tile-card__filename">{photo.filename}</div>
+          <div className="photo-tile-card__tags">
+            {photo.tags.slice(0, 3).map((t) => (
+              <span key={t.id} className="tag-pill-soft">
+                {t.note === 'auto:dominant-color' && <ColorDot name={t.name} />}
+                {t.name}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -525,7 +620,7 @@ export function Library({ onOpenProject, forProjectId }: Props) {
         className="field-input search-input"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search filenames…"
+        placeholder="Search filename, camera, lens, location…"
       />
 
       <div className="chip-bar" style={{ alignItems: 'center' }}>
@@ -562,46 +657,42 @@ export function Library({ onOpenProject, forProjectId }: Props) {
             <button className="btn" onClick={bulkAddToProject} disabled={!bulkIdeaId}>Add</button>
             <input value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} placeholder="tag name…" style={{ width: 120 }} />
             <button className="btn" onClick={bulkAddTag} disabled={!bulkTag.trim()}>Tag</button>
+            <button className="btn" onClick={() => setShowBulkFields((v) => !v)}>{showBulkFields ? 'Hide details' : 'Set details…'}</button>
             <button className="btn btn-danger" onClick={bulkDelete}>Delete {selectedIds.size}</button>
             <span className="chip-bar__clear" onClick={() => setSelectedIds(new Set())}>Clear selection</span>
           </div>
+          {showBulkFields && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
+              <input className="field-input" value={bulkCamera} onChange={(e) => setBulkCamera(e.target.value)} list="camera-options-list" placeholder="Camera model" style={{ width: 160 }} />
+              <input className="field-input" value={bulkLens} onChange={(e) => setBulkLens(e.target.value)} list="lens-options-list" placeholder="Lens" style={{ width: 160 }} />
+              <input className="field-input" value={bulkFilmStock} onChange={(e) => setBulkFilmStock(e.target.value)} list="film-options-list" placeholder="Film stock" style={{ width: 160 }} />
+              <input className="field-input" value={bulkLocation} onChange={(e) => setBulkLocation(e.target.value)} list="location-options-list" placeholder="Location" style={{ width: 160 }} />
+              <button
+                className="btn btn-accent"
+                onClick={bulkSetFields}
+                disabled={![bulkCamera, bulkLens, bulkFilmStock, bulkLocation].some((v) => v.trim())}
+              >
+                Apply to {selectedIds.size}
+              </button>
+              <span className="muted" style={{ fontSize: 12 }}>Blank fields are left unchanged</span>
+            </div>
+          )}
         </div>
       )}
 
-      <div className="photo-grid">
-        {visible.map((photo) => (
-          <div key={photo.id} className="photo-tile-card">
-            <button className="photo-tile-card__select" onClick={(e) => toggleSelect(photo.id, e)} title="Select">
-              <input type="checkbox" checked={selectedIds.has(photo.id)} readOnly />
-            </button>
-            <button className="photo-tile-card__img-btn" onClick={() => setOpenPhotoId(photo.id)}>
-              <img src={`/files/thumb/${photo.id}`} alt={photo.filename} loading="lazy" />
-            </button>
-            {projectByPhoto[photo.id] && <span className="photo-tile-card__badge">{projectByPhoto[photo.id]}</span>}
-            <button
-              className={`photo-tile-card__favorite ${photo.is_favorite ? 'is-active' : ''}`}
-              onClick={(e) => toggleFavorite(photo.id, e)}
-              title={photo.is_favorite ? 'Remove favorite' : 'Mark as favorite'}
-            >
-              ★
-            </button>
-            <button className="photo-tile-card__delete" onClick={() => deletePhoto(photo.id)} title="Delete photo">✕</button>
-            <PaletteBar palette={photo.palette} />
-            <div className="photo-tile-card__meta">
-              <div className="photo-tile-card__filename">{photo.filename}</div>
-              <div className="photo-tile-card__tags">
-                {photo.tags.slice(0, 3).map((t) => (
-                  <span key={t.id} className="tag-pill-soft">
-                    {t.note === 'auto:dominant-color' && <ColorDot name={t.name} />}
-                    {t.name}
-                  </span>
-                ))}
-              </div>
-            </div>
+      {sort === 'taken_at' && timelineGroups.length > 0 ? (
+        timelineGroups.map(([label, groupPhotos]) => (
+          <div key={label} className="timeline-group">
+            <div className="timeline-group__label">{label}</div>
+            <div className="photo-grid">{groupPhotos.map(renderTile)}</div>
           </div>
-        ))}
-        {visible.length === 0 && <p className="muted">No photos match. Upload some scans to get started.</p>}
-      </div>
+        ))
+      ) : (
+        <div className="photo-grid">
+          {visible.map(renderTile)}
+          {visible.length === 0 && <p className="muted">No photos match. Upload some scans to get started.</p>}
+        </div>
+      )}
 
       {canLoadMore && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>

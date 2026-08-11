@@ -104,6 +104,8 @@ export const api = {
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),
     nearDuplicates: () => request<{ groups: import('./types').NearDuplicateGroup[][] }>('/api/near-duplicates'),
+    onThisDay: () => request<{ photos: import('./types').Photo[] }>('/api/on-this-day'),
+    mapPoints: () => request<{ points: import('./types').MapPoint[] }>('/api/map-points'),
   },
   config: {
     get: () =>

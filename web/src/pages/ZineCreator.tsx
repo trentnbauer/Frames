@@ -176,13 +176,25 @@ function nextUnusedSpreadId(order: string[]): string {
 // window as a fraction of the image's own size (0 = centered, clamped to
 // ±0.4 so the crop can't pan entirely off the image), zoom magnifies on
 // top of the base cover-fit scale. "Whole photo" (contain) mode always
-// shows the full image, so it has nothing to pan/zoom.
+// shows the full image, so it has nothing to pan/zoom. rotation/brightness/
+// contrast/saturate are basic per-slot edits; caption is a text band that
+// reserves space above or below the photo rather than overlapping it (the
+// image's own area shrinks — see ZineImageSlot's flex-column layout and
+// renderPageCanvas's matching capH reservation on export).
 interface SlotTransform {
   ox: number;
   oy: number;
   zoom: number;
+  rotation: 0 | 90 | 180 | 270;
+  brightness: number; // percent; 100 = unchanged
+  contrast: number;
+  saturate: number;
+  caption: string;
+  captionPosition: 'above' | 'below';
 }
-const DEFAULT_TRANSFORM: SlotTransform = { ox: 0, oy: 0, zoom: 1 };
+const DEFAULT_TRANSFORM: SlotTransform = {
+  ox: 0, oy: 0, zoom: 1, rotation: 0, brightness: 100, contrast: 100, saturate: 100, caption: '', captionPosition: 'below',
+};
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -669,12 +681,16 @@ export function ZineCreator({ projectId, onExit }: Props) {
     setPickerSlot(null);
   }
 
+  // Merges over DEFAULT_TRANSFORM rather than falling back to it wholesale —
+  // a save made before rotation/filters/caption existed has a real (partial)
+  // stored object, not nothing, and returning it as-is would leave those
+  // newer fields `undefined` instead of at their defaults.
   function getTransform(slotKey: string): SlotTransform {
-    return slotTransforms[slotKey] ?? DEFAULT_TRANSFORM;
+    return { ...DEFAULT_TRANSFORM, ...slotTransforms[slotKey] };
   }
 
   function updateTransform(slotKey: string, patch: Partial<SlotTransform>) {
-    setSlotTransforms((s) => ({ ...s, [slotKey]: { ...(s[slotKey] ?? DEFAULT_TRANSFORM), ...patch } }));
+    setSlotTransforms((s) => ({ ...s, [slotKey]: { ...DEFAULT_TRANSFORM, ...s[slotKey], ...patch } }));
   }
 
   interface PageBox {
@@ -1376,6 +1392,8 @@ function ZineImageSlot({
   // handlePointerUp before handleSlotClick ever runs. This ref survives
   // past that point and is consumed (cleared) by the click handler itself.
   const suppressNextClick = useRef(false);
+  const [captionOpen, setCaptionOpen] = useState(!!transform.caption.trim());
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   if (photoId == null) {
     return (
@@ -1429,38 +1447,116 @@ function ZineImageSlot({
   }
 
   const isAdjusted = transform.ox !== 0 || transform.oy !== 0 || transform.zoom !== 1;
+  const isFiltered = transform.brightness !== 100 || transform.contrast !== 100 || transform.saturate !== 100;
+  const rotated90 = transform.rotation === 90 || transform.rotation === 270;
+  const filterCss = isFiltered ? `brightness(${transform.brightness}%) contrast(${transform.contrast}%) saturate(${transform.saturate}%)` : undefined;
+  const rotateTransform = transform.rotation !== 0 ? `rotate(${transform.rotation}deg)` : '';
+  const zoomTransform = pannable && transform.zoom !== 1 ? `scale(${transform.zoom})` : '';
+
+  function toggleCaption() {
+    if (captionOpen) {
+      setCaptionOpen(false);
+      if (transform.caption) onTransformChange({ caption: '' });
+    } else {
+      setCaptionOpen(true);
+    }
+  }
+
+  const captionBand = captionOpen && (
+    <div className="zine-slot__caption" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <input
+        value={transform.caption}
+        onChange={(e) => onTransformChange({ caption: e.target.value })}
+        placeholder="Caption…"
+        autoFocus
+      />
+      <button
+        type="button"
+        className="zine-slot__caption-flip"
+        onClick={() => onTransformChange({ captionPosition: transform.captionPosition === 'above' ? 'below' : 'above' })}
+        title={transform.captionPosition === 'above' ? 'Move caption below the photo' : 'Move caption above the photo'}
+      >
+        {transform.captionPosition === 'above' ? '↓' : '↑'}
+      </button>
+    </div>
+  );
 
   return (
-    <div
-      className="zine-slot zine-slot--filled"
-      style={{ background: fillColor, cursor: pannable ? 'grab' : 'default' }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onWheel={handleWheel}
-      onClick={handleSlotClick}
-    >
-      <img
-        src={`/files/display/${photoId}`}
-        alt=""
-        draggable={false}
-        style={{
-          objectFit: fit,
-          objectPosition: pannable ? `${50 - transform.ox * 100}% ${50 - transform.oy * 100}%` : '50% 50%',
-          transform: pannable && transform.zoom !== 1 ? `scale(${transform.zoom})` : undefined,
-        }}
-      />
-      <button type="button" className="zine-slot__delete" onClick={(e) => { e.stopPropagation(); onClear(); }} title="Remove image">×</button>
-      {pannable && (
-        <div className="zine-slot__zoom" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-          <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom - 0.2, 1, 3) })} title="Zoom out">−</button>
-          <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom + 0.2, 1, 3) })} title="Zoom in">+</button>
-          {isAdjusted && (
-            <button type="button" onClick={() => onTransformChange({ ox: 0, oy: 0, zoom: 1 })} title="Reset position">⟲</button>
-          )}
+    <div className="zine-slot zine-slot--filled" style={{ background: fillColor }}>
+      {transform.captionPosition === 'above' && captionBand}
+      <div
+        className="zine-slot__image-area"
+        style={{ cursor: pannable ? 'grab' : 'default' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleWheel}
+        onClick={handleSlotClick}
+      >
+        <img
+          src={`/files/display/${photoId}`}
+          alt=""
+          draggable={false}
+          style={{
+            objectFit: fit,
+            objectPosition: pannable ? `${50 - transform.ox * 100}% ${50 - transform.oy * 100}%` : '50% 50%',
+            filter: filterCss,
+            // A 90/270 rotation needs the image's own box swapped to the
+            // container's cross-axis size before rotating, or it doesn't
+            // fill the (non-square) container correctly — cqw/cqh read the
+            // container's own width/height regardless of which axis the
+            // rotated element ends up occupying, so this works without any
+            // JS measurement (see .zine-slot__image-area's container-type).
+            ...(rotated90
+              ? { position: 'absolute', top: '50%', left: '50%', width: '100cqh', height: '100cqw', transform: `translate(-50%, -50%) ${rotateTransform} ${zoomTransform}`.trim() }
+              : { transform: `${rotateTransform} ${zoomTransform}`.trim() || undefined }),
+          }}
+        />
+        <button type="button" className="zine-slot__delete" onClick={(e) => { e.stopPropagation(); onClear(); }} title="Remove image">×</button>
+        <div className="zine-slot__controls" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => onTransformChange({ rotation: (((transform.rotation + 90) % 360) as 0 | 90 | 180 | 270) })} title="Rotate 90°">
+            ⟳
+          </button>
+          <button type="button" className={captionOpen ? 'is-active' : ''} onClick={toggleCaption} title="Add caption">
+            Aa
+          </button>
+          <button type="button" className={filtersOpen ? 'is-active' : ''} onClick={() => setFiltersOpen((v) => !v)} title="Brightness / contrast / saturation">
+            ◐
+          </button>
         </div>
-      )}
+        {pannable && (
+          <div className="zine-slot__zoom" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom - 0.2, 1, 3) })} title="Zoom out">−</button>
+            <button type="button" onClick={() => onTransformChange({ zoom: clamp(transform.zoom + 0.2, 1, 3) })} title="Zoom in">+</button>
+            {isAdjusted && (
+              <button type="button" onClick={() => onTransformChange({ ox: 0, oy: 0, zoom: 1 })} title="Reset position">⟲</button>
+            )}
+          </div>
+        )}
+        {filtersOpen && (
+          <div className="zine-slot__filters" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            <label>
+              <span>Bright</span>
+              <input type="range" min={50} max={150} value={transform.brightness} onChange={(e) => onTransformChange({ brightness: Number(e.target.value) })} />
+            </label>
+            <label>
+              <span>Contrast</span>
+              <input type="range" min={50} max={150} value={transform.contrast} onChange={(e) => onTransformChange({ contrast: Number(e.target.value) })} />
+            </label>
+            <label>
+              <span>Color</span>
+              <input type="range" min={0} max={200} value={transform.saturate} onChange={(e) => onTransformChange({ saturate: Number(e.target.value) })} />
+            </label>
+            {isFiltered && (
+              <button type="button" onClick={() => onTransformChange({ brightness: 100, contrast: 100, saturate: 100 })} title="Reset adjustments">
+                Reset
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {transform.captionPosition === 'below' && captionBand}
     </div>
   );
 }
@@ -1476,29 +1572,73 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
+// Rotates the canvas around the destination rect's own center, then draws
+// into an "effective" rect that's width/height-swapped for a 90/270
+// rotation — after the rotation transform, that swapped rect exactly fills
+// the original (unrotated) dx/dy/dw/dh, mirroring the live preview's cqw/
+// cqh trick (see ZineImageSlot) without needing any DOM measurement here.
+function withRotation(ctx: CanvasRenderingContext2D, dx: number, dy: number, dw: number, dh: number, rotation: number, filterCss: string | undefined, draw: (dx: number, dy: number, dw: number, dh: number) => void) {
+  ctx.save();
+  ctx.filter = filterCss || 'none';
+  const cx = dx + dw / 2, cy = dy + dh / 2;
+  if (rotation) {
+    ctx.translate(cx, cy);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
+  const swapped = rotation === 90 || rotation === 270;
+  const effDw = swapped ? dh : dw, effDh = swapped ? dw : dh;
+  draw(cx - effDw / 2, cy - effDh / 2, effDw, effDh);
+  ctx.restore();
+}
+
 // ox/oy/zoom mirror the live preview's object-position + transform:scale
 // pan/zoom (see ZineImageSlot) — same sign convention, so what you drag
 // into place while editing is exactly what prints.
-function drawCoverFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number, ox = 0, oy = 0, zoom = 1) {
+function drawCoverFit(
+  ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number,
+  ox = 0, oy = 0, zoom = 1, rotation = 0, filterCss?: string
+) {
   if (dw <= 0 || dh <= 0) return;
-  const scale = Math.max(dw / img.width, dh / img.height) * zoom;
-  const sw = dw / scale, sh = dh / scale;
-  const cx = img.width / 2 - ox * img.width;
-  const cy = img.height / 2 - oy * img.height;
-  const sx = clamp(cx - sw / 2, 0, Math.max(0, img.width - sw));
-  const sy = clamp(cy - sh / 2, 0, Math.max(0, img.height - sh));
-  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  withRotation(ctx, dx, dy, dw, dh, rotation, filterCss, (edx, edy, edw, edh) => {
+    const scale = Math.max(edw / img.width, edh / img.height) * zoom;
+    const sw = edw / scale, sh = edh / scale;
+    const cx = img.width / 2 - ox * img.width;
+    const cy = img.height / 2 - oy * img.height;
+    const sx = clamp(cx - sw / 2, 0, Math.max(0, img.width - sw));
+    const sy = clamp(cy - sh / 2, 0, Math.max(0, img.height - sh));
+    ctx.drawImage(img, sx, sy, sw, sh, edx, edy, edw, edh);
+  });
 }
 
 // "Fit" mode — the whole photo stays uncropped, scaled to fit inside the
 // slot and centered; whatever margin that leaves is the slot's own border
 // color (already painted behind it), matching the live preview's letterbox.
-function drawContainFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+function drawContainFit(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number, rotation = 0, filterCss?: string) {
   if (dw <= 0 || dh <= 0) return;
-  const scale = Math.min(dw / img.width, dh / img.height);
-  const sw = img.width * scale, sh = img.height * scale;
-  const ox = dx + (dw - sw) / 2, oy = dy + (dh - sh) / 2;
-  ctx.drawImage(img, ox, oy, sw, sh);
+  withRotation(ctx, dx, dy, dw, dh, rotation, filterCss, (edx, edy, edw, edh) => {
+    const scale = Math.min(edw / img.width, edh / img.height);
+    const sw = img.width * scale, sh = img.height * scale;
+    const ox = edx + (edw - sw) / 2, oy = edy + (edh - sh) / 2;
+    ctx.drawImage(img, ox, oy, sw, sh);
+  });
+}
+
+// Plain white band with centered dark text, same look regardless of paper
+// size or which cell it's attached to — a simple, predictable caption
+// style rather than trying to match every possible cover/border color.
+function drawCaptionBand(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, text: string) {
+  if (w <= 0 || h <= 0 || !text) return;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, w, h);
+  const fontSize = Math.max(10, h * 0.42);
+  ctx.font = `500 ${fontSize}px Inter, sans-serif`;
+  ctx.fillStyle = '#161826';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, y + h / 2, w * 0.94);
+  ctx.restore();
 }
 
 function sliceCanvas(src: HTMLCanvasElement, sx: number, sy: number, sw: number, sh: number): HTMLCanvasElement {
@@ -1549,11 +1689,29 @@ async function renderPageCanvas(spec: RenderSpec): Promise<HTMLCanvasElement> {
         ctx.fillRect(0, cellY, spec.widthPx, cellH);
         const img = await loadImage(`/files/display/${photoId}`);
         if (img) {
+          // Merge over defaults rather than falling back to them wholesale
+          // — see getTransform's comment; a save from before these fields
+          // existed has a real (partial) stored object, not nothing.
+          const t = { ...DEFAULT_TRANSFORM, ...spec.slotTransforms[spec.images[i]] };
+          const filterCss = t.brightness !== 100 || t.contrast !== 100 || t.saturate !== 100
+            ? `brightness(${t.brightness}%) contrast(${t.contrast}%) saturate(${t.saturate}%)`
+            : undefined;
+
+          const hasCaption = t.caption.trim().length > 0;
+          // 15% matches .zine-slot__caption's flex-basis in the live preview.
+          const capH = hasCaption ? cellH * 0.15 : 0;
+          const imgDy = cellY + padPx + (hasCaption && t.captionPosition === 'above' ? capH : 0);
+          const imgDh = cellH - 2 * padPx - capH;
+
           if (spec.imageFit === 'contain') {
-            drawContainFit(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx);
+            drawContainFit(ctx, img, padPx, imgDy, spec.widthPx - 2 * padPx, imgDh, t.rotation, filterCss);
           } else {
-            const t = spec.slotTransforms[spec.images[i]] ?? DEFAULT_TRANSFORM;
-            drawCoverFit(ctx, img, padPx, cellY + padPx, spec.widthPx - 2 * padPx, cellH - 2 * padPx, t.ox, t.oy, t.zoom);
+            drawCoverFit(ctx, img, padPx, imgDy, spec.widthPx - 2 * padPx, imgDh, t.ox, t.oy, t.zoom, t.rotation, filterCss);
+          }
+
+          if (hasCaption) {
+            const capY = t.captionPosition === 'above' ? cellY + padPx : cellY + cellH - padPx - capH;
+            drawCaptionBand(ctx, padPx, capY, spec.widthPx - 2 * padPx, capH, t.caption);
           }
         }
       }
