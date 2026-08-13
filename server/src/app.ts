@@ -45,13 +45,13 @@ seedProvidersFromEnv();
 // starts.
 backfillDerivedFields().catch((err) => console.error('Derived-field backfill crashed:', err.message));
 
-// Opt-in: only starts if FRAMES_WATCH_DIR points at an existing directory,
+// Opt-in: only starts if WATCH_DIR points at an existing directory,
 // so self-hosters who don't want it pay nothing.
-const watchDir = process.env.FRAMES_WATCH_DIR;
+const watchDir = process.env.WATCH_DIR;
 if (watchDir && fs.existsSync(watchDir)) {
   startWatchFolder(watchDir);
 } else if (watchDir) {
-  console.error(`FRAMES_WATCH_DIR is set to "${watchDir}" but that directory doesn't exist — watch folder not started.`);
+  console.error(`WATCH_DIR is set to "${watchDir}" but that directory doesn't exist — watch folder not started.`);
 }
 
 export const app = express();

@@ -2,7 +2,7 @@
 // identifiers (API key + OAuth client ID, app key) meant to ship in
 // browser code — not secrets, so localStorage is fine, no backend storage
 // needed for values a user types into Settings. Container-level defaults
-// (set via FRAMES_GOOGLE_* / FRAMES_DROPBOX_APP_KEY / FRAMES_SOCIAL_HANDLES
+// (set via GOOGLE_* / DROPBOX_APP_KEY / SOCIAL_HANDLES
 // env vars) come from GET /api/config and are cached here — call
 // loadEnvConfig() once at startup. A value the user explicitly typed in
 // Settings always wins over the env default.
