@@ -197,6 +197,42 @@ function BackupSection() {
   );
 }
 
+// Classic edit-distance DP — fine at personal-library tag-list sizes (low
+// hundreds at most), run client-side against the already-fetched tag list.
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[] = Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+// Case differences already collapse via slug (see types.ts#slugify), so
+// only distinct names — near-typos ("portrat"), plurals ("portraits" vs
+// "portrait"), or short edit distances — are worth flagging here.
+function findDuplicateCandidates(tags: Tag[]): [Tag, Tag][] {
+  const pairs: [Tag, Tag][] = [];
+  for (let i = 0; i < tags.length; i++) {
+    for (let j = i + 1; j < tags.length; j++) {
+      const a = tags[i].name.toLowerCase();
+      const b = tags[j].name.toLowerCase();
+      if (a === b) continue;
+      const isPlural = a === `${b}s` || b === `${a}s`;
+      if (isPlural || levenshtein(a, b) <= 2) pairs.push([tags[i], tags[j]]);
+    }
+  }
+  return pairs;
+}
+
 function TagManagementSection() {
   const [tags, setTags] = useState<Tag[]>([]);
   const showToast = useToast();
@@ -208,6 +244,8 @@ function TagManagementSection() {
   useEffect(() => {
     refresh();
   }, []);
+
+  const duplicateCandidates = findDuplicateCandidates(tags);
 
   async function rename(tag: Tag, name: string) {
     const trimmed = name.trim();
@@ -238,21 +276,36 @@ function TagManagementSection() {
   }
 
   return (
-    <div className="tag-manage-list">
-      {tags.map((tag) => (
-        <div key={tag.id} className="tag-manage-row">
-          <input className="field-input" defaultValue={tag.name} onBlur={(e) => rename(tag, e.target.value)} />
-          <span className="muted tag-manage-row__count">{tag.photo_count} photo{tag.photo_count === 1 ? '' : 's'}</span>
-          <select value="" onChange={(e) => e.target.value && mergeInto(tag, Number(e.target.value))}>
-            <option value="">Merge into…</option>
-            {tags.filter((t) => t.id !== tag.id).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          <button className="danger" onClick={() => remove(tag)}>Delete</button>
+    <div>
+      {duplicateCandidates.length > 0 && (
+        <div className="tag-duplicates">
+          {duplicateCandidates.map(([a, b]) => {
+            const [winner, loser] = a.photo_count >= b.photo_count ? [a, b] : [b, a];
+            return (
+              <div key={`${a.id}-${b.id}`} className="tag-duplicates__row">
+                <span className="tag-duplicates__names">Possible duplicate: <strong>{a.name}</strong> ↔ <strong>{b.name}</strong></span>
+                <button onClick={() => mergeInto(loser, winner.id)}>Merge into "{winner.name}"</button>
+              </div>
+            );
+          })}
         </div>
-      ))}
-      {tags.length === 0 && <p className="muted">No tags yet.</p>}
+      )}
+      <div className="tag-manage-list">
+        {tags.map((tag) => (
+          <div key={tag.id} className="tag-manage-row">
+            <input className="field-input" defaultValue={tag.name} onBlur={(e) => rename(tag, e.target.value)} />
+            <span className="muted tag-manage-row__count">{tag.photo_count} photo{tag.photo_count === 1 ? '' : 's'}</span>
+            <select value="" onChange={(e) => e.target.value && mergeInto(tag, Number(e.target.value))}>
+              <option value="">Merge into…</option>
+              {tags.filter((t) => t.id !== tag.id).map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <button className="danger" onClick={() => remove(tag)}>Delete</button>
+          </div>
+        ))}
+        {tags.length === 0 && <p className="muted">No tags yet.</p>}
+      </div>
     </div>
   );
 }

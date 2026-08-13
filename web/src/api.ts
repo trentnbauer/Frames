@@ -100,6 +100,27 @@ export const api = {
     suggestedPhotos: (ideaId: number) => request<{ photos: import('./types').Photo[] }>(`/api/ideas/${ideaId}/suggested-photos`),
     exportUrl: (ideaId: number) => `/api/ideas/${ideaId}/export`,
     briefUrl: (ideaId: number) => `/api/ideas/${ideaId}/brief`,
+    shotList: {
+      list: (ideaId: number) => request<{ items: import('./types').ShotListItem[] }>(`/api/ideas/${ideaId}/shot-list`),
+      add: (ideaId: number, text: string) =>
+        request<{ item: import('./types').ShotListItem }>(`/api/ideas/${ideaId}/shot-list`, { method: 'POST', body: JSON.stringify({ text }) }),
+      update: (ideaId: number, itemId: number, data: Partial<{ text: string; done: boolean }>) =>
+        request<{ item: import('./types').ShotListItem }>(`/api/ideas/${ideaId}/shot-list/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      remove: (ideaId: number, itemId: number) => request<void>(`/api/ideas/${ideaId}/shot-list/${itemId}`, { method: 'DELETE' }),
+    },
+    references: {
+      list: (ideaId: number) => request<{ references: import('./types').IdeaReference[] }>(`/api/ideas/${ideaId}/references`),
+      addImage: async (ideaId: number, file: File) => {
+        const form = new FormData();
+        form.append('image', file);
+        const res = await fetch(`/api/ideas/${ideaId}/references/image`, { method: 'POST', body: form });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload failed');
+        return res.json() as Promise<{ reference: import('./types').IdeaReference }>;
+      },
+      addNote: (ideaId: number, text: string) =>
+        request<{ reference: import('./types').IdeaReference }>(`/api/ideas/${ideaId}/references/note`, { method: 'POST', body: JSON.stringify({ text }) }),
+      remove: (ideaId: number, refId: number) => request<void>(`/api/ideas/${ideaId}/references/${refId}`, { method: 'DELETE' }),
+    },
   },
   discovery: {
     comboSuggestions: () => request<{ combos: import('./types').ComboSuggestion[] }>('/api/combo-suggestions'),

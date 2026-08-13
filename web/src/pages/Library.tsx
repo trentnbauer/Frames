@@ -49,8 +49,25 @@ export function Library({ onOpenProject, forProjectId }: Props) {
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [isDraggingOverPage, setIsDraggingOverPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const showToast = useToast();
+
+  // "/" focuses search from anywhere on the page, like Library's own
+  // dedicated shortcut cheat-sheet entry — ignored while already typing
+  // somewhere else so it doesn't hijack a "/" typed into another field.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const active = document.activeElement;
+      const isEditable = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active as HTMLElement)?.isContentEditable;
+      if (isEditable) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const hasFilters = activeTags.length > 0 || !!activeCamera || !!activeLocation || !!search.trim() || activeFavorite;
 
@@ -679,10 +696,11 @@ export function Library({ onOpenProject, forProjectId }: Props) {
       )}
 
       <input
+        ref={searchInputRef}
         className="field-input search-input"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search filename, camera, lens, location…"
+        placeholder="Search filename, camera, lens, location… (/ to focus)"
       />
 
       <div className="chip-bar chip-bar--sticky" style={{ alignItems: 'center' }}>

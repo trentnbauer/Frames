@@ -63,6 +63,25 @@ export interface IdeaPhotoRow {
   created_at: string;
 }
 
+export interface ShotListItemRow {
+  id: number;
+  idea_id: number;
+  text: string;
+  done: number;
+  created_at: string;
+}
+
+export type IdeaReferenceKind = 'image' | 'note';
+
+export interface IdeaReferenceRow {
+  id: number;
+  idea_id: number;
+  kind: IdeaReferenceKind;
+  path: string | null;
+  text: string | null;
+  created_at: string;
+}
+
 export function slugify(name: string): string {
   return name
     .trim()
