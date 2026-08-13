@@ -1,9 +1,15 @@
 import { Router } from 'express';
 import path from 'node:path';
-import db, { THUMBS_DIR, DISPLAY_DIR } from '../db.js';
-import type { PhotoRow } from '../types.js';
+import db, { THUMBS_DIR, DISPLAY_DIR, REFERENCES_DIR } from '../db.js';
+import type { IdeaReferenceRow, PhotoRow } from '../types.js';
 
 export const filesRouter = Router();
+
+filesRouter.get('/reference/:id', (req, res) => {
+  const reference = db.prepare('SELECT * FROM idea_references WHERE id = ?').get(req.params.id) as IdeaReferenceRow | undefined;
+  if (!reference || reference.kind !== 'image' || !reference.path) return res.status(404).json({ error: 'Reference image not found' });
+  res.sendFile(path.join(REFERENCES_DIR, reference.path));
+});
 
 filesRouter.get('/:kind/:id', (req, res) => {
   const { kind, id } = req.params;

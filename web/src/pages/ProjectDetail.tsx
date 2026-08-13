@@ -1,6 +1,6 @@
-import { useEffect, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { api } from '../api.js';
-import type { Idea, IdeaPhoto, LightPref, Photo } from '../types.js';
+import type { Idea, IdeaPhoto, IdeaReference, LightPref, Photo, ShotListItem } from '../types.js';
 import { LIGHT_PREFS } from '../types.js';
 import { relativeTime } from '../relativeTime.js';
 import { PhotoDetail } from '../components/PhotoDetail.js';
@@ -259,6 +259,9 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
         </div>
       )}
 
+      <MoodBoard projectId={projectId} />
+      <ShotList projectId={projectId} />
+
       <div
         className={`photo-grid photo-grid--dropzone ${dragOverGrid ? 'is-drag-over' : ''}`}
         onDragOver={handleGridDragOver}
@@ -306,6 +309,163 @@ export function ProjectDetail({ projectId, onBack, onImport, onOpenZine, onDelet
           onNavigate={setOpenPhotoId}
         />
       )}
+    </div>
+  );
+}
+
+// "Frames I still need for this project" — distinct from idea_photos, which
+// tracks frames already shot and dropped in below.
+function ShotList({ projectId }: { projectId: number }) {
+  const [items, setItems] = useState<ShotListItem[]>([]);
+  const [newText, setNewText] = useState('');
+
+  async function refresh() {
+    setItems((await api.ideas.shotList.list(projectId)).items);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, [projectId]);
+
+  async function addItem() {
+    const text = newText.trim();
+    if (!text) return;
+    setNewText('');
+    await api.ideas.shotList.add(projectId, text);
+    await refresh();
+  }
+
+  async function toggleDone(item: ShotListItem) {
+    await api.ideas.shotList.update(projectId, item.id, { done: !item.done });
+    await refresh();
+  }
+
+  async function editText(item: ShotListItem, text: string) {
+    if (!text.trim() || text.trim() === item.text) return;
+    await api.ideas.shotList.update(projectId, item.id, { text: text.trim() });
+    await refresh();
+  }
+
+  async function remove(item: ShotListItem) {
+    await api.ideas.shotList.remove(projectId, item.id);
+    await refresh();
+  }
+
+  if (items.length === 0 && newText === '') {
+    return (
+      <details style={{ marginBottom: 8 }}>
+        <summary className="muted" style={{ cursor: 'pointer' }}>+ Shot list — what you still need to go shoot</summary>
+        <div className="add-tag-row">
+          <input value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="e.g. wide shot at golden hour" onKeyDown={(e) => e.key === 'Enter' && addItem()} />
+          <button onClick={addItem}>Add</button>
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <h3 style={{ marginBottom: 6 }}>Shot list</h3>
+      <div className="shot-list">
+        {items.map((item) => (
+          <div key={item.id} className={`shot-list__item ${item.done ? 'is-done' : ''}`}>
+            <input type="checkbox" checked={!!item.done} onChange={() => toggleDone(item)} />
+            <input
+              className="shot-list__text"
+              defaultValue={item.text}
+              onBlur={(e) => editText(item, e.target.value)}
+            />
+            <button className="danger" onClick={() => remove(item)}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="add-tag-row">
+        <input value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="e.g. wide shot at golden hour" onKeyDown={(e) => e.key === 'Enter' && addItem()} />
+        <button onClick={addItem}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+// Mood board: reference images/notes pinned before there are real shots —
+// inspiration, not the idea's actual photo grid below.
+function MoodBoard({ projectId }: { projectId: number }) {
+  const [references, setReferences] = useState<IdeaReference[]>([]);
+  const [noteText, setNoteText] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const showToast = useToast();
+
+  async function refresh() {
+    setReferences((await api.ideas.references.list(projectId)).references);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, [projectId]);
+
+  async function addImages(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) await api.ideas.references.addImage(projectId, file);
+      await refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function addNote() {
+    const text = noteText.trim();
+    if (!text) return;
+    setNoteText('');
+    await api.ideas.references.addNote(projectId, text);
+    await refresh();
+  }
+
+  async function remove(ref: IdeaReference) {
+    await api.ideas.references.remove(projectId, ref.id);
+    await refresh();
+  }
+
+  if (references.length === 0) {
+    return (
+      <details style={{ marginBottom: 8 }}>
+        <summary className="muted" style={{ cursor: 'pointer' }}>+ Mood board — inspiration images and notes</summary>
+        <div className="add-tag-row" style={{ marginTop: 8 }}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading…' : 'Add image'}</button>
+          <input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="pin a note…" onKeyDown={(e) => e.key === 'Enter' && addNote()} />
+          <button onClick={addNote}>Add note</button>
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />
+      </details>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <h3 style={{ marginBottom: 6 }}>Mood board</h3>
+      <div className="moodboard-strip">
+        {references.map((ref) => (
+          <div key={ref.id} className="moodboard-tile">
+            <button className="moodboard-tile__remove" onClick={() => remove(ref)} title="Remove">✕</button>
+            {ref.kind === 'image' ? (
+              <img src={`/files/reference/${ref.id}`} alt="Reference" />
+            ) : (
+              <div className="moodboard-tile__note">{ref.text}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="add-tag-row">
+        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading…' : 'Add image'}</button>
+        <input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="pin a note…" onKeyDown={(e) => e.key === 'Enter' && addNote()} />
+        <button onClick={addNote}>Add note</button>
+      </div>
+      <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />
     </div>
   );
 }

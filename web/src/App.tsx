@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { ZineCreator } from './pages/ZineCreator.js';
 import { NewProjectModal } from './components/NewProjectModal.js';
+import { ShortcutsOverlay } from './components/ShortcutsOverlay.js';
 import { useToast } from './toast.js';
 
 interface NewProjectRequest {
@@ -23,7 +24,22 @@ export default function App() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [libraryTotal, setLibraryTotal] = useState<number | null>(null);
   const [newProjectRequest, setNewProjectRequest] = useState<NewProjectRequest | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const showToast = useToast();
+
+  // Global "?" cheat-sheet toggle — ignored while typing in a field so a
+  // literal "?" in a search box or note doesn't pop the overlay.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '?') return;
+      const active = document.activeElement;
+      const isEditable = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active as HTMLElement)?.isContentEditable;
+      if (isEditable) return;
+      setShowShortcuts((v) => !v);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   async function refreshIdeas() {
     const res = await api.ideas.list();
@@ -195,6 +211,8 @@ export default function App() {
         onClose={() => setNewProjectRequest(null)}
         onCreated={handleProjectCreated}
       />
+
+      {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
     </div>
   );
 }

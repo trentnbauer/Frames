@@ -48,6 +48,28 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
 
   useEscapeKey(true, onClose);
 
+  useEffect(() => {
+    if (!photo) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'd' && e.key !== 'Delete') return;
+      // Same guard as the arrow-key navigation below — don't hijack these
+      // while the user is typing in one of this modal's fields.
+      const active = document.activeElement;
+      const isEditable =
+        active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active as HTMLElement)?.isContentEditable;
+      if (isEditable) return;
+
+      if (e.key === 'f') {
+        toggleFavorite();
+      } else {
+        trashPhoto();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.id]);
+
   function navigateBy(delta: number) {
     if (!navIds || !onNavigate) return;
     const idx = navIds.indexOf(photoId);
@@ -145,6 +167,14 @@ export function PhotoDetail({ photoId, onClose, onChanged, onAddedToIdea, navIds
     await api.photos.favorite(photo!.id);
     await refresh();
     onChanged();
+  }
+
+  async function trashPhoto() {
+    if (!confirm('Move this photo to trash? You can restore it later, or delete it forever from Trash.')) return;
+    await api.photos.delete(photo!.id);
+    onChanged();
+    onClose();
+    showToast('Moved to trash');
   }
 
   async function retag() {

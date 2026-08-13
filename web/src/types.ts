@@ -70,6 +70,25 @@ export interface IdeaPhoto extends Photo {
   position: number;
 }
 
+export interface ShotListItem {
+  id: number;
+  idea_id: number;
+  text: string;
+  done: number;
+  created_at: string;
+}
+
+export type IdeaReferenceKind = 'image' | 'note';
+
+export interface IdeaReference {
+  id: number;
+  idea_id: number;
+  kind: IdeaReferenceKind;
+  path: string | null;
+  text: string | null;
+  created_at: string;
+}
+
 export const LIGHT_PREFS: LightPref[] = ['any', 'overcast', 'raking_sun', 'golden_hour', 'dark', 'night'];
 
 export type VisionProviderType = 'openai' | 'anthropic' | 'gemini' | 'self_hosted';

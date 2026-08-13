@@ -228,4 +228,91 @@ describe('ideas routes', () => {
     const photoStillThere = await request(app).get(`/api/photos/${photo.id}`);
     expect(photoStillThere.status).toBe(200);
   });
+
+  describe('shot list', () => {
+    it('adds, lists, toggles, and removes shot list items', async () => {
+      const ideaRes = await request(app).post('/api/ideas').send({ title: 'Shot list idea' });
+      const ideaId = ideaRes.body.idea.id;
+
+      const addRes = await request(app).post(`/api/ideas/${ideaId}/shot-list`).send({ text: 'wide shot at golden hour' });
+      expect(addRes.status).toBe(201);
+      expect(addRes.body.item).toMatchObject({ text: 'wide shot at golden hour', done: 0 });
+      const itemId = addRes.body.item.id;
+
+      const listRes = await request(app).get(`/api/ideas/${ideaId}/shot-list`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.items).toHaveLength(1);
+
+      const toggleRes = await request(app).patch(`/api/ideas/${ideaId}/shot-list/${itemId}`).send({ done: true });
+      expect(toggleRes.status).toBe(200);
+      expect(toggleRes.body.item.done).toBe(1);
+
+      const delRes = await request(app).delete(`/api/ideas/${ideaId}/shot-list/${itemId}`);
+      expect(delRes.status).toBe(204);
+
+      const afterDelete = await request(app).get(`/api/ideas/${ideaId}/shot-list`);
+      expect(afterDelete.body.items).toHaveLength(0);
+    });
+
+    it('rejects an empty shot list item', async () => {
+      const ideaRes = await request(app).post('/api/ideas').send({ title: 'Empty shot list' });
+      const res = await request(app).post(`/api/ideas/${ideaRes.body.idea.id}/shot-list`).send({ text: '  ' });
+      expect(res.status).toBe(400);
+    });
+
+    it('404s deleting a shot list item that does not belong to the idea', async () => {
+      const ideaA = await request(app).post('/api/ideas').send({ title: 'List A' });
+      const ideaB = await request(app).post('/api/ideas').send({ title: 'List B' });
+      const item = await request(app).post(`/api/ideas/${ideaA.body.idea.id}/shot-list`).send({ text: 'only in A' });
+
+      const res = await request(app).delete(`/api/ideas/${ideaB.body.idea.id}/shot-list/${item.body.item.id}`);
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('mood board references', () => {
+    it('adds a note reference, lists it, and removes it', async () => {
+      const ideaRes = await request(app).post('/api/ideas').send({ title: 'Mood board idea' });
+      const ideaId = ideaRes.body.idea.id;
+
+      const addRes = await request(app).post(`/api/ideas/${ideaId}/references/note`).send({ text: 'shoot like the Waubra dawn-fog idea' });
+      expect(addRes.status).toBe(201);
+      expect(addRes.body.reference).toMatchObject({ kind: 'note', text: 'shoot like the Waubra dawn-fog idea' });
+
+      const listRes = await request(app).get(`/api/ideas/${ideaId}/references`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.references).toHaveLength(1);
+
+      const delRes = await request(app).delete(`/api/ideas/${ideaId}/references/${addRes.body.reference.id}`);
+      expect(delRes.status).toBe(204);
+
+      const afterDelete = await request(app).get(`/api/ideas/${ideaId}/references`);
+      expect(afterDelete.body.references).toHaveLength(0);
+    });
+
+    it('adds an image reference and serves it from /files/reference/:id', async () => {
+      const ideaRes = await request(app).post('/api/ideas').send({ title: 'Mood board image idea' });
+      const ideaId = ideaRes.body.idea.id;
+      const jpeg = await tinyJpeg(200);
+
+      const addRes = await request(app).post(`/api/ideas/${ideaId}/references/image`).attach('image', jpeg, 'inspo.jpg');
+      expect(addRes.status).toBe(201);
+      expect(addRes.body.reference.kind).toBe('image');
+      expect(addRes.body.reference.path).toBeTruthy();
+
+      const fileRes = await request(app).get(`/files/reference/${addRes.body.reference.id}`);
+      expect(fileRes.status).toBe(200);
+    });
+
+    it('rejects an empty note reference', async () => {
+      const ideaRes = await request(app).post('/api/ideas').send({ title: 'Empty note idea' });
+      const res = await request(app).post(`/api/ideas/${ideaRes.body.idea.id}/references/note`).send({ text: '' });
+      expect(res.status).toBe(400);
+    });
+
+    it('404s adding a reference to a non-existent idea', async () => {
+      const res = await request(app).post('/api/ideas/999999/references/note').send({ text: 'orphaned' });
+      expect(res.status).toBe(404);
+    });
+  });
 });

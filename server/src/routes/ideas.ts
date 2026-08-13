@@ -1,12 +1,22 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
-import db, { ORIGINALS_DIR } from '../db.js';
+import multer from 'multer';
+import sharp from 'sharp';
+import db, { ORIGINALS_DIR, REFERENCES_DIR } from '../db.js';
 import { streamZip } from '../lib/zipExport.js';
 import { withTags } from '../lib/withTags.js';
 import { deriveNudge } from '../lib/ideaNudges.js';
-import type { IdeaRow, PhotoRow } from '../types.js';
+import type { IdeaReferenceRow, IdeaRow, PhotoRow, ShotListItemRow } from '../types.js';
 
 export const ideasRouter = Router();
+
+const uploadReference = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith('image/')),
+});
 
 // Bumped on any meaningful edit (title/notes/status/zine layout, photo
 // membership/reorder) — drives sidebar/Dashboard ordering, see GET '/'.
@@ -187,6 +197,109 @@ ideasRouter.get('/:id/suggested-photos', (req, res) => {
     .all(...tagIds, ideaId) as PhotoRow[];
 
   res.json({ photos: rows.map(withTags) });
+});
+
+// --- Shot list: "frames I still need for this project" ---
+
+ideasRouter.get('/:id/shot-list', (req, res) => {
+  const items = db
+    .prepare('SELECT * FROM idea_shot_list_items WHERE idea_id = ? ORDER BY created_at ASC')
+    .all(req.params.id) as ShotListItemRow[];
+  res.json({ items });
+});
+
+ideasRouter.post('/:id/shot-list', (req, res) => {
+  const ideaId = req.params.id;
+  const idea = db.prepare('SELECT id FROM ideas WHERE id = ?').get(ideaId);
+  if (!idea) return res.status(404).json({ error: 'Idea not found' });
+
+  const { text } = req.body as { text?: string };
+  if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
+
+  const info = db.prepare('INSERT INTO idea_shot_list_items (idea_id, text) VALUES (?, ?)').run(ideaId, text.trim());
+  const item = db.prepare('SELECT * FROM idea_shot_list_items WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json({ item });
+});
+
+ideasRouter.patch('/:id/shot-list/:itemId', (req, res) => {
+  const { text, done } = req.body as { text?: string; done?: boolean };
+  const existing = db
+    .prepare('SELECT * FROM idea_shot_list_items WHERE id = ? AND idea_id = ?')
+    .get(req.params.itemId, req.params.id) as ShotListItemRow | undefined;
+  if (!existing) return res.status(404).json({ error: 'Shot list item not found' });
+
+  db.prepare('UPDATE idea_shot_list_items SET text = ?, done = ? WHERE id = ?').run(
+    text !== undefined && text.trim() ? text.trim() : existing.text,
+    done !== undefined ? (done ? 1 : 0) : existing.done,
+    existing.id
+  );
+
+  const item = db.prepare('SELECT * FROM idea_shot_list_items WHERE id = ?').get(existing.id);
+  res.json({ item });
+});
+
+ideasRouter.delete('/:id/shot-list/:itemId', (req, res) => {
+  const result = db.prepare('DELETE FROM idea_shot_list_items WHERE id = ? AND idea_id = ?').run(req.params.itemId, req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Shot list item not found' });
+  res.status(204).end();
+});
+
+// --- Mood board: reference images/notes pinned to an idea before there are
+// real shots for it yet — distinct from idea_photos (frames already shot). ---
+
+ideasRouter.get('/:id/references', (req, res) => {
+  const references = db
+    .prepare('SELECT * FROM idea_references WHERE idea_id = ? ORDER BY created_at ASC')
+    .all(req.params.id) as IdeaReferenceRow[];
+  res.json({ references });
+});
+
+// Image reference: reuses the upload + sharp-resize pattern from
+// routes/photos.ts, but skips the original/thumb/display trio and the
+// tagging pipeline — a mood-board image is inspiration, not a shot to file.
+ideasRouter.post('/:id/references/image', uploadReference.single('image'), async (req, res) => {
+  const ideaId = req.params.id;
+  const idea = db.prepare('SELECT id FROM ideas WHERE id = ?').get(ideaId);
+  if (!idea) return res.status(404).json({ error: 'Idea not found' });
+
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'No image file uploaded' });
+
+  const filename = `${crypto.randomUUID()}.jpg`;
+  await sharp(file.buffer).rotate().resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(path.join(REFERENCES_DIR, filename));
+
+  const info = db
+    .prepare("INSERT INTO idea_references (idea_id, kind, path) VALUES (?, 'image', ?)")
+    .run(ideaId, filename);
+  const reference = db.prepare('SELECT * FROM idea_references WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json({ reference });
+});
+
+ideasRouter.post('/:id/references/note', (req, res) => {
+  const ideaId = req.params.id;
+  const idea = db.prepare('SELECT id FROM ideas WHERE id = ?').get(ideaId);
+  if (!idea) return res.status(404).json({ error: 'Idea not found' });
+
+  const { text } = req.body as { text?: string };
+  if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
+
+  const info = db.prepare("INSERT INTO idea_references (idea_id, kind, text) VALUES (?, 'note', ?)").run(ideaId, text.trim());
+  const reference = db.prepare('SELECT * FROM idea_references WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json({ reference });
+});
+
+ideasRouter.delete('/:id/references/:refId', (req, res) => {
+  const reference = db
+    .prepare('SELECT * FROM idea_references WHERE id = ? AND idea_id = ?')
+    .get(req.params.refId, req.params.id) as IdeaReferenceRow | undefined;
+  if (!reference) return res.status(404).json({ error: 'Reference not found' });
+
+  db.prepare('DELETE FROM idea_references WHERE id = ?').run(reference.id);
+  if (reference.kind === 'image' && reference.path) {
+    fs.rm(path.join(REFERENCES_DIR, reference.path), { force: true }, () => {});
+  }
+
+  res.status(204).end();
 });
 
 function escapeHtml(s: string): string {
