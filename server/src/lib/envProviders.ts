@@ -1,7 +1,8 @@
 import db from '../db.js';
 
-// Declarative: whatever FRAMES_* vars are set on the container define these
-// provider rows, re-asserted on every boot (upsert by a reserved name). This
+// Declarative: whatever provider env vars are set on the container define
+// these provider rows, re-asserted on every boot (upsert by a reserved
+// name). This
 // makes deploying with real keys a docker-compose env: block instead of a
 // manual Settings-page step every time the volume is fresh. Editing or
 // disabling one of these via the UI sticks only until the next restart — at
@@ -11,27 +12,27 @@ import db from '../db.js';
 export function seedProvidersFromEnv() {
   upsert('OpenAI (env)', {
     type: 'openai',
-    api_key: process.env.FRAMES_OPENAI_API_KEY,
-    model: process.env.FRAMES_OPENAI_MODEL,
+    api_key: process.env.OPENAI_API_KEY,
+    model: process.env.OPENAI_MODEL,
   });
 
   upsert('Anthropic (env)', {
     type: 'anthropic',
-    api_key: process.env.FRAMES_ANTHROPIC_API_KEY,
-    model: process.env.FRAMES_ANTHROPIC_MODEL,
+    api_key: process.env.ANTHROPIC_API_KEY,
+    model: process.env.ANTHROPIC_MODEL,
   });
 
   upsert('Gemini (env)', {
     type: 'gemini',
-    api_key: process.env.FRAMES_GEMINI_API_KEY,
-    model: process.env.FRAMES_GEMINI_MODEL,
+    api_key: process.env.GEMINI_API_KEY,
+    model: process.env.GEMINI_MODEL,
   });
 
   upsert('Self-hosted (env)', {
     type: 'self_hosted',
-    base_url: process.env.FRAMES_SELF_HOSTED_BASE_URL,
-    api_key: process.env.FRAMES_SELF_HOSTED_API_KEY,
-    model: process.env.FRAMES_SELF_HOSTED_MODEL,
+    base_url: process.env.SELF_HOSTED_BASE_URL,
+    api_key: process.env.SELF_HOSTED_API_KEY,
+    model: process.env.SELF_HOSTED_MODEL,
   });
 }
 

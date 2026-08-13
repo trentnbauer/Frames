@@ -9,18 +9,18 @@ export const configRouter = Router();
 // localStorage on the frontend; a value the user types in Settings still
 // overrides whatever's here (see web/src/importConfig.ts).
 configRouter.get('/', (_req, res) => {
-  const socialHandles = (process.env.FRAMES_SOCIAL_HANDLES || '')
+  const socialHandles = (process.env.SOCIAL_HANDLES || '')
     .split(',')
     .map((h) => h.trim())
     .filter(Boolean);
 
   res.json({
     googleDrive:
-      process.env.FRAMES_GOOGLE_API_KEY || process.env.FRAMES_GOOGLE_CLIENT_ID
-        ? { apiKey: process.env.FRAMES_GOOGLE_API_KEY || '', clientId: process.env.FRAMES_GOOGLE_CLIENT_ID || '' }
+      process.env.GOOGLE_API_KEY || process.env.GOOGLE_CLIENT_ID
+        ? { apiKey: process.env.GOOGLE_API_KEY || '', clientId: process.env.GOOGLE_CLIENT_ID || '' }
         : null,
-    dropbox: process.env.FRAMES_DROPBOX_APP_KEY ? { appKey: process.env.FRAMES_DROPBOX_APP_KEY } : null,
+    dropbox: process.env.DROPBOX_APP_KEY ? { appKey: process.env.DROPBOX_APP_KEY } : null,
     socialHandles: socialHandles.length ? socialHandles : null,
-    watchFolder: process.env.FRAMES_WATCH_DIR || null,
+    watchFolder: process.env.WATCH_DIR || null,
   });
 });

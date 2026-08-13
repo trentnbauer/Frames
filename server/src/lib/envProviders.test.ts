@@ -8,16 +8,16 @@ describe('seedProvidersFromEnv', () => {
   let cleanup: () => void;
 
   beforeAll(async () => {
-    process.env.FRAMES_OPENAI_API_KEY = 'sk-from-env';
-    process.env.FRAMES_OPENAI_MODEL = 'gpt-4o-mini-env';
-    process.env.FRAMES_SELF_HOSTED_BASE_URL = 'http://localhost:11434/v1';
+    process.env.OPENAI_API_KEY = 'sk-from-env';
+    process.env.OPENAI_MODEL = 'gpt-4o-mini-env';
+    process.env.SELF_HOSTED_BASE_URL = 'http://localhost:11434/v1';
     ({ app, cleanup } = await createTestApp());
   });
 
   afterAll(() => {
-    delete process.env.FRAMES_OPENAI_API_KEY;
-    delete process.env.FRAMES_OPENAI_MODEL;
-    delete process.env.FRAMES_SELF_HOSTED_BASE_URL;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_MODEL;
+    delete process.env.SELF_HOSTED_BASE_URL;
     cleanup();
   });
 
@@ -27,7 +27,7 @@ describe('seedProvidersFromEnv', () => {
 
     expect(names).toContain('OpenAI (env)');
     expect(names).toContain('Self-hosted (env)');
-    expect(names).not.toContain('Anthropic (env)'); // FRAMES_ANTHROPIC_API_KEY was never set
+    expect(names).not.toContain('Anthropic (env)'); // ANTHROPIC_API_KEY was never set
 
     const openai = res.body.providers.find((p: { name: string }) => p.name === 'OpenAI (env)');
     expect(openai).toMatchObject({ type: 'openai', model: 'gpt-4o-mini-env', enabled: true, hasApiKey: true });

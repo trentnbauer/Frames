@@ -16,18 +16,18 @@ describe('config route', () => {
     let cleanup: () => void;
 
     beforeAll(async () => {
-      process.env.FRAMES_GOOGLE_API_KEY = 'AIza-env';
-      process.env.FRAMES_GOOGLE_CLIENT_ID = 'client.apps.googleusercontent.com';
-      process.env.FRAMES_DROPBOX_APP_KEY = 'dbx-env';
-      process.env.FRAMES_SOCIAL_HANDLES = '@yourhandle, yoursite.com ,,@another';
+      process.env.GOOGLE_API_KEY = 'AIza-env';
+      process.env.GOOGLE_CLIENT_ID = 'client.apps.googleusercontent.com';
+      process.env.DROPBOX_APP_KEY = 'dbx-env';
+      process.env.SOCIAL_HANDLES = '@yourhandle, yoursite.com ,,@another';
       ({ app, cleanup } = await createTestApp());
     });
 
     afterAll(() => {
-      delete process.env.FRAMES_GOOGLE_API_KEY;
-      delete process.env.FRAMES_GOOGLE_CLIENT_ID;
-      delete process.env.FRAMES_DROPBOX_APP_KEY;
-      delete process.env.FRAMES_SOCIAL_HANDLES;
+      delete process.env.GOOGLE_API_KEY;
+      delete process.env.GOOGLE_CLIENT_ID;
+      delete process.env.DROPBOX_APP_KEY;
+      delete process.env.SOCIAL_HANDLES;
       cleanup();
     });
 
