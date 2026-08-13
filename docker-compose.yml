@@ -1,6 +1,6 @@
 services:
   app:
-    image: docker pull ghcr.io/trentnbauer/frames:latest
+    image: ghcr.io/trentnbauer/frames:latest
     restart: unless-stopped
     environment:
       - PORT=4000
