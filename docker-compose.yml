@@ -1,14 +1,6 @@
-# Frames has no built-in login, users, or access control of any kind — every
-# route (view/delete photos, restore-from-backup which replaces the entire
-# library, vision-provider API keys) is open to anyone who can reach this
-# port. The `ports: 4000:4000` mapping below exposes it directly on the
-# host's network. Do not put this on the open internet as-is — put it behind
-# a reverse proxy (Caddy, nginx, Traefik) with auth (basic auth, oauth2-proxy,
-# Authelia, etc.) or keep it on a private network / VPN / Tailscale only.
 services:
   app:
-    build: .
-    container_name: frames-app
+    image: docker pull ghcr.io/trentnbauer/frames:latest
     restart: unless-stopped
     environment:
       - PORT=4000
@@ -30,18 +22,12 @@ services:
       # - DROPBOX_APP_KEY=${DROPBOX_APP_KEY:-}
       # - SOCIAL_HANDLES=${SOCIAL_HANDLES:-}
     volumes:
-      - frames-data:/data
+      - data:/data
     ports:
-      # Drop this if TunnelMate reaches the container over the shared network below
-      # instead of the host.
-      - "4000:4000"
-    # Uncomment and point at your TunnelMate network so it can route to this
-    # container by name (e.g. http://frames-app:4000) instead of the host port.
-    # networks:
-    #   - tunnelmate
+      - 4000:4000
 
 volumes:
-  frames-data:
+  data:
 
 # networks:
 #   tunnelmate:
