@@ -28,7 +28,7 @@ const until = async (fn: () => boolean, ms = 8000) => { const t = Date.now(); wh
 /** A stand-in for the Cloudflare API, with just enough memory to tell whether a call is repeated. */
 const cf = { tunnels: new Map<string, { name: string }>(), dns: [] as { id: string; zone: string; type: string; name: string; content: string; proxied?: boolean }[], routes: [] as any[], calls: [] as string[], authSeen: new Set<string>(), seq: 0 };
 let cfServer: http.Server, cfBase = '';
-const ZONES = [{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'sub.example.com' }];
+const ZONES = [{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'sub.example.com' }, { id: 'z3', name: 'mygallery.net' }];
 beforeAll(async () => {
   cfServer = http.createServer((req, res) => {
     let body = ''; req.on('data', (d) => (body += d));
@@ -210,6 +210,12 @@ describe('automatic setup through the Cloudflare API', () => {
     const r = await setup([{ hostname: 'gallery.sub.example.com', kind: 'portfolio' }]);
     expect(r.body.ok).toBe(true);
     expect(cf.dns.find((d) => d.name === 'gallery.sub.example.com')?.zone).toBe('z2');
+  });
+  it('works for a bare domain (the zone itself), not just subdomains', async () => {
+    await A.put('/api/portfolio', { host: 'mygallery.net' });
+    const r = await setup([{ hostname: 'mygallery.net', kind: 'portfolio' }]);
+    expect(r.body.ok).toBe(true);
+    expect(cf.dns.find((d) => d.name === 'mygallery.net')?.zone).toBe('z3');
   });
   it('removes only the DNS records it made, for hostnames you took off', async () => {
     cf.dns.push({ id: 'theirs', zone: 'z1', type: 'A', name: 'www.example.com', content: '1.2.3.4' });
