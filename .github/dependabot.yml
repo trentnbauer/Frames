@@ -4,6 +4,7 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    labels: ["release: fix"]
     # better-sqlite3 13+ ships no prebuilt binaries, so the slim Docker image can't install it
     # (and arm64 builds would compile under emulation). Stay on 11 until that changes.
     ignore:
@@ -13,10 +14,12 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    labels: ["release: fix"]
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    labels: ["release: fix"]
     # Node major versions are chosen by hand: native modules (better-sqlite3, sharp) must ship
     # prebuilt binaries for that version before the image can move to it.
     ignore:
@@ -26,3 +29,4 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    labels: ["release: none"]

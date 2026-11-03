@@ -10,6 +10,12 @@ permissions:
   contents: read
 
 jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: .github/scripts/next-version.test.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:
