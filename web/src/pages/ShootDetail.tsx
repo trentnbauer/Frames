@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Img, Loading, useField } from '../components/bits';
+import { SharePanel } from '../components/SharePanel';
 
 export function ShootDetail() {
   const { id } = useParams();
@@ -19,6 +20,7 @@ export function ShootDetail() {
   const f = { name, place, description, dateFrom, dateTo };
   const setF = (n: typeof f) => { setName(n.name); setPlace(n.place); setDescription(n.description); setDateFrom(n.dateFrom); setDateTo(n.dateTo); };
   const [select, setSelect] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
   const [msg, setMsg] = useState('');
   const s = shoot.data;
@@ -35,8 +37,9 @@ export function ShootDetail() {
       <Header />
       <div className="spread" style={{ fontSize: 13, marginBottom: 14 }}>
         <Link to="/shoots" className="t2">← Photoshoots</Link>
-        <span className="muted">{s.source} · imported {new Date(s.importedAt).toLocaleDateString('en-AU')}</span>
+        <span className="muted" style={{ display: 'flex', gap: 18 }}>{s.source} · imported {new Date(s.importedAt).toLocaleDateString('en-AU')}<button className="t2" onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share</button></span>
       </div>
+      {sharing && <SharePanel kind="shoot" id={s.id} onClose={() => setSharing(false)} />}
       <input className="serif inline" aria-label="Photoshoot name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onBlur={() => f.name.trim() && f.name !== s.name && save({ name: f.name })} style={{ fontSize: 52, lineHeight: 1 }} />
       <div className="form" style={{ margin: '14px 0 6px' }}>
         <label>Place <input aria-label="Place" value={f.place} onChange={(e) => setF({ ...f, place: e.target.value })} onBlur={() => f.place !== s.place && save({ place: f.place })} /></label>

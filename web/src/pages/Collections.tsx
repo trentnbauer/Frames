@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { checkTarget, parseTarget, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
 import { Header, Img, Loading, Title } from '../components/bits';
+import { SharePanel } from '../components/SharePanel';
 
 type SuggestedSet = { name: string; reason: string; aiAssisted: boolean; photoIds: number[]; photos: PhotoLite[] };
 type Insights = {
@@ -80,6 +81,7 @@ export function CollectionDetail() {
   const [adding, setAdding] = useState(false);
   const [dl, setDl] = useState<Dl | null>(null);
   const [cmp, setCmp] = useState<number[] | null>(null);
+  const [sharing, setSharing] = useState(false);
   const cancelled = useRef(false);
 
   const c = coll.data;
@@ -139,11 +141,13 @@ export function CollectionDetail() {
       <div className="spread" style={{ fontSize: 13, marginBottom: 20 }}>
         <Link to="/collections" className="t2">← Collections</Link>
         <span className="t2" style={{ display: 'flex', gap: 18 }}>
+          <button onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share</button>
           <button onClick={() => setCmp(cmp ? null : [])}>{cmp ? 'Cancel compare' : 'Compare'}</button>
           <button onClick={() => setAdding(!adding)}>{adding ? 'Done adding' : 'Add photos'}</button>
           <button onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
         </span>
       </div>
+      {sharing && <SharePanel kind="collection" id={c.id} onClose={() => setSharing(false)} />}
       {dl && (
         <div className="toast" role="status">
           <b>{dl.state === 'ready' ? 'Downloads started' : 'Downloading originals'}</b>

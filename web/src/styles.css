@@ -219,6 +219,13 @@ textarea.area { background: var(--surface); border-radius: 8px; padding: 8px 10p
 .tabs button.on { background: var(--chip); color: var(--text); }
 .fy .tile em { font-style: normal; }
 .exif dd { word-break: break-word; }
+.sharepanel { background: rgba(255,255,255,.04); border-radius: 12px; padding: 18px 22px; margin-bottom: 26px; }
+.sharerow { border-top: 1px solid var(--hair); padding: 12px 0; margin-top: 12px; }
+.sharerow.off { opacity: .55; }
+.guestres { margin-top: 10px; font-size: 13px; background: var(--surface); border-radius: 8px; padding: 10px 12px; }
+.namebox { background: var(--surface); border: 0; border-radius: 999px; padding: 10px 16px; color: var(--text); min-width: 220px; }
+.lbnav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 40px; color: var(--text2); padding: 10px 16px; z-index: 2; }
+.lbnav:hover { color: var(--text); }
 /* the photo stays in view while the long side column scrolls */
 .detail .main { position: sticky; top: 16px; align-self: flex-start; }
 .detail .stage { flex: none; padding: 16px 0; }

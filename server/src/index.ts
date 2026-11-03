@@ -20,6 +20,7 @@ const app = buildApp(db, {
   libraries, dataDir, webDir: process.env.WEB_DIR ?? path.resolve('../web/dist'),
   version: process.env.APP_VERSION || 'dev',
   trustProxy: process.env.TRUST_PROXY === '1',
+  maxUploadMb: Number(process.env.MAX_UPLOAD_MB) || undefined,
   authPassword, authUser: process.env.AUTH_USER || 'frames',
   // Public host names (for example frames.example.com) when a reverse proxy rewrites the Host header.
   allowedHosts: (process.env.ALLOWED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),

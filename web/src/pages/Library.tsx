@@ -47,6 +47,9 @@ export function Library() {
   if (sp.get('from') || sp.get('to')) chips.push({ label: `Date: ${sp.get('from') ?? '…'} to ${sp.get('to') ?? '…'}`, remove: () => { set('from', null); set('to', null); } });
   if (sp.get('place')) chips.push({ label: `Place: ${sp.get('place')}`, remove: () => set('place', null) });
   if (sp.get('gps')) chips.push({ label: 'Has location', remove: () => set('gps', null) });
+  for (const k of ['shape', 'light', 'contrast'] as const) if (sp.get(k)) chips.push({ label: `${k[0].toUpperCase()}${k.slice(1)}: ${sp.get(k)}`, remove: () => set(k, null) });
+  if (sp.get('exclude')) chips.push({ label: `Without: ${sp.get('exclude')}`, remove: () => set('exclude', null) });
+  if (sp.get('time')) chips.push({ label: `Time: ${sp.get('time')}`, remove: () => set('time', null) });
   if (sp.get('review') === 'excluded') chips.push({ label: 'Left out of review', remove: () => set('review', null) });
   if (similarTo) chips.push({ label: `Similar to photo ${similarTo}`, remove: () => set('similarTo', null) });
 
@@ -73,6 +76,11 @@ export function Library() {
           </Menu>
           <Menu id="colour" label="Colour">
             <div className="colour-grid">{COLOURS.map((c) => <button key={c} aria-label={c} title={c} aria-pressed={multi(sp.get('colour')).includes(c)} className={'cdot c-' + c + (multi(sp.get('colour')).includes(c) ? ' on' : '')} onClick={() => toggle('colour', c)} />)}</div>
+          </Menu>
+          <Menu id="look" label="Shape & light">
+            {([['shape', 'portrait'], ['shape', 'landscape'], ['shape', 'square'], ['light', 'dark'], ['light', 'mid'], ['light', 'bright'], ['contrast', 'low'], ['contrast', 'medium'], ['contrast', 'high']] as const).map(([k, v]) => (
+              <Item key={k + v} on={sp.get(k) === v} onClick={() => set(k, sp.get(k) === v ? null : v)}>{k === 'shape' ? v : k === 'light' ? `${v === 'mid' ? 'mid-tone' : v} light` : `${v} contrast`}</Item>
+            ))}
           </Menu>
           <Menu id="date" label="Date">
             <label className="menu-field">From <input type="date" value={sp.get('from') ?? ''} onChange={(e) => set('from', e.target.value || null)} /></label>

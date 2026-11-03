@@ -15,6 +15,9 @@ services:
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       # Public host name(s), only needed behind a reverse proxy that rewrites Host.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}
     volumes:
       # Your photographs. Read-only: Frames never writes to them.
       - ${PHOTOS_DIR:-./photos}:/library:ro

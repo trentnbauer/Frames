@@ -13,6 +13,7 @@ export function Review() {
   const { refreshSummary } = useStore();
   const [s, setS] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState('');
   const [noting, setNoting] = useState(false);
 
   useEffect(() => {
@@ -24,11 +25,16 @@ export function Review() {
 
   const leave = () => { refreshSummary(); nav('/'); };
   const move = async (index: number) => { if (s) setS(await api<Session>('/review/session', { method: 'PUT', body: { index } })); };
-  const rate = async (n: number) => {
+  // Moves on at once and saves in the background, so quick key presses never land on the same photo.
+  // If a rating can't be saved, you are put back on that photo.
+  const rate = (n: number) => {
     if (!s || !cur) return;
+    const before = s;
     setNoting(false);
-    setS(await api<Session>('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } }));
-    refreshSummary();
+    setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
+    api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } })
+      .then(() => refreshSummary())
+      .catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
   };
   const saveNote = async (note: string) => {
     if (!s || !cur) return;
@@ -94,6 +100,7 @@ export function Review() {
         ))}
       </div>
       <button className="notebtn" onClick={() => setNoting(true)}>N note</button>
+      {saveErr && <div className="reason" role="alert" style={{ position: 'absolute', bottom: 100, left: 0, right: 0, textAlign: 'center' }}>{saveErr}</div>}
       {noting && cur && (
         <div className="notebox">
           <textarea

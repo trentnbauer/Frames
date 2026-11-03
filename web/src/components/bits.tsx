@@ -4,7 +4,7 @@ import { imgUrl } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 
-type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean };
+type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean; share?: string };
 
 /** The photo preview, or a grey striped stand-in when no preview exists (for example a RAW with no embedded JPEG). */
 export function Img({ p, kind = 'thumb', className = '', style }: { p: P; kind?: 'thumb' | 'preview'; className?: string; style?: React.CSSProperties }) {
@@ -15,7 +15,7 @@ export function Img({ p, kind = 'thumb', className = '', style }: { p: P; kind?:
   if (p.hasImage === false || failed) {
     return <div className={'ph ' + className} role="img" aria-label="No preview available" style={{ ...st, background: `repeating-linear-gradient(135deg, hsl(${hue} 6% 22%) 0 10px, hsl(${hue} 6% 25%) 10px 20px)` }} />;
   }
-  return <img className={'ph ' + className} src={imgUrl(p.id, kind)} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...st, objectFit: 'cover' }} />;
+  return <img className={'ph ' + className} src={imgUrl(p.id, kind, p.share)} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...st, objectFit: 'cover' }} />;
 }
 
 /** Contained, never cropped. The parent sets --fit-h (the height available to the photo). */

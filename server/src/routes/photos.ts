@@ -69,6 +69,13 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       where.push("p.captured_at IS NOT NULL AND substr(p.captured_at, 12, 5) BETWEEN ? AND ?");
       args.push(`${p2(tm[1])}:${tm[2]}`, `${p2(tm[3])}:${tm[4]}`);
     }
+    // Composition and light, from the picture itself (no AI needed): its shape, how bright it is, how contrasty.
+    const shape = String(q.shape ?? '');
+    if (shape === 'portrait') where.push('p.h > p.w'); else if (shape === 'landscape') where.push('p.w > p.h'); else if (shape === 'square') where.push('p.w > 0 AND ABS(p.w - p.h) * 1.0 / p.w < 0.05');
+    const light = String(q.light ?? '');
+    if (light === 'dark') where.push('p.brightness < 0.35'); else if (light === 'mid') where.push('p.brightness BETWEEN 0.35 AND 0.65'); else if (light === 'bright') where.push('p.brightness > 0.65');
+    const contrast = String(q.contrast ?? '');
+    if (contrast === 'low') where.push('p.contrast < 0.15'); else if (contrast === 'medium') where.push('p.contrast BETWEEN 0.15 AND 0.28'); else if (contrast === 'high') where.push('p.contrast > 0.28');
     if (q.variants === 'hide') where.push('p.parent_id IS NULL');
     if (q.review === 'excluded') where.push('p.archived = 1');
 
@@ -76,8 +83,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const semantic = q.semantic === '1' && !!cfgAi && !!q.q;
     if (!semantic) {
       for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-        where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-        args.push(like(w), like(w), like(w), like(w), like(w), like(w), w, like(w));
+        where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+        args.push(like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
       }
     }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';

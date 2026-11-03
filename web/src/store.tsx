@@ -22,6 +22,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [summary, setSum] = useState<Summary | null>(null);
   const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); }, []);
   useEffect(() => {
+    // A share link's page has no login, and these calls need one: skip them there, or the browser asks a guest for a password.
+    if (window.location.pathname.startsWith('/s/')) return;
     api<{ settings: Settings }>('/settings').then((r) => setS(r.settings)).catch(() => {});
     refreshSummary();
   }, [refreshSummary]);
