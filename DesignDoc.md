@@ -67,7 +67,10 @@ publishing software.
     referenced image libraries including cloud storage
     -   *Done: uploaded photos (internal) and read-only library folders
         (external), including a cloud drive mounted as a folder.*
-    -   *Not done: built-in cloud connectors (S3, WebDAV, Google Drive).*
+    -   *Done: built-in sync from Google Drive, Dropbox and OneDrive
+        (Settings, Cloud sync): one way, read-only on the provider's
+        side, files already copied are never overwritten or deleted.*
+    -   *Not done: S3 and WebDAV connectors.*
 -   [x] Preserve original photographs without modification.
 -   [x] Keep generated thumbnails, previews and other derivatives
     separate from originals.
