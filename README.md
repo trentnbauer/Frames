@@ -65,6 +65,12 @@ Everything else (AI, sign-in providers, portfolio, sync) is set in the app, unde
 
 **Portainer**: use `docker-compose.portainer.yml` (Stacks, Add stack, Web editor). It pulls the published image, reads no files, and takes every stack and container variable above from the stack's *Environment variables* section; only `PHOTOS_DIR` is required.
 
+### Setting up without any variables
+
+You do not have to write the variables by hand. Start Frames with none at all (just the photo folder and the data volume), open **Settings, Deployment**, and fill in the form: sign-in, sign-ups, the port and photo folder, upload size, and the Cloudflare tunnel (API token, account ID, app address, allowed emails, portfolio address). It starts from how this server is set up now, checks what you type (for example that an app address always has emails for Cloudflare Access), and shows a preview of the file with secrets hidden. **Download frames.env** gives you the real file to use with the stack: `docker compose --env-file frames.env up -d`, or save it as `.env` next to your compose file, or in Portainer *Stack, Environment variables, Load variables from .env file*. Administrators only.
+
+The file is built in your browser. The secrets you type there (the API token, a shared password) are never sent to the server or stored, which also means they cannot be read back later: type them again whenever you make a new file. Sign-in providers, the allow-list, people, AI settings and cloud accounts live in the data volume, not in the file, so they carry over by keeping the same volume.
+
 ### Versions and releases
 
 Releases are Docker images on GitHub's container registry: `ghcr.io/trentnbauer/frames`, tagged `1.2.3`, `1.2`, `1` and `latest` (amd64 and arm64). To run a release instead of building from source, set `FRAMES_IMAGE=ghcr.io/trentnbauer/frames:1.2.3` in `.env`, then:

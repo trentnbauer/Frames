@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { loadAccess } from '../access.js';
 import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import type { DB } from '../db.js';
+import { envBool } from '../env.js';
 import { userDir } from '../tenants.js';
+import { loadTunnel } from '../tunnel.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, updateUser, validFolder, type User } from '../users.js';
 
 /**
@@ -64,6 +67,37 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
 
   // ---------- administrators ----------
   app.get('/api/admin/users', async () => ({ users: listUsers(sys).map(dto), signups: x.cfg.allowSignups !== false, libraryRoots: x.tenants.owner().cfg.libraryRoots ?? [] }));
+
+  // What this instance is running with, as environment variables, to fill in the Deployment page. Never a secret: passwords,
+  // API tokens and keys are not kept in a form that can be read back, so the page asks for them again and builds the file in the browser.
+  app.get('/api/admin/deployment', async () => {
+    const t = loadTunnel(sys);
+    const access = loadAccess(sys);
+    const auth = loadAuth(sys);
+    const ownerHost = (sys.prepare('SELECT host FROM portfolio_hosts WHERE user_id = 1').get() as { host: string } | undefined)?.host ?? '';
+    const emails = access?.emails.length ? access.emails : auth.allow.filter((e) => e.includes('@') && !e.startsWith('@'));
+    const env = process.env;
+    const values: Record<string, string> = {
+      AUTH_DISABLE: String(envBool('AUTH_DISABLE', false)),
+      AUTH_USER: env.AUTH_USER ?? '',
+      ALLOW_SIGNUPS: String(x.cfg.allowSignups !== false),
+      TRUST_PROXY: String(envBool('TRUST_PROXY', false)),
+      OIDC_ALLOW_HTTP: String(envBool('OIDC_ALLOW_HTTP', false)),
+      ALLOWED_HOSTS: env.ALLOWED_HOSTS ?? '',
+      MAX_UPLOAD_MB: env.MAX_UPLOAD_MB ?? '',
+      SESSION_DAYS: env.SESSION_DAYS ?? '',
+      CLOUDFLARE_ACCOUNT_ID: t.accountId,
+      TUNNEL_NAME: t.tunnelName,
+      APP_HOSTNAME: t.hostnames.find((h) => h.kind === 'app')?.hostname ?? access?.appHost ?? '',
+      ACCESS_EMAILS: emails.join(','),
+      PORTFOLIO_HOSTNAME: t.hostnames.find((h) => h.kind === 'portfolio')?.hostname ?? ownerHost,
+    };
+    return {
+      values, version: x.cfg.version ?? 'dev',
+      // Reminders for the things that cannot be carried in a file.
+      hasPassword: !!x.cfg.authPassword, oauthProviders: auth.providers.length, tunnelManagedByEnv: !!t.env,
+    };
+  });
 
   // Add someone before they ever sign in. They are also put on the allow-list, which is what lets an account in at all.
   app.post('/api/admin/users', async (req, rep) => {

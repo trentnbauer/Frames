@@ -9,10 +9,11 @@ import { Access } from './Access';
 import { AiSettings } from './AiSettings';
 import { CloudSettings } from './CloudSettings';
 import { TunnelSettings } from './TunnelSettings';
+import { Deployment } from './Deployment';
 import { People } from './People';
 import { YourData } from './YourData';
 
-const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Cloudflare tunnel', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'People', 'Your data', 'About'] as const;
+const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Cloudflare tunnel', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'People', 'Deployment', 'Your data', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -29,7 +30,7 @@ export function SettingsPage() {
   const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return q.has('access') ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
   const { settings: s, setSettings, me } = useStore();
   // Sign-in and the tunnel belong to the whole instance: only an administrator sees them.
-  const sections = SECTIONS.filter((x) => me?.role !== 'member' || !(x === 'Access' || x === 'Cloudflare tunnel' || x === 'People'));
+  const sections = SECTIONS.filter((x) => me?.role !== 'member' || !(x === 'Access' || x === 'Cloudflare tunnel' || x === 'People' || x === 'Deployment'));
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
@@ -51,6 +52,7 @@ export function SettingsPage() {
           {sec === 'Cloud sync' && <CloudSettings />}
           {sec === 'Cloudflare tunnel' && <TunnelSettings />}
           {sec === 'People' && <People />}
+          {sec === 'Deployment' && <Deployment />}
           {sec === 'Your data' && <YourData />}
           {sec === 'Access' && <Access />}
           {sec === 'Tags & subjects' && <Vocabulary />}
