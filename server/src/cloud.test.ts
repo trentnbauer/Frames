@@ -201,6 +201,14 @@ describe.each(['google', 'dropbox', 'onedrive'] as const)('cloud sync: %s', (pro
     resetTree();
   });
 
+  it('does not fetch an oversized metadata file', async () => {
+    nodes.push({ id: 'fx', name: 'huge.xmp', folder: false, parent: 'ROOT', data: Buffer.alloc(6 * 1024 * 1024, 32), version: 'v1' });
+    const r = await A.post(`/api/cloud/${id}/sync?wait=1`);
+    expect(r.body.downloaded).toBe(0);
+    expect(r.body.errors.join(' ')).toMatch(/huge\.xmp.*metadata file larger/);
+    expect(fs.existsSync(path.join(dest, 'huge.xmp'))).toBe(false);
+    nodes.pop();
+  });
   it('is scanned like any library, and the files stay when the connection is removed', async () => {
     // The sync already started a scan in the background; wait for it, then run one more to be sure.
     for (let i = 0; i < 100 && (await A.get('/api/library/scan/status')).body.running; i++) await new Promise((r) => setTimeout(r, 100));

@@ -210,16 +210,35 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const d = (s: string) => crypto.createHash('sha256').update(s).digest();
     return !!m && crypto.timingSafeEqual(d(`${u}:${rest.join(':')}`), d(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
   };
+  // Wrong shared-password attempts are counted per address: after 10 in a minute, even the right password is refused until the minute is up.
+  const wrong = new Map<string, { n: number; reset: number }>();
+  const lockedOut = (ip: string) => { const b = wrong.get(ip); return !!b && b.reset > Date.now() && b.n >= 10; };
+  const noteWrong = (ip: string) => {
+    const now = Date.now();
+    let b = wrong.get(ip);
+    if (!b || b.reset < now) { b = { n: 0, reset: now + 60_000 }; wrong.set(ip, b); if (wrong.size > 2000) for (const [k, v] of wrong) if (v.reset < now) wrong.delete(k); }
+    b.n++;
+  };
+  /** The one place a shared password is checked. 'none' = no password offered (the browser's first try), which is not a wrong guess. */
+  const checkPassword = (req: FastifyRequest): 'ok' | 'none' | 'wrong' | 'limited' => {
+    if (!cfg.authPassword) return 'none';
+    if (lockedOut(req.ip)) return 'limited';
+    if (passwordOk(req)) return 'ok';
+    if (!/^Basic /.test(req.headers.authorization ?? '')) return 'none';
+    noteWrong(req.ip);
+    return lockedOut(req.ip) ? 'limited' : 'wrong';
+  };
   const oauthOn = () => oauthEnabled(db);
   /** Is anything protecting this instance right now? */
   const protectedNow = () => !cfg.authDisabled && (oauthOn() || !!cfg.authPassword);
 
-  type Verdict = { ok: true; user: Identity | null; via: 'open' | 'session' | 'password' } | { ok: false };
+  type Verdict = { ok: true; user: Identity | null; via: 'open' | 'session' | 'password' } | { ok: false; limited?: boolean };
   function verify(req: FastifyRequest): Verdict {
     if (!protectedNow()) return { ok: true, user: null, via: 'open' };
     if (oauthOn()) { const u = sessionUser(db, req); if (u) return { ok: true, user: u, via: 'session' }; }
-    if (passwordOk(req)) return { ok: true, user: null, via: 'password' };
-    return { ok: false };
+    const pw = checkPassword(req);
+    if (pw === 'ok') return { ok: true, user: null, via: 'password' };
+    return pw === 'limited' ? { ok: false, limited: true } : { ok: false };
   }
 
   const PAGE = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Frames</title><style>
@@ -238,7 +257,8 @@ export function createAuth(db: DB, cfg: AppCfg) {
 
   const wantsHtml = (req: FastifyRequest) => req.method === 'GET' && !req.url.startsWith('/api/') && String(req.headers.accept ?? '').includes('text/html');
   /** Refuses a request that has no valid sign-in, in the way that suits who is asking. */
-  function deny(req: FastifyRequest, rep: FastifyReply) {
+  function deny(req: FastifyRequest, rep: FastifyReply, limited = false) {
+    if (limited) return rep.code(429).header('Retry-After', '60').send({ error: 'Too many wrong passwords. Try again in a minute.' });
     if (oauthOn()) {
       if (wantsHtml(req)) return rep.code(401).type('text/html').send(signinPage());
       return rep.code(401).send({ error: 'Sign in required', signIn: true });
@@ -246,7 +266,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
   }
 
-  return { baseUrl, isSecure, begin, finish, verify, deny, oauthOn, protectedNow, passwordOk, signinPage, messagePage, issuerOf };
+  return { baseUrl, isSecure, begin, finish, verify, deny, oauthOn, protectedNow, signinPage, messagePage, issuerOf, checkPassword };
 }
 export type Auth = ReturnType<typeof createAuth>;
 

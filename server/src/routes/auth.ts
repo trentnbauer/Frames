@@ -66,7 +66,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
 
   // For the shared-password option alongside OAuth: asking for it makes the browser show its password box.
   app.get('/auth/password', async (req, rep) => {
-    if (!cfg.authPassword || auth.passwordOk(req)) return rep.redirect('/');
+    if (!cfg.authPassword) return rep.redirect('/');
+    const pw = auth.checkPassword(req);
+    if (pw === 'ok') return rep.redirect('/');
+    if (pw === 'limited') return rep.code(429).header('Retry-After', '60').send({ error: 'Too many wrong passwords. Try again in a minute.' });
     return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
   });
 
