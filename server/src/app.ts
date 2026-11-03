@@ -15,6 +15,7 @@ import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
+import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
 import { registerPhotos } from './routes/photos.js';
 
 export type { AppCfg } from './ctx.js';
@@ -24,20 +25,25 @@ const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.leng
 const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 
 // Fonts come from Google Fonts. Everything else must be same-origin.
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 export function buildApp(db: DB, cfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
   const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
+  const portfolioGate = createPortfolioGate(db, cfg.webDir);
   const auth = createAuth(db, cfg);
   app.decorateRequest('authUser', null);
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
+    // The portfolio hostname shows the public portfolio and nothing else, whatever else is asked of it.
+    const pg = portfolioGate.check(req);
+    if (pg === 'deny') return rep.code(404).send({ error: 'Not found' });
+    if (pg === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
     // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open.
-    // Always reachable: the health check, the sign-in pages, and the exact share-link addresses (see routes/share.ts).
-    if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url)) {
+    // Always reachable: the health check, the sign-in pages, the exact share-link addresses (see routes/share.ts) and the public portfolio.
+    if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
       const v = auth.verify(req);
       if (!v.ok) return auth.deny(req, rep);
       (req as any).authUser = v.user;
@@ -330,6 +336,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
   registerShare(app, ctx);
+  registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
