@@ -59,7 +59,8 @@ export function Header({ right }: { right?: ReactNode }) {
         Frames
       </Link>
       <div style={{ display: 'flex', gap: 20, alignItems: 'baseline' }}>
-        {right ?? links}
+        {right}
+        {links}
         {/* Always there when someone is signed in with OAuth, whatever the page puts on the right. */}
         {me?.user && <button className="toplinks" style={{ fontSize: 13 }} onClick={signOut} title={me.user.email || me.user.name}>Sign out</button>}
       </div>
