@@ -12,6 +12,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Node major versions are chosen by hand: native modules (better-sqlite3, sharp) must ship
+    # prebuilt binaries for that version before the image can move to it.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
