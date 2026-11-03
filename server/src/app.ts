@@ -15,7 +15,9 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
+import { registerAdmin } from './routes/admin.js';
 import { registerCloud } from './routes/cloud.js';
+import { registerPrivacy } from './privacy.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
 import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
@@ -373,6 +375,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   registerCloud(app, ctx);
+  registerAdmin(app, ctx);
+  registerPrivacy(app, ctx);
   const tunnelRunner = createTunnelRunner(sys);
   registerTunnel(app, ctx, tunnelRunner);
   app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server

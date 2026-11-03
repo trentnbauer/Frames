@@ -257,7 +257,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const a = loadAuth(db);
     return PAGE(`<h1>Frames</h1><p>Sign in to continue.</p>${message ? `<div class="e" role="alert">${esc(message)}</div>` : ''}
       ${a.providers.map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('')}
-      ${cfg.authPassword ? '<a class="l" href="/auth/password">Use the shared password instead</a>' : ''}`);
+      ${cfg.authPassword ? '<a class="l" href="/auth/password">Use the shared password instead</a>' : ''}<p style="margin-top:26px;font-size:13px"><a class="l" href="/privacy">Privacy</a></p>`);
   }
   const messagePage = (title: string, text: string) => PAGE(`<h1>${esc(title)}</h1><p>${esc(text)}</p><a class="l" href="/auth/signin">Back to sign in</a>`);
 

@@ -20,7 +20,7 @@ const TOKEN = '[A-Za-z0-9_-]{16,64}';
 /** The only addresses served without the login: the share page shell, its assets, and the share API. */
 export function isPublicPath(url: string): boolean {
   const path = url.split('?')[0];
-  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg';
+  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg' || path === '/privacy';
 }
 export const isSharePath = (url: string) => /^\/(api\/)?s\//.test(url);
 
