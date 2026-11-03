@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
+import { buildXmp, readSidecar } from './xmp.js';
 
 let app: ReturnType<typeof buildApp>, lib: string, tmp: string;
 const basic = (u: string, p: string) => 'Basic ' + Buffer.from(`${u}:${p}`).toString('base64');
@@ -29,6 +30,53 @@ describe('login', () => {
     expect((await app.inject({ url: '/api/photos', headers: auth })).statusCode).toBe(200);
     expect((await app.inject('/api/health')).statusCode).toBe(200);
     expect((await app.inject('/api/photos')).headers['www-authenticate']).toContain('Basic');
+  });
+});
+
+describe('guessing the shared password', () => {
+  let t2: string, app2: ReturnType<typeof buildApp>;
+  beforeAll(() => {
+    t2 = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-sec2-'));
+    fs.mkdirSync(path.join(t2, 'lib'));
+    app2 = buildApp(openDb(path.join(t2, 'data')), { libraries: [path.join(t2, 'lib')], dataDir: path.join(t2, 'data'), authUser: 'me', authPassword: PW });
+  });
+  afterAll(() => fs.rmSync(t2, { recursive: true, force: true }));
+  const ip = (remoteAddress: string) => ({ remoteAddress });
+
+  it('counts only wrong passwords, so the first, credential-less try and good logins never lock anyone out', async () => {
+    for (let i = 0; i < 15; i++) expect((await app2.inject({ url: '/api/photos', remoteAddress: '10.0.0.9' })).statusCode).toBe(401);
+    for (let i = 0; i < 15; i++) expect((await app2.inject({ url: '/api/photos', headers: auth, remoteAddress: '10.0.0.9' })).statusCode).toBe(200);
+  });
+  it('locks an address out after 10 wrong tries, even for the right password, and answers 429', async () => {
+    const bad = { authorization: basic('me', 'nope') };
+    for (let i = 0; i < 9; i++) expect((await app2.inject({ url: '/api/photos', headers: bad, ...ip('10.0.0.1') })).statusCode).toBe(401);
+    const tenth = await app2.inject({ url: '/api/photos', headers: bad, ...ip('10.0.0.1') });
+    expect(tenth.statusCode).toBe(429);
+    expect(tenth.headers['retry-after']).toBe('60');
+    expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.0.0.1') })).statusCode).toBe(429);
+    // Someone else is not affected.
+    expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.0.0.2') })).statusCode).toBe(200);
+  });
+  it('is the same limit on /auth/password, so that page cannot be used to guess for free', async () => {
+    const bad = { authorization: basic('me', 'nope') };
+    for (let i = 0; i < 9; i++) expect((await app2.inject({ url: '/auth/password', headers: bad, ...ip('10.0.0.3') })).statusCode).toBe(401);
+    expect((await app2.inject({ url: '/auth/password', headers: bad, ...ip('10.0.0.3') })).statusCode).toBe(429);
+    expect((await app2.inject({ url: '/auth/password', headers: auth, ...ip('10.0.0.3') })).statusCode).toBe(429);
+    expect((await app2.inject({ url: '/auth/password', headers: auth, ...ip('10.0.0.4') })).statusCode).toBe(302);
+  });
+});
+
+describe('metadata sidecars', () => {
+  it('read only the start of a huge file, so one cannot use up memory', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-xmp-'));
+    try {
+      const img = path.join(d, 'a.jpg');
+      fs.writeFileSync(img, 'x');
+      fs.writeFileSync(img + '.xmp', buildXmp({ title: 'Harbour', description: '', keywords: ['sea'], rating: 4 }) + ' '.repeat(40_000_000));
+      const t0 = Date.now();
+      expect(readSidecar(img)).toMatchObject({ title: 'Harbour', keywords: ['sea'], rating: 4 });
+      expect(Date.now() - t0).toBeLessThan(1000);
+    } finally { fs.rmSync(d, { recursive: true, force: true }); }
   });
 });
 
@@ -76,6 +124,7 @@ describe('responses', () => {
     expect(r.headers['content-security-policy']).toContain("default-src 'self'");
     expect(r.headers['x-content-type-options']).toBe('nosniff');
     expect(r.headers['x-frame-options']).toBe('DENY');
+    expect(r.headers['permissions-policy']).toContain('geolocation=()');
   });
   it('never include the server path of an original', async () => {
     await app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: auth });

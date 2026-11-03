@@ -215,6 +215,7 @@ export const validFolderId = (provider: ProviderId, id: string) => adapters[prov
 
 // ---------- the sync ----------
 const MAX_FILE = (Number(process.env.CLOUD_MAX_FILE_MB) || 1024) * 1024 * 1024;
+const MAX_SIDECAR = 5 * 1024 * 1024;
 const MAX_DEPTH = 25;
 const MAX_ENTRIES = 200_000;
 const ALLOWED = new Set([...IMAGE_EXT, '.xmp']);
@@ -261,6 +262,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         if (!ALLOWED.has(path.extname(e.name).toLowerCase())) continue;
         const prior = known.get(id, e.id) as { version: string } | undefined;
         if (prior) { if (prior.version === e.version) res.skipped++; else res.changedRemotely++; continue; }
+        if (path.extname(e.name).toLowerCase() === '.xmp' && e.size > MAX_SIDECAR) { res.errors.push(`${e.name}: a metadata file larger than ${MAX_SIDECAR / 1048576} MB`); continue; }
         if (e.size > MAX_FILE) { res.errors.push(`${e.name}: larger than the ${MAX_FILE / 1048576} MB limit`); continue; }
         let name = safeName(e.name);
         let rel = [...f.rel, name].join('/');

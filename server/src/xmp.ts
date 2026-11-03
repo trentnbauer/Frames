@@ -36,7 +36,11 @@ export function findSidecar(file: string): string | null {
 export function readSidecar(file: string): XmpData | null {
   const f = findSidecar(file);
   if (!f) return null;
-  try { return parseXmp(fs.readFileSync(f, 'utf8').slice(0, 2_000_000)); } catch { return null; }
+  try {
+    // Only the first 2 MB: a sidecar can arrive from a cloud folder or a library we do not control.
+    const fd = fs.openSync(f, 'r');
+    try { const buf = Buffer.alloc(2_000_000); return parseXmp(buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8')); } finally { fs.closeSync(fd); }
+  } catch { return null; }
 }
 
 /** An XMP packet with only metadata the user has approved. The original image is never touched. */

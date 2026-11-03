@@ -287,6 +287,19 @@ describe('uploads (internal storage)', () => {
     const s = (await A.scan()).body;
     expect(s.imported).toBe(2);
   });
+  it('never overwrites an original, even when two uploads of one name arrive at the same moment', async () => {
+    const dir = path.join(env.data, 'originals');
+    const a = await jpg(svg(300, 200, '#111', '#222', [0.2, 0.2]));
+    const b = await jpg(svg(300, 200, '#eee', '#ddd', [0.8, 0.8]));
+    const send = (data: Buffer) => { const m = multipart([{ name: 'clash.jpg', data }]); return env.app.inject({ method: 'POST', url: '/api/upload', payload: m.payload, headers: m.headers }); };
+    const [r1, r2] = await Promise.all([send(a), send(b)]);
+    const names = [...r1.json().saved, ...r2.json().saved].sort();
+    expect(names).toEqual(['clash-1.jpg', 'clash.jpg']);
+    const stored = names.map((n) => fs.readFileSync(path.join(dir, n)));
+    expect(stored.some((x) => x.equals(a))).toBe(true);
+    expect(stored.some((x) => x.equals(b))).toBe(true);
+    expect(fs.readdirSync(dir).filter((f) => f.startsWith('.upload-'))).toEqual([]);
+  });
 });
 
 describe('backup, recovery and processing', () => {

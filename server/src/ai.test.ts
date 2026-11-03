@@ -248,6 +248,22 @@ describe('outside services', () => {
   });
 });
 
+describe('a service that redirects', () => {
+  it('never receives the key: redirects are not followed', async () => {
+    const got: string[] = [];
+    const sink = http.createServer((req, res) => { got.push(String(req.headers['x-api-key'] ?? '') + String(req.headers.authorization ?? '')); res.end('{}'); });
+    await new Promise<void>((r) => sink.listen(0, '127.0.0.1', r));
+    const hop = http.createServer((_req, res) => { res.writeHead(302, { Location: `http://127.0.0.1:${(sink.address() as AddressInfo).port}/steal` }); res.end(); });
+    await new Promise<void>((r) => hop.listen(0, '127.0.0.1', r));
+    try {
+      const { src } = await addSource('anthropic', { endpoint: `http://127.0.0.1:${(hop.address() as AddressInfo).port}`, key: 'ant-secret', ack: true }, false);
+      const r = (await A.post(`/api/ai/sources/${src.id}/test`)).body;
+      expect(r.ok).toBe(false);
+      expect(got).toEqual([]);
+    } finally { hop.close(); sink.close(); }
+  });
+});
+
 describe('moving from the old single setup', () => {
   it('keeps an existing configuration as the first source, still active, with its key', async () => {
     const e = makeEnv();
