@@ -19,7 +19,9 @@ Write the pull request title as the line users will read in the app's "What's ne
 
 ## Pull requests
 
-- Open them ready for review, not as drafts. Do not merge your own pull request unless the owner has said to.
+- Open them ready for review, not as drafts.
+- **Turn on auto-merge for every pull request** (squash) as soon as it is open and carries its release label: `gh pr merge <number> --auto --squash`, or the "Enable auto-merge" button. It then merges itself once the required checks pass. Never merge by hand over a failing check, never bypass the branch rules, and never turn auto-merge on for a pull request whose release label is missing or wrong, because the label decides the version number at merge. If you cannot turn it on (no permission, or a tool or session that is not allowed to), say so in your report and in the pull request so the owner can.
+- A pull request with conflicts will not auto-merge: when `main` moves on, merge `main` into the branch, fix the conflicts and push.
 - Say in the description what changed, what was checked, and what was not (for example "not tested against the real service").
 - If a change adds or alters behaviour users can see, describe it in `README.md` in the same pull request, including its limits and anything not tested against the real service.
 - If it adds or changes an environment variable, update the README's *Environment variables* tables, `.env.example` and both compose files.
