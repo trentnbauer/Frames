@@ -130,7 +130,7 @@ export function Access() {
 
       <div className="field">
         <h3>If you get locked out</h3>
-        <p style={{ margin: 0 }}>Set <span className="mono">AUTH_DISABLE=1</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</p>
+        <p style={{ margin: 0 }}>Set <span className="mono">AUTH_DISABLE=true</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</p>
       </div>
     </>
   );
