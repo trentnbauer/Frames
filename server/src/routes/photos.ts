@@ -57,6 +57,18 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       const avg = '(SELECT AVG(r.rating) FROM reviews r WHERE r.photo_id = p.id)';
       where.push(String(q.rating) === '4+' ? `${avg} >= 4` : String(q.rating) === '3+' ? `${avg} >= 3` : `${avg} < 3`);
     }
+    // "No people": leave out photos with that tag or subject, or mentioning it in their title or description.
+    for (const e of String(q.exclude ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
+      where.push("NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND t.name = ?) AND lower(p.title) NOT LIKE ? ESCAPE '\\' AND lower(p.description) NOT LIKE ? ESCAPE '\\'");
+      args.push(e, like(e), like(e));
+    }
+    // Time of day, from the capture time ("05:00-08:00"). Photos without a capture time never match.
+    const tm = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(String(q.time ?? ''));
+    if (tm) {
+      const p2 = (v: string) => v.padStart(2, '0');
+      where.push("p.captured_at IS NOT NULL AND substr(p.captured_at, 12, 5) BETWEEN ? AND ?");
+      args.push(`${p2(tm[1])}:${tm[2]}`, `${p2(tm[3])}:${tm[4]}`);
+    }
     if (q.variants === 'hide') where.push('p.parent_id IS NULL');
     if (q.review === 'excluded') where.push('p.archived = 1');
 
@@ -110,6 +122,15 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const text = String(((req.body ?? {}) as Row).q ?? '').slice(0, 300);
     const parsed = c && text ? await parseQuery(c, text) : null;
     return { ai: !!c, parsed };
+  });
+
+  /** Two photos side by side, with how alike they are. */
+  app.get('/api/compare', async (req, rep) => {
+    const q = req.query as Row;
+    const a = one('SELECT * FROM photos WHERE id = ?', num(q.a)), b = one('SELECT * FROM photos WHERE id = ?', num(q.b));
+    if (!a || !b) return notFound(rep);
+    const f = loadFeatures(x, [a.id, b.id]);
+    return { a: x.photoDto(a, true), b: x.photoDto(b, true), similarity: Math.round(similarity(f.get(a.id)!, f.get(b.id)!) * 100) / 100 };
   });
 
   // ---------- one photo ----------

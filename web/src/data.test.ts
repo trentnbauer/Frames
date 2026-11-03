@@ -1,28 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { requiredPx, targetProblem } from './data';
+import { checkTarget, fmtCoord, parseTarget, requiredPx } from './data';
 
-const A3_PORTRAIT = { count: 3, size: 'A3', orientation: 'portrait', ppi: 300 } as const;
-const A3_ANY = { count: 1, size: 'A3', orientation: 'any', ppi: 300 } as const;
+const t = (o: object) => parseTarget({ size: 'none', orientation: 'any', ppi: 300, count: 1, ...o })!;
 
 describe('print target', () => {
   it('A3 at 300 PPI needs 3508 × 4961 px', () => {
-    expect(requiredPx('A3', 300)).toEqual([3508, 4961]);
+    expect(requiredPx(t({ size: 'A3' }))).toEqual([3508, 4961]);
   });
-  it('flags landscape against a portrait target', () => {
-    expect(targetProblem({ w: 6000, h: 4000 }, A3_PORTRAIT)).toBe('Landscape. Target is portrait.');
+  it('explains orientation, size, minimum pixels and aspect failures in plain words', () => {
+    expect(checkTarget({ w: 6000, h: 4000 }, t({ size: 'A3', orientation: 'portrait' })).problem).toBe('Landscape. Target is portrait.');
+    expect(checkTarget({ w: 2848, h: 4272 }, t({ size: 'A3', orientation: 'portrait' })).problem).toBe('2848 × 4272 px. A3 at 300 PPI needs 3508 × 4961.');
+    expect(checkTarget({ w: 3000, h: 2000 }, t({ minWidth: 4000, minHeight: 3000 })).problem).toBe('3000 × 2000 px. Needs at least 4000 × 3000 px.');
+    expect(checkTarget({ w: 4000, h: 3000 }, t({ aspect: '3:2', aspectMode: 'required' })).problem).toMatch(/Target is 3:2/);
   });
-  it('flags too few pixels with the exact requirement', () => {
-    expect(targetProblem({ w: 2848, h: 4272 }, A3_PORTRAIT)).toBe('2848 × 4272 px. A3 at 300 PPI needs 3508 × 4961.');
+  it('treats a preferred aspect ratio as advice, not a failure', () => {
+    const r = checkTarget({ w: 4000, h: 3000 }, t({ aspect: '3:2', aspectMode: 'preferred' }));
+    expect(r.problem).toBeNull();
+    expect(r.note).toMatch(/cropping/);
   });
-  it('checks landscape photos against the landscape size when orientation is any', () => {
-    expect(targetProblem({ w: 5000, h: 3600 }, A3_ANY)).toBeNull();
-    expect(targetProblem({ w: 4000, h: 3000 }, A3_ANY)).toBe('4000 × 3000 px. A3 at 300 PPI needs 4961 × 3508.');
+  it('passes a large enough photo, a null target, and refuses to guess when the size is unknown', () => {
+    expect(checkTarget({ w: 4000, h: 6000 }, t({ size: 'A3', orientation: 'portrait' })).problem).toBeNull();
+    expect(checkTarget({ w: 10, h: 10 }, null).problem).toBeNull();
+    expect(checkTarget({ w: 0, h: 0 }, t({ size: 'A3' })).problem).toBe('Pixel size unknown.');
   });
-  it('passes a large portrait and a null target', () => {
-    expect(targetProblem({ w: 4000, h: 6000 }, A3_PORTRAIT)).toBeNull();
-    expect(targetProblem({ w: 10, h: 10 }, null)).toBeNull();
-  });
-  it('does not claim a pass when the pixel size is unknown', () => {
-    expect(targetProblem({ w: 0, h: 0 }, A3_PORTRAIT)).toBe('Pixel size unknown.');
+});
+
+describe('formatting', () => {
+  it('writes GPS coordinates with hemispheres', () => {
+    expect(fmtCoord(-33.8567, 151.2153)).toBe('33.8567°S, 151.2153°E');
   });
 });

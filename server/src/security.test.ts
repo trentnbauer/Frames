@@ -44,6 +44,16 @@ describe('cross-site requests', () => {
   });
 });
 
+describe('recommendations behind the login', () => {
+  it('serve suggested collections and recommendations to a logged-in user (and nothing without the login)', async () => {
+    expect((await app.inject('/api/collections/suggestions')).statusCode).toBe(401);
+    const r = await app.inject({ url: '/api/collections/suggestions', headers: auth });
+    expect(r.statusCode).toBe(200);
+    expect(Array.isArray(r.json())).toBe(true);
+    expect((await app.inject({ url: '/api/recommendations', headers: auth })).statusCode).toBe(200);
+  });
+});
+
 describe('version', () => {
   it('is reported by the health check', async () => {
     const v = buildApp(openDb(path.join(tmp, 'data')), { libraries: [lib], dataDir: path.join(tmp, 'data'), version: '1.2.3' });

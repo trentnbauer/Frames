@@ -73,10 +73,12 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (big.length < 2) continue;
       const sameFolder = new Set(big.map((g) => g.folder)).size === 1;
       const sameDay = new Set(big.map((g) => g.day)).size === 1;
+      // Frames' own upload folder is called "originals" on disk; people know it as uploads.
+      const folderName = (f: string) => (f === 'originals' ? 'Uploads' : f);
       out.push({
         shootId: s.id, shootName: s.name,
         groups: big.map((g) => ({
-          name: sameFolder ? g.day : sameDay ? g.folder : `${g.folder} · ${g.day}`,
+          name: (sameFolder ? g.day : sameDay ? folderName(g.folder) : [folderName(g.folder), g.day].filter(Boolean).join(' · ')) || folderName(g.folder),
           reason: sameFolder ? 'Taken on a different day' : sameDay ? 'From a different folder' : 'Different folder and day',
           photoIds: g.ids,
         })),
@@ -181,7 +183,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.get('/api/backup/list', async () => {
     const dir = path.join(cfg.dataDir, 'backups');
     if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir).filter((n) => n.startsWith('auto-')).sort().reverse().map((n) => ({ name: n, bytes: fs.statSync(path.join(dir, n)).size }));
+    return fs.readdirSync(dir).filter((n) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort().reverse().map((n) => ({ name: n, bytes: fs.statSync(path.join(dir, n)).size }));
   });
 
   // Regenerate previews and analysis for photos that lack them (or everything with ?all=1). Originals are only read.

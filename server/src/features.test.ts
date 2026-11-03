@@ -110,6 +110,16 @@ describe('searching and filtering', () => {
     expect(await ids('place=blue%20mount')).toEqual(['blue.jpg']);
     expect(await ids('q=ridge')).toEqual(['blue.jpg']);
   });
+  it('excludes things and filters by time of day', async () => {
+    const red = await photo('red.jpg');
+    await A.put(`/api/photos/${red.id}/tags`, { name: 'people' });
+    expect(await ids('exclude=people&tag=moody')).toEqual(['blue.jpg']);
+    expect(await ids('exclude=people&gps=1')).toEqual([]);
+    expect(await ids('time=05:00-08:00')).toEqual(['red.jpg']); // 06:30 capture
+    expect(await ids('time=16:00-18:00')).toEqual(['blue.jpg']); // 17:00 capture
+    expect(await ids('time=5:00-8:00&exclude=nothing')).toEqual(['red.jpg']);
+    await A.put(`/api/photos/${red.id}/tags`, { name: 'people', action: 'remove' });
+  });
   it('pages results', async () => {
     const r = (await A.get('/api/photos?limit=2&offset=1')).body;
     expect(r.photos).toHaveLength(2);

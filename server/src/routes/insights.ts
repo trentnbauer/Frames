@@ -41,7 +41,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   }
   const scoreOf = (w: Map<string, number>, fs: string[] | undefined) => (fs?.length ? fs.reduce((s, f) => s + (w.get(f) ?? 0), 0) / fs.length : 0);
 
-  app.get('/api/recommendations', async () => {
+  const recommendations = () => {
     const settings = loadSettings(db);
     const rv = reviewsByPhoto();
     const feats = featuresOf();
@@ -92,7 +92,8 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     }).filter(Boolean);
 
     return { growing, quiet, forgotten, archive, similar, complementary, together: togetherSets(photos, f, feats, prof, rv, dto), aiAssisted: [...f.values()].some((v) => v.embedding) };
-  });
+  };
+  app.get('/api/recommendations', async () => recommendations());
 
   /** Groups of well-liked photographs from at least two photoshoots that belong together by look and subject. */
   function togetherSets(photos: Row[], f: ReturnType<typeof loadFeatures>, feats: Map<number, string[]>, prof: Map<string, number>, rv: Map<number, Rv[]>, dto: (p: Row) => Record<string, any>) {
@@ -118,7 +119,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     });
   }
   // Collection suggestions share the engine: sets of photographs that belong together.
-  app.get('/api/collections/suggestions', async () => (await app.inject('/api/recommendations')).json().together);
+  app.get('/api/collections/suggestions', async () => recommendations().together);
 
   /** Accepting ("more like this", "start a collection") and rejecting ("not for me") both teach the profile above. */
   app.post('/api/recommendations/feedback', async (req, rep) => {

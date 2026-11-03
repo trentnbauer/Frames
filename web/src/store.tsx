@@ -3,7 +3,8 @@ import { api } from './api';
 
 export type Settings = {
   sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean;
-  ai: 'off' | 'local' | 'external'; aiEndpoint: string;
+  ai: 'off' | 'local' | 'external'; aiEndpoint: string; aiModel: string; aiEmbedModel: string; aiExternalAck: boolean;
+  xmpWriteBack: boolean;
 };
 export type Summary = { due: number; resumable: boolean; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 

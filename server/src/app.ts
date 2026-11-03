@@ -12,6 +12,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerInsights } from './routes/insights.js';
 import { registerLibrary } from './routes/library.js';
+import { isPublicPath, registerShare } from './routes/share.js';
 import { registerPhotos } from './routes/photos.js';
 
 export type { AppCfg } from './ctx.js';
@@ -24,13 +25,15 @@ const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 export function buildApp(db: DB, cfg: AppCfg) {
-  const app = Fastify({ logger: false });
+  // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
+  const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
     // Optional single-user login (HTTP Basic). Set AUTH_PASSWORD to turn it on. /api/health stays open for container health checks.
-    if (cfg.authPassword && req.url !== '/api/health') {
+    // Only the exact share-link addresses (and the page assets they need) are public; see routes/share.ts.
+    if (cfg.authPassword && req.url !== '/api/health' && !isPublicPath(req.url)) {
       const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
       const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
       const ok = crypto.timingSafeEqual(digest(u + ':' + rest.join(':')), digest(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
@@ -43,7 +46,8 @@ export function buildApp(db: DB, cfg: AppCfg) {
       if (!sameHost || req.headers['sec-fetch-site'] === 'cross-site') return rep.code(403).send({ error: 'Cross-site request blocked' });
     }
   });
-  app.addHook('onSend', async (_req, rep) => {
+  app.addHook('onSend', async (req, rep) => {
+    if (/^\/(api\/)?s\//.test(req.url)) rep.header('X-Robots-Tag', 'noindex, nofollow'); // share pages are never for search engines
     rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY');
   });
   // Never echo internal errors (SQL, file paths) to the client.
@@ -322,6 +326,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
+  registerShare(app, ctx);
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
 

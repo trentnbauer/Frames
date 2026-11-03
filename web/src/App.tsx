@@ -11,6 +11,9 @@ import { Collections, CollectionDetail } from './pages/Collections';
 import { ForYou } from './pages/ForYou';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './pages/Settings';
+import { ShootDetail } from './pages/ShootDetail';
+import { Compare } from './pages/Compare';
+import { Duplicates } from './pages/Duplicates';
 import { useStore } from './store';
 
 export function App() {
@@ -43,6 +46,9 @@ export function App() {
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
         <Route path="/shoots" element={<Shoots />} />
+        <Route path="/shoots/:id" element={<ShootDetail />} />
+        <Route path="/compare" element={<Compare />} />
+        <Route path="/duplicates" element={<Duplicates />} />
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
