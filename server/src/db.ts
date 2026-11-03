@@ -85,7 +85,7 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       ['brightness', 'REAL'], ['contrast', 'REAL'], ['saturation', 'REAL'],
       ['parent_id', 'INTEGER'], ['mtime', 'INTEGER'],
       ['ai_status', 'TEXT'], ['ai_json', 'TEXT'], ['ai_attempts', 'INTEGER NOT NULL DEFAULT 0'], ['embedding', 'BLOB'],
-      ['xmp_rating', 'INTEGER'],
+      ['xmp_rating', 'INTEGER'], ['xmp_sig', 'TEXT'],
     ] as const) addColumn(db, 'photos', c, d);
     addColumn(db, 'shoots', 'description', "TEXT NOT NULL DEFAULT ''");
     addColumn(db, 'shoots', 'date_from', 'TEXT');
