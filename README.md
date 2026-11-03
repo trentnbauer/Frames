@@ -128,6 +128,17 @@ Settings, Cloud sync copies the photographs from a cloud folder into Frames, the
 - **Secrets stay put.** The client secret and the refresh token are kept on the server only, are never shown again and are left out of backups.
 - Pick a folder, then sync by hand or let Frames check as often as every 15 minutes. Connect as many accounts as you like.
 
+## Cloudflare tunnel
+
+Settings, Cloudflare tunnel lets you reach Frames (or just your public portfolio) from outside your network with no open ports. Frames runs the bundled `cloudflared` for you.
+
+- **Two ways to set it up.** Paste a tunnel token you made in the Cloudflare dashboard, or give Frames an API token and it creates the tunnel, its routes and the DNS records itself. The API token only needs *Account: Cloudflare Tunnel: Edit* and *Zone: DNS: Edit* (plus *Zone: Read*), limited to your domain.
+- **Safe by default.** Every hostname goes to this Frames server and nothing else on your network. A **portfolio** hostname shows only the public portfolio (set the same address in Settings, Portfolio). Exposing the **whole app** is refused unless sign-in is on.
+- **Secrets stay put.** Tokens are write-only (never shown again), are kept out of backups, reach `cloudflared` through its environment (not the command line) and are removed from the tunnel log.
+- It reconnects by itself after a failure and starts again when Frames restarts, if you left it on. Frames only deletes DNS records it created.
+- Running Frames outside the supplied Docker image? Install [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and put it on the `PATH`.
+
+
 ## Backup
 
 Everything Frames knows (reviews, tags, collections, share links, settings) is in one database. Your originals are not part of it: back those up the way you already do.
