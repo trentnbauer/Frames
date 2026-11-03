@@ -5,6 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app' };
 type Data = {
   config: { enabled: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string; hostnames: Host[] };
   hasToken: boolean; hasApiToken: boolean; portfolioHost: string; signInOn: boolean; service: string;
+  managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
 };
 
@@ -28,6 +29,7 @@ export function TunnelSettings() {
   useEffect(() => { const t = setInterval(() => { d.reload(); if (showLogs) logs.reload(); }, 3000); return () => clearInterval(t); }, [showLogs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data || !c) return <p className="empty">Loading…</p>;
   const { status } = d.data;
+  if (d.data.managedByEnv) return <FromEnvironment d={d.data} logs={logs.data?.lines ?? []} showLogs={showLogs} setShowLogs={(v) => { setShowLogs(v); logs.reload(); }} />;
 
   const save = async (body: Record<string, unknown>, ok = 'Saved.') => {
     setMsg(null);
@@ -119,6 +121,42 @@ export function TunnelSettings() {
       <div className="field">
         <button className="t2" onClick={() => { setShowLogs(!showLogs); logs.reload(); }}>{showLogs ? 'Hide' : 'Show'} the tunnel log</button>
         {showLogs && <pre className="mono" style={{ fontSize: 11.5, background: 'var(--surface)', borderRadius: 8, padding: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{logs.data?.lines.length ? logs.data.lines.join('\n') : 'Nothing logged yet.'}</pre>}
+      </div>
+    </>
+  );
+}
+
+/** A tunnel set up from environment variables (compose file): nothing to edit here, but everything to see. */
+function FromEnvironment({ d, logs, showLogs, setShowLogs }: { d: Data; logs: string[]; showLogs: boolean; setShowLogs: (v: boolean) => void }) {
+  const { status, config, access } = d;
+  return (
+    <>
+      <div className="banner"><span>This tunnel is set up by environment variables (<span className="mono">CLOUDFLARE_API_TOKEN</span>, <span className="mono">APP_HOSTNAME</span>, <span className="mono">ACCESS_EMAILS</span>, <span className="mono">PORTFOLIO_HOSTNAME</span>). To change it, edit them in your compose file and restart Frames.</span></div>
+      <div className="field">
+        <h3 style={{ fontSize: 19 }}>Status</h3>
+        <p style={{ margin: 0 }}>
+          <b className={status.state === 'error' ? 'reason' : ''}>{LABEL[status.state]}</b>
+          {status.state === 'connected' && ' — Frames can be reached through Cloudflare.'}
+          {status.error && <span className="reason"> {status.error}</span>}
+        </p>
+        {access?.error && <p className="reason" role="alert">{access.error}</p>}
+      </div>
+      <div className="field">
+        <h3>What is reachable</h3>
+        {config.hostnames.length === 0 && <p className="muted">Nothing yet.</p>}
+        {config.hostnames.map((h) => (
+          <div className="row" key={h.hostname}>
+            <span><span className="mono">{h.hostname}</span> <span className="muted">{h.kind === 'app' ? 'the app' : 'the portfolio only'}</span></span>
+            <span className="faint">{h.kind === 'app' ? `Cloudflare Access: ${access?.emails.join(', ') || 'no one'}` : 'public'}</span>
+          </div>
+        ))}
+        {access && access.appHost && (
+          <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>On the app address, these need no login so that share links and the portfolio work for everyone: <span className="mono">{access.publicPaths.join('  ')}</span>. Everything else needs a valid Cloudflare Access login, and Frames checks it itself.</p>
+        )}
+      </div>
+      <div className="field">
+        <button className="t2" onClick={() => setShowLogs(!showLogs)}>{showLogs ? 'Hide' : 'Show'} the tunnel log</button>
+        {showLogs && <pre className="mono" style={{ fontSize: 11.5, background: 'var(--surface)', borderRadius: 8, padding: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{logs.length ? logs.join('\n') : 'Nothing logged yet.'}</pre>}
       </div>
     </>
   );
