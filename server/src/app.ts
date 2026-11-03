@@ -15,6 +15,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
+import { createAccessGate } from './access.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerCloud } from './routes/cloud.js';
 import { registerPrivacy } from './privacy.js';
@@ -23,6 +24,7 @@ import { isPublicPath, registerShare } from './routes/share.js';
 import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
 import { registerPhotos } from './routes/photos.js';
 import { createTunnelRunner, loadTunnel, registerTunnel } from './tunnel.js';
+import { applyEnvTunnel, readEnvTunnel } from './tunnelEnv.js';
 
 export type { AppCfg } from './ctx.js';
 
@@ -48,6 +50,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const cfg = tenantProxy<AppCfg>(() => tenants.currentOrNull()?.cfg ?? baseCfg);
   const portfolioGate = createPortfolioGate(sys, tenants, baseCfg.webDir);
   const auth = createAuth(sys, baseCfg);
+  const access = createAccessGate(sys, baseCfg.accessCertsBase);
   app.decorateRequest('authUser', null);
   app.decorateRequest('authVia', null);
   app.decorateRequest('tenant', null);
@@ -64,6 +67,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.addHook('onRequest', async (req, rep) => {
     const r = req as any;
     // The portfolio hostname shows the public portfolio and nothing else, whatever else is asked of it.
+    // The app's own address, when Cloudflare Access protects it: only a valid Access token gets past (public paths excepted).
+    if (access.applies(req) && (await access.check(req)) !== 'ok') return rep.code(403).send({ error: 'Sign in through Cloudflare Access to use this address.' });
     const pg = portfolioGate.check(req);
     if (pg.mode === 'deny') return rep.code(404).send({ error: 'Not found' });
     if (pg.mode === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
@@ -381,10 +386,21 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerTunnel(app, ctx, tunnelRunner);
   app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server
   // The start-up jobs are cancelled if the app is closed before they run (tests, a quick shutdown), so they never touch a closed database.
-  const startup = [
-    setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500), // the tunnel comes back up with the server
-    setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000), // and so does AI analysis, where it left off
-  ];
+  const envTunnel = readEnvTunnel();
+  for (const p of envTunnel.problems) console.error(`Cloudflare tunnel (environment): ${p}`);
+  const startup: NodeJS.Timeout[] = [];
+  if (envTunnel.cfg) {
+    // Set up from environment variables: make Cloudflare match, and try again every five minutes until that has worked.
+    const apply = async () => {
+      const r = await applyEnvTunnel(envTunnel.cfg!, { sys, ownerDb, runner: tunnelRunner, port: Number(process.env.PORT ?? 3000), apiBase: baseCfg.cloudflareApi });
+      if (r.error) { console.error(`Cloudflare tunnel: ${r.error}. Trying again in five minutes.`); const t = setTimeout(() => void apply(), 5 * 60_000); t.unref(); startup.push(t); }
+      else console.log(`Cloudflare tunnel ready${envTunnel.cfg!.appHost ? `: ${envTunnel.cfg!.appHost} (Access: ${envTunnel.cfg!.emails.length} email${envTunnel.cfg!.emails.length === 1 ? '' : 's'})` : ''}${envTunnel.cfg!.portfolioHost ? `, portfolio ${envTunnel.cfg!.portfolioHost}` : ''}.`);
+    };
+    startup.push(setTimeout(() => void apply(), 1500));
+  } else {
+    startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500)); // the tunnel comes back up with the server
+  }
+  startup.push(setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000)); // and so does AI analysis, where it left off
   for (const t of startup) t.unref();
   app.decorate('frames', { sys, tenants });
   app.addHook('onClose', async () => { for (const t of startup) clearTimeout(t); for (const t of tenants.all()) tenants.forget(t.user.id); sys.close(); });

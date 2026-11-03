@@ -198,6 +198,8 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       const h = text(b.host, 253).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
       if (h && !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$|^localhost$/.test(h)) return bad('The hostname is not valid. Use something like photography.example.com');
       if (h && x.sys.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ? AND user_id != ?').get(h, x.tenant().user.id)) return bad('Someone else already uses that address.');
+      const envHost = (getSetting<{ env?: boolean }>(x.sys, 'tunnel', {}).env && x.tenant().user.id === 1) ? (x.sys.prepare('SELECT host FROM portfolio_hosts WHERE user_id = 1').get() as { host: string } | undefined)?.host : '';
+      if (envHost && h !== envHost) return bad('The portfolio address is set by the PORTFOLIO_HOSTNAME environment variable. Change it there and restart Frames.');
       n.host = h;
     }
     if (b.collectionId !== undefined) {

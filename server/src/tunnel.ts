@@ -4,6 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
 import { CloudflareError, cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
+import { loadAccess } from './access.js';
+import { PUBLIC_DESTINATIONS } from './access.js';
+import { loadEnvState } from './tunnelEnv.js';
 import { getSetting, setSetting, type DB } from './db.js';
 
 /**
@@ -21,6 +24,8 @@ export type TunnelCfg = {
   enabled: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
   hostnames: { hostname: string; kind: HostKind }[];
   dns: Record<string, { zoneId: string; recordId: string }>; // records Frames made, so it only ever removes its own
+  /** Set up from environment variables (tunnelEnv.ts): shown read-only, changed by editing the variables. */
+  env?: boolean;
 };
 const DEFAULTS: TunnelCfg = { enabled: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {} };
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
@@ -109,15 +114,22 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
   const service = () => `http://localhost:${port()}`; // always this server, never a typed-in address
 
   const dto = (c: TunnelCfg) => ({
-    config: { ...c, dns: undefined }, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'), hasApiToken: !!getSecret(db, 'cloudflare:apiToken'),
+    config: { ...c, dns: undefined }, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'), hasApiToken: !!getSecret(db, 'cloudflare:apiToken') || (c.env && !!process.env.CLOUDFLARE_API_TOKEN),
+    managedByEnv: !!c.env,
+    // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
+    access: c.env ? { appHost: loadAccess(db)?.appHost ?? '', emails: loadAccess(db)?.emails ?? [], publicPaths: PUBLIC_DESTINATIONS, error: loadEnvState(db).error } : null,
     status: { ...runner.status }, portfolioHost: portfolioHosts()[0] ?? '', signInOn: x.isProtected(), service: service(),
   });
 
   app.get('/api/tunnel', async () => dto(loadTunnel(db)));
   app.get('/api/tunnel/logs', async () => ({ lines: runner.logs.slice(-100) }));
 
+  /** An environment-managed tunnel is changed by editing its variables, not here. */
+  const locked = (rep: any) => loadTunnel(db).env ? rep.code(409).send({ error: 'This tunnel is set up by environment variables (CLOUDFLARE_API_TOKEN, APP_HOSTNAME and the others). Change them and restart Frames.' }) : null;
+
   /** Validates and saves the setup. Secrets are write-only. Does not touch Cloudflare. */
   app.put('/api/tunnel', async (req, rep) => {
+    if (locked(rep)) return;
     const b = (req.body ?? {}) as Row;
     const cur = loadTunnel(db);
     const n: TunnelCfg = { ...cur, hostnames: [...cur.hostnames] };
@@ -158,6 +170,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
 
   /** API mode: create the tunnel if needed, set its routes, point DNS at it, keep the token. */
   app.post('/api/tunnel/apply', async (_req, rep) => {
+    if (locked(rep)) return;
     const c = loadTunnel(db);
     const apiToken = getSecret(db, 'cloudflare:apiToken');
     if (c.mode !== 'api') return rep.code(400).send({ error: 'This is only for automatic setup. Switch the mode first.' });
@@ -194,10 +207,11 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
   });
 
   app.post('/api/tunnel/start', async (_req, rep) => {
+    if (locked(rep)) return;
     if (!getSecret(db, 'cloudflare:tunnelToken')) return rep.code(400).send({ error: 'There is no tunnel token yet.' });
     saveTunnel(db, { ...loadTunnel(db), enabled: true });
     runner.start();
     return dto(loadTunnel(db));
   });
-  app.post('/api/tunnel/stop', async () => { saveTunnel(db, { ...loadTunnel(db), enabled: false }); await runner.stop(); return dto(loadTunnel(db)); });
+  app.post('/api/tunnel/stop', async (_req, rep) => { if (locked(rep)) return; saveTunnel(db, { ...loadTunnel(db), enabled: false }); await runner.stop(); return dto(loadTunnel(db)); });
 }
