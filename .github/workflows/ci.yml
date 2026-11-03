@@ -25,6 +25,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      # The server reads RAW files through these two programs (the Docker image has them too).
+      - if: matrix.package == 'server'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libimage-exiftool-perl dcraw
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
