@@ -20,6 +20,7 @@ export function SettingsPage() {
   const [sec, setSec] = useState<(typeof SECTIONS)[number]>('Reviews');
   const { settings: s, setSettings } = useStore();
   const info = useApi<{ libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
+  const version = useApi<{ version: string }>('/health').data?.version;
   if (!s) return <div className="page"><Header /><Loading /></div>;
   return (
     <div className="page">
@@ -91,7 +92,8 @@ export function SettingsPage() {
               ))}
             </div>
           )}
-          {(sec === 'Metadata & XMP' || sec === 'Backup' || sec === 'About') && <p className="empty">{sec === 'Backup' ? 'Back up the data folder (it holds the database and previews). Your originals are untouched.' : 'Not built yet.'}</p>}
+          {sec === 'About' && <p className="empty">Frames {version ? (version === 'dev' ? '(development build)' : `version ${version}`) : ''}</p>}
+          {(sec === 'Metadata & XMP' || sec === 'Backup') && <p className="empty">{sec === 'Backup' ? 'Back up the data folder (it holds the database and previews). Your originals are untouched.' : 'Not built yet.'}</p>}
         </div>
       </div>
     </div>

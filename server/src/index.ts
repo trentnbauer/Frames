@@ -11,6 +11,7 @@ const authPassword = process.env.AUTH_PASSWORD || undefined;
 const db = openDb(dataDir);
 const app = buildApp(db, {
   libraries, dataDir, webDir: process.env.WEB_DIR ?? path.resolve('../web/dist'),
+  version: process.env.APP_VERSION || 'dev',
   authPassword, authUser: process.env.AUTH_USER || 'frames',
   // Public host names (for example frames.example.com) when a reverse proxy rewrites the Host header.
   allowedHosts: (process.env.ALLOWED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),

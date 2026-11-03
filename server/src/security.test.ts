@@ -44,6 +44,13 @@ describe('cross-site requests', () => {
   });
 });
 
+describe('version', () => {
+  it('is reported by the health check', async () => {
+    const v = buildApp(openDb(path.join(tmp, 'data')), { libraries: [lib], dataDir: path.join(tmp, 'data'), version: '1.2.3' });
+    expect((await v.inject('/api/health')).json()).toEqual({ ok: true, version: '1.2.3' });
+  });
+});
+
 describe('behind a reverse proxy', () => {
   it('accepts writes from a listed public host even when the Host header was rewritten', async () => {
     const proxied = buildApp(openDb(path.join(tmp, 'data')), { libraries: [lib], dataDir: path.join(tmp, 'data'), allowedHosts: ['frames.example.com'] });

@@ -9,7 +9,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 
 type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[] };
+export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string };
 
 const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0);
@@ -84,7 +84,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   const one = (sql: string, ...a: unknown[]) => db.prepare(sql).get(...a) as Row | undefined;
 
   // ---------- health / settings ----------
-  app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/health', async () => ({ ok: true, version: cfg.version ?? 'dev' }));
   app.get('/api/settings', async () => ({ settings: loadSettings(db), libraries: cfg.libraries.map((l) => ({ path: l, exists: fs.existsSync(l), lastScan: getSetting<string | null>(db, `lastScan:${l}`, null) })) }));
   app.put('/api/settings', async (req) => saveSettings(db, (req.body ?? {}) as any));
 

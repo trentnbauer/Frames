@@ -15,6 +15,24 @@ Open http://localhost:3000, go to **Photoshoots** and press **Sync library**.
 - The database and generated previews live in the `frames-data` volume. Back that up.
 - The container runs as an unprivileged user with a read-only filesystem, no extra capabilities, and a health check.
 
+### Versions and releases
+
+Releases are Docker images on GitHub's container registry: `ghcr.io/trentnbauer/frames`, tagged `1.2.3`, `1.2`, `1` and `latest` (for amd64 and arm64). To run a release instead of building from source, set `FRAMES_IMAGE=ghcr.io/trentnbauer/frames:1.2.3` in `.env`, then:
+
+```sh
+docker compose pull && docker compose up -d --no-build
+```
+
+Pin an exact version to choose when you upgrade. The running version is shown in Settings, About.
+
+**Publishing a release** (maintainers): push a version tag. The release workflow runs the tests, then builds and pushes the image.
+
+```sh
+git tag v1.2.3 && git push origin v1.2.3
+```
+
+A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `latest`. The first publish creates the package as private: in GitHub, open the package settings and make it public if others should pull it.
+
 ### Security
 
 - **Login.** Set `AUTH_PASSWORD` (and optionally `AUTH_USER`, default `frames`) in `.env` to require a login. It is HTTP Basic, so **use HTTPS** (a reverse proxy) if the password crosses a network you don't trust. There is no rate limiting on failed logins; put one on your proxy if it is internet-facing.

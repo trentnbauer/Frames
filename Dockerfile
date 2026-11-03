@@ -14,7 +14,8 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:20-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production DATA_DIR=/data LIBRARY_DIRS=/library PORT=3000 HOST=0.0.0.0 WEB_DIR=/app/web
+ARG VERSION=dev
+ENV APP_VERSION=$VERSION NODE_ENV=production DATA_DIR=/data LIBRARY_DIRS=/library PORT=3000 HOST=0.0.0.0 WEB_DIR=/app/web
 COPY --from=server /app/server/node_modules ./server/node_modules
 COPY --from=server /app/server/dist ./server/dist
 COPY --from=server /app/server/package.json ./server/package.json
