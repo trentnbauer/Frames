@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import sharp from 'sharp';
 import type { Ctx, Row } from './ctx.js';
+import type { Tenant, Tenants } from './tenants.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath } from './ingest.js';
 
@@ -66,20 +67,24 @@ const hostOf = (req: FastifyRequest) => String(req.hostname ?? '').toLowerCase()
 /**
  * For the request hook. 'index' = serve the portfolio page; 'allow' = a portfolio address (skip the sign-in);
  * 'deny' = the portfolio hostname, but not a portfolio address (so: nothing); null = a normal request.
+ * A hostname belongs to one person (the system database says whom), and then every answer comes from their library only.
  */
-export function createPortfolioGate(db: DB, webDir?: string) {
+export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) {
   let index: string | null = null;
   const indexHtml = () => (index ??= fs.readFileSync(path.join(webDir ?? '', 'portfolio', 'index.html'), 'utf8'));
+  const none = { mode: null as null, tenant: null as Tenant | null };
   return {
     indexHtml,
-    check(req: FastifyRequest): 'index' | 'allow' | 'deny' | null {
-      const c = loadPortfolio(db);
-      if (!c.host || hostOf(req) !== c.host.toLowerCase()) return null;
-      if (!c.enabled) return 'deny';
+    check(req: FastifyRequest): { mode: 'index' | 'allow' | 'deny' | null; tenant: Tenant | null } {
+      const row = sys.prepare('SELECT user_id FROM portfolio_hosts WHERE host = ?').get(hostOf(req)) as { user_id: number } | undefined;
+      if (!row) return none;
+      const t = tenants.get(row.user_id);
+      if (!t) return { mode: 'deny', tenant: null };
+      if (!loadPortfolio(t.db).enabled) return { mode: 'deny', tenant: null };
       const p = req.url.split('?')[0];
-      if (req.method !== 'GET' && req.method !== 'HEAD') return 'deny';
-      if (p === '/' ) return 'index';
-      return isPortfolioPath(req.url) ? 'allow' : 'deny';
+      if (req.method !== 'GET' && req.method !== 'HEAD') return { mode: 'deny', tenant: null };
+      if (p === '/') return { mode: 'index', tenant: t };
+      return isPortfolioPath(req.url) ? { mode: 'allow', tenant: t } : { mode: 'deny', tenant: null };
     },
   };
 }
@@ -192,6 +197,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (b.host !== undefined) {
       const h = text(b.host, 253).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
       if (h && !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$|^localhost$/.test(h)) return bad('The hostname is not valid. Use something like photography.example.com');
+      if (h && x.sys.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ? AND user_id != ?').get(h, x.tenant().user.id)) return bad('Someone else already uses that address.');
       n.host = h;
     }
     if (b.collectionId !== undefined) {
@@ -204,6 +210,9 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
     if (n.enabled && !n.collectionId) return bad('Choose the collection the portfolio shows first.');
     save(db, n);
+    // The system database maps each hostname to its owner, so a visitor reaches the right library without signing in.
+    x.sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(x.tenant().user.id);
+    if (n.host) x.sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(n.host.toLowerCase(), x.tenant().user.id);
     return dto(n);
   });
 

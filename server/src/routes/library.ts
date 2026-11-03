@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadSources, newSource, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
+import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -189,7 +190,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   });
 
   // Regenerate previews and analysis for photos that lack them (or everything with ?all=1). Originals are only read.
-  const rb = { running: false, done: 0, total: 0, result: null as null | { checked: number; rebuilt: number } };
+  const rb = tenantProxy(() => x.bag('rebuild', () => ({ running: false, done: 0, total: 0, result: null as null | { checked: number; rebuilt: number } })));
   app.post('/api/library/rebuild', async (req, rep) => {
     if (rb.running) return rep.code(409).send({ error: 'Already rebuilding' });
     Object.assign(rb, { running: true, done: 0, total: 0, result: null });

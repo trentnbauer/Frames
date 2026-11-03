@@ -5,7 +5,6 @@ import { getSecret, setSecret } from './ai.js';
 import { CloudflareError, cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
-import { loadPortfolio } from './portfolio.js';
 
 /**
  * A Cloudflare tunnel run by Frames itself: cloudflared (bundled in the Docker image) makes an outbound-only
@@ -103,13 +102,15 @@ export type TunnelRunner = ReturnType<typeof createTunnelRunner>;
 const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 
 export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunner) {
-  const { db, cfg } = x;
+  const db = x.sys;
   const port = () => Number(process.env.PORT ?? 3000);
+  /** Every portfolio address anyone has set (each person has their own). */
+  const portfolioHosts = () => (db.prepare('SELECT host FROM portfolio_hosts ORDER BY user_id').all() as { host: string }[]).map((r) => r.host.toLowerCase());
   const service = () => `http://localhost:${port()}`; // always this server, never a typed-in address
 
   const dto = (c: TunnelCfg) => ({
     config: { ...c, dns: undefined }, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'), hasApiToken: !!getSecret(db, 'cloudflare:apiToken'),
-    status: { ...runner.status }, portfolioHost: loadPortfolio(db).host, signInOn: x.isProtected(), service: service(),
+    status: { ...runner.status }, portfolioHost: portfolioHosts()[0] ?? '', signInOn: x.isProtected(), service: service(),
   });
 
   app.get('/api/tunnel', async () => dto(loadTunnel(db)));
@@ -142,9 +143,8 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     if (b.clearApiToken === true) setSecret(db, 'cloudflare:apiToken', '');
 
     // --- what each hostname is allowed to expose ---
-    const pf = loadPortfolio(db);
     for (const h of n.hostnames) {
-      if (h.kind === 'portfolio' && h.hostname !== pf.host.toLowerCase()) return bad(`Set ${h.hostname} as the portfolio’s own address first (Settings, Portfolio). Then the tunnel shows only the portfolio on it.`);
+      if (h.kind === 'portfolio' && !portfolioHosts().includes(h.hostname)) return bad(`Set ${h.hostname} as the portfolio’s own address first (Settings, Portfolio). Then the tunnel shows only the portfolio on it.`);
       if (h.kind === 'app' && !x.isProtected()) return bad(`Turn on sign-in before exposing the whole app at ${h.hostname}. Without it, anyone on the internet could use Frames.`);
     }
     if (typeof b.enabled === 'boolean') {
@@ -163,12 +163,11 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     if (c.mode !== 'api') return rep.code(400).send({ error: 'This is only for automatic setup. Switch the mode first.' });
     if (!apiToken || !c.accountId) return rep.code(400).send({ error: 'Enter the Cloudflare account ID and an API token first.' });
     if (!c.hostnames.length) return rep.code(400).send({ error: 'Add at least one hostname.' });
-    const pf = loadPortfolio(db);
     for (const h of c.hostnames) {
-      if (h.kind === 'portfolio' && h.hostname !== pf.host.toLowerCase()) return rep.code(400).send({ error: `${h.hostname} is not the portfolio’s address any more.` });
+      if (h.kind === 'portfolio' && !portfolioHosts().includes(h.hostname)) return rep.code(400).send({ error: `${h.hostname} is not the portfolio’s address any more.` });
       if (h.kind === 'app' && !x.isProtected()) return rep.code(400).send({ error: `Sign-in is off, so ${h.hostname} cannot expose the app.` });
     }
-    const cf = cloudflare(apiToken, c.accountId, cfg.cloudflareApi);
+    const cf = cloudflare(apiToken, c.accountId, x.cfg.cloudflareApi);
     const result: { hostname: string; ok: boolean; detail: string }[] = [];
     try {
       const zones = new Map<string, { id: string; name: string }>();

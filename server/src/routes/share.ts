@@ -67,7 +67,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       if (Number.isNaN(+t) || +t < Date.now()) return rep.code(400).send({ error: 'The expiry date must be in the future' });
       expires = t.toISOString();
     }
-    const token = crypto.randomBytes(16).toString('base64url');
+    // The first part names the owner, so a visitor with no sign-in is sent to the right library.
+    const token = `${x.tenant().user.id.toString(36)}_${crypto.randomBytes(16).toString('base64url')}`;
     const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)')
       .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), b.allowDownload ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString()).lastInsertRowid);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);

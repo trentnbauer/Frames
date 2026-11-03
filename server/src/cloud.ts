@@ -66,7 +66,7 @@ const EXTRA: Record<ProviderId, Record<string, string>> = {
 };
 
 // ---------- sign-in with the provider (authorization code + PKCE) ----------
-const pending = new Map<string, { provider: ProviderId; verifier: string; exp: number }>();
+const pending = new Map<string, { provider: ProviderId; verifier: string; exp: number; dir: string }>();
 const b64u = (b: Buffer) => b.toString('base64url');
 
 export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirectUri: string): string {
@@ -75,7 +75,7 @@ export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirect
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   const state = b64u(crypto.randomBytes(24));
   const verifier = b64u(crypto.randomBytes(32));
-  pending.set(state, { provider, verifier, exp: Date.now() + 10 * 60_000 });
+  pending.set(state, { provider, verifier, exp: Date.now() + 10 * 60_000, dir: cfg.dataDir });
   const q = new URLSearchParams({
     response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: SCOPE[provider], state,
     code_challenge: b64u(crypto.createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256', ...EXTRA[provider],
@@ -100,7 +100,7 @@ async function tokenCall(db: DB, cfg: AppCfg, provider: ProviderId, body: Record
 export async function finishConnect(db: DB, cfg: AppCfg, code: string, state: string, redirectUri: string): Promise<Conn> {
   const p = pending.get(state);
   pending.delete(state); // single use
-  if (!p || p.exp < Date.now()) throw new CloudError('That sign-in expired. Start again.');
+  if (!p || p.exp < Date.now() || p.dir !== cfg.dataDir) throw new CloudError('That sign-in expired. Start again.');
   const t = await tokenCall(db, cfg, p.provider, { grant_type: 'authorization_code', code, redirect_uri: redirectUri, code_verifier: p.verifier });
   if (!t.refresh_token) throw new CloudError('The provider did not allow lasting access. Remove Frames from the account’s connected apps and try again.');
   const id = crypto.randomBytes(4).toString('hex');
@@ -227,12 +227,15 @@ export function safeName(n: string): string {
 }
 
 export type Progress = { running: boolean; connId: string | null; downloaded: number; current: string };
-export const progress: Progress = { running: false, connId: null, downloaded: 0, current: '' };
+const progresses = new Map<string, Progress>();
+/** What a person's sync is doing right now (one sync at a time per person). */
+export const progressOf = (cfg: AppCfg): Progress => { let p = progresses.get(cfg.dataDir); if (!p) { p = { running: false, connId: null, downloaded: 0, current: '' }; progresses.set(cfg.dataDir, p); } return p; };
 
 export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<SyncResult> {
   const c0 = loadCloud(db).connections.find((c) => c.id === id);
   if (!c0) throw new CloudError('No such connection.');
   if (!c0.folderId && c0.folderId !== '') throw new CloudError('Choose a folder to sync first.');
+  const progress = progressOf(cfg);
   if (progress.running) throw new CloudError('A cloud sync is already running.');
   Object.assign(progress, { running: true, connId: id, downloaded: 0, current: '' });
   const res: SyncResult = { downloaded: 0, skipped: 0, changedRemotely: 0, errors: [], error: null, bytes: 0 };

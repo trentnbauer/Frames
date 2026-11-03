@@ -150,7 +150,7 @@ describe('managing links', () => {
     expect(c.reviews).toBeGreaterThan(0);
   });
   it('makes links hard to guess and refuses a past expiry', async () => {
-    expect(tokenColl).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(tokenColl).toMatch(/^1_[A-Za-z0-9_-]{22}$/);
     expect(new Set([tokenColl, tokenShoot]).size).toBe(2);
     expect((await post('/api/shares', { kind: 'collection', id: 1, expiresAt: '2001-01-01' })).statusCode).toBe(400);
     expect((await post('/api/shares', { kind: 'nonsense', id: 1 })).statusCode).toBe(400);

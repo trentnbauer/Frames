@@ -1,0 +1,124 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import type { DB } from './db.js';
+
+/**
+ * The system database: who the people are, their sign-in sessions, and instance-wide settings (sign-in providers, the
+ * tunnel). Each person's photographs, reviews and collections live in their own database, see tenants.ts.
+ */
+export type Role = 'admin' | 'member';
+export type User = { id: number; provider: string; sub: string; email: string; name: string; role: Role; folder: string; disabled: boolean; invited: boolean; created: string };
+export type Who = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
+
+/** The first user (id 1) is the owner: the existing library from before accounts existed belongs to them. */
+export const OWNER_ID = 1;
+
+const SYSTEM_SCHEMA = `
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, sub TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'member', folder TEXT NOT NULL DEFAULT '', disabled INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL, last_seen TEXT,
+  UNIQUE (provider, sub)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_folder ON users(folder) WHERE folder != '';
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created TEXT NOT NULL, expires TEXT NOT NULL, last_seen TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires);
+CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
+`;
+
+export function openSystemDb(dataDir: string): DB {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const db = new Database(path.join(dataDir, 'system.db'));
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.exec(SYSTEM_SCHEMA);
+  ensureOwner(db);
+  return db;
+}
+
+type Row = Record<string, any>;
+const toUser = (r: Row): User => ({ id: r.id, provider: r.provider, sub: r.sub, email: r.email, name: r.name, role: r.role === 'admin' ? 'admin' : 'member', folder: r.folder, disabled: !!r.disabled, invited: r.provider === 'invite', created: r.created });
+
+/** Until someone signs in, the owner is a placeholder ('local'): the password, or no sign-in at all, is "the owner". */
+export function ensureOwner(sys: DB): User {
+  if (!sys.prepare('SELECT 1 FROM users WHERE id = ?').get(OWNER_ID)) {
+    sys.prepare("INSERT INTO users(id, provider, sub, email, name, role, folder, created) VALUES(?, 'local', 'owner', '', 'Owner', 'admin', '', ?)").run(OWNER_ID, new Date().toISOString());
+  }
+  return getUser(sys, OWNER_ID)!;
+}
+
+export const getUser = (sys: DB, id: number): User | null => { const r = sys.prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined; return r ? toUser(r) : null; };
+export const listUsers = (sys: DB): User[] => (sys.prepare('SELECT * FROM users ORDER BY id').all() as Row[]).map(toUser);
+export const countAdmins = (sys: DB) => (sys.prepare("SELECT COUNT(*) n FROM users WHERE role = 'admin' AND disabled = 0").get() as { n: number }).n;
+
+// ---------- the folder under the libraries mount ----------
+const RESERVED = new Set(['users', 'cloud', 'originals', 'derivatives', 'backups', 'tmp', 'lost+found']);
+export const validFolder = (f: string) => /^[a-z0-9][a-z0-9._-]{0,39}$/.test(f) && !RESERVED.has(f) && !f.endsWith('.');
+
+/** A readable, safe folder name from an email or name, unique among everyone. */
+export function uniqueFolder(sys: DB, email: string, name: string): string {
+  const raw = (email.split('@')[0] || name || 'user').toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[-.]+$/, '').slice(0, 32);
+  const base = validFolder(raw) ? raw : 'user';
+  const taken = new Set((sys.prepare("SELECT folder FROM users WHERE folder != ''").all() as Row[]).map((r) => r.folder as string));
+  let f = base, n = 2;
+  while (taken.has(f) || !validFolder(f)) f = `${base}-${n++}`;
+  return f;
+}
+
+// ---------- finding and creating people ----------
+export function findByIdentity(sys: DB, provider: string, sub: string): User | null {
+  const r = sys.prepare('SELECT * FROM users WHERE provider = ? AND sub = ?').get(provider, sub) as Row | undefined;
+  return r ? toUser(r) : null;
+}
+
+/** An administrator can add someone by email before they ever sign in. Their first verified sign-in with that address claims it. */
+export function invite(sys: DB, email: string, role: Role = 'member'): User {
+  const e = email.trim().toLowerCase();
+  const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES('invite', ?, ?, ?, ?, ?, ?)").run(e, e, e, role, uniqueFolder(sys, e, ''), new Date().toISOString()).lastInsertRowid);
+  return getUser(sys, id)!;
+}
+
+/**
+ * Who is this person? An existing account, an invitation for their verified email, or (if sign-ups are on) a new account.
+ * Returns null when they may not have one. Names and email are kept up to date from the provider.
+ */
+export function resolveUser(sys: DB, who: Who, allowSignups: boolean): User | null {
+  const now = new Date().toISOString();
+  let u = findByIdentity(sys, who.provider, who.sub);
+  if (!u && who.emailVerified && who.email) {
+    const inv = sys.prepare("SELECT * FROM users WHERE provider = 'invite' AND sub = ?").get(who.email.toLowerCase()) as Row | undefined;
+    if (inv) {
+      sys.prepare('UPDATE users SET provider = ?, sub = ? WHERE id = ?').run(who.provider, who.sub, inv.id);
+      u = getUser(sys, inv.id);
+    }
+  }
+  if (!u) {
+    if (!allowSignups) return null;
+    const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES(?, ?, ?, ?, 'member', ?, ?)").run(who.provider, who.sub, who.email, who.name, uniqueFolder(sys, who.email, who.name), now).lastInsertRowid);
+    u = getUser(sys, id);
+  }
+  if (!u || u.disabled) return null;
+  sys.prepare('UPDATE users SET email = ?, name = ?, last_seen = ? WHERE id = ?').run(who.email || u.email, who.name || u.name, now, u.id);
+  return getUser(sys, u.id);
+}
+
+/** The owner placeholder becomes a real account when the owner does the test sign-in from Settings. Returns whether it did. */
+export function bindOwner(sys: DB, who: Who): boolean {
+  const o = getUser(sys, OWNER_ID);
+  if (!o || o.provider !== 'local') return false;
+  if (findByIdentity(sys, who.provider, who.sub)) return false; // that account already exists as someone else
+  sys.prepare('UPDATE users SET provider = ?, sub = ?, email = ?, name = ? WHERE id = ?').run(who.provider, who.sub, who.email, who.name || o.name, OWNER_ID);
+  return true;
+}
+
+export function updateUser(sys: DB, id: number, patch: Partial<Pick<User, 'role' | 'folder' | 'disabled' | 'name'>>) {
+  if (patch.role) sys.prepare('UPDATE users SET role = ? WHERE id = ?').run(patch.role, id);
+  if (patch.folder !== undefined) sys.prepare('UPDATE users SET folder = ? WHERE id = ?').run(patch.folder, id);
+  if (patch.disabled !== undefined) { sys.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(patch.disabled ? 1 : 0, id); if (patch.disabled) sys.prepare('DELETE FROM sessions WHERE user_id = ?').run(id); }
+  if (patch.name !== undefined) sys.prepare('UPDATE users SET name = ? WHERE id = ?').run(patch.name, id);
+}
+export const deleteUserRow = (sys: DB, id: number) => { sys.prepare('DELETE FROM users WHERE id = ?').run(id); };

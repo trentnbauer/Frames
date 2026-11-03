@@ -11,7 +11,7 @@ import { findSidecar, readSidecar, type XmpData } from './xmp.js';
 export const RAW_EXT = new Set(['.raf', '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2']);
 export const IMAGE_EXT = new Set([...RAW_EXT, '.jpg', '.jpeg', '.png', '.tif', '.tiff']);
 
-export type Cfg = { libraries: string[]; dataDir: string };
+export type Cfg = { libraries: string[]; dataDir: string; /** Folders to leave out: other people's libraries under a shared root. */ skip?: string[] };
 
 export const internalDir = (cfg: Cfg) => path.join(cfg.dataDir, 'originals');
 
@@ -19,7 +19,7 @@ export function derivPath(cfg: Cfg, id: number, kind: 'thumb' | 'preview') {
   return path.join(cfg.dataDir, 'derivatives', String(id), `${kind}.jpg`);
 }
 
-function* walk(dir: string): Generator<string> {
+function* walk(dir: string, skip: string[] = []): Generator<string> {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -30,7 +30,7 @@ function* walk(dir: string): Generator<string> {
     if (e.name.startsWith('.')) continue;
     const p = path.join(dir, e.name);
     // Symlinks are skipped on purpose: a link must not pull in files from outside the library.
-    if (e.isDirectory()) yield* walk(p);
+    if (e.isDirectory()) { if (!skip.includes(p)) yield* walk(p, skip); }
     else if (e.isFile() && IMAGE_EXT.has(path.extname(e.name).toLowerCase())) yield p;
   }
 }
@@ -42,7 +42,8 @@ export function pending(db: DB, cfg: Cfg) {
     ...(db.prepare('SELECT path FROM duplicates').all() as { path: string }[]).map((r) => r.path),
   ]);
   const files: string[] = [];
-  for (const lib of cfg.libraries) for (const f of walk(lib)) if (!known.has(f)) files.push(f);
+  const skip = cfg.skip ?? [];
+  for (const lib of cfg.libraries) for (const f of walk(lib, skip)) if (!known.has(f)) files.push(f);
   const folders = new Map<string, number>();
   for (const f of files) {
     const lib = cfg.libraries.find((l) => f.startsWith(l + path.sep))!;
