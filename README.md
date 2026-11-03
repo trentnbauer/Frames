@@ -97,7 +97,7 @@ cd web && npm install && npm run dev         # UI on :5173, proxies /api to :300
 
 ## Known limits
 
-- **RAW files**: the embedded JPEG preview is used. A RAW file with none shows a placeholder, and its real pixel size is only known if its metadata has it. Tested with generated RAW-style files, not with real camera files from every maker.
+- **RAW files**: every RAW (uploaded or in a library) gets a JPEG thumbnail and preview. Frames uses the biggest JPEG the camera embedded (found with ExifTool, so it works across makers). If there is none or it is small, the RAW is developed with `dcraw` just to make the preview. The RAW itself is never changed. Checked with a real Nikon D5600 file and the ExifTool sample set (Canon, Nikon, Fuji, Panasonic, Adobe DNG), not every camera. A file with no picture data at all shows a placeholder.
 - **AI**: tested against a stand-in model server, not against real models. Quality depends on the model you choose.
 - **Cloud storage**: use a cloud drive mounted as a folder. There are no built-in connectors for S3, WebDAV or Google Drive.
 - **Login**: one shared password, no accounts or per-person permissions.

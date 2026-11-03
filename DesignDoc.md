@@ -88,10 +88,11 @@ architecture.
     date, dimensions and GPS information where available.
 -   [x] Extract embedded JPEG previews from RAW files wherever
     available.
--   [ ] Generate previews when embedded previews are unavailable.
-    -   *Done for JPEG, PNG and TIFF.*
-    -   *Not done for a RAW file that has no embedded preview: that needs
-        RAW development, which is out of scope. It shows a placeholder.*
+-   [x] Generate previews when embedded previews are unavailable.
+    -   *JPEG, PNG and TIFF are resized directly. A RAW file whose
+        embedded preview is missing or small is developed to a JPEG
+        (fast, half size) only to make its thumbnail and preview. This
+        is not RAW editing, which stays out of scope.*
 -   [x] Generate and cache thumbnails.
 -   [x] Identify exact duplicates and potential near-duplicates.
 -   [x] Support edited variations and alternative crops associated with

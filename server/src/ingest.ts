@@ -5,6 +5,7 @@ import exifr from 'exifr';
 import sharp from 'sharp';
 import { analyseLocal } from './analysis.js';
 import type { DB } from './db.js';
+import { rawInfo, rawToJpeg, type RawInfo } from './raw.js';
 import { findSidecar, readSidecar, type XmpData } from './xmp.js';
 
 export const RAW_EXT = new Set(['.raf', '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2']);
@@ -64,11 +65,16 @@ const titleFromFile = (f: string) => path.basename(f, path.extname(f)).replace(/
 
 type Meta = Record<string, any>;
 async function exif(file: string): Promise<Meta> {
+  let x: Meta = {};
   try {
-    return (await exifr.parse(file, { tiff: true, exif: true, gps: true, iptc: true, translateValues: true, mergeOutput: true })) ?? {};
-  } catch {
-    return {};
+    x = (await exifr.parse(file, { tiff: true, exif: true, gps: true, iptc: true, translateValues: true, mergeOutput: true })) ?? {};
+  } catch { /* some formats exifr cannot read; ExifTool below covers RAW */ }
+  if (RAW_EXT.has(path.extname(file).toLowerCase())) {
+    // ExifTool reads every camera maker's RAW format. It only fills in what exifr could not find.
+    const info = await rawInfo(file);
+    if (info) for (const [k, v] of Object.entries(info.meta)) if (v !== undefined && (x[k] === undefined || x[k] === null)) x[k] = v;
   }
+  return x;
 }
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v : v ? [v] : []).map((s) => String(s).trim()).filter(Boolean);
 
@@ -113,15 +119,21 @@ function importSidecar(db: DB, id: number, file: string) {
   if (x) applyExternal(db, id, x, 'xmp');
 }
 
-async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolean) {
+async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolean, info: RawInfo | null) {
   const dir = path.dirname(derivPath(cfg, id, 'thumb'));
   fs.mkdirSync(dir, { recursive: true });
   let input: string | Buffer = file;
   if (isRaw) {
-    // Embedded JPEG preview only. Full RAW development is out of scope.
-    const t = await exifr.thumbnail(file).catch(() => undefined);
-    if (!t) return null;
-    input = Buffer.from(t);
+    // A RAW file becomes a JPEG first (its biggest embedded preview, or developed by dcraw), and the thumbnail and
+    // preview are made from that. The RAW itself is only read.
+    const r = await rawToJpeg(file, info);
+    if (r) input = r.jpeg;
+    else {
+      // No helper tools on this machine: fall back to the small thumbnail inside the file, if it has one.
+      const t = await exifr.thumbnail(file).catch(() => undefined);
+      if (!t) return null;
+      input = Buffer.from(t);
+    }
   }
   const base = sharp(input, { failOn: 'none' }).rotate();
   const meta = await base.clone().metadata();
@@ -133,13 +145,15 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
 /** Builds previews and the AI-free analysis for one photo. Safe to run again. */
 export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, opts: { exifW?: number; exifH?: number } = {}) {
   const isRaw = RAW_EXT.has(path.extname(file).toLowerCase());
-  const meta = await makeDerivatives(cfg, id, file, isRaw).catch(() => null);
+  const info = isRaw ? await rawInfo(file) : null;
+  const meta = await makeDerivatives(cfg, id, file, isRaw, info).catch(() => null);
   if (!meta) return false;
   const rot = (meta.orientation ?? 1) >= 5;
   const w = rot ? meta.height : meta.width;
   const h = rot ? meta.width : meta.height;
-  // For RAW the derivative is only the embedded thumbnail, so its size says nothing about the real pixels.
-  const keepExif = isRaw && !!opts.exifW;
+  // For RAW the JPEG is a preview, smaller than the real picture, so its size says nothing about the real pixels:
+  // keep the size from the file's own header when there is one.
+  const keepExif = isRaw && !!(info?.w || opts.exifW);
   db.prepare('UPDATE photos SET has_derivs = 1, w = CASE WHEN ? THEN w ELSE ? END, h = CASE WHEN ? THEN h ELSE ? END WHERE id = ?')
     .run(keepExif ? 1 : 0, w ?? 0, keepExif ? 1 : 0, h ?? 0, id);
   try {
