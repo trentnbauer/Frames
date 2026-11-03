@@ -1,0 +1,230 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import sharp from 'sharp';
+import type { Ctx, Row } from './ctx.js';
+import { getSetting, setSetting, type DB } from './db.js';
+import { derivPath } from './ingest.js';
+
+/**
+ * The public portfolio website, served by Frames from a collection you choose.
+ *
+ * The page itself (web/public/portfolio) is the same site that used to be built by GitHub Actions. Frames now supplies
+ * what that build produced: config.json, images/manifest.json, resized progressive JPEGs, and gear.md.
+ *
+ * Safety:
+ *  - Only the photographs in the chosen collection can be reached, and only through these addresses.
+ *  - Visitors get a resized copy with all camera data removed. Serving the original files is an explicit choice,
+ *    because an original can contain the location it was taken.
+ *  - A dedicated hostname shows ONLY the portfolio. Pointing a tunnel or proxy at that name never exposes the app.
+ */
+
+export type PortfolioCfg = {
+  enabled: boolean;
+  host: string;
+  collectionId: number | null;
+  photographerName: string;
+  tagline: string;
+  accentColor: string;
+  social: { instagram: string; twitter: string; behance: string };
+  gear: string;
+  footer: string;
+  /** What a visitor gets when they open a photo full size. */
+  fullSize: 'resized' | 'original' | 'none';
+  captions: boolean;
+  order: 'collection' | 'newest' | 'oldest' | 'captured';
+};
+
+export const DEFAULT_PORTFOLIO: PortfolioCfg = {
+  enabled: false, host: '', collectionId: null, photographerName: '', tagline: '', accentColor: 'oklch(0.58 0.13 35)',
+  social: { instagram: '', twitter: '', behance: '' }, gear: '', footer: '', fullSize: 'resized', captions: true, order: 'collection',
+};
+export const loadPortfolio = (db: DB): PortfolioCfg => {
+  const s = getSetting<Partial<PortfolioCfg>>(db, 'portfolio', {});
+  return { ...DEFAULT_PORTFOLIO, ...s, social: { ...DEFAULT_PORTFOLIO.social, ...(s.social ?? {}) } };
+};
+const save = (db: DB, c: PortfolioCfg) => setSetting(db, 'portfolio', c);
+
+const MAX_DIM = 2400;
+const BROWSER_TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif' };
+
+/** The exact addresses that anyone may fetch, whatever the host. Nothing else of the app is reachable this way. */
+export const isPortfolioPath = (url: string): boolean => {
+  const p = url.split('?')[0];
+  return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|css\/style\.css|js\/app\.js|images\/manifest\.json|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
+};
+
+/** "2026-Autumn-KonicaAutoS2-FujiC200-R01-0024" gives camera "Konica Auto S 2" and film "Fuji C 200". Same rule as the old build. */
+const humanise = (t: string) => t.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2').replace(/(\d)([A-Za-z])/g, '$1 $2').trim();
+export function parseFilenameMeta(file: string): { camera?: string; film?: string } {
+  const tokens = path.parse(file).name.split('-');
+  return tokens.length < 4 ? {} : { camera: humanise(tokens[2]), film: humanise(tokens[3]) };
+}
+
+const hostOf = (req: FastifyRequest) => String(req.hostname ?? '').toLowerCase();
+
+/**
+ * For the request hook. 'index' = serve the portfolio page; 'allow' = a portfolio address (skip the sign-in);
+ * 'deny' = the portfolio hostname, but not a portfolio address (so: nothing); null = a normal request.
+ */
+export function createPortfolioGate(db: DB, webDir?: string) {
+  let index: string | null = null;
+  const indexHtml = () => (index ??= fs.readFileSync(path.join(webDir ?? '', 'portfolio', 'index.html'), 'utf8'));
+  return {
+    indexHtml,
+    check(req: FastifyRequest): 'index' | 'allow' | 'deny' | null {
+      const c = loadPortfolio(db);
+      if (!c.host || hostOf(req) !== c.host.toLowerCase()) return null;
+      if (!c.enabled) return 'deny';
+      const p = req.url.split('?')[0];
+      if (req.method !== 'GET' && req.method !== 'HEAD') return 'deny';
+      if (p === '/' ) return 'index';
+      return isPortfolioPath(req.url) ? 'allow' : 'deny';
+    },
+  };
+}
+
+export function registerPortfolio(app: FastifyInstance, x: Ctx) {
+  const { db, cfg, num, one, all, notFound } = x;
+
+  /** Photographs in the chosen collection that have a picture to show, in the chosen order. */
+  const photos = (c: PortfolioCfg): Row[] => {
+    if (!c.collectionId) return [];
+    const order = c.order === 'newest' ? 'p.added_at DESC' : c.order === 'oldest' ? 'p.added_at ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC' : 'cp.pos ASC';
+    return all(`SELECT p.* FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND p.has_derivs = 1 AND p.missing = 0 ORDER BY ${order}, p.id`, c.collectionId);
+  };
+  const inSet = (c: PortfolioCfg, id: number) => !!c.collectionId && !!one('SELECT 1 x FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND cp.photo_id = ? AND p.has_derivs = 1 AND p.missing = 0', c.collectionId, id);
+
+  /** A 2400 px progressive JPEG with no camera data, made once and kept. */
+  async function portfolioJpeg(id: number): Promise<string | null> {
+    const src = derivPath(cfg, id, 'preview');
+    if (!fs.existsSync(src)) return null;
+    const out = path.join(path.dirname(src), 'portfolio.jpg');
+    if (fs.existsSync(out) && fs.statSync(out).mtimeMs >= fs.statSync(src).mtimeMs) return out;
+    const tmp = `${out}.${process.pid}.tmp`;
+    await sharp(src).resize({ width: MAX_DIM, height: MAX_DIM, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82, progressive: true }).toFile(tmp);
+    fs.renameSync(tmp, out);
+    return out;
+  }
+
+  const live = (rep: any) => { const c = loadPortfolio(db); if (!c.enabled) { notFound(rep); return null; } return c; };
+  const open = (rep: any) => rep.header('Cache-Control', 'no-cache');
+
+  // ---------- the public site ----------
+  app.get('/portfolio', async (_req, rep) => rep.redirect('/portfolio/'));
+  app.get('/portfolio/', async (_req, rep) => {
+    if (!live(rep)) return;
+    return rep.type('text/html').header('Cache-Control', 'no-cache').send(fs.readFileSync(path.join(cfg.webDir ?? '', 'portfolio', 'index.html')));
+  });
+  app.get('/portfolio/config.json', async (_req, rep) => {
+    const c = live(rep); if (!c) return;
+    return open(rep).send({ photographerName: c.photographerName, tagline: c.tagline, accentColor: c.accentColor, social: c.social, gearUrl: 'gear.md', footer: c.footer });
+  });
+  app.get('/portfolio/gear.md', async (_req, rep) => {
+    const c = live(rep); if (!c) return;
+    return open(rep).type('text/markdown; charset=utf-8').send(c.gear || '# My gear\n\nNothing listed yet.');
+  });
+  app.get('/portfolio/images/manifest.json', async (_req, rep) => {
+    const c = live(rep); if (!c) return;
+    // Only what the page needs: a title, the date, the size, and (if allowed) the camera and film. No place, notes, file path or location.
+    return open(rep).send(photos(c).map((p) => {
+      const scale = Math.min(1, MAX_DIM / Math.max(p.w || 1, p.h || 1));
+      const meta = c.captions ? { ...parseFilenameMeta(p.file), ...(parseFilenameMeta(p.file).camera ? {} : p.camera ? { camera: String(p.camera) } : {}) } : {};
+      return {
+        file: `images/${p.id}.jpg`,
+        ...(c.fullSize === 'original' ? { original: `images/${p.id}-full` } : {}),
+        alt: p.title, date: p.captured_at ?? p.added_at,
+        width: p.w ? Math.round(p.w * scale) : undefined, height: p.h ? Math.round(p.h * scale) : undefined, ...meta,
+      };
+    }));
+  });
+  app.get('/portfolio/images/:name', async (req, rep) => {
+    const c = live(rep); if (!c) return;
+    const m = /^(\d{1,9})(-full|\.jpg)$/.exec((req.params as Row).name);
+    if (!m || !inSet(c, Number(m[1]))) return notFound(rep); // only photographs in the portfolio
+    const id = Number(m[1]);
+    const cache = 'public, max-age=3600';
+    if (m[2] === '-full') {
+      if (c.fullSize !== 'original') return notFound(rep);
+      const p = one('SELECT path, file FROM photos WHERE id = ?', id)!;
+      const type = BROWSER_TYPES[path.extname(p.file).toLowerCase()];
+      // A browser can show JPEG and PNG. A RAW or TIFF original cannot be shown, so those get the resized picture.
+      if (type && fs.existsSync(p.path)) return rep.header('Cache-Control', cache).type(type).send(fs.createReadStream(p.path));
+    }
+    const f = await portfolioJpeg(id);
+    if (!f) return notFound(rep);
+    return rep.header('Cache-Control', cache).type('image/jpeg').send(fs.createReadStream(f));
+  });
+
+  // ---------- the owner's settings (behind the sign-in) ----------
+  const status = (c: PortfolioCfg) => {
+    const col = c.collectionId ? one('SELECT id, name FROM collections WHERE id = ?', c.collectionId) : null;
+    return { photoCount: photos(c).length, collection: col ? { id: col.id, name: col.name } : null };
+  };
+  const dto = (c: PortfolioCfg) => ({ config: c, status: status(c), collections: all('SELECT c.id, c.name, COUNT(cp.photo_id) n FROM collections c LEFT JOIN collection_photos cp ON cp.collection_id = c.id GROUP BY c.id ORDER BY c.name') });
+
+  app.get('/api/portfolio', async () => dto(loadPortfolio(db)));
+
+  app.put('/api/portfolio', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    const cur = loadPortfolio(db);
+    const n: PortfolioCfg = { ...cur, social: { ...cur.social } };
+    const bad = (error: string) => rep.code(400).send({ error });
+    const text = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
+    if (b.photographerName !== undefined) n.photographerName = text(b.photographerName, 80);
+    if (b.tagline !== undefined) n.tagline = text(b.tagline, 200);
+    if (b.footer !== undefined) n.footer = text(b.footer, 200);
+    if (b.gear !== undefined) n.gear = String(b.gear).slice(0, 20_000);
+    if (b.accentColor !== undefined) {
+      // It goes into a CSS custom property on a public page, so only plain colour syntax is accepted.
+      const v = text(b.accentColor, 60);
+      if (v && !/^(#[0-9a-f]{3,8}|[a-z]+\(\s*[0-9a-z.%\s,/-]+\)|[a-z]{3,20})$/i.test(v)) return bad('That colour is not valid. Use a name (coral), a hex code (#d2691e) or oklch(...)/rgb(...)');
+      n.accentColor = v || DEFAULT_PORTFOLIO.accentColor;
+    }
+    if (b.social && typeof b.social === 'object') {
+      for (const k of ['instagram', 'twitter', 'behance'] as const) {
+        if (b.social[k] === undefined) continue;
+        const v = text(b.social[k], 300);
+        if (v) { try { const u = new URL(v); if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(); } catch { return bad(`The ${k} link must be a web address starting with https://`); } }
+        n.social[k] = v;
+      }
+    }
+    if (b.host !== undefined) {
+      const h = text(b.host, 253).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (h && !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$|^localhost$/.test(h)) return bad('The hostname is not valid. Use something like photography.example.com');
+      n.host = h;
+    }
+    if (b.collectionId !== undefined) {
+      if (b.collectionId === null) n.collectionId = null;
+      else if (!one('SELECT 1 x FROM collections WHERE id = ?', num(b.collectionId))) return bad('That collection does not exist');
+      else n.collectionId = num(b.collectionId);
+    }
+    for (const [k, vals] of [['fullSize', ['resized', 'original', 'none']], ['order', ['collection', 'newest', 'oldest', 'captured']]] as const) if (b[k] !== undefined) { if (!(vals as readonly string[]).includes(b[k])) return bad(`Unknown ${k}`); (n as any)[k] = b[k]; }
+    if (typeof b.captions === 'boolean') n.captions = b.captions;
+    if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
+    if (n.enabled && !n.collectionId) return bad('Choose the collection the portfolio shows first.');
+    save(db, n);
+    return dto(n);
+  });
+
+  /** Puts a photograph in or out of the portfolio. Makes a "Portfolio" collection the first time. */
+  app.post('/api/portfolio/photos/:id', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
+    const on = ((req.body ?? {}) as Row).on !== false;
+    const c = loadPortfolio(db);
+    let col = c.collectionId;
+    if (!col || !one('SELECT 1 x FROM collections WHERE id = ?', col)) {
+      if (!on) return { inPortfolio: false };
+      col = Number(db.prepare("INSERT INTO collections(name, description) VALUES('Portfolio', 'Shown on the public portfolio website')").run().lastInsertRowid);
+      save(db, { ...c, collectionId: col });
+    }
+    if (on) db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) VALUES(?, ?, (SELECT COALESCE(MAX(pos), -1) + 1 FROM collection_photos WHERE collection_id = ?))').run(col, id, col);
+    else db.prepare('DELETE FROM collection_photos WHERE collection_id = ? AND photo_id = ?').run(col, id);
+    return { inPortfolio: on, collectionId: col };
+  });
+  app.get('/api/portfolio/photos/:id', async (req) => {
+    const c = loadPortfolio(db);
+    return { inPortfolio: !!c.collectionId && !!one('SELECT 1 x FROM collection_photos WHERE collection_id = ? AND photo_id = ?', c.collectionId, num((req.params as Row).id)), enabled: c.enabled };
+  });
+}
