@@ -130,8 +130,13 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     })();
   }
 
-  async function run() {
-    if (state.running) return state;
+  // Asking for a run while one is going returns that same run, so callers that wait really wait for it.
+  let current: Promise<AiState> | null = null;
+  function run(): Promise<AiState> {
+    if (!current) current = go().finally(() => { current = null; });
+    return current;
+  }
+  async function go(): Promise<AiState> {
     const c = aiConfig(db);
     if (!c) return state;
     state.running = true; state.done = 0; state.failed = 0; state.lastError = null;
