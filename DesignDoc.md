@@ -55,6 +55,7 @@ publishing software.
 -   [x] Create and manage curated photographic collections.
 -   [x] Export collections for use in external software and printing.
 -   [x] Share button on collections and photoshoots, generating a like with url/s/abc123 that allows a user to either download the files or review them
+-   [ ] Optionally restrict access with sign-in through OAuth providers.
 
 ## 2. Product Requirements
 
@@ -255,6 +256,45 @@ collection for printing or further work in external creative software.
 The application does not perform print layout, image editing or
 production management.
 
+### 2.9 Authentication and Access
+
+Authentication must be optional. With nothing configured, the
+application behaves as it does today. Where it is turned on, people sign
+in through an OAuth provider instead of a shared password.
+
+-   [ ] Authentication is optional and off by default. The application
+    works fully with no sign-in.
+-   [ ] Sign in with an OAuth 2.0 / OpenID Connect provider. Support
+    well-known providers (for example Google, GitHub and Microsoft) and
+    any standards-based OIDC provider (for example Authentik, Keycloak
+    or Authelia) that a self-hoster already runs.
+-   [ ] Allow one or more providers to be configured (client ID, client
+    secret, and for generic OIDC the issuer address). Secrets are
+    stored safely and never sent back to the browser or included in
+    backups.
+-   [ ] Restrict who may sign in with an allow-list (email addresses,
+    email domains or provider account IDs). Anyone else is refused with
+    a clear message and gets no access.
+-   [ ] Everyone who is allowed in has the same access. This is access
+    control for the owner and trusted people, not per-person
+    permissions or collaboration.
+-   [ ] Sessions use secure cookies with an expiry and a sign-out. The
+    protections against cross-site requests continue to apply.
+-   [ ] Work behind a reverse proxy and over HTTPS, with a callback
+    address that can be set, and show the exact address to register with
+    the provider.
+-   [ ] Never lock the owner out: a configuration mistake or an
+    unavailable provider has a documented way back in (for example an
+    environment setting that switches sign-in off).
+-   [ ] Keep the existing shared-password option for simple setups, as a
+    choice alongside OAuth.
+-   [ ] Share links keep working without signing in, and never grant
+    access to anything beyond what the link shares.
+-   [ ] The health check stays reachable without signing in.
+
+OAuth is used to decide who may sign in. Multi-user collaboration stays
+out of scope (section 6).
+
 ## 3. Metadata and Portability
 
 -   [x] Read existing XMP sidecar files.
@@ -342,6 +382,7 @@ The following is a suggested development sequence.
 -   [x] Performance optimisation.
 -   [x] Basic statistics.
 -   [x] Backup and recovery improvements.
+-   [ ] Optional OAuth sign-in (section 2.9).
 
 ## 6. Out of Scope
 
@@ -352,7 +393,8 @@ The initial application is not intended to provide:
 -   [ ] Gallery wall or framing previews.
 -   [ ] Exhibition management.
 -   [ ] Social networking or public galleries.
--   [ ] Multi-user collaboration.
+-   [ ] Multi-user collaboration. (Optional sign-in, section 2.9, only
+    controls who may get in. Everyone allowed in has the same access.)
 -   [ ] Advanced photography journaling.
 -   [ ] Gamification or photography challenges.
 -   [ ] Complex analytics and reporting.
@@ -380,6 +422,8 @@ The application should allow a user to:
 -   [x] Download an entire collection as its original photograph
     files.
 -   [x] Deploy and maintain the application through Docker.
+-   [ ] Optionally require sign-in through an OAuth provider, with
+    share links still working for the people they are sent to.
 
 ------------------------------------------------------------------------
 
