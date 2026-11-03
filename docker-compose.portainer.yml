@@ -1,40 +1,23 @@
-# Frames, as a Portainer stack (Stacks, Add stack, Web editor: paste this file).
-#
-# Differences from docker-compose.yml, which is meant for a checkout of the source:
-#  - it never builds: it pulls a published image (set FRAMES_VERSION, or leave it on "latest");
-#  - nothing is read from a .env file or a relative folder: everything is set under
-#    "Environment variables" in the stack form (names below, see README, Environment variables);
-#  - PHOTOS_DIR must be an absolute folder on the Docker host.
-#
-# The only variable you must set is PHOTOS_DIR. The image is on GitHub's container registry; if that
-# package is private, add it under Registries in Portainer first (user name and a token with read:packages).
 services:
-  frames:
+  app:
     image: ghcr.io/trentnbauer/frames:${FRAMES_VERSION:-latest}
-    container_name: frames
     init: true
     restart: unless-stopped
     ports:
-      # This machine only by default. Use 0.0.0.0 to reach Frames from other devices, and turn on
-      # sign-in first (AUTH_PASSWORD below, or an OAuth provider in Settings, Access).
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+      - ${PORT:-3000}:3000
     environment:
-      AUTH_USER: ${AUTH_USER:-frames}
-      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
-      AUTH_DISABLE: ${AUTH_DISABLE:-}
-      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP:-}
-      SESSION_DAYS: ${SESSION_DAYS:-}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
-      ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-}
+      AUTH_USER: ${AUTH_USER}
+      AUTH_PASSWORD: ${AUTH_PASSWORD}
+      AUTH_DISABLE: ${AUTH_DISABLE:-true}
+      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP}
+      SESSION_DAYS: ${SESSION_DAYS}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
       TRUST_PROXY: ${TRUST_PROXY:-}
-      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
     volumes:
-      # Your photographs, read-only: Frames never writes to them.
-      - ${PHOTOS_DIR:?Set PHOTOS_DIR to the folder of photographs on the Docker host}:/library:ro
-      # The database and generated previews. Back this volume up.
-      - frames-data:/data
-    # Nothing in the container needs to write outside /data and /tmp.
-    read_only: true
+      - library:/library
+      - data:/data
     tmpfs:
       - /tmp
     cap_drop:
@@ -43,4 +26,5 @@ services:
       - no-new-privileges:true
 
 volumes:
-  frames-data:
+  data:
+  library:
