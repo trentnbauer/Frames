@@ -1,17 +1,18 @@
 import { getSetting, setSetting, type DB } from './db.js';
 import { INTERVAL_OPTIONS } from './schedule.js';
+import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources.js';
+
+export { BadSetting };
 
 export type Settings = {
   sessions: number;
   intervals: string[];
   adaptive: boolean;
   archiveSuggest: boolean;
+  /** The id of the AI source in use (Settings, AI), or '' for AI off. */
+  aiActive: string;
+  /** Worked out from the active source, never stored: 'off', or whether analysis stays on your network. */
   ai: 'off' | 'local' | 'external';
-  aiEndpoint: string;
-  aiModel: string;
-  aiEmbedModel: string;
-  /** The user has read that external analysis sends previews to a third party. Required before it can be switched on. */
-  aiExternalAck: boolean;
   /** Write approved metadata to .xmp sidecars next to the originals (needs the library mounted writable). */
   xmpWriteBack: boolean;
 };
@@ -21,17 +22,17 @@ export const DEFAULT_SETTINGS: Settings = {
   intervals: ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'],
   adaptive: true,
   archiveSuggest: false,
+  aiActive: '',
   ai: 'off',
-  aiEndpoint: '',
-  aiModel: '',
-  aiEmbedModel: '',
-  aiExternalAck: false,
   xmpWriteBack: false,
 };
 
-export class BadSetting extends Error { statusCode = 400; }
-
-export const loadSettings = (db: DB): Settings => ({ ...DEFAULT_SETTINGS, ...getSetting<Partial<Settings>>(db, 'settings', {}) });
+export function loadSettings(db: DB): Settings {
+  const s = { ...DEFAULT_SETTINGS, ...getSetting<Partial<Settings>>(db, 'settings', {}) };
+  const src = s.aiActive ? getSource(db, s.aiActive) : undefined;
+  s.ai = src && isReady(src) ? (aiType(src.type)!.local ? 'local' : 'external') : 'off';
+  return s;
+}
 
 const short = (v: unknown, max: number) => String(v).trim().slice(0, max);
 
@@ -46,22 +47,18 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   }
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
-  if (patch.ai === 'off' || patch.ai === 'local' || patch.ai === 'external') next.ai = patch.ai;
-  if (typeof patch.aiEndpoint === 'string') {
-    const e = patch.aiEndpoint.trim();
-    if (e) {
-      let u: URL;
-      try { u = new URL(e); } catch { throw new BadSetting('The AI address is not a valid URL'); }
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new BadSetting('The AI address must start with http:// or https://');
-      next.aiEndpoint = e.slice(0, 300);
-    } else next.aiEndpoint = '';
+  if (typeof patch.aiActive === 'string') {
+    if (patch.aiActive === '') next.aiActive = '';
+    else {
+      const src = getSource(db, patch.aiActive);
+      if (!src) throw new BadSetting('That AI is not set up');
+      const why = whyNotReady(src);
+      if (why) throw new BadSetting(`${why} before turning this AI on`);
+      next.aiActive = src.id;
+    }
   }
-  if (typeof patch.aiModel === 'string') next.aiModel = short(patch.aiModel, 100);
-  if (typeof patch.aiEmbedModel === 'string') next.aiEmbedModel = short(patch.aiEmbedModel, 100);
-  if (typeof patch.aiExternalAck === 'boolean') next.aiExternalAck = patch.aiExternalAck;
   if (typeof patch.xmpWriteBack === 'boolean') next.xmpWriteBack = patch.xmpWriteBack;
-  if (next.ai !== 'off' && (!next.aiEndpoint || !next.aiModel)) throw new BadSetting('Choose an address and a model before turning AI on');
-  if (next.ai === 'external' && !next.aiExternalAck) throw new BadSetting('Confirm that previews will be sent to a third party before using an external provider');
-  setSetting(db, 'settings', next);
-  return next;
+  const { ai: _derived, ...stored } = next;
+  setSetting(db, 'settings', stored);
+  return loadSettings(db);
 }

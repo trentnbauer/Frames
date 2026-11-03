@@ -291,12 +291,12 @@ describe('uploads (internal storage)', () => {
 
 describe('backup, recovery and processing', () => {
   it('downloads a consistent database copy without the AI key', async () => {
-    await A.put('/api/ai/key', { key: 'sk-secret' });
+    await A.post('/api/ai/sources', { type: 'openai', key: 'sk-secret' });
     const r = await A.get('/api/backup');
     expect(r.status).toBe(200);
     expect((r.body as Buffer).subarray(0, 15).toString()).toBe('SQLite format 3');
     expect((r.body as Buffer).includes(Buffer.from('sk-secret'))).toBe(false);
-    expect((await A.get('/api/ai/key')).body).toEqual({ hasKey: true });
+    expect(JSON.stringify((await A.get('/api/ai/sources')).body)).not.toContain('sk-secret');
     expect(JSON.stringify((await A.get('/api/settings')).body)).not.toContain('sk-secret');
   });
   it('rebuilds missing previews and analysis from the originals', async () => {

@@ -92,10 +92,13 @@ Everything Frames knows (reviews, tags, collections, share links, settings) is i
 
 ## AI (optional)
 
-Off by default; everything else works without it. Turn it on in Settings, AI:
+Off by default; everything else works without it. Settings, AI is one list of the AIs you have set up. Add as many as you like, open one to change it, and choose which one is in use:
 
-- **Local**: an [Ollama](https://ollama.com) server on your network (a vision model such as `llava`, and an embedding model such as `nomic-embed-text`). Photos never leave your network.
-- **External**: any OpenAI-compatible service. Previews (at most 1024 px) are sent to that third party, so you must confirm this before it can be used.
+- **On your network** (photos never leave it): [Ollama](https://ollama.com) (a vision model such as `llava` and an embedding model such as `nomic-embed-text`), or any local OpenAI-compatible server (LM Studio, llama.cpp, vLLM, LocalAI).
+- **Cloud**: Claude, Gemini, ChatGPT, OpenRouter, or any other OpenAI-compatible service. Previews (at most 1024 px) are sent to that third party, so you must tick a confirmation on each one before it can be used.
+- Claude and OpenRouter have no embeddings, so with one of those in use, search by meaning is unavailable (colour and shape still drive similar photos).
+- API keys are write-only: never shown again and left out of backups. Testing a connection sends one short text message, never a photograph.
+- Removing the confirmation, or deleting the AI in use, switches AI off rather than sending photos anywhere unconfirmed.
 
 It suggests descriptions, subjects and tags (nothing counts until you accept it), enables search by meaning and natural-language searches, and improves "similar" suggestions. Without AI, colour, shape and light still drive similarity, near-duplicate detection and recommendations.
 

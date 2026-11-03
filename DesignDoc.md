@@ -117,6 +117,9 @@ Additional requirements:
 
 -   [x] Users can review, edit and reject AI-generated information.
 -   [x] Support local and external AI providers.
+-   [x] Configure several AI sources at once (Claude, Gemini, ChatGPT,
+    OpenRouter, Ollama, other local or OpenAI-compatible services) in
+    one list in the settings, and choose which one is in use.
 -   [x] The application remains fully usable for core library
     management, reviews and manual collections when AI is disabled.
 -   [x] Make external AI processing and its privacy implications clear

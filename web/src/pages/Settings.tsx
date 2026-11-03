@@ -6,6 +6,7 @@ import { Header, Loading } from '../components/bits';
 import { useStore, type Settings } from '../store';
 import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
+import { AiSettings } from './AiSettings';
 
 const SECTIONS = ['Libraries & storage', 'Access', 'Portfolio', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
@@ -38,7 +39,7 @@ export function SettingsPage() {
           <h1 className="serif" style={{ fontSize: 44, marginBottom: 12 }}>{sec}</h1>
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
           {sec === 'Reviews' && <Reviews s={s} save={save} />}
-          {sec === 'AI' && <Ai s={s} save={save} />}
+          {sec === 'AI' && <AiSettings />}
           {sec === 'Libraries & storage' && <Libraries />}
           {sec === 'Portfolio' && <PortfolioSettings />}
           {sec === 'Access' && <Access />}
@@ -79,83 +80,6 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
       </div>
       <Toggle on={s.adaptive} onChange={(v) => save({ adaptive: v })} label="Adapt to consistency" hint="Steady ratings come back less often. Mixed ratings come back sooner." />
       <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and collections." />
-    </>
-  );
-}
-
-type AiStatus = { enabled: boolean; pending: number; done: number; failed: number; running: boolean; total: number; lastError: string | null };
-
-function Ai({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
-  const status = useApi<AiStatus>('/ai/status');
-  const key = useApi<{ hasKey: boolean }>('/ai/key');
-  const [f, setF] = useState({ endpoint: s.aiEndpoint, model: s.aiModel, embed: s.aiEmbedModel, key: '' });
-  const [test, setTest] = useState<{ ok: boolean; detail: string } | null>(null);
-  useEffect(() => { if (status.data?.running) { const t = setTimeout(status.reload, 2000); return () => clearTimeout(t); } }, [status.data]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mode = s.ai;
-  const DEFAULTS = {
-    local: { e: 'http://localhost:11434', m: 'llava', em: 'nomic-embed-text' },
-    external: { e: 'https://api.openai.com', m: 'gpt-4o-mini', em: 'text-embedding-3-small' },
-  };
-  // Switching mode fills in sensible defaults, unless you have typed your own values.
-  const setMode = (ai: 'local' | 'external') => {
-    const d = DEFAULTS[ai], other = DEFAULTS[ai === 'local' ? 'external' : 'local'];
-    const pick = (cur: string, mine: string, theirs: string) => (!cur || cur === theirs ? mine : cur);
-    const next = { endpoint: pick(f.endpoint, d.e, other.e), model: pick(f.model, d.m, other.m), embed: pick(f.embed, d.em, other.em), key: f.key };
-    setF(next);
-    return save({ ai, aiEndpoint: next.endpoint, aiModel: next.model, aiEmbedModel: next.embed }).then(status.reload);
-  };
-  const hint = mode === 'external' ? 'https://api.openai.com' : 'http://192.168.1.20:11434';
-  return (
-    <>
-      <div className="field">
-        <h3>Where analysis runs</h3>
-        <p>Descriptions, tags and subjects, picture-based search, similar photos and suggestions. Nothing here changes your files, and it all stays a suggestion until you accept it. With AI off, everything else works as normal.</p>
-        <div className="cards2" role="radiogroup" aria-label="AI mode">
-          <button role="radio" aria-checked={mode === 'local'} className={'opt' + (mode === 'local' ? ' sel' : '')} onClick={() => setMode('local')}>
-            <b>Local</b>A model on your own network (Ollama). Photos never leave your network.
-          </button>
-          <button role="radio" aria-checked={mode === 'external'} className={'opt' + (mode === 'external' ? ' sel' : '')} onClick={() => setMode('external')}>
-            <b>External provider</b>Any OpenAI-compatible service.
-            <span className="w">Previews (up to 1024 px) are sent to a third party for analysis.</span>
-          </button>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <button className="pill" onClick={() => (mode === 'off' ? setMode('local') : save({ ai: 'off' }).then(status.reload))}>{mode === 'off' ? 'Turn AI on (local)' : 'Turn AI off'}</button>
-        </div>
-        {mode === 'off' && <p style={{ marginTop: 12 }}>AI is off. Tags, descriptions, similarity from content and suggestions are hidden. Colour-based similarity, search and everything else still work.</p>}
-      </div>
-      <div className="field">
-        <h3>Connection</h3>
-        <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 460 }}>
-          <label>Address <input value={f.endpoint} placeholder={hint} aria-label="AI address" onChange={(e) => setF({ ...f, endpoint: e.target.value })} /></label>
-          <label>Vision model <input value={f.model} placeholder={mode === 'external' ? 'gpt-4o-mini' : 'llava'} aria-label="Vision model" onChange={(e) => setF({ ...f, model: e.target.value })} /></label>
-          <label>Embedding model <input value={f.embed} placeholder={mode === 'external' ? 'text-embedding-3-small' : 'nomic-embed-text'} aria-label="Embedding model" onChange={(e) => setF({ ...f, embed: e.target.value })} /></label>
-          <label>API key <input type="password" autoComplete="off" value={f.key} placeholder={key.data?.hasKey ? 'Saved. Type to replace' : 'Optional'} aria-label="API key" onChange={(e) => setF({ ...f, key: e.target.value })} /></label>
-        </div>
-        {(
-          <label className="check" style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start', maxWidth: 560 }}>
-            <input type="checkbox" aria-label="Confirm previews are sent to a third party" checked={s.aiExternalAck} onChange={(e) => save({ aiExternalAck: e.target.checked })} />
-            <span>Needed before an external provider can be used: I understand that previews of my photographs will be sent to this third party. They may be stored or used according to its terms.</span>
-          </label>
-        )}
-        <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="pill" onClick={async () => {
-            if (f.key) { await api('/ai/key', { method: 'PUT', body: { key: f.key } }); setF({ ...f, key: '' }); key.reload(); }
-            await save({ aiEndpoint: f.endpoint, aiModel: f.model, aiEmbedModel: f.embed });
-            status.reload();
-          }}>Save connection</button>
-          <button className="pill" disabled={mode === 'off'} onClick={async () => { setTest(null); setTest(await api<{ ok: boolean; detail: string }>('/ai/test', { method: 'POST', body: {} }).catch((e: Error) => ({ ok: false, detail: e.message }))); }}>Test connection</button>
-          {test && <span role="status" className={test.ok ? 'muted' : 'reason'} style={{ fontSize: 13 }}>{test.detail}</span>}
-        </div>
-      </div>
-      {status.data?.enabled && (
-        <div className="field">
-          <h3>Analysis</h3>
-          <p>{status.data.done} analysed · {status.data.pending} waiting{status.data.failed > 0 && ` · ${status.data.failed} failed`}{status.data.running && ` · working (${status.data.done}/${status.data.total})`}</p>
-          {status.data.lastError && <p className="reason">{status.data.lastError}</p>}
-          <button className="pill" disabled={status.data.running} onClick={async () => { await api('/ai/run?retry=1', { method: 'POST', body: {} }); setTimeout(status.reload, 500); }}>{status.data.running ? 'Analysing…' : status.data.failed ? 'Retry failed and continue' : 'Analyse now'}</button>
-        </div>
-      )}
     </>
   );
 }
