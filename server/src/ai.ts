@@ -36,7 +36,8 @@ async function post(c: AiCfg, path: string, body: unknown, ms: number): Promise<
     if (c.protocol === 'anthropic') { headers['x-api-key'] = c.key; headers['anthropic-version'] = '2023-06-01'; } else headers.Authorization = `Bearer ${c.key}`;
   }
   const base = c.protocol === 'openai' ? openaiBase(c) : c.endpoint;
-  const r = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(ms) });
+  // No redirects: a service that answers with one could otherwise be sent our key header (only Authorization is dropped across hosts).
+  const r = await fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error(`${c.name} answered ${r.status}`);
   return r.json();
 }

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -151,13 +152,17 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         // Only the base name is used, so a crafted name cannot write outside the folder.
         const base = path.basename(String(part.filename ?? '')).replace(/[^\w. -]/g, '_');
         if (!base || base.startsWith('.') || !IMAGE_EXT.has(path.extname(base).toLowerCase())) { rejected.push({ file: base || '(unnamed)', reason: 'Not a supported photo type' }); part.file.resume(); continue; }
-        let name = base, n = 1;
-        while (fs.existsSync(path.join(dir, name))) name = `${path.basename(base, path.extname(base))}-${n++}${path.extname(base)}`;
-        const tmp = path.join(dir, `.upload-${process.pid}-${Date.now()}-${n}`);
+        const tmp = path.join(dir, `.upload-${crypto.randomBytes(8).toString('hex')}`);
         try {
           await pipeline(part.file, fs.createWriteStream(tmp));
           if (part.file.truncated) { fs.rmSync(tmp, { force: true }); rejected.push({ file: base, reason: 'Too large' }); continue; }
-          fs.renameSync(tmp, path.join(dir, name));
+          // A hard link fails if the name is taken, so two uploads of the same name (even at the same moment) never overwrite an original.
+          const ext = path.extname(base), stem = path.basename(base, ext);
+          let name = base, n = 1;
+          for (;;) {
+            try { fs.linkSync(tmp, path.join(dir, name)); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || n > 10_000) throw e; name = `${stem}-${n++}${ext}`; }
+          }
+          fs.rmSync(tmp, { force: true });
           saved.push(name);
         } catch { fs.rmSync(tmp, { force: true }); rejected.push({ file: base, reason: 'Upload failed' }); }
       }

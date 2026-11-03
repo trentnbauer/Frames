@@ -50,7 +50,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
     // Always reachable: the health check, the sign-in pages, the exact share-link addresses (see routes/share.ts) and the public portfolio.
     if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
       const v = auth.verify(req);
-      if (!v.ok) return auth.deny(req, rep);
+      if (!v.ok) return auth.deny(req, rep, v.limited);
       (req as any).authUser = v.user;
     }
     // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
@@ -62,7 +62,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   });
   app.addHook('onSend', async (req, rep) => {
     if (/^\/(api\/)?s\//.test(req.url)) rep.header('X-Robots-Tag', 'noindex, nofollow'); // share pages are never for search engines
-    rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY');
+    rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY').header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
   // Never echo internal errors (SQL, file paths) to the client.
   app.setErrorHandler((e, _req, rep) => {
