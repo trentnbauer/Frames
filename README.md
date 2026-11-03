@@ -66,7 +66,7 @@ Releases are Docker images on GitHub's container registry: `ghcr.io/trentnbauer/
 docker compose pull && docker compose up -d --no-build
 ```
 
-Pin an exact version to choose when you upgrade. The running version is shown in Settings, About.
+Pin an exact version to choose when you upgrade. The running version is shown in the corner of every page (and in Settings, About). Click it for **What's new**: the merged pull requests so far. After an update it opens by itself once, listing only what is new since that browser last looked (the first visit is never shown the whole history). A build from source shows "dev build" and an empty list.
 
 **Publishing a release** (maintainers): push a version tag. The release workflow runs the tests, then builds and pushes the image.
 
@@ -74,7 +74,7 @@ Pin an exact version to choose when you upgrade. The running version is shown in
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `latest`. The first publish creates the package as private: make it public in the package settings if others should pull it.
+The release also writes the "What's new" list from the merged pull requests (`.github/scripts/generate-changelog.sh`), so a clear pull request title is the changelog line. A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `latest`. The first publish creates the package as private: make it public in the package settings if others should pull it.
 
 ## Security
 
