@@ -122,6 +122,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS share_reviews_share ON share_reviews(share_id);
     `);
   },
+  // 4: sign-in sessions (only a hash of each session token is stored)
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY, provider TEXT NOT NULL, sub TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '',
+        created TEXT NOT NULL, expires TEXT NOT NULL, last_seen TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires);
+    `);
+  },
 ];
 
 export function migrate(db: DB) {

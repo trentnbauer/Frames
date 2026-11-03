@@ -44,18 +44,25 @@ export function Mark({ w = 24 }: { w?: number }) {
 }
 
 export function Header({ right }: { right?: ReactNode }) {
+  const { me } = useStore();
+  const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
+  const links = (
+    <nav className="toplinks">
+      <NavLink to="/stats" className={({ isActive }) => (isActive ? 'active' : '')}>Stats</NavLink>
+      <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
+    </nav>
+  );
   return (
     <header className="header">
       <Link to="/" className="lockup" aria-label="Frames home">
         <Mark />
         Frames
       </Link>
-      {right ?? (
-        <nav className="toplinks">
-          <NavLink to="/stats" className={({ isActive }) => (isActive ? 'active' : '')}>Stats</NavLink>
-          <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
-        </nav>
-      )}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'baseline' }}>
+        {right ?? links}
+        {/* Always there when someone is signed in with OAuth, whatever the page puts on the right. */}
+        {me?.user && <button className="toplinks" style={{ fontSize: 13 }} onClick={signOut} title={me.user.email || me.user.name}>Sign out</button>}
+      </div>
     </header>
   );
 }

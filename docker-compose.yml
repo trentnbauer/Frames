@@ -7,14 +7,18 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      # Listens on this machine only by default. Frames has no accounts, so set
-      # AUTH_PASSWORD before changing BIND_ADDRESS to 0.0.0.0 (all interfaces).
+      # Listens on this machine only by default. Before using 0.0.0.0 (all interfaces) turn on
+      # sign-in: AUTH_PASSWORD here, or an OAuth provider in Settings, Access.
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
     environment:
       AUTH_USER: ${AUTH_USER:-frames}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       # Public host name(s), only needed behind a reverse proxy that rewrites Host.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Break-glass: 1 switches ALL sign-in off (see README, Security). Leave empty normally.
+      AUTH_DISABLE: ${AUTH_DISABLE:-}
+      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP:-}
+      SESSION_DAYS: ${SESSION_DAYS:-}
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
       TRUST_PROXY: ${TRUST_PROXY:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}

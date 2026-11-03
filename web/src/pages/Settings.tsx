@@ -4,8 +4,9 @@ import { api, useApi } from '../api';
 import { fmtDate } from '../data';
 import { Header, Loading } from '../components/bits';
 import { useStore, type Settings } from '../store';
+import { Access } from './Access';
 
-const SECTIONS = ['Libraries & storage', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
+const SECTIONS = ['Libraries & storage', 'Access', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -18,7 +19,8 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 }
 
 export function SettingsPage() {
-  const [sec, setSec] = useState<(typeof SECTIONS)[number]>('Reviews');
+  // Coming back from a test sign-in lands here with ?access=…, so open the Access section.
+  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => (new URLSearchParams(window.location.search).has('access') ? 'Access' : 'Reviews'));
   const { settings: s, setSettings } = useStore();
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
@@ -37,6 +39,7 @@ export function SettingsPage() {
           {sec === 'Reviews' && <Reviews s={s} save={save} />}
           {sec === 'AI' && <Ai s={s} save={save} />}
           {sec === 'Libraries & storage' && <Libraries />}
+          {sec === 'Access' && <Access />}
           {sec === 'Tags & subjects' && <Vocabulary />}
           {sec === 'Metadata & XMP' && <Metadata s={s} save={save} />}
           {sec === 'Backup' && <Backup />}
