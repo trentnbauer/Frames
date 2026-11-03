@@ -4,12 +4,14 @@ import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, createAiWorker, getSecret } from './ai.js';
+import { createAuth, isAuthPath } from './auth.js';
 import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
 import { parseTarget } from './target.js';
 import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
@@ -31,20 +33,21 @@ export function buildApp(db: DB, cfg: AppCfg) {
   const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
   const portfolioGate = createPortfolioGate(db, cfg.webDir);
+  const auth = createAuth(db, cfg);
+  app.decorateRequest('authUser', null);
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
-    // Optional single-user login (HTTP Basic). Set AUTH_PASSWORD to turn it on. /api/health stays open for container health checks.
-    // Only the exact share-link addresses (and the page assets they need) are public; see routes/share.ts.
     // The portfolio hostname shows the public portfolio and nothing else, whatever else is asked of it.
     const pg = portfolioGate.check(req);
     if (pg === 'deny') return rep.code(404).send({ error: 'Not found' });
     if (pg === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
-    if (cfg.authPassword && req.url !== '/api/health' && !isPublicPath(req.url) && !isPortfolioPath(req.url)) {
-      const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
-      const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
-      const ok = crypto.timingSafeEqual(digest(u + ':' + rest.join(':')), digest(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
-      if (!m || !ok) return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
+    // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open.
+    // Always reachable: the health check, the sign-in pages, the exact share-link addresses (see routes/share.ts) and the public portfolio.
+    if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
+      const v = auth.verify(req);
+      if (!v.ok) return auth.deny(req, rep);
+      (req as any).authUser = v.user;
     }
     // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -329,7 +332,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, isProtected: () => !!cfg.authPassword };
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, isProtected: () => auth.protectedNow() };
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
@@ -339,6 +342,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerTunnel(app, ctx, tunnelRunner);
   app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server
   setTimeout(() => { if (loadTunnel(db).enabled) tunnelRunner.start(); }, 1500).unref(); // and comes back up with it
+  registerAuth(app, ctx, auth);
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
 

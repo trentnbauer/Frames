@@ -1,0 +1,255 @@
+import crypto from 'node:crypto';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+import * as oidc from 'openid-client';
+import { getSecret, setSecret } from './ai.js';
+import type { AppCfg } from './ctx.js';
+import { getSetting, setSetting, type DB } from './db.js';
+
+/**
+ * Optional sign-in through OAuth providers (design doc section 2.9).
+ *
+ *  - Off by default. Nothing here runs until the owner turns it on.
+ *  - OpenID Connect (Google, Microsoft, any OIDC server) goes through the openid-client library: discovery, PKCE,
+ *    state and nonce, and verification of the signed ID token. GitHub and other plain OAuth 2 services use the same
+ *    code flow with PKCE and then ask the service who the user is.
+ *  - OAuth only answers "who is this?". A separate allow-list decides who may come in. Everyone allowed has the same access.
+ *  - Sessions are random tokens in HttpOnly cookies. Only a hash of each token is stored.
+ *  - It cannot lock the owner out: it can only be switched on after a test sign-in by an allowed account, and
+ *    AUTH_DISABLE=1 switches it off from outside.
+ */
+
+export type ProviderType = 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2';
+export type Provider = {
+  id: string; type: ProviderType; name: string; clientId: string;
+  issuer?: string; tenant?: string; // oidc / microsoft
+  authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; // oauth2 (GitHub has these built in)
+};
+export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
+export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null };
+
+const EMPTY: AuthConfig = { enabled: false, providers: [], allow: [], publicUrl: '', testedBy: null };
+export const loadAuth = (db: DB): AuthConfig => ({ ...EMPTY, ...getSetting<Partial<AuthConfig>>(db, 'auth', {}) });
+export const saveAuth = (db: DB, c: AuthConfig) => setSetting(db, 'auth', c);
+/** Is OAuth sign-in switched on, with at least one provider? */
+export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && a.providers.length > 0; };
+
+export const PRESETS: Record<'github', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
+  github: { authUrl: 'https://github.com/login/oauth/authorize', tokenUrl: 'https://github.com/login/oauth/access_token', userUrl: 'https://api.github.com/user', emailsUrl: 'https://api.github.com/user/emails' },
+};
+
+const SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
+const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+const rand = (n = 32) => crypto.randomBytes(n).toString('base64url');
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+// ---------- the allow-list ----------
+/** Entries: an email (a@b.com), a whole domain (@b.com), or a provider account (github:12345). Email entries need a verified email. */
+export function isAllowed(who: Pick<Identity, 'provider' | 'sub' | 'email' | 'emailVerified'>, allow: string[]): boolean {
+  const email = who.email.toLowerCase();
+  return allow.some((raw) => {
+    const e = raw.trim().toLowerCase();
+    if (!e) return false;
+    if (e.startsWith('@')) return who.emailVerified && email.endsWith(e) && email.length > e.length;
+    if (e.includes('@')) return who.emailVerified && email === e;
+    const i = e.indexOf(':');
+    return i > 0 && e.slice(0, i) === who.provider.toLowerCase() && e.slice(i + 1) === who.sub.toLowerCase();
+  });
+}
+export const cleanAllow = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : String(v ?? '').split(/[\n,]/)).map((s) => String(s).trim()).filter(Boolean))].slice(0, 200).map((s) => s.slice(0, 200));
+
+export function validateProvider(p: Partial<Provider>): string | null {
+  if (!/^[a-z0-9-]{1,30}$/.test(p.id ?? '')) return 'The provider needs a short id (letters, numbers, dashes)';
+  if (!['google', 'github', 'microsoft', 'oidc', 'oauth2'].includes(p.type as string)) return 'Unknown provider type';
+  if (!p.clientId?.trim()) return 'Enter the client ID';
+  const url = (v?: string) => { try { const u = new URL(v ?? ''); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } };
+  if (p.type === 'oidc' && !url(p.issuer)) return 'Enter the issuer address of your OpenID Connect server';
+  if (p.type === 'microsoft' && !/^[0-9a-f-]{36}$|^[a-z0-9.-]+\.[a-z]+$/i.test(p.tenant ?? '')) return 'Enter your Microsoft tenant ID';
+  if (p.type === 'oauth2' && !(url(p.authUrl) && url(p.tokenUrl) && url(p.userUrl))) return 'Enter the authorize, token and user-info addresses';
+  return null;
+}
+
+// ---------- sessions ----------
+export function createSession(db: DB, who: Identity): string {
+  const token = rand(32);
+  const now = new Date();
+  db.prepare('DELETE FROM sessions WHERE expires < ?').run(now.toISOString());
+  db.prepare('INSERT INTO sessions(id, provider, sub, email, name, created, expires, last_seen) VALUES(?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(hash(token), who.provider, who.sub, who.email, who.name, now.toISOString(), new Date(now.getTime() + SESSION_DAYS * 86_400_000).toISOString(), now.toISOString());
+  return token;
+}
+const cookieOf = (req: FastifyRequest, name: string) => {
+  for (const part of String(req.headers.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim()); }
+  return '';
+};
+export const SESSION_COOKIE = 'frames_session';
+
+export function sessionUser(db: DB, req: FastifyRequest): (Identity & { sessionId: string }) | null {
+  const t = cookieOf(req, SESSION_COOKIE);
+  if (!t) return null;
+  const id = hash(t);
+  const s = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as { provider: string; sub: string; email: string; name: string; expires: string; last_seen: string } | undefined;
+  if (!s || new Date(s.expires).getTime() < Date.now()) return null;
+  // Sliding expiry: using it keeps it alive, written at most once a day.
+  if (Date.now() - new Date(s.last_seen).getTime() > 86_400_000) db.prepare('UPDATE sessions SET last_seen = ?, expires = ? WHERE id = ?').run(new Date().toISOString(), new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString(), id);
+  return { provider: s.provider, sub: s.sub, email: s.email, name: s.name, emailVerified: true, sessionId: id };
+}
+export const endSession = (db: DB, req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); if (t) db.prepare('DELETE FROM sessions WHERE id = ?').run(hash(t)); };
+export const endAllSessions = (db: DB) => db.prepare('DELETE FROM sessions').run().changes;
+
+export function sessionCookie(token: string | null, secure: boolean): string {
+  const base = `${SESSION_COOKIE}=${token ? encodeURIComponent(token) : ''}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+  return token ? `${base}; Max-Age=${SESSION_DAYS * 86_400}` : `${base}; Max-Age=0`;
+}
+
+// ---------- talking to providers ----------
+type Flow = { providerId: string; verifier: string; nonce: string; test: boolean; created: number; returnTo: string; redirectUri: string };
+
+export function createAuth(db: DB, cfg: AppCfg) {
+  const flows = new Map<string, Flow>(); // state -> flow, kept for ten minutes
+  const configs = new Map<string, { at: number; key: string; config: oidc.Configuration }>();
+  const jwksSets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+  const http = cfg.allowInsecureOidc ? [oidc.allowInsecureRequests] : [];
+
+  const baseUrl = (req: FastifyRequest) => (loadAuth(db).publicUrl || `${req.protocol}://${req.host}`).replace(/\/+$/, '');
+  const isSecure = (req: FastifyRequest) => baseUrl(req).startsWith('https://');
+  const issuerOf = (p: Provider) => (p.type === 'google' ? 'https://accounts.google.com' : p.type === 'microsoft' ? `https://login.microsoftonline.com/${p.tenant}/v2.0` : p.issuer!);
+
+  async function oidcConfig(p: Provider) {
+    const secret = getSecret(db, `oauth:${p.id}`);
+    const key = JSON.stringify([p.type, p.clientId, p.issuer, p.tenant, !!secret]);
+    const hit = configs.get(p.id);
+    if (hit && hit.key === key && Date.now() - hit.at < 600_000) return hit.config;
+    const config = await oidc.discovery(new URL(issuerOf(p)), p.clientId, secret ? { client_secret: secret } : undefined, secret ? undefined : oidc.None(), { execute: http as any });
+    configs.set(p.id, { at: Date.now(), key, config });
+    return config;
+  }
+
+  const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };
+
+  /** Where to send the browser to start signing in. */
+  async function begin(p: Provider, req: FastifyRequest, opts: { test: boolean; returnTo: string }): Promise<string> {
+    prune();
+    const state = rand(24), verifier = oidc.randomPKCECodeVerifier(), nonce = rand(16);
+    const challenge = await oidc.calculatePKCECodeChallenge(verifier);
+    const redirectUri = `${baseUrl(req)}/auth/callback/${p.id}`;
+    flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri });
+    if (p.type === 'github' || p.type === 'oauth2') {
+      const a = p.type === 'github' ? PRESETS.github : p;
+      const u = new URL(a.authUrl!);
+      u.search = new URLSearchParams({ client_id: p.clientId, redirect_uri: redirectUri, response_type: 'code', scope: p.type === 'github' ? 'read:user user:email' : 'profile email', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString();
+      return u.toString();
+    }
+    const config = await oidcConfig(p);
+    return oidc.buildAuthorizationUrl(config, { redirect_uri: redirectUri, scope: 'openid email profile', code_challenge: challenge, code_challenge_method: 'S256', state, nonce }).toString();
+  }
+
+  const getJson = async (url: string, token: string) => {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(15_000) });
+    if (!r.ok) throw new Error(`The provider answered ${r.status}`);
+    return r.json() as Promise<Record<string, any>>;
+  };
+
+  /** Finishes the sign-in and says who it was. Throws a plain-language Error if anything does not check out. */
+  async function finish(req: FastifyRequest): Promise<{ who: Identity; flow: Flow }> {
+    const q = req.query as Record<string, string>;
+    const flow = flows.get(q.state ?? '');
+    flows.delete(q.state ?? ''); // one use only
+    const id = (req.params as { id: string }).id;
+    if (!flow || flow.providerId !== id || Date.now() - flow.created > 600_000) throw new Error('This sign-in link expired or was already used. Please start again.');
+    if (q.error) throw new Error(`The provider did not sign you in (${q.error_description || q.error}).`);
+    const p = loadAuth(db).providers.find((x) => x.id === id);
+    if (!p) throw new Error('That provider is no longer set up.');
+    const secret = getSecret(db, `oauth:${p.id}`);
+
+    if (p.type === 'github' || p.type === 'oauth2') {
+      const a = p.type === 'github' ? PRESETS.github : (p as Required<Provider>);
+      if (!q.code) throw new Error('The provider sent no code.');
+      const body = new URLSearchParams({ grant_type: 'authorization_code', code: q.code, redirect_uri: flow.redirectUri, client_id: p.clientId, code_verifier: flow.verifier });
+      if (secret) body.set('client_secret', secret);
+      const tr = await fetch(a.tokenUrl, { method: 'POST', body, headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(15_000) });
+      const t = (await tr.json().catch(() => ({}))) as Record<string, any>;
+      if (!tr.ok || !t.access_token) throw new Error('The provider would not give out a sign-in token. Check the client ID and secret.');
+      const u = await getJson(a.userUrl, t.access_token);
+      let email = String(u.email ?? ''), verified = u.email_verified === true;
+      if (a.emailsUrl) {
+        // GitHub: the public profile email is unverified. Only the primary verified address counts.
+        const list = (await getJson(a.emailsUrl, t.access_token).catch(() => [])) as unknown as { email: string; primary: boolean; verified: boolean }[];
+        const best = Array.isArray(list) ? list.find((e) => e.primary && e.verified) ?? list.find((e) => e.verified) : undefined;
+        if (best) { email = best.email; verified = true; }
+      }
+      const sub = String(u.id ?? u.sub ?? '');
+      if (!sub) throw new Error('The provider did not say who you are.');
+      return { who: { provider: p.id, sub, email, emailVerified: verified && !!email, name: String(u.name ?? u.login ?? email ?? sub) }, flow };
+    }
+
+    const config = await oidcConfig(p);
+    const current = new URL(`${baseUrl(req)}${req.url}`);
+    const tokens = await oidc.authorizationCodeGrant(config, current, { pkceCodeVerifier: flow.verifier, expectedState: q.state, expectedNonce: flow.nonce });
+    // The library checks the claims (issuer, audience, nonce, expiry). It does not check the signature, because the OpenID
+    // spec lets a client skip that for a token received straight from the provider over TLS. Checking it anyway costs
+    // little and stops a forged token, which matters most if the provider is reached over plain http.
+    const meta = config.serverMetadata();
+    if (!tokens.id_token || !meta.jwks_uri) throw new Error('The provider did not send a signed ID token.');
+    const keys = jwksSets.get(meta.jwks_uri) ?? jwksSets.set(meta.jwks_uri, createRemoteJWKSet(new URL(meta.jwks_uri), { timeoutDuration: 10_000 })).get(meta.jwks_uri)!;
+    await jwtVerify(tokens.id_token, keys, { issuer: meta.issuer, audience: p.clientId, clockTolerance: 60 });
+    const c = tokens.claims();
+    if (!c?.sub) throw new Error('The provider did not say who you are.');
+    const email = String(c.email ?? '');
+    // Google and well-run OIDC servers say whether the email is verified. Microsoft does not, but a tenant-specific
+    // sign-in only ever issues addresses that tenant controls. Anything else without the claim counts as unverified.
+    const verified = c.email_verified === true || (p.type === 'microsoft' && !!email);
+    return { who: { provider: p.id, sub: String(c.sub), email, emailVerified: verified && !!email, name: String(c.name ?? c.preferred_username ?? email ?? c.sub) }, flow };
+  }
+
+  // ---------- the gate ----------
+  const passwordOk = (req: FastifyRequest) => {
+    if (!cfg.authPassword) return false;
+    const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
+    const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
+    const d = (s: string) => crypto.createHash('sha256').update(s).digest();
+    return !!m && crypto.timingSafeEqual(d(`${u}:${rest.join(':')}`), d(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
+  };
+  const oauthOn = () => oauthEnabled(db);
+  /** Is anything protecting this instance right now? */
+  const protectedNow = () => !cfg.authDisabled && (oauthOn() || !!cfg.authPassword);
+
+  type Verdict = { ok: true; user: Identity | null; via: 'open' | 'session' | 'password' } | { ok: false };
+  function verify(req: FastifyRequest): Verdict {
+    if (!protectedNow()) return { ok: true, user: null, via: 'open' };
+    if (oauthOn()) { const u = sessionUser(db, req); if (u) return { ok: true, user: u, via: 'session' }; }
+    if (passwordOk(req)) return { ok: true, user: null, via: 'password' };
+    return { ok: false };
+  }
+
+  const PAGE = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Frames</title><style>
+  body{margin:0;background:#0d0d0d;color:#efede8;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+  main{width:min(380px,calc(100vw - 48px))}h1{font:400 44px/1 Georgia,serif;margin:0 0 8px}p{color:#a8a59f;margin:0 0 22px}
+  a.b{display:block;text-align:center;padding:12px 18px;border-radius:999px;background:#efede8;color:#0d0d0d;text-decoration:none;font-weight:500;margin-bottom:10px}
+  a.l{color:#8f8c86;font-size:13px}.e{color:#e79a82;background:rgba(231,140,120,.1);border-radius:10px;padding:10px 14px;margin-bottom:18px}</style></head><body><main>${body}</main></body></html>`;
+
+  function signinPage(message?: string): string {
+    const a = loadAuth(db);
+    return PAGE(`<h1>Frames</h1><p>Sign in to continue.</p>${message ? `<div class="e" role="alert">${esc(message)}</div>` : ''}
+      ${a.providers.map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('')}
+      ${cfg.authPassword ? '<a class="l" href="/auth/password">Use the shared password instead</a>' : ''}`);
+  }
+  const messagePage = (title: string, text: string) => PAGE(`<h1>${esc(title)}</h1><p>${esc(text)}</p><a class="l" href="/auth/signin">Back to sign in</a>`);
+
+  const wantsHtml = (req: FastifyRequest) => req.method === 'GET' && !req.url.startsWith('/api/') && String(req.headers.accept ?? '').includes('text/html');
+  /** Refuses a request that has no valid sign-in, in the way that suits who is asking. */
+  function deny(req: FastifyRequest, rep: FastifyReply) {
+    if (oauthOn()) {
+      if (wantsHtml(req)) return rep.code(401).type('text/html').send(signinPage());
+      return rep.code(401).send({ error: 'Sign in required', signIn: true });
+    }
+    return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
+  }
+
+  return { baseUrl, isSecure, begin, finish, verify, deny, oauthOn, protectedNow, passwordOk, signinPage, messagePage, issuerOf };
+}
+export type Auth = ReturnType<typeof createAuth>;
+
+/** Addresses served without signing in: the sign-in pages themselves. */
+export const isAuthPath = (url: string) => /^\/auth\/(login\/[a-z0-9-]{1,30}|callback\/[a-z0-9-]{1,30}|signin|password|logout)(\?.*)?$/.test(url);
+export { getSecret, setSecret };
