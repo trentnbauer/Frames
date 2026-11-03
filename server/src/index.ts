@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { buildApp } from './app.js';
 import { oauthEnabled } from './auth.js';
@@ -13,6 +14,10 @@ const libraries = [...external, internalDir({ libraries: [], dataDir })];
 const port = Number(process.env.PORT ?? 3000);
 const authPassword = process.env.AUTH_PASSWORD || undefined;
 
+// Everything Frames keeps (databases, uploads, previews) lives here, so say so plainly if it cannot be written.
+try { fs.mkdirSync(dataDir, { recursive: true }); fs.accessSync(dataDir, fs.constants.W_OK); } catch (e) {
+  console.error(`CANNOT WRITE TO THE DATA FOLDER ${dataDir} (${(e as NodeJS.ErrnoException).code}). Frames runs as an unprivileged user (uid ${process.getuid?.()}): the folder or volume must be writable by it. For a bind mount: chown it to that user. For a named volume that was created by something else (for example as root): remove it or fix its ownership.`);
+}
 const db = openDb(dataDir);
 const check = integrity(db);
 if (check !== 'ok') console.error(`DATABASE PROBLEM: ${check}. Restore from a backup in ${path.join(dataDir, 'backups')} (see the README).`);

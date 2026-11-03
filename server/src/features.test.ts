@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { analyseLocal, colorName, hamming, hammingInts, hashInts, paletteDistance } from './analysis.js';
 import { applyExternal } from './ingest.js';
 import { buildXmp, parseXmp } from './xmp.js';
@@ -286,6 +286,32 @@ describe('uploads (internal storage)', () => {
     expect(fs.existsSync(path.join(env.tmp, 'escape.jpg'))).toBe(false);
     const s = (await A.scan()).body;
     expect(s.imported).toBe(2);
+  });
+  it('still saves uploads on a filesystem that refuses hard links, and still never overwrites', async () => {
+    const dir = path.join(env.data, 'originals');
+    const a = await jpg(svg(300, 200, '#101010', '#202020', [0.2, 0.2]));
+    const b = await jpg(svg(300, 200, '#e0e0e0', '#f0f0f0', [0.8, 0.8]));
+    const send = (data: Buffer) => { const m = multipart([{ name: 'nolinks.jpg', data }]); return env.app.inject({ method: 'POST', url: '/api/upload', payload: m.payload, headers: m.headers }); };
+    const spy = vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('no links here'), { code: 'EPERM' }); });
+    try {
+      expect((await send(a)).json().saved).toEqual(['nolinks.jpg']);
+      expect((await send(b)).json().saved).toEqual(['nolinks-1.jpg']);
+    } finally { spy.mockRestore(); }
+    expect(fs.readFileSync(path.join(dir, 'nolinks.jpg')).equals(a)).toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'nolinks-1.jpg')).equals(b)).toBe(true);
+    expect(fs.readdirSync(dir).filter((f) => f.startsWith('.upload-'))).toEqual([]);
+  });
+  it('says why an upload failed when the data folder cannot be written', async () => {
+    const m = multipart([{ name: 'denied.jpg', data: await jpg(svg(300, 200, '#333', '#444', [0.5, 0.5])) }]);
+    const link = vi.spyOn(fs, 'linkSync').mockImplementation(() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const r = (await env.app.inject({ method: 'POST', url: '/api/upload', payload: m.payload, headers: m.headers })).json();
+      expect(r.saved).toEqual([]);
+      expect(r.rejected[0].reason).toMatch(/cannot write to its data folder.*permissions/);
+      expect(log.mock.calls.flat().join(' ')).toMatch(/denied\.jpg failed \(EACCES\)/);
+    } finally { link.mockRestore(); log.mockRestore(); }
+    expect(fs.existsSync(path.join(env.data, 'originals', 'denied.jpg'))).toBe(false);
   });
   it('never overwrites an original, even when two uploads of one name arrive at the same moment', async () => {
     const dir = path.join(env.data, 'originals');

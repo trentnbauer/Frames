@@ -13,6 +13,25 @@ import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
+/**
+ * Gives a finished upload its final name without ever replacing a file that is already there. A hard link does that in one
+ * step; some filesystems (network shares, certain volume drivers) refuse links, so those fall back to an exclusive copy.
+ * Either way a taken name throws EEXIST and the caller tries the next one.
+ */
+function claimName(from: string, to: string) {
+  try { fs.linkSync(from, to); } catch (e) {
+    if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK', 'ENOSYS', 'EINVAL'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
+    fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+  }
+}
+const UPLOAD_REASONS: Record<string, string> = {
+  EACCES: 'The server cannot write to its data folder. Check the data volume’s permissions',
+  EPERM: 'The server cannot write to its data folder. Check the data volume’s permissions',
+  EROFS: 'The data folder is read-only. Frames needs the data volume to be writable',
+  ENOSPC: 'The disk is full',
+  EDQUOT: 'The disk quota is used up',
+};
+
 export function registerLibrary(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
@@ -161,11 +180,17 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
           const ext = path.extname(base), stem = path.basename(base, ext);
           let name = base, n = 1;
           for (;;) {
-            try { fs.linkSync(tmp, path.join(dir, name)); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || n > 10_000) throw e; name = `${stem}-${n++}${ext}`; }
+            try { claimName(tmp, path.join(dir, name)); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || n > 10_000) throw e; name = `${stem}-${n++}${ext}`; }
           }
           fs.rmSync(tmp, { force: true });
           saved.push(name);
-        } catch { fs.rmSync(tmp, { force: true }); rejected.push({ file: base, reason: 'Upload failed' }); }
+        } catch (e) {
+          fs.rmSync(tmp, { force: true });
+          // Say what went wrong, here and to the person uploading, instead of a bare "failed".
+          const code = (e as NodeJS.ErrnoException).code ?? '';
+          console.error(`Upload of ${base} failed (${code || (e as Error).message}) writing to ${dir}`);
+          rejected.push({ file: base, reason: UPLOAD_REASONS[code] ?? 'Upload failed. Check the server log' });
+        }
       }
       if (!saved.length && !rejected.length) return rep.code(400).send({ error: 'No files received' });
       return { saved, rejected };
