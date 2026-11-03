@@ -14,6 +14,7 @@ export function PhotoDetail() {
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const colls = useApi<Collection[]>('/collections');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
+  const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
   const [picker, setPicker] = useState(false);
   const [msg, setMsg] = useState('');
   const p = photo.data;
@@ -167,6 +168,7 @@ export function PhotoDetail() {
 
           <div style={{ position: 'relative', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="pill" onClick={() => setPicker(!picker)}>Add to collection</button>
+            <button className="pill" aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio collection.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
             <button className="pill" onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
             <button className="pill" onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
             <a className="pill" href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>

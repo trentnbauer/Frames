@@ -295,6 +295,30 @@ in through an OAuth provider instead of a shared password.
 OAuth is used to decide who may sign in. Multi-user collaboration stays
 out of scope (section 6).
 
+### 2.10 Public Portfolio
+
+The photographer can publish a public portfolio website made from one
+collection, served by the application itself.
+
+-   [x] Publish the photographs of a chosen collection as a public
+    portfolio website, in a gallery with a hero (name, tagline, social
+    links), a light/dark theme and a full-size viewer.
+-   [x] Settings for the name, tagline, accent colour, social links,
+    footer and a "My Gear" page written in simple Markdown.
+-   [x] Add and remove photographs from the portfolio from the
+    photograph's own page.
+-   [x] Choose what a visitor gets at full size: a resized copy with all
+    camera data removed (the default), the original file (with a clear
+    warning that it can contain camera data and location), or nothing
+    extra.
+-   [x] Give the portfolio its own hostname. That hostname shows only the
+    portfolio and nothing else of the application, so it is safe to make
+    public through a tunnel or reverse proxy.
+-   [x] Visitors can only reach photographs that are in the portfolio, and
+    see nothing else about them (no places, notes or file paths).
+-   [x] The portfolio stays public when sign-in is required for the rest
+    of the application.
+
 ## 3. Metadata and Portability
 
 -   [x] Read existing XMP sidecar files.

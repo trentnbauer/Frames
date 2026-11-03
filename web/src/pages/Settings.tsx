@@ -4,8 +4,9 @@ import { api, useApi } from '../api';
 import { fmtDate } from '../data';
 import { Header, Loading } from '../components/bits';
 import { useStore, type Settings } from '../store';
+import { PortfolioSettings } from './PortfolioSettings';
 
-const SECTIONS = ['Libraries & storage', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
+const SECTIONS = ['Libraries & storage', 'Portfolio', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -37,6 +38,7 @@ export function SettingsPage() {
           {sec === 'Reviews' && <Reviews s={s} save={save} />}
           {sec === 'AI' && <Ai s={s} save={save} />}
           {sec === 'Libraries & storage' && <Libraries />}
+          {sec === 'Portfolio' && <PortfolioSettings />}
           {sec === 'Tags & subjects' && <Vocabulary />}
           {sec === 'Metadata & XMP' && <Metadata s={s} save={save} />}
           {sec === 'Backup' && <Backup />}

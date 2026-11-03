@@ -90,8 +90,8 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   /** Photographs in the chosen collection that have a picture to show, in the chosen order. */
   const photos = (c: PortfolioCfg): Row[] => {
     if (!c.collectionId) return [];
-    const order = c.order === 'newest' ? 'p.added_at DESC' : c.order === 'oldest' ? 'p.added_at ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC' : 'cp.pos ASC';
-    return all(`SELECT p.* FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND p.has_derivs = 1 AND p.missing = 0 ORDER BY ${order}, p.id`, c.collectionId);
+    const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos ASC, p.id ASC';
+    return all(`SELECT p.* FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND p.has_derivs = 1 AND p.missing = 0 ORDER BY ${order}`, c.collectionId);
   };
   const inSet = (c: PortfolioCfg, id: number) => !!c.collectionId && !!one('SELECT 1 x FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND cp.photo_id = ? AND p.has_derivs = 1 AND p.missing = 0', c.collectionId, id);
 
@@ -178,7 +178,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (b.accentColor !== undefined) {
       // It goes into a CSS custom property on a public page, so only plain colour syntax is accepted.
       const v = text(b.accentColor, 60);
-      if (v && !/^(#[0-9a-f]{3,8}|[a-z]+\(\s*[0-9a-z.%\s,/-]+\)|[a-z]{3,20})$/i.test(v)) return bad('That colour is not valid. Use a name (coral), a hex code (#d2691e) or oklch(...)/rgb(...)');
+      if (v && !/^(#[0-9a-f]{3,8}|(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch)\(\s*[0-9a-z.%\s,/-]+\)|[a-z]{3,20})$/i.test(v)) return bad('That colour is not valid. Use a name (coral), a hex code (#d2691e) or oklch(...)/rgb(...)');
       n.accentColor = v || DEFAULT_PORTFOLIO.accentColor;
     }
     if (b.social && typeof b.social === 'object') {
