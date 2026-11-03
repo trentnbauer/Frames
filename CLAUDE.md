@@ -1,6 +1,6 @@
 # Working on Frames
 
-Rules for anyone (human or Claude) changing this repository. The product requirements are in `DesignDoc.md`; how it is run is in `README.md`.
+Rules for anyone (human or Claude) changing this repository. What Frames does and how it is run is in `README.md` (the original design document has been retired: every requirement in it was built and tested, and `git log` has its history).
 
 ## Every pull request gets exactly one release label
 
@@ -21,7 +21,7 @@ Write the pull request title as the line users will read in the app's "What's ne
 
 - Open them ready for review, not as drafts. Do not merge your own pull request unless the owner has said to.
 - Say in the description what changed, what was checked, and what was not (for example "not tested against the real service").
-- If a change adds or alters a requirement, update `DesignDoc.md` in the same pull request. Tick a box only for what is built **and** tested; leave an honest note for anything partial.
+- If a change adds or alters behaviour users can see, describe it in `README.md` in the same pull request, including its limits and anything not tested against the real service.
 - If it adds or changes an environment variable, update the README's *Environment variables* tables, `.env.example` and both compose files.
 - If it adds a database migration, append to `MIGRATIONS` in `server/src/db.ts` (never edit an old one). Two open pull requests can both add the next number: whichever merges second renumbers.
 

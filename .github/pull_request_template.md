@@ -10,6 +10,6 @@ Add one label: `release: fix` (bug fix, small tweak, dependency update), `releas
 
 - [ ] Type check, tests and build pass in `server/` and `web/`
 - [ ] Tried in the running app
-- [ ] `DesignDoc.md`, README and `.env.example` updated if needed
+- [ ] README and `.env.example` updated if needed
 
 ## Not checked / known gaps

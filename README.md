@@ -1,6 +1,6 @@
 # Frames
 
-A self-hosted archive for portfolio photographs: organise them into photoshoots, review them over several sessions so your real opinion settles, find what's strongest, and curate collections you can download as untouched original files or share with a link. Requirements are in [DesignDoc.md](DesignDoc.md).
+A self-hosted archive for portfolio photographs: organise them into photoshoots, review them over several sessions so your real opinion settles, find what's strongest, and curate collections you can download as untouched original files or share with a link.
 
 ## Run with Docker
 
@@ -176,6 +176,10 @@ It suggests descriptions, subjects and tags (nothing counts until you accept it)
 
 Frames reads `photo.jpg.xmp` or `photo.xmp` next to a photograph: keywords become tags, and its title and description are used where you haven't written your own. **Your own edits always win**; differences are listed for you to settle. Tags another app added are never removed. Approved metadata can be exported as XMP (always to the data folder). Writing sidecars **beside your originals** is off by default and needs the library mounted writable (remove `:ro` in `docker-compose.yml`); another program's sidecar is never overwritten, and image files are never modified.
 
+## What Frames is not
+
+Left out on purpose, to stay a small tool for one photographer's portfolio: photo editing or RAW development, photobook or print layout, gallery-wall or framing previews, exhibition management, social networking or public galleries beyond the one portfolio page, multi-user collaboration (sign-in only controls who may get in; everyone allowed in has the same access), a photography journal, gamification or challenges, heavy analytics and reporting, automated publishing to other services, two-way file synchronisation, training your own AI models, and elaborate ranking algorithms.
+
 ## Develop
 
 ```sh
@@ -189,5 +193,5 @@ cd web && npm install && npm run dev         # UI on :5173, proxies /api to :300
 
 - **RAW files**: every RAW (uploaded or in a library) gets a JPEG thumbnail and preview. Frames uses the biggest JPEG the camera embedded (found with ExifTool, so it works across makers). If there is none or it is small, the RAW is developed with `dcraw` just to make the preview. The RAW itself is never changed. Checked with a real Nikon D5600 file and the ExifTool sample set (Canon, Nikon, Fuji, Panasonic, Adobe DNG), not every camera. A file with no picture data at all shows a placeholder.
 - **AI**: tested against a stand-in model server, not against real models. Quality depends on the model you choose.
-- **Cloud storage**: use a cloud drive mounted as a folder. There are no built-in connectors for S3, WebDAV or Google Drive.
+- **Cloud storage**: built-in sync covers Google Drive, Dropbox and OneDrive (see *Cloud sync*), and any other drive that can be mounted as a folder (S3, WebDAV, SMB, with rclone for example) works as a library. There are no built-in S3 or WebDAV connectors. The three services are tested against stand-in servers, not the live services.
 - **Access**: there are two roles, administrator and member; there are no finer permissions, and no sharing of one library between people except by share links and downloads. OAuth sign-in is tested against stand-in providers that follow the standards, not against live Google, GitHub or Microsoft.
