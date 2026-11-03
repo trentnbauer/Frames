@@ -1,18 +1,18 @@
-FROM node:26-bookworm-slim AS web
+FROM node:22-bookworm-slim AS web
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM node:26-bookworm-slim AS server
+FROM node:22-bookworm-slim AS server
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci
 COPY server/ ./
 RUN npm run build && npm prune --omit=dev
 
-FROM node:26-bookworm-slim
+FROM node:22-bookworm-slim
 WORKDIR /app
 ARG VERSION=dev
 ENV APP_VERSION=$VERSION NODE_ENV=production DATA_DIR=/data LIBRARY_DIRS=/library PORT=3000 HOST=0.0.0.0 WEB_DIR=/app/web
