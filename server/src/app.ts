@@ -380,11 +380,14 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const tunnelRunner = createTunnelRunner(sys);
   registerTunnel(app, ctx, tunnelRunner);
   app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server
-  setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500).unref(); // and comes back up with it
-  // Pick up where it left off after a restart.
-  setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000).unref();
+  // The start-up jobs are cancelled if the app is closed before they run (tests, a quick shutdown), so they never touch a closed database.
+  const startup = [
+    setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500), // the tunnel comes back up with the server
+    setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000), // and so does AI analysis, where it left off
+  ];
+  for (const t of startup) t.unref();
   app.decorate('frames', { sys, tenants });
-  app.addHook('onClose', async () => { for (const t of tenants.all()) tenants.forget(t.user.id); sys.close(); });
+  app.addHook('onClose', async () => { for (const t of startup) clearTimeout(t); for (const t of tenants.all()) tenants.forget(t.user.id); sys.close(); });
 
   // ---------- web UI ----------
   if (baseCfg.webDir && fs.existsSync(baseCfg.webDir)) {
