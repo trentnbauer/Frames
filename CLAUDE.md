@@ -41,6 +41,7 @@ All of these, not a subset:
 
 - Node 22. `better-sqlite3` stays on 11 (later majors ship no prebuilt binaries for the slim image). Native modules must have prebuilds for the Node major in the Dockerfile.
 - The server is Fastify with one route module per area (`server/src/routes/*.ts`) sharing the `Ctx` object, plus plain modules for the rest. The web app is React with `useApi` for reads and `api()` for writes.
+- On/off environment variables are written `true` or `false` (read with `envBool` in `server/src/env.ts`, which also accepts 1/0, yes/no, on/off and warns on anything else). Never test a switch with `=== '1'`.
 - Input from the network is validated where it enters. Secrets (API keys, client secrets, tokens) are **write-only**: stored through `setSecret`/the `secret:` settings prefix, never returned by an API, never logged, and left out of backups.
 - Originals are never modified or deleted by Frames. Anything that copies, syncs or exports is additive.
 - Each person has their own library. Code in routes and `ingest`/`ai`/`portfolio` etc. reads `db` and `cfg` from the shared `Ctx`, which are proxies answering from the person making the request (see `tenants.ts`), so never keep a library's data in a module-level variable or cache it across requests. Instance-wide things (sign-in providers, people, sessions, the tunnel) live in the system database, `ctx.sys`. Background jobs must run inside `tenants.run(tenant, ...)` for each person.
