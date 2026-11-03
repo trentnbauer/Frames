@@ -18,6 +18,7 @@ import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
 import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
 import { registerPhotos } from './routes/photos.js';
+import { createTunnelRunner, loadTunnel, registerTunnel } from './tunnel.js';
 
 export type { AppCfg } from './ctx.js';
 
@@ -336,7 +337,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, baseUrl: auth.baseUrl };
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow() };
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
@@ -344,6 +345,10 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   registerCloud(app, ctx);
+  const tunnelRunner = createTunnelRunner(db);
+  registerTunnel(app, ctx, tunnelRunner);
+  app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server
+  setTimeout(() => { if (loadTunnel(db).enabled) tunnelRunner.start(); }, 1500).unref(); // and comes back up with it
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
 

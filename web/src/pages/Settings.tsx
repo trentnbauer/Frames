@@ -8,8 +8,9 @@ import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
 import { AiSettings } from './AiSettings';
 import { CloudSettings } from './CloudSettings';
+import { TunnelSettings } from './TunnelSettings';
 
-const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
+const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Cloudflare tunnel', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -44,6 +45,7 @@ export function SettingsPage() {
           {sec === 'Libraries & storage' && <Libraries />}
           {sec === 'Portfolio' && <PortfolioSettings />}
           {sec === 'Cloud sync' && <CloudSettings />}
+          {sec === 'Cloudflare tunnel' && <TunnelSettings />}
           {sec === 'Access' && <Access />}
           {sec === 'Tags & subjects' && <Vocabulary />}
           {sec === 'Metadata & XMP' && <Metadata s={s} save={save} />}
