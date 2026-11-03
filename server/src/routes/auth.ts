@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
+import { bindOwner, resolveUser, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
 
 export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
-  const { db, cfg } = x;
+  const { cfg } = x;
+  const db = x.sys; // sign-in is instance-wide: providers, sessions and people live in the system database
 
   // ---------- rate limit the sign-in routes ----------
   const hits = new Map<string, { n: number; reset: number }>();
@@ -51,9 +53,18 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       if (flow.test) return rep.redirect('/settings?access=notallowed');
       return rep.code(403).type('text/html').send(auth.messagePage('Not on the list', `${who.email || 'That account'} is not allowed to use this Frames. Ask the owner to add it.`));
     }
-    if (flow.test) saveAuth(db, { ...conf, testedBy: who }); // proof that this provider works and that an allowed account can get in
+    if (flow.test) {
+      saveAuth(db, { ...conf, testedBy: who }); // proof that this provider works and that an allowed account can get in
+      bindOwner(db, who); // the person doing the test from Settings is the owner of the library that already exists
+    }
+    // Being on the list lets someone in; ALLOW_SIGNUPS decides whether a first-time visitor gets an account of their own.
+    const user = resolveUser(db, who, cfg.allowSignups !== false);
+    if (!user) {
+      console.warn(`account refused: ${who.provider}:${who.sub}`);
+      return rep.code(403).type('text/html').send(auth.messagePage('No account', 'New accounts are turned off here, or this account has been switched off. Ask the owner to add you.'));
+    }
     // A signed-in session even for a test, so turning sign-in on never signs the person who tested it out.
-    const token = createSession(db, who);
+    const token = createSession(db, user.id);
     rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
     return rep.redirect(flow.test ? '/settings?access=tested' : flow.returnTo);
   });
@@ -75,8 +86,13 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
 
   // ---------- behind the sign-in: who am I, and the owner's settings ----------
   app.get('/api/me', async (req) => {
-    const u = (req as any).authUser as { name: string; email: string; provider: string } | null;
-    return { mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password', user: u ? { name: u.name, email: u.email, provider: u.provider } : null, canSignOut: !!u };
+    const u = (req as any).authUser as User | null;
+    const signedIn = (req as any).authVia === 'session';
+    return {
+      mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
+      user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
+      role: u?.role ?? 'member', canSignOut: signedIn, signups: cfg.allowSignups !== false,
+    };
   });
 
   const dto = (req: any, c: AuthConfig) => ({
@@ -132,7 +148,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       if (cur.enabled && next.enabled) return bad('Turn sign-in off before changing a provider, then test it and turn sign-in back on.');
       next.testedBy = null; // a changed provider has to be tested again
     }
-    const me = (req as any).authUser as { provider: string; sub: string; email: string; emailVerified: boolean } | null;
+    const au = (req as any).authUser as User | null;
+    const me = au && (req as any).authVia === 'session' ? { provider: au.provider, sub: au.sub, email: au.email, emailVerified: true } : null;
     if (next.enabled) {
       if (!next.providers.length) return bad('Add a provider first.');
       if (!next.allow.length) return bad('Add at least one email, domain or account to the list of people allowed in.');

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { beginConnect, CloudError, clientSecret, finishConnect, isProvider, listFolders, loadCloud, PROVIDERS, progress, removeConnection, saveCloud, setClientSecret, syncConnection, validFolderId } from '../cloud.js';
+import { beginConnect, CloudError, clientSecret, finishConnect, isProvider, listFolders, loadCloud, PROVIDERS, progressOf, removeConnection, saveCloud, setClientSecret, syncConnection, validFolderId } from '../cloud.js';
 import type { Ctx, Row } from '../ctx.js';
 
 /** Settings, Cloud sync: connect Google Drive / Dropbox / OneDrive, pick a folder, and copy its photographs in. */
@@ -13,7 +13,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     return {
       providers: PROVIDERS.map((p) => ({ ...p, clientId: c.clients[p.id]?.clientId ?? '', hasSecret: !!clientSecret(db, p.id) })),
       connections: c.connections, // holds no tokens: those are kept apart as secrets
-      progress: { ...progress },
+      progress: { ...progressOf(cfg) },
     };
   };
   app.get('/api/cloud', async (req) => ({ ...dto(), redirectUri: redirect(req) }));
@@ -100,18 +100,22 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     const c = conn(req);
     if (!c) return x.notFound(rep);
     if (c.folderId === null) return rep.code(400).send({ error: 'Choose a folder first.' });
-    if (progress.running) return rep.code(409).send({ error: 'A cloud sync is already running.' });
+    if (progressOf(cfg).running) return rep.code(409).send({ error: 'A cloud sync is already running.' });
     const p = run(c.id);
     if ((req.query as Row).wait === '1') { try { return await p; } catch (e) { return fail(rep, e); } }
     p.catch(() => {});
     return rep.code(202).send({ started: true });
   });
 
-  // Scheduled syncs: check once a minute which connections are due.
+  // Scheduled syncs: once a minute, for each person, whichever of their connections are due.
   setInterval(() => {
-    if (progress.running) return;
-    const now = Date.now();
-    const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= c.intervalMin * 60_000));
-    if (due) run(due.id).catch(() => {});
+    for (const t of x.tenants.all()) {
+      x.tenants.run(t, () => {
+        if (progressOf(cfg).running) return;
+        const now = Date.now();
+        const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= c.intervalMin * 60_000));
+        if (due) run(due.id).catch(() => {});
+      });
+    }
   }, 60_000).unref();
 }

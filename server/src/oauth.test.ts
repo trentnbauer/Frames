@@ -213,7 +213,7 @@ describe('with sign-in on', () => {
     expect(c).toContain('SameSite=Lax');
     expect(c).not.toContain('Secure'); // the public address here is http
     const token = decodeURIComponent(c.split(';')[0].split('=')[1]);
-    const raw = new Database(path.join(env.data, 'frames.db'), { readonly: true });
+    const raw = new Database(path.join(env.data, 'system.db'), { readonly: true });
     const rows = raw.prepare('SELECT id FROM sessions').all() as { id: string }[];
     raw.close();
     expect(rows.length).toBeGreaterThan(0);
@@ -240,7 +240,7 @@ describe('with sign-in on', () => {
   });
   it('lets a session expire', async () => {
     const s = sessionHeader(await signIn('fake', { sub: 'u1', email: 'owner@example.test', verified: true }));
-    env.db.prepare("UPDATE sessions SET expires = '2020-01-01T00:00:00Z'").run();
+    (env.app as any).frames.sys.prepare("UPDATE sessions SET expires = '2020-01-01T00:00:00Z'").run();
     expect((await call('GET', '/api/photos', undefined, s)).statusCode).toBe(401);
     sess = sessionHeader(await signIn('fake', { sub: 'u1', email: 'owner@example.test', verified: true }));
   });
@@ -260,6 +260,22 @@ describe('with sign-in on', () => {
       const r = await signIn('fake', { sub: 'kid', email: 'kid@family.test', verified: true });
       expect(r.statusCode).toBe(302);
       expect(cookieOf(r)).toContain('frames_session=');
+    });
+    it('gives a first-time visitor their own member account, with a folder named for them', async () => {
+      const r = await signIn('fake', { sub: 'kid', email: 'kid@family.test', verified: true });
+      const me = (await call('GET', '/api/me', undefined, sessionHeader(r))).json();
+      expect(me).toMatchObject({ role: 'member', user: { email: 'kid@family.test', folder: 'kid' } });
+    });
+    it('with ALLOW_SIGNUPS off, an allowed newcomer gets no account, but people who already have one still sign in', async () => {
+      env.cfg.allowSignups = false;
+      try {
+        const r = await signIn('fake', { sub: 'newkid', email: 'newkid@family.test', verified: true });
+        expect(r.statusCode).toBe(403);
+        expect(r.body).toContain('No account');
+        expect(cookieOf(r)).toBe('');
+        expect((await signIn('fake', { sub: 'kid', email: 'kid@family.test', verified: true })).statusCode).toBe(302);
+        expect((await call('GET', '/api/me', undefined, sess)).json().signups).toBe(false);
+      } finally { env.cfg.allowSignups = undefined; }
     });
     it('does not accept an unverified email, even for an allowed address', async () => {
       const r = await signIn('fake', { sub: 'imp', email: 'owner@example.test', verified: false });
@@ -473,7 +489,7 @@ describe('backups never carry keys or logins', () => {
       c.close();
     }
     // …but the live database still has them, so signing in keeps working.
-    expect((env.db.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n).toBeGreaterThan(0);
+    expect(((env.app as any).frames.sys.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n).toBeGreaterThan(0);
   });
 });
 

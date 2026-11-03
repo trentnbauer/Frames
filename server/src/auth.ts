@@ -5,6 +5,7 @@ import * as oidc from 'openid-client';
 import { getSecret, setSecret } from './ai.js';
 import type { AppCfg } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
+import { getUser, OWNER_ID, type User } from './users.js';
 
 /**
  * Optional sign-in through OAuth providers (design doc section 2.9).
@@ -70,12 +71,13 @@ export function validateProvider(p: Partial<Provider>): string | null {
 }
 
 // ---------- sessions ----------
-export function createSession(db: DB, who: Identity): string {
+/** A sign-in session belongs to one person. Only a hash of the token is stored (in the system database). */
+export function createSession(sys: DB, userId: number): string {
   const token = rand(32);
   const now = new Date();
-  db.prepare('DELETE FROM sessions WHERE expires < ?').run(now.toISOString());
-  db.prepare('INSERT INTO sessions(id, provider, sub, email, name, created, expires, last_seen) VALUES(?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(hash(token), who.provider, who.sub, who.email, who.name, now.toISOString(), new Date(now.getTime() + SESSION_DAYS * 86_400_000).toISOString(), now.toISOString());
+  sys.prepare('DELETE FROM sessions WHERE expires < ?').run(now.toISOString());
+  sys.prepare('INSERT INTO sessions(id, user_id, created, expires, last_seen) VALUES(?, ?, ?, ?, ?)')
+    .run(hash(token), userId, now.toISOString(), new Date(now.getTime() + SESSION_DAYS * 86_400_000).toISOString(), now.toISOString());
   return token;
 }
 const cookieOf = (req: FastifyRequest, name: string) => {
@@ -84,18 +86,20 @@ const cookieOf = (req: FastifyRequest, name: string) => {
 };
 export const SESSION_COOKIE = 'frames_session';
 
-export function sessionUser(db: DB, req: FastifyRequest): (Identity & { sessionId: string }) | null {
+export function sessionUser(sys: DB, req: FastifyRequest): User | null {
   const t = cookieOf(req, SESSION_COOKIE);
   if (!t) return null;
   const id = hash(t);
-  const s = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as { provider: string; sub: string; email: string; name: string; expires: string; last_seen: string } | undefined;
+  const s = sys.prepare('SELECT user_id, expires, last_seen FROM sessions WHERE id = ?').get(id) as { user_id: number; expires: string; last_seen: string } | undefined;
   if (!s || new Date(s.expires).getTime() < Date.now()) return null;
+  const user = getUser(sys, s.user_id);
+  if (!user || user.disabled) return null;
   // Sliding expiry: using it keeps it alive, written at most once a day.
-  if (Date.now() - new Date(s.last_seen).getTime() > 86_400_000) db.prepare('UPDATE sessions SET last_seen = ?, expires = ? WHERE id = ?').run(new Date().toISOString(), new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString(), id);
-  return { provider: s.provider, sub: s.sub, email: s.email, name: s.name, emailVerified: true, sessionId: id };
+  if (Date.now() - new Date(s.last_seen).getTime() > 86_400_000) sys.prepare('UPDATE sessions SET last_seen = ?, expires = ? WHERE id = ?').run(new Date().toISOString(), new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString(), id);
+  return user;
 }
-export const endSession = (db: DB, req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); if (t) db.prepare('DELETE FROM sessions WHERE id = ?').run(hash(t)); };
-export const endAllSessions = (db: DB) => db.prepare('DELETE FROM sessions').run().changes;
+export const endSession = (sys: DB, req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); if (t) sys.prepare('DELETE FROM sessions WHERE id = ?').run(hash(t)); };
+export const endAllSessions = (sys: DB) => sys.prepare('DELETE FROM sessions').run().changes;
 
 export function sessionCookie(token: string | null, secure: boolean): string {
   const base = `${SESSION_COOKIE}=${token ? encodeURIComponent(token) : ''}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
@@ -232,12 +236,14 @@ export function createAuth(db: DB, cfg: AppCfg) {
   /** Is anything protecting this instance right now? */
   const protectedNow = () => !cfg.authDisabled && (oauthOn() || !!cfg.authPassword);
 
-  type Verdict = { ok: true; user: Identity | null; via: 'open' | 'session' | 'password' } | { ok: false; limited?: boolean };
+  /** Who is asking: the owner when nothing protects the instance or the shared password was used, otherwise the person whose session it is. */
+  type Verdict = { ok: true; user: User; via: 'open' | 'session' | 'password' } | { ok: false; limited?: boolean };
+  const owner = () => getUser(db, OWNER_ID)!;
   function verify(req: FastifyRequest): Verdict {
-    if (!protectedNow()) return { ok: true, user: null, via: 'open' };
+    if (!protectedNow()) return { ok: true, user: owner(), via: 'open' };
     if (oauthOn()) { const u = sessionUser(db, req); if (u) return { ok: true, user: u, via: 'session' }; }
     const pw = checkPassword(req);
-    if (pw === 'ok') return { ok: true, user: null, via: 'password' };
+    if (pw === 'ok') return { ok: true, user: owner(), via: 'password' };
     return pw === 'limited' ? { ok: false, limited: true } : { ok: false };
   }
 

@@ -25,7 +25,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 export function SettingsPage() {
   // Coming back from a test sign-in lands here with ?access=…, so open the Access section.
   const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return q.has('access') ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
-  const { settings: s, setSettings } = useStore();
+  const { settings: s, setSettings, me } = useStore();
+  // Sign-in and the tunnel belong to the whole instance: only an administrator sees them.
+  const sections = SECTIONS.filter((x) => me?.role !== 'member' || !(x === 'Access' || x === 'Cloudflare tunnel'));
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
@@ -35,7 +37,7 @@ export function SettingsPage() {
       <Header />
       <div className="settings">
         <nav className="snav" aria-label="Settings sections">
-          {SECTIONS.map((x) => <button key={x} className={sec === x ? 'on' : ''} onClick={() => { setSec(x); setErr(''); }}>{x}</button>)}
+          {sections.map((x) => <button key={x} className={sec === x ? 'on' : ''} onClick={() => { setSec(x); setErr(''); }}>{x}</button>)}
         </nav>
         <div>
           <h1 className="serif" style={{ fontSize: 44, marginBottom: 12 }}>{sec}</h1>

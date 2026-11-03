@@ -39,6 +39,7 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 | `OIDC_ALLOW_HTTP` | empty | `1` allows an OpenID Connect server on plain `http://`, on a network you trust. |
 | `SESSION_DAYS` | `14` | How long a sign-in lasts (renewed by use). |
 | `ALLOWED_HOSTS` | empty | Comma-separated public host names (for example `frames.example.com`), needed only when a reverse proxy rewrites the `Host` header. |
+| `ALLOW_SIGNUPS` | on | `0` (or `false`) turns off self-service accounts: someone on the allow-list who has no account yet is refused, and only people an administrator has added, or who already have an account, can sign in. Anything else leaves sign-ups on. |
 | `TRUST_PROXY` | empty | `1` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
 | `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
 
@@ -86,12 +87,12 @@ Setting it up once (maintainers): create the four labels, and in the repository'
 ## Security
 
 - **Sign-in (optional).** Frames works with no sign-in. To protect it you can use either or both of:
-  - **OAuth providers** (Settings, Access): Google, GitHub, Microsoft, any OpenID Connect server (Authentik, Keycloak, Authelia and so on), or another OAuth 2 service. Add a provider with its client ID and secret, register the redirect address Frames shows you, list who may sign in (emails, whole domains such as `@family.com`, or account ids), press **Test sign-in**, then turn **Require sign-in** on. Everyone on the list has the same access.
+  - **OAuth providers** (Settings, Access): Google, GitHub, Microsoft, any OpenID Connect server (Authentik, Keycloak, Authelia and so on), or another OAuth 2 service. Add a provider with its client ID and secret, register the redirect address Frames shows you, list who may sign in (emails, whole domains such as `@family.com`, or account ids), press **Test sign-in**, then turn **Require sign-in** on. Everyone on the list gets their own library (see *People and libraries*).
   - **A shared password** (`AUTH_PASSWORD`). This is HTTP Basic, so **use HTTPS** if it crosses a network you don't trust.
 - **You can't lock yourself out.** Sign-in can only be switched on after a test sign-in by an account that is on the list, and you can't save a list that removes your own account or change a provider while sign-in is on. If it still goes wrong, set `AUTH_DISABLE=1` on the container and restart.
 - **How OAuth is handled.** Standard authorization-code flow with PKCE, state and nonce; the ID token's signature, issuer, audience and expiry are all checked; email entries only count if the provider says the address is verified. Sessions are random, HttpOnly, SameSite=Lax cookies (Secure over https), kept as a hash in the database. Client secrets are write-only: never sent back to the browser and left out of every backup. Failed and repeated sign-in attempts are rate-limited. Share links and the health check never need a sign-in.
 - Wrong shared passwords are rate-limited: after 10 wrong tries in a minute an address is refused (even with the right password) until the minute is up, and `/auth/password` follows the same limit. Put a proxy limit in front too if Frames is internet-facing.
-- **Everyone allowed in has full access**, including to Settings. That means they can point Frames at an AI address or sign-in provider of their choosing, so only allow people you trust. AI requests never follow redirects, so a service cannot bounce your key to another host.
+- **Administrators and members.** Members use Frames but cannot change sign-in or the tunnel (those APIs answer 403). Anyone can still point *their own* library at an AI address or cloud account of their choosing, so Frames makes requests to addresses they type: only allow people you trust. AI requests never follow redirects, so a service cannot bounce a key to another host.
 - **Exposure.** By default Frames only listens on this machine. To reach it from other devices set `BIND_ADDRESS=0.0.0.0`, and set a password first. Frames warns at start-up if there is no password.
 - Cross-site writes are blocked, responses carry a strict Content-Security-Policy, original files are only ever served by photo id, symlinks in the library are ignored, and the AI key is write-only (never sent back, never in a backup).
 - The page loads its fonts from Google Fonts (allowed in the policy). Self-host them if that matters to you.
@@ -107,6 +108,17 @@ A **Share** button on every collection and photoshoot makes an address like `/s/
 - Share pages are marked not for search engines.
 
 Anyone who has the address can use it, so treat it like a key and send it privately.
+
+## People and libraries
+
+With sign-in on (Settings, Access), **every person has their own library**: their own photographs, shoots, reviews, collections, share links, tags, AI settings, cloud sync accounts, backups and portfolio. Nobody can see or reach anyone else's, even by guessing ids. Each person's data lives in their own database and folder under `data/users/<id>`.
+
+- **Where their photographs come from.** Under the libraries mount, a person's folder is `/library/<their folder>` (the folder is named after them, for example `/library/alice`; the owner can see it in their account and an administrator can change it). Put their photographs there, read-only like any library, and press Sync. People can also upload, and use cloud sync, which keep their files in their own part of the data volume.
+- **The owner.** Whoever did the **Test sign-in** from Settings, Access when sign-in was turned on is the owner and the first administrator. The owner's library is the one that already existed: nothing moves on upgrade. The owner's own scan skips other people's folders under the libraries mount. With only the shared password (or no sign-in) there is just the owner.
+- **New people.** The first time someone on the allow-list signs in they get a member account and an empty library. Set `ALLOW_SIGNUPS=0` to stop that: only existing accounts, and people an administrator has added by email, can then sign in.
+- **Administrators and members.** Administrators manage sign-in, the allow-list and the tunnel. Members can do everything inside their own library.
+- **Upgrading a shared setup.** If several people used one Frames before, the existing library now belongs to the owner. Everyone else signs in once more and gets a library of their own (the old sessions end).
+- **Share links and portfolios.** A share link opens its owner's library, with no sign-in. The owner's portfolio is at `/portfolio/` on the main address. Every other person's portfolio is served only on a hostname of their own (Settings, Portfolio): that hostname shows their portfolio and nothing else, and two people cannot use the same one.
 
 ## Public portfolio
 
@@ -182,4 +194,4 @@ cd web && npm install && npm run dev         # UI on :5173, proxies /api to :300
 - **RAW files**: every RAW (uploaded or in a library) gets a JPEG thumbnail and preview. Frames uses the biggest JPEG the camera embedded (found with ExifTool, so it works across makers). If there is none or it is small, the RAW is developed with `dcraw` just to make the preview. The RAW itself is never changed. Checked with a real Nikon D5600 file and the ExifTool sample set (Canon, Nikon, Fuji, Panasonic, Adobe DNG), not every camera. A file with no picture data at all shows a placeholder.
 - **AI**: tested against a stand-in model server, not against real models. Quality depends on the model you choose.
 - **Cloud storage**: built-in sync covers Google Drive, Dropbox and OneDrive (see *Cloud sync*), and any other drive that can be mounted as a folder (S3, WebDAV, SMB, with rclone for example) works as a library. There are no built-in S3 or WebDAV connectors. The three services are tested against stand-in servers, not the live services.
-- **Access**: everyone allowed in has the same access (no per-person permissions). OAuth sign-in is tested against stand-in providers that follow the standards, not against live Google, GitHub or Microsoft.
+- **Access**: there are two roles, administrator and member; there are no finer permissions, and no sharing of one library between people except by share links and downloads. OAuth sign-in is tested against stand-in providers that follow the standards, not against live Google, GitHub or Microsoft.

@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { aiConfig, createAiWorker, getSecret } from './ai.js';
+import { aiConfig, getSecret } from './ai.js';
 import { createAuth, isAuthPath } from './auth.js';
+import { createTenants, migrateLegacy, tenantProxy, type Tenant } from './tenants.js';
+import { openSystemDb } from './users.js';
 import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
@@ -29,38 +31,66 @@ const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 // Fonts come from Google Fonts. Everything else must be same-origin.
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
-export function buildApp(db: DB, cfg: AppCfg) {
+const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin)(\/|\?|$)/;
+const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
+
+export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
-  const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
-  let scanning = false;
-  // Photographs copied in from cloud drives (Settings, Cloud sync) land here and are scanned like any other library.
-  const cloudDir = path.join(cfg.dataDir, 'cloud');
-  fs.mkdirSync(cloudDir, { recursive: true });
-  if (!cfg.libraries.includes(cloudDir)) cfg.libraries.push(cloudDir);
-  const portfolioGate = createPortfolioGate(db, cfg.webDir);
-  const auth = createAuth(db, cfg);
+  const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy });
+  // Who the people are lives in the system database. Each person's library is their own database (see tenants.ts), and `db` and
+  // `cfg` below answer from the library of whoever is making the request, so a route can only ever reach its own caller's data.
+  const sys = openSystemDb(baseCfg.dataDir);
+  migrateLegacy(sys, ownerDb);
+  const tenants = createTenants(sys, baseCfg, ownerDb);
+  const db = tenantProxy<DB>(() => tenants.current().db);
+  const cfg = tenantProxy<AppCfg>(() => tenants.currentOrNull()?.cfg ?? baseCfg);
+  const portfolioGate = createPortfolioGate(sys, tenants, baseCfg.webDir);
+  const auth = createAuth(sys, baseCfg);
   app.decorateRequest('authUser', null);
+  app.decorateRequest('authVia', null);
+  app.decorateRequest('tenant', null);
+
+  /** A share link's owner, found from the address alone: its prefix names the person; links from before accounts are the owner's. */
+  const shareTenant = (token: string): Tenant | null => {
+    const prefix = /^([0-9a-z]{1,8})_/.exec(token)?.[1];
+    const ids = [...(prefix ? [parseInt(prefix, 36)] : []), 1];
+    for (const id of ids) { const t = tenants.get(id); if (t && t.db.prepare('SELECT 1 FROM shares WHERE token = ?').get(token)) return t; }
+    return null;
+  };
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
+    const r = req as any;
     // The portfolio hostname shows the public portfolio and nothing else, whatever else is asked of it.
     const pg = portfolioGate.check(req);
-    if (pg === 'deny') return rep.code(404).send({ error: 'Not found' });
-    if (pg === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
-    // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open.
-    // Always reachable: the health check, the sign-in pages, the exact share-link addresses (see routes/share.ts) and the public portfolio.
-    if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
+    if (pg.mode === 'deny') return rep.code(404).send({ error: 'Not found' });
+    if (pg.mode === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
+    if (pg.mode === 'allow') r.tenant = pg.tenant;
+    else if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
+      // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
       const v = auth.verify(req);
       if (!v.ok) return auth.deny(req, rep, v.limited);
-      (req as any).authUser = v.user;
+      r.authUser = v.user;
+      r.authVia = v.via;
+      if (ADMIN_ONLY.test(req.url) && v.user.role !== 'admin') return rep.code(403).send({ error: 'Only an administrator can do that' });
+      r.tenant = tenants.get(v.user.id);
+      if (!r.tenant) return rep.code(403).send({ error: 'This account has no library' });
+    } else if (isPortfolioPath(req.url)) {
+      r.tenant = tenants.owner(); // the portfolio at /portfolio/ on the main address is the owner's; everyone else has their own hostname
+    } else {
+      const m = SHARE_URL.exec(req.url);
+      // An unknown link still goes to the owner's library, so the share routes give their usual answer and count the wrong guess.
+      if (m) r.tenant = shareTenant(m[1]) ?? tenants.owner();
     }
     // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       const origin = req.headers.origin;
-      const sameHost = !origin || (() => { try { const h = new URL(origin).host; return h === req.headers.host || (cfg.allowedHosts ?? []).includes(h); } catch { return false; } })();
+      const sameHost = !origin || (() => { try { const h = new URL(origin).host; return h === req.headers.host || (baseCfg.allowedHosts ?? []).includes(h); } catch { return false; } })();
       if (!sameHost || req.headers['sec-fetch-site'] === 'cross-site') return rep.code(403).send({ error: 'Cross-site request blocked' });
     }
   });
+  // Everything after this runs as the person the request is for.
+  app.addHook('onRequest', (req, _rep, done) => { const t = (req as any).tenant as Tenant | null; if (t) tenants.enter(t, done); else done(); });
   app.addHook('onSend', async (req, rep) => {
     if (/^\/(api\/)?s\//.test(req.url)) rep.header('X-Robots-Tag', 'noindex, nofollow'); // share pages are never for search engines
     rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY').header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
@@ -127,8 +157,8 @@ export function buildApp(db: DB, cfg: AppCfg) {
   const all = (sql: string, ...a: unknown[]) => db.prepare(sql).all(...a) as Row[];
   const ratingAgg = () => new Map(all('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
   // Photographs are analysed in the background once AI is on. Errors are retried a few times and never block anything else.
-  const ai = createAiWorker(db, cfg);
-  const kickAi = () => { if (aiConfig(db)) void ai.run().catch((e) => console.error('AI run failed', e)); };
+  const ai = tenantProxy(() => tenants.current().ai);
+  const kickAi = (t: Tenant = tenants.current()) => { if (aiConfig(t.db)) void t.ai.run().catch((e) => console.error('AI run failed', e)); };
 
   // ---------- health / settings ----------
   app.get('/api/health', async () => ({ ok: true, version: cfg.version ?? 'dev' }));
@@ -151,38 +181,36 @@ export function buildApp(db: DB, cfg: AppCfg) {
   });
   // A sync can take minutes on a big library, so it runs in the background and the browser polls
   // /api/library/scan/status. ?wait=1 holds the request open and returns the result (scripts, tests).
-  type ScanState = { running: boolean; done: number; total: number; startedAt: string | null; finishedAt: string | null; result: any; error: string | null };
-  const scanState: ScanState = { running: false, done: 0, total: 0, startedAt: null, finishedAt: null, result: null, error: null };
-  const runScan = async () => {
-    scanning = true;
+  const runScan = async (t: Tenant = tenants.current()) => {
+    const scanState = t.scan;
     Object.assign(scanState, { running: true, done: 0, total: 0, startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null });
     try {
-      const r = await scan(db, cfg, (done, total) => { scanState.done = done; scanState.total = total; });
+      const r = await scan(t.db, t.cfg, (done, total) => { scanState.done = done; scanState.total = total; });
       const stamp = new Date().toISOString();
-      setSetting(db, 'lastScan', stamp);
-      for (const l of cfg.libraries) setSetting(db, `lastScan:${l}`, stamp);
+      setSetting(t.db, 'lastScan', stamp);
+      for (const l of t.cfg.libraries) setSetting(t.db, `lastScan:${l}`, stamp);
       // Flag files that disappeared from disk. Never delete anything.
-      for (const p of db.prepare('SELECT id, path FROM photos').all() as Row[]) db.prepare('UPDATE photos SET missing = ? WHERE id = ?').run(fs.existsSync(p.path) ? 0 : 1, p.id);
+      for (const p of t.db.prepare('SELECT id, path FROM photos').all() as Row[]) t.db.prepare('UPDATE photos SET missing = ? WHERE id = ?').run(fs.existsSync(p.path) ? 0 : 1, p.id);
       scanState.result = { ...r, errors: r.errors.slice(0, 20).map((e) => ({ file: path.basename(e.file), error: 'unreadable' })) };
     } catch (e) {
       console.error(e);
       scanState.error = 'The sync failed. Check the server log.';
     } finally {
-      scanning = false;
       scanState.running = false;
       scanState.finishedAt = new Date().toISOString();
-      kickAi();
+      kickAi(t);
     }
     return scanState;
   };
   app.post('/api/library/scan', async (req, rep) => {
     // One scan at a time, otherwise two overlapping scans import the same files twice.
-    if (scanning) return rep.code(409).send({ error: 'A sync is already running' });
+    const scanState = tenants.current().scan;
+    if (scanState.running) return rep.code(409).send({ error: 'A sync is already running' });
     const p = runScan();
     if ((req.query as Row).wait === '1') return (await p).result ?? rep.code(500).send({ error: scanState.error });
     return rep.code(202).send({ started: true });
   });
-  app.get('/api/library/scan/status', async () => scanState);
+  app.get('/api/library/scan/status', async () => tenants.current().scan);
 
 
   // images: only ever served by id, never by path
@@ -337,7 +365,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow() };
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: () => runScan(), scanning: () => tenants.current().scan.running, sys, tenants, tenant: () => tenants.current(), bag: (key, init) => { const m = tenants.current().bag; if (!m.has(key)) m.set(key, init()); return m.get(key); }, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow() };
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
@@ -345,16 +373,18 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   registerCloud(app, ctx);
-  const tunnelRunner = createTunnelRunner(db);
+  const tunnelRunner = createTunnelRunner(sys);
   registerTunnel(app, ctx, tunnelRunner);
   app.addHook('onClose', async () => { await tunnelRunner.stop(); }); // cloudflared goes down with the server
-  setTimeout(() => { if (loadTunnel(db).enabled) tunnelRunner.start(); }, 1500).unref(); // and comes back up with it
+  setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500).unref(); // and comes back up with it
   // Pick up where it left off after a restart.
-  setTimeout(kickAi, 2000).unref();
+  setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000).unref();
+  app.decorate('frames', { sys, tenants });
+  app.addHook('onClose', async () => { for (const t of tenants.all()) tenants.forget(t.user.id); sys.close(); });
 
   // ---------- web UI ----------
-  if (cfg.webDir && fs.existsSync(cfg.webDir)) {
-    void app.register(fastifyStatic, { root: path.resolve(cfg.webDir) });
+  if (baseCfg.webDir && fs.existsSync(baseCfg.webDir)) {
+    void app.register(fastifyStatic, { root: path.resolve(baseCfg.webDir) });
     app.setNotFoundHandler((req, rep) => (req.url.startsWith('/api/') ? rep.code(404).send({ error: 'Not found' }) : rep.sendFile('index.html')));
   }
   return app;

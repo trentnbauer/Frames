@@ -41,6 +41,7 @@ All of these, not a subset:
 - The server is Fastify with one route module per area (`server/src/routes/*.ts`) sharing the `Ctx` object, plus plain modules for the rest. The web app is React with `useApi` for reads and `api()` for writes.
 - Input from the network is validated where it enters. Secrets (API keys, client secrets, tokens) are **write-only**: stored through `setSecret`/the `secret:` settings prefix, never returned by an API, never logged, and left out of backups.
 - Originals are never modified or deleted by Frames. Anything that copies, syncs or exports is additive.
+- Each person has their own library. Code in routes and `ingest`/`ai`/`portfolio` etc. reads `db` and `cfg` from the shared `Ctx`, which are proxies answering from the person making the request (see `tenants.ts`), so never keep a library's data in a module-level variable or cache it across requests. Instance-wide things (sign-in providers, people, sessions, the tunnel) live in the system database, `ctx.sys`. Background jobs must run inside `tenants.run(tenant, ...)` for each person.
 - Anything reachable without signing in (share links, the public portfolio, the health check) stays a short, fixed list of addresses; add to it with great care and a test.
 - Do not put anything that looks like a real credential in a test or a doc, not even an obviously fake one in a real token's shape: secret scanning (GitGuardian) will flag it. Build such values at run time.
 - Never commit a `.env` file, a database, or a photograph.
