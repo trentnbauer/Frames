@@ -23,6 +23,7 @@ export function Changelog() {
   const version = v.data ? (v.data.version === 'dev' ? 'dev build' : `v${v.data.version.replace(/^v/, '')}`) : '';
   return (
     <>
+      <a className="verfoot" style={{ right: 'auto', left: 16 }} href="/privacy" target="_blank" rel="noreferrer">Privacy</a>
       <button className="verfoot" onClick={() => setManual(true)} aria-label={`Frames ${version}. What's new`}>{version && <span>{version} · </span>}What’s new</button>
       {open && (
         <div className="scrim" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>

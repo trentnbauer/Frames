@@ -8,7 +8,7 @@ export type Settings = {
 };
 export type Summary = { due: number; resumable: boolean; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 
-export type Me = { mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; role: 'admin' | 'member'; canSignOut: boolean; signups: boolean };
+export type Me = { mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member'; canSignOut: boolean; signups: boolean };
 
 type Ctx = {
   me: Me | null;
