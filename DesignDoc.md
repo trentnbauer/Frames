@@ -38,7 +38,7 @@ publishing software.
 -   [ ] The application must be self-hostable and deployable using
     Docker.
 -   [ ] Support both internally managed photo storage and externally
-    referenced image libraries.
+    referenced image libraries including cloud storage
 -   [ ] Preserve original photographs without modification.
 -   [ ] Keep generated thumbnails, previews and other derivatives
     separate from originals.
