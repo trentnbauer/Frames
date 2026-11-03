@@ -6,14 +6,8 @@ services:
     ports:
       - ${PORT:-3000}:3000
     environment:
-      AUTH_USER: ${AUTH_USER}
-      AUTH_PASSWORD: ${AUTH_PASSWORD}
-      AUTH_DISABLE: ${AUTH_DISABLE:-true}
-      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP}
-      SESSION_DAYS: ${SESSION_DAYS}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
-      TRUST_PROXY: ${TRUST_PROXY:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
     volumes:
       - library:/library
