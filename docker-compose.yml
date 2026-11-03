@@ -1,0 +1,33 @@
+# Frames. Copy .env.example to .env and edit it, then: docker compose up -d --build
+services:
+  frames:
+    build: .
+    # Set FRAMES_IMAGE in .env to run a published release instead of building here.
+    image: ${FRAMES_IMAGE:-frames:local}
+    init: true
+    restart: unless-stopped
+    ports:
+      # Listens on this machine only by default. Frames has no accounts, so set
+      # AUTH_PASSWORD before changing BIND_ADDRESS to 0.0.0.0 (all interfaces).
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    environment:
+      AUTH_USER: ${AUTH_USER:-frames}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      # Public host name(s), only needed behind a reverse proxy that rewrites Host.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+    volumes:
+      # Your photographs. Read-only: Frames never writes to them.
+      - ${PHOTOS_DIR:-./photos}:/library:ro
+      # Database and generated previews. Back this up.
+      - frames-data:/data
+    # Hardening: nothing in the container needs to write outside /data and /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  frames-data:
