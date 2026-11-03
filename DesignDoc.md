@@ -54,6 +54,7 @@ publishing software.
 -   [ ] Recommend individual photographs and complementary images.
 -   [ ] Create and manage curated photographic collections.
 -   [ ] Export collections for use in external software and printing.
+-   [ ] Share button on collections and photoshoots, generating a like with url/s/abc123 that allows a user to either download the files or review them
 
 ## 2. Product Requirements
 
