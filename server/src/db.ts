@@ -4,6 +4,7 @@ import path from 'node:path';
 
 export type DB = Database.Database;
 
+// Version 1: the original schema. Existing databases already have it.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS shoots (
   id INTEGER PRIMARY KEY,
@@ -65,17 +66,64 @@ CREATE TABLE IF NOT EXISTS collection_photos (
   chosen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (collection_id, photo_id)
 );
-CREATE TABLE IF NOT EXISTS duplicates (path TEXT PRIMARY KEY, hash TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS dismissed (kind TEXT NOT NULL, photo_id INTEGER NOT NULL, PRIMARY KEY (kind, photo_id));
+CREATE TABLE IF NOT EXISTS duplicates (path TEXT PRIMARY KEY, hash TEXT NOT NULL);
 `;
+
+const hasColumn = (db: DB, table: string, col: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
+const addColumn = (db: DB, table: string, col: string, ddl: string) => { if (!hasColumn(db, table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`); };
+
+/** Each step runs once, in order, and is safe to re-run. The database version is stored in PRAGMA user_version. */
+const MIGRATIONS: ((db: DB) => void)[] = [
+  // 2: location, analysis, variants, metadata, AI, richer organisation
+  (db) => {
+    for (const [c, d] of [
+      ['description', "TEXT NOT NULL DEFAULT ''"], ['desc_source', "TEXT NOT NULL DEFAULT ''"], ['title_user', 'INTEGER NOT NULL DEFAULT 0'],
+      ['lat', 'REAL'], ['lon', 'REAL'], ['place', "TEXT NOT NULL DEFAULT ''"],
+      ['dhash', 'TEXT'], ['palette', 'TEXT'], ['colors', "TEXT NOT NULL DEFAULT ''"],
+      ['brightness', 'REAL'], ['contrast', 'REAL'], ['saturation', 'REAL'],
+      ['parent_id', 'INTEGER'], ['mtime', 'INTEGER'],
+      ['ai_status', 'TEXT'], ['ai_json', 'TEXT'], ['ai_attempts', 'INTEGER NOT NULL DEFAULT 0'], ['embedding', 'BLOB'],
+      ['xmp_rating', 'INTEGER'],
+    ] as const) addColumn(db, 'photos', c, d);
+    addColumn(db, 'shoots', 'description', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'shoots', 'date_from', 'TEXT');
+    addColumn(db, 'shoots', 'date_to', 'TEXT');
+    addColumn(db, 'collections', 'theme', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'tags', 'kind', "TEXT NOT NULL DEFAULT 'tag'");
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS vocab (name TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY (name, kind));
+      CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, photo_id INTEGER NOT NULL, verdict TEXT NOT NULL, ts TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS dup_ignored (a INTEGER NOT NULL, b INTEGER NOT NULL, PRIMARY KEY (a, b));
+      CREATE TABLE IF NOT EXISTS xmp_conflicts (photo_id INTEGER NOT NULL, field TEXT NOT NULL, mine TEXT NOT NULL, theirs TEXT NOT NULL, PRIMARY KEY (photo_id, field));
+      CREATE INDEX IF NOT EXISTS photos_captured ON photos(captured_at);
+      CREATE INDEX IF NOT EXISTS photos_parent ON photos(parent_id);
+      CREATE INDEX IF NOT EXISTS photos_next_review ON photos(next_review_at);
+      CREATE INDEX IF NOT EXISTS photos_ai ON photos(ai_status);
+      CREATE INDEX IF NOT EXISTS tags_name ON tags(name);
+      CREATE INDEX IF NOT EXISTS reviews_date ON reviews(date);
+      CREATE INDEX IF NOT EXISTS colpho_photo ON collection_photos(photo_id);
+    `);
+  },
+];
+
+export function migrate(db: DB) {
+  db.exec(SCHEMA);
+  let v = Number(db.pragma('user_version', { simple: true })) || 0;
+  // A database created before versioning is version 1.
+  if (v < 1) v = 1;
+  for (let i = v - 1; i < MIGRATIONS.length; i++) {
+    db.transaction(() => { MIGRATIONS[i](db); db.pragma(`user_version = ${i + 2}`); })();
+  }
+}
 
 export function openDb(dataDir: string): DB {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new Database(path.join(dataDir, 'frames.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-  db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

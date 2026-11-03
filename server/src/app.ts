@@ -93,22 +93,39 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const p = pending(db, cfg);
     return { count: p.count, folders: p.folders, lastScan: getSetting<string | null>(db, 'lastScan', null) };
   });
-  app.post('/api/library/scan', async (_req, rep) => {
-    // One scan at a time, otherwise two overlapping scans import the same files twice.
-    if (scanning) return rep.code(409).send({ error: 'A sync is already running' });
+  // A sync can take minutes on a big library, so it runs in the background and the browser polls
+  // /api/library/scan/status. ?wait=1 holds the request open and returns the result (scripts, tests).
+  type ScanState = { running: boolean; done: number; total: number; startedAt: string | null; finishedAt: string | null; result: any; error: string | null };
+  const scanState: ScanState = { running: false, done: 0, total: 0, startedAt: null, finishedAt: null, result: null, error: null };
+  const runScan = async () => {
     scanning = true;
+    Object.assign(scanState, { running: true, done: 0, total: 0, startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null });
     try {
-      const r = await scan(db, cfg);
+      const r = await scan(db, cfg, (done, total) => { scanState.done = done; scanState.total = total; });
       const stamp = new Date().toISOString();
       setSetting(db, 'lastScan', stamp);
       for (const l of cfg.libraries) setSetting(db, `lastScan:${l}`, stamp);
       // Flag files that disappeared from disk. Never delete anything.
       for (const p of db.prepare('SELECT id, path FROM photos').all() as Row[]) db.prepare('UPDATE photos SET missing = ? WHERE id = ?').run(fs.existsSync(p.path) ? 0 : 1, p.id);
-      return { ...r, errors: r.errors.slice(0, 20).map((e) => ({ file: path.basename(e.file), error: 'unreadable' })) };
+      scanState.result = { ...r, errors: r.errors.slice(0, 20).map((e) => ({ file: path.basename(e.file), error: 'unreadable' })) };
+    } catch (e) {
+      console.error(e);
+      scanState.error = 'The sync failed. Check the server log.';
     } finally {
       scanning = false;
+      scanState.running = false;
+      scanState.finishedAt = new Date().toISOString();
     }
+    return scanState;
+  };
+  app.post('/api/library/scan', async (req, rep) => {
+    // One scan at a time, otherwise two overlapping scans import the same files twice.
+    if (scanning) return rep.code(409).send({ error: 'A sync is already running' });
+    const p = runScan();
+    if ((req.query as Row).wait === '1') return (await p).result ?? rep.code(500).send({ error: scanState.error });
+    return rep.code(202).send({ started: true });
   });
+  app.get('/api/library/scan/status', async () => scanState);
 
   app.get('/api/photos', async (req) => {
     const q = req.query as Row;
@@ -116,19 +133,22 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const args: unknown[] = [];
     if (q.shoot) { where.push('p.shoot_id = ?'); args.push(num(q.shoot)); }
     if (q.tag) { where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(String(q.tag)); }
-    if (q.archived !== 'all') where.push('p.archived = 0');
+    // Archived only means "left out of review". It never hides a photograph from browsing or search.
+    // Escape LIKE wildcards so a "%" or "_" typed into search matches literally.
+    const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
     for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-      where.push(`(lower(p.file) LIKE ? OR lower(p.title) LIKE ? OR lower(p.camera) LIKE ? OR lower(p.lens) LIKE ? OR lower(p.file_type) = ? OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ?))`);
-      args.push(`%${w}%`, `%${w}%`, `%${w}%`, `%${w}%`, w, `%${w}%`);
+      where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+      args.push(like(w), like(w), like(w), like(w), w, like(w));
+    }
+    if (q.rating) {
+      // Filtered in SQL so it applies before the row limit, not after.
+      const avg = '(SELECT AVG(r.rating) FROM reviews r WHERE r.photo_id = p.id)';
+      where.push(String(q.rating) === '4+' ? `${avg} >= 4` : String(q.rating) === '3+' ? `${avg} >= 3` : `${avg} < 3`);
     }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
     const agg = new Map((db.prepare('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').all() as Row[]).map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
-    let photos = (db.prepare(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order} LIMIT 5000`).all(...args) as Row[]).map((p) => photoDto(p, false, agg));
-    if (q.rating) {
-      const f = String(q.rating);
-      photos = photos.filter((p) => p.reviewCount > 0 && (f === '4+' ? p.avgRating >= 4 : f === '3+' ? p.avgRating >= 3 : p.avgRating < 3));
-    }
-    return { total: (one('SELECT COUNT(*) n FROM photos WHERE archived = 0') as Row).n, photos };
+    const photos = (db.prepare(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order} LIMIT 5000`).all(...args) as Row[]).map((p) => photoDto(p, false, agg));
+    return { total: (one('SELECT COUNT(*) n FROM photos') as Row).n, photos };
   });
   app.get('/api/photos/:id', async (req, rep) => {
     const p = one('SELECT * FROM photos WHERE id = ?', num((req.params as Row).id));
@@ -207,7 +227,9 @@ export function buildApp(db: DB, cfg: AppCfg) {
   app.post('/api/review/start', async () => {
     const existing = getSession();
     if (existing && existing.index < existing.queue.length) return existing;
-    const ids = dueIds().sort(() => Math.random() - 0.5);
+    const ids = dueIds();
+    // Fisher-Yates. Sorting with a random comparator is biased, and the order must be properly random.
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
     const s: Session = {
       runId: crypto.randomUUID(), index: 0, ratings: {}, notes: {},
       queue: ids.map((id) => { const p = one('SELECT w, h FROM photos WHERE id = ?', id)!; return { id, ar: p.w && p.h ? p.w / p.h : 1.5 }; }),
@@ -281,7 +303,14 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const b = (req.body ?? {}) as Row;
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     if (typeof b.description === 'string') db.prepare('UPDATE collections SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
-    if ('target' in b) db.prepare('UPDATE collections SET target = ? WHERE id = ?').run(b.target ? JSON.stringify(parseTarget(b.target)) : null, id);
+    if ('target' in b) {
+      const t = b.target ? parseTarget(b.target) : null;
+      db.prepare('UPDATE collections SET target = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, id);
+      // Fewer slots than chosen photos: keep the first ones, so the count never reads "3 of 2".
+      const keep = t ? t.count : 0;
+      const chosen = db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ? AND chosen = 1 ORDER BY pos').all(id) as Row[];
+      chosen.slice(keep).forEach((r) => db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ? AND photo_id = ?').run(id, r.photo_id));
+    }
     if (Array.isArray(b.order)) b.order.forEach((pid: number, i: number) => db.prepare('UPDATE collection_photos SET pos = ? WHERE collection_id = ? AND photo_id = ?').run(i, id, num(pid)));
     if (Array.isArray(b.chosenIds)) {
       db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ?').run(id);
@@ -336,7 +365,12 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const dismissed = new Set((db.prepare("SELECT kind || ':' || photo_id k FROM dismissed").all() as Row[]).map((r) => r.k));
     const settings = loadSettings(db);
     const all = (db.prepare('SELECT * FROM photos WHERE archived = 0').all() as Row[]);
-    const withRatings = all.map((p) => ({ p, rs: (db.prepare('SELECT rating, date FROM reviews WHERE photo_id = ? ORDER BY session, id').all(p.id) as Row[]) }));
+    // One query for every review, grouped here, instead of one query per photo.
+    const byPhoto = new Map<number, Row[]>();
+    for (const r of db.prepare('SELECT photo_id, rating, date FROM reviews ORDER BY photo_id, session, id').all() as Row[]) {
+      (byPhoto.get(r.photo_id) ?? byPhoto.set(r.photo_id, []).get(r.photo_id)!).push(r);
+    }
+    const withRatings = all.map((p) => ({ p, rs: byPhoto.get(p.id) ?? [] }));
     const inColl = new Set((db.prepare('SELECT DISTINCT photo_id FROM collection_photos').all() as Row[]).map((r) => r.photo_id));
     const keep = (kind: string, p: Row) => !dismissed.has(`${kind}:${p.id}`);
     const growing = withRatings.filter(({ p, rs }) => rs.length >= 3 && rs[rs.length - 1].rating - rs[0].rating >= 1 && keep('growing', p)).slice(0, 12)

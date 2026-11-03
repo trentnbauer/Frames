@@ -18,12 +18,24 @@ export function Shoots() {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
 
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const run = async () => {
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setProgress(null);
     try {
-      setResult(await api<ScanResult>('/library/scan', { method: 'POST', body: {} }));
+      await api('/library/scan', { method: 'POST', body: {} });
+      // The sync runs on the server; poll until it finishes.
+      for (;;) {
+        const s = await api<{ running: boolean; done: number; total: number; result: ScanResult | null; error: string | null }>('/library/scan/status');
+        setProgress({ done: s.done, total: s.total });
+        if (!s.running) {
+          if (s.error) throw new Error(s.error);
+          setResult(s.result);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 700));
+      }
       shoots.reload(); pending.reload(); refreshSummary();
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); setProgress(null); }
   };
   const create = async () => {
     if (!name.trim()) return;
@@ -41,7 +53,7 @@ export function Shoots() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {p?.lastScan && <span className="faint" style={{ fontSize: 12 }}>Last synced {fmtDate(p.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
           <button className="pill" onClick={() => setNaming(!naming)}>New photoshoot</button>
-          <button className="pill primary" onClick={run} disabled={busy}>{busy ? 'Syncing…' : 'Sync library'}</button>
+          <button className="pill primary" onClick={run} disabled={busy}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
         </div>
       </div>
       {naming && (

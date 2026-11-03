@@ -85,8 +85,10 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
 export type ScanResult = { imported: number; duplicates: number; relinked: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null };
 
 /** Imports every new file into one photoshoot named for today's date. Originals are only ever read. */
-export async function scan(db: DB, cfg: Cfg): Promise<ScanResult> {
+export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: number) => void): Promise<ScanResult> {
   const { files } = pending(db, cfg);
+  let processed = 0;
+  const tick = () => onProgress?.(++processed, files.length);
   const result: ScanResult = { imported: 0, duplicates: 0, relinked: 0, errors: [], shootId: null, shootName: null };
   if (!files.length) return result;
 
@@ -147,6 +149,8 @@ export async function scan(db: DB, cfg: Cfg): Promise<ScanResult> {
       result.imported++;
     } catch (e) {
       result.errors.push({ file: f, error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      tick();
     }
   }
   return result;

@@ -19,6 +19,9 @@ const app = buildApp(db, {
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authPassword ? 'on' : 'OFF'})`);
   if (!authPassword) console.warn('No AUTH_PASSWORD set: anyone who can reach this port can use Frames.');
+}).catch((e) => {
+  console.error(`Could not start on port ${port}: ${e instanceof Error ? e.message : e}`);
+  process.exit(1);
 });
 // Close the database cleanly when the container stops.
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { void app.close().then(() => { db.close(); process.exit(0); }); });

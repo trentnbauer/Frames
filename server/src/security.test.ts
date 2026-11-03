@@ -35,8 +35,8 @@ describe('login', () => {
 describe('cross-site requests', () => {
   const h = { ...auth, host: 'frames.local' };
   it('blocks cross-site writes', async () => {
-    expect((await app.inject({ method: 'POST', url: '/api/library/scan', headers: { ...h, origin: 'https://evil.example' } })).statusCode).toBe(403);
-    expect((await app.inject({ method: 'POST', url: '/api/library/scan', headers: { ...h, 'sec-fetch-site': 'cross-site' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: { ...h, origin: 'https://evil.example' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: { ...h, 'sec-fetch-site': 'cross-site' } })).statusCode).toBe(403);
   });
   it('allows same-origin browsers and plain API clients', async () => {
     expect((await app.inject({ method: 'POST', url: '/api/review/start', headers: { ...h, origin: 'http://frames.local' }, payload: {} })).statusCode).toBe(200);
@@ -68,7 +68,7 @@ describe('responses', () => {
     expect(r.headers['x-frame-options']).toBe('DENY');
   });
   it('never include the server path of an original', async () => {
-    await app.inject({ method: 'POST', url: '/api/library/scan', headers: auth });
+    await app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: auth });
     const body = (await app.inject({ url: '/api/photos/1', headers: auth })).body;
     expect(body).not.toContain(tmp);
     expect(body).not.toContain('"path"');
@@ -94,8 +94,8 @@ describe('library folder', () => {
   it('rejects overlapping syncs instead of importing twice', async () => {
     fs.writeFileSync(path.join(lib, 'y.jpg'), await jpg('#aa5500', 30, 30));
     const [a, b] = await Promise.all([
-      app.inject({ method: 'POST', url: '/api/library/scan', headers: auth }),
-      app.inject({ method: 'POST', url: '/api/library/scan', headers: auth }),
+      app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: auth }),
+      app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: auth }),
     ]);
     expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
     expect((await app.inject({ url: '/api/photos', headers: auth })).json().photos).toHaveLength(2);
@@ -104,7 +104,7 @@ describe('library folder', () => {
     await app.inject({ method: 'PUT', url: '/api/photos/1/tags', headers: auth, payload: { name: 'keep' } });
     fs.mkdirSync(path.join(lib, 'moved'));
     fs.renameSync(path.join(lib, 'x.jpg'), path.join(lib, 'moved', 'x2.jpg'));
-    const r = (await app.inject({ method: 'POST', url: '/api/library/scan', headers: auth })).json();
+    const r = (await app.inject({ method: 'POST', url: '/api/library/scan?wait=1', headers: auth })).json();
     expect(r.relinked).toBe(1);
     const photos = (await app.inject({ url: '/api/photos', headers: auth })).json().photos;
     expect(photos).toHaveLength(2);
