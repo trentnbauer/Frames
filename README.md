@@ -40,6 +40,12 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 | `SESSION_DAYS` | `14` | How long a sign-in lasts (renewed by use). |
 | `ALLOWED_HOSTS` | empty | Comma-separated public host names (for example `frames.example.com`), needed only when a reverse proxy rewrites the `Host` header. |
 | `ALLOW_SIGNUPS` | `true` | `false` turns off self-service accounts: someone on the allow-list who has no account yet is refused, and only people an administrator has added, or who already have an account, can sign in. |
+| `CLOUDFLARE_API_TOKEN` | empty | Turns on the environment-configured Cloudflare tunnel (below). A scoped API token: *Account > Cloudflare Tunnel: Edit*, *Account > Access: Apps and Policies: Edit*, *Zone > DNS: Edit*, *Zone > Zone: Read*. Kept in the environment only, never written to the database. |
+| `CLOUDFLARE_ACCOUNT_ID` | empty | Your Cloudflare account id (32 letters and numbers, in the dashboard). |
+| `TUNNEL_NAME` | `Frames` | The tunnel's name in Cloudflare. |
+| `APP_HOSTNAME` | empty | The app's public address, for example `frames.example.com`. It is only published behind Cloudflare Access, so `ACCESS_EMAILS` is required with it. |
+| `ACCESS_EMAILS` | empty | Comma-separated emails that Cloudflare Access lets in to `APP_HOSTNAME`. |
+| `PORTFOLIO_HOSTNAME` | empty | The public portfolio's own address, for example `gallery.example.com`. It shows only the portfolio and needs no login. |
 | `TRUST_PROXY` | `false` | `true` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
 | `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
 
@@ -151,6 +157,7 @@ Settings, Cloudflare tunnel lets you reach Frames (or just your public portfolio
 - **Safe by default.** Every hostname goes to this Frames server and nothing else on your network. A **portfolio** hostname shows only the public portfolio (set the same address in Settings, Portfolio). Exposing the **whole app** is refused unless sign-in is on.
 - **Secrets stay put.** Tokens are write-only (never shown again), are kept out of backups, reach `cloudflared` through its environment (not the command line) and are removed from the tunnel log.
 - It reconnects by itself after a failure and starts again when Frames restarts, if you left it on. Frames only deletes DNS records it created.
+- **From environment variables** (a single person, no sign-in inside Frames): set `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `APP_HOSTNAME`, `ACCESS_EMAILS` and `PORTFOLIO_HOSTNAME` (all in the table above) and Frames does the rest on every start: it creates the tunnel, its routes and proxied DNS records, a **Cloudflare Access** application that lets only `ACCESS_EMAILS` in to the app address, and a second Access application that **bypasses the login for share links (`/s/`, `/api/s/`), the portfolio (`/portfolio`) and the few files they need (`/assets/`, `/icon.svg`, `/privacy`)**, so anyone can open those. The portfolio address is the owner's and shows only the portfolio, public. Settings, Cloudflare tunnel then shows it read-only. Access is set up *before* anything is published, and Frames also checks Cloudflare's signed login token on the app address itself, so if the Access application is ever deleted or misconfigured the app stays closed instead of open. Frames only changes what it created, tracked by id. Turn one-time-PIN login on once in Cloudflare Zero Trust (*Settings, Authentication, Login methods*) if you have not already. With `AUTH_DISABLE=true` and the port published on your network, anyone on that network can still use Frames directly at the LAN address: Access protects the public address.
 - Running Frames outside the supplied Docker image? Install [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and put it on the `PATH`.
 
 
