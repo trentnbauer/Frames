@@ -6,8 +6,9 @@ import { Header, Loading } from '../components/bits';
 import { useStore, type Settings } from '../store';
 import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
+import { CloudSettings } from './CloudSettings';
 
-const SECTIONS = ['Libraries & storage', 'Access', 'Portfolio', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
+const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -21,7 +22,7 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 
 export function SettingsPage() {
   // Coming back from a test sign-in lands here with ?access=…, so open the Access section.
-  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => (new URLSearchParams(window.location.search).has('access') ? 'Access' : 'Reviews'));
+  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return q.has('access') ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
   const { settings: s, setSettings } = useStore();
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
@@ -41,6 +42,7 @@ export function SettingsPage() {
           {sec === 'AI' && <Ai s={s} save={save} />}
           {sec === 'Libraries & storage' && <Libraries />}
           {sec === 'Portfolio' && <PortfolioSettings />}
+          {sec === 'Cloud sync' && <CloudSettings />}
           {sec === 'Access' && <Access />}
           {sec === 'Tags & subjects' && <Vocabulary />}
           {sec === 'Metadata & XMP' && <Metadata s={s} save={save} />}

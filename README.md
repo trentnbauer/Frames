@@ -81,6 +81,17 @@ Settings, Portfolio turns one collection into a public website (your name, tagli
 - **Its own address.** At `/portfolio/` on this server, or give it a hostname (for example `photography.example.com`). Point a tunnel or reverse proxy at Frames and that hostname shows **only** the portfolio: every other address, including the app, share links and the API, returns "not found" on it. That is what makes it safe to expose.
 - It stays public even when sign-in is required for the rest of Frames.
 
+## Cloud sync (Google Drive, Dropbox, OneDrive)
+
+Settings, Cloud sync copies the photographs from a cloud folder into Frames, then adds them like any other photo (the folder is `cloud/` in the data volume). It is one way and careful:
+
+- **Read-only on the cloud side.** Frames asks each service for read access to files and nothing more.
+- **Nothing is deleted or overwritten.** A photo already copied is never fetched again. If you edit it online, Frames tells you and keeps the copy you have. Removing a file online, or disconnecting an account, leaves your copies alone.
+- **Photos and sidecars only.** Image and RAW files and `.xmp` sidecars are copied; everything else is skipped.
+- **Set up once per service.** A self-hosted app has no shared account with these services, so you register a small app of your own in the service's developer console (free) and paste its client ID and secret into Settings. The return address to give them is shown on that page (it is `<your Frames address>/api/cloud/callback`; set the public address in Settings, Access if Frames is behind a proxy).
+- **Secrets stay put.** The client secret and the refresh token are kept on the server only, are never shown again and are left out of backups.
+- Pick a folder, then sync by hand or let Frames check as often as every 15 minutes. Connect as many accounts as you like.
+
 ## Backup
 
 Everything Frames knows (reviews, tags, collections, share links, settings) is in one database. Your originals are not part of it: back those up the way you already do.

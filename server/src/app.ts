@@ -13,6 +13,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
+import { registerCloud } from './routes/cloud.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
 import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
@@ -31,6 +32,10 @@ export function buildApp(db: DB, cfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
   const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
+  // Photographs copied in from cloud drives (Settings, Cloud sync) land here and are scanned like any other library.
+  const cloudDir = path.join(cfg.dataDir, 'cloud');
+  fs.mkdirSync(cloudDir, { recursive: true });
+  if (!cfg.libraries.includes(cloudDir)) cfg.libraries.push(cloudDir);
   const portfolioGate = createPortfolioGate(db, cfg.webDir);
   const auth = createAuth(db, cfg);
   app.decorateRequest('authUser', null);
@@ -331,13 +336,14 @@ export function buildApp(db: DB, cfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning };
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning, baseUrl: auth.baseUrl };
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
+  registerCloud(app, ctx);
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
 
