@@ -3,6 +3,30 @@
 **Product Requirements & Design Document**\
 Version 1.2
 
+## Notes for UI design
+
+This document describes what the application does, not how it looks.
+Screen list, navigation and layout are deliberately left to the
+designer.
+
+-   The checkboxes in this document are both requirements and a to-do
+    list. An unticked box is still to be built.
+-   There is a single user: one photographer. There is no sharing,
+    login-based collaboration or multi-user UI.
+-   Reviewing photographs is the core daily habit of the product. Review
+    sessions should be a primary, easily reached activity, not a
+    secondary feature.
+-   This is a curated portfolio archive, not a dump of every photograph
+    taken. Roughly one in ten photographs is expected to be kept, so
+    expect a modest library (thousands of photographs, not hundreds of
+    thousands). Browsing should favour looking at photographs well over
+    handling huge volumes.
+-   The photographs are the focus. The interface should stay out of
+    their way.
+-   Design the whole product, but the build order in section 5 applies:
+    foundation and organisation come first, AI features last.
+-   The application must look and work correctly with AI disabled.
+
 ## 1. Product Overview
 
 A self-hosted web application for storing, organising, reviewing and
