@@ -4,6 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, getSecret, ping, setSecret } from '../ai.js';
+import { scrubCopy } from '../backup.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
 import { loadSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -170,12 +171,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     fs.mkdirSync(dir, { recursive: true });
     const f = path.join(dir, `download-${Date.now()}.db`);
     await db.backup(f);
-    // The copy must not carry the AI key.
-    const Database = (await import('better-sqlite3')).default;
-    const c = new Database(f);
-    c.prepare("DELETE FROM settings WHERE key LIKE 'secret:%'").run();
-    c.exec('VACUUM');
-    c.close();
+    scrubCopy(f); // no keys, secrets or sign-in sessions in a copy that leaves the server
     const stamp = new Date().toISOString().slice(0, 10);
     rep.raw.on('close', () => fs.rmSync(f, { force: true }));
     return rep.header('Content-Type', 'application/octet-stream').header('Content-Disposition', `attachment; filename="frames-backup-${stamp}.db"`).header('Content-Length', String(fs.statSync(f).size)).send(fs.createReadStream(f));

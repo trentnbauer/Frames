@@ -4,12 +4,14 @@ import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, createAiWorker, getSecret } from './ai.js';
+import { createAuth, isAuthPath } from './auth.js';
 import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
 import { parseTarget } from './target.js';
 import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
@@ -28,16 +30,17 @@ export function buildApp(db: DB, cfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
   const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
+  const auth = createAuth(db, cfg);
+  app.decorateRequest('authUser', null);
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
-    // Optional single-user login (HTTP Basic). Set AUTH_PASSWORD to turn it on. /api/health stays open for container health checks.
-    // Only the exact share-link addresses (and the page assets they need) are public; see routes/share.ts.
-    if (cfg.authPassword && req.url !== '/api/health' && !isPublicPath(req.url)) {
-      const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
-      const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
-      const ok = crypto.timingSafeEqual(digest(u + ':' + rest.join(':')), digest(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
-      if (!m || !ok) return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
+    // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open.
+    // Always reachable: the health check, the sign-in pages, and the exact share-link addresses (see routes/share.ts).
+    if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url)) {
+      const v = auth.verify(req);
+      if (!v.ok) return auth.deny(req, rep);
+      (req as any).authUser = v.user;
     }
     // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -327,6 +330,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
   registerShare(app, ctx);
+  registerAuth(app, ctx, auth);
   // Pick up where it left off after a restart.
   setTimeout(kickAi, 2000).unref();
 
