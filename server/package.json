@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fastify/multipart": "^9.4.0",
+    "@fastify/multipart": "^10.1.6",
     "@fastify/static": "^10.1.8",
     "better-sqlite3": "^11.10.0",
     "exifr": "^7.1.3",
