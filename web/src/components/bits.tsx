@@ -1,28 +1,26 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useEffect, type ReactNode } from 'react';
-import type { Photo } from '../data';
+import { useEffect, useState, type ReactNode } from 'react';
+import { imgUrl } from '../api';
+import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 
-/** Grey striped stand-in until real previews exist. Keeps the true aspect ratio. */
-export function Img({ p, className = '', style }: { p: Pick<Photo, 'ar' | 'hue'>; className?: string; style?: React.CSSProperties }) {
-  const l = 20 + (p.hue % 7) * 2;
-  return (
-    <div
-      className={'ph ' + className}
-      role="img"
-      aria-label="Photo preview placeholder"
-      style={{
-        aspectRatio: String(p.ar),
-        background: `repeating-linear-gradient(135deg, hsl(${p.hue} 6% ${l}%) 0 10px, hsl(${p.hue} 6% ${l + 3}%) 10px 20px)`,
-        ...style,
-      }}
-    />
-  );
+type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean };
+
+/** The photo preview, or a grey striped stand-in when no preview exists (for example a RAW with no embedded JPEG). */
+export function Img({ p, kind = 'thumb', className = '', style }: { p: P; kind?: 'thumb' | 'preview'; className?: string; style?: React.CSSProperties }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [p.id]);
+  const hue = 190 + (p.id % 7) * 8;
+  const st: React.CSSProperties = { aspectRatio: String(p.ar), ...style };
+  if (p.hasImage === false || failed) {
+    return <div className={'ph ' + className} role="img" aria-label="No preview available" style={{ ...st, background: `repeating-linear-gradient(135deg, hsl(${hue} 6% 22%) 0 10px, hsl(${hue} 6% 25%) 10px 20px)` }} />;
+  }
+  return <img className={'ph ' + className} src={imgUrl(p.id, kind)} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...st, objectFit: 'cover' }} />;
 }
 
 /** Contained, never cropped. The parent sets --fit-h (the height available to the photo). */
-export function Fit({ p, className }: { p: Pick<Photo, 'ar' | 'hue'>; className?: string }) {
-  return <Img p={p} className={className} style={{ width: `min(100%, calc(var(--fit-h) * ${p.ar}))`, height: 'auto' }} />;
+export function Fit({ p, className }: { p: P; className?: string }) {
+  return <Img p={p} kind="preview" className={className} style={{ width: `min(100%, calc(var(--fit-h) * ${p.ar}))`, height: 'auto' }} />;
 }
 
 export function Mark({ w = 24 }: { w?: number }) {
@@ -61,8 +59,10 @@ export function Title({ children, count }: { children: ReactNode; count?: string
   );
 }
 
+export const Loading = ({ error }: { error?: string | null }) => <div className="empty" role={error ? 'alert' : 'status'}>{error ? `Something went wrong: ${error}` : 'Loading…'}</div>;
+
 export function BottomNav({ onSearch }: { onSearch: () => void }) {
-  const { dueCount } = useStore();
+  const { summary } = useStore();
   const nav = useNavigate();
   const item = (to: string, label: string) => (
     <NavLink to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>{label}</NavLink>
@@ -76,22 +76,21 @@ export function BottomNav({ onSearch }: { onSearch: () => void }) {
       {item('/for-you', 'For you')}
       <span className="div" />
       <button className="search" onClick={onSearch}>Search or ask… <span>⌘K</span></button>
-      <button className="review" onClick={() => nav('/review')}>Review · {dueCount}</button>
+      <button className="review" onClick={() => nav('/review')}>Review · {summary?.due ?? 0}</button>
     </nav>
   );
 }
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
-export function Justified({ photos, h = 190, onPick }: { photos: Photo[]; h?: number; onPick?: (p: Photo) => void }) {
+export function Justified({ photos, h = 190, onPick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void }) {
   return (
     <div className="just">
       {photos.map((p) => {
-        const inner = <Img p={p} />;
         const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar) };
         return onPick ? (
-          <button key={p.id} style={st} onClick={() => onPick(p)} aria-label={p.title}>{inner}</button>
+          <button key={p.id} style={st} onClick={() => onPick(p)} aria-label={p.title}><Img p={p} /></button>
         ) : (
-          <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}>{inner}</Link>
+          <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}><Img p={p} /></Link>
         );
       })}
       <i />

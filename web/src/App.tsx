@@ -11,9 +11,11 @@ import { Collections, CollectionDetail } from './pages/Collections';
 import { ForYou } from './pages/ForYou';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './pages/Settings';
+import { useStore } from './store';
 
 export function App() {
   const [searching, setSearching] = useState(false);
+  const { refreshSummary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
   const inReview = loc.pathname === '/review';
@@ -31,6 +33,7 @@ export function App() {
   useKey((e) => {
     if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav('/review');
   }, [inReview, searching]);
+  useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
     <>

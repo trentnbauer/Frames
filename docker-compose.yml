@@ -1,0 +1,14 @@
+services:
+  frames:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # Your photographs. Read-only: Frames never writes to them.
+      - ${PHOTOS_DIR:-./photos}:/library:ro
+      # Database and generated previews. Back this up.
+      - frames-data:/data
+    restart: unless-stopped
+
+volumes:
+  frames-data:
