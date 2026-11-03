@@ -1,3 +1,6 @@
+# cloudflared, for the optional Cloudflare tunnel (Settings, Cloudflare tunnel). Pinned; Dependabot proposes bumps.
+FROM cloudflare/cloudflared:2026.7.3 AS cloudflared
+
 FROM node:22-bookworm-slim AS web
 WORKDIR /app/web
 COPY web/package*.json ./
@@ -20,6 +23,7 @@ COPY --from=server /app/server/node_modules ./server/node_modules
 COPY --from=server /app/server/dist ./server/dist
 COPY --from=server /app/server/package.json ./server/package.json
 COPY --from=web /app/web/dist ./web
+COPY --from=cloudflared /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 # The app runs as the unprivileged "node" user, so it must own the data folder
 # (a fresh named volume copies this ownership).
 RUN mkdir -p /data /library && chown node:node /data

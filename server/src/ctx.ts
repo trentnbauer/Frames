@@ -3,7 +3,7 @@ import type { Cfg } from './ingest.js';
 import type { createAiWorker } from './ai.js';
 
 export type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean };
+export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean; cloudflareApi?: string };
 
 /** What the route modules share. Built once in buildApp. */
 export type Ctx = {
@@ -22,4 +22,6 @@ export type Ctx = {
   /** Starts the background sync. Resolves when finished. */
   startScan: () => Promise<unknown>;
   scanning: () => boolean;
+  /** Is anything protecting the app right now (a password, or sign-in)? Used to refuse exposing it publicly without one. */
+  isProtected: () => boolean;
 };

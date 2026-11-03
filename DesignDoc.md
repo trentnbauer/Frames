@@ -319,6 +319,26 @@ collection, served by the application itself.
 -   [x] The portfolio stays public when sign-in is required for the rest
     of the application.
 
+### 2.11 Cloudflare Tunnel
+
+The photographer can make the application (or only the public portfolio)
+reachable from outside their network through a Cloudflare tunnel, set up
+from the settings screen.
+
+-   [x] A "Cloudflare tunnel" section in the settings, with an on/off
+    switch, a clear status (stopped, connecting, connected, problem) and
+    the tunnel's log.
+-   [x] Two setup modes: paste a tunnel token from the Cloudflare
+    dashboard, or give an API token and have the application create the
+    tunnel, its routes and the DNS records.
+-   [x] Each public hostname is either "only the portfolio" or "the whole
+    app". The whole app can only be exposed when sign-in is on.
+-   [x] Tokens are write-only, excluded from backups, never placed on a
+    command line and removed from the log.
+-   [x] The tunnel restarts itself after a failure and when the
+    application restarts, and only ever forwards to this application.
+-   [x] The application deletes only the DNS records it created.
+
 ## 3. Metadata and Portability
 
 -   [x] Read existing XMP sidecar files.
