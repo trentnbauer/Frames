@@ -11,9 +11,13 @@ import { Collections, CollectionDetail } from './pages/Collections';
 import { ForYou } from './pages/ForYou';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './pages/Settings';
+import { ShootDetail } from './pages/ShootDetail';
+import { Compare } from './pages/Compare';
+import { Duplicates } from './pages/Duplicates';
+import { SharePage } from './pages/SharePage';
 import { useStore } from './store';
 
-export function App() {
+function Shell() {
   const [searching, setSearching] = useState(false);
   const { refreshSummary } = useStore();
   const loc = useLocation();
@@ -43,6 +47,9 @@ export function App() {
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
         <Route path="/shoots" element={<Shoots />} />
+        <Route path="/shoots/:id" element={<ShootDetail />} />
+        <Route path="/compare" element={<Compare />} />
+        <Route path="/duplicates" element={<Duplicates />} />
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
@@ -54,4 +61,14 @@ export function App() {
       {searching && <Search onClose={() => setSearching(false)} />}
     </>
   );
+}
+
+/**
+ * A share link opens a page of its own. It must not start the signed-in app (which would call the
+ * login-protected API and, in a browser, pop up a password box for someone who has no password).
+ */
+export function App() {
+  const loc = useLocation();
+  if (loc.pathname.startsWith('/s/')) return <Routes><Route path="/s/:token" element={<SharePage />} /><Route path="*" element={<SharePage />} /></Routes>;
+  return <Shell />;
 }

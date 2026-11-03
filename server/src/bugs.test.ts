@@ -85,7 +85,8 @@ describe('background sync', () => {
     for (let i = 0; i < 50 && st.running; i++) { await new Promise((x) => setTimeout(x, 40)); st = await get('/api/library/scan/status'); }
     expect(st.running).toBe(false);
     expect(st.result.imported).toBe(1);
-    expect(st.total).toBe(1);
+    expect(st.total).toBe(4); // 1 new file plus the 3 already known, which are checked for changes
+    expect(st.done).toBe(st.total);
   });
 });
 

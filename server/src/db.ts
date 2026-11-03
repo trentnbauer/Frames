@@ -85,7 +85,7 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       ['brightness', 'REAL'], ['contrast', 'REAL'], ['saturation', 'REAL'],
       ['parent_id', 'INTEGER'], ['mtime', 'INTEGER'],
       ['ai_status', 'TEXT'], ['ai_json', 'TEXT'], ['ai_attempts', 'INTEGER NOT NULL DEFAULT 0'], ['embedding', 'BLOB'],
-      ['xmp_rating', 'INTEGER'],
+      ['xmp_rating', 'INTEGER'], ['xmp_sig', 'TEXT'],
     ] as const) addColumn(db, 'photos', c, d);
     addColumn(db, 'shoots', 'description', "TEXT NOT NULL DEFAULT ''");
     addColumn(db, 'shoots', 'date_from', 'TEXT');
@@ -104,6 +104,22 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS tags_name ON tags(name);
       CREATE INDEX IF NOT EXISTS reviews_date ON reviews(date);
       CREATE INDEX IF NOT EXISTS colpho_photo ON collection_photos(photo_id);
+    `);
+  },
+  // 3: share links
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS shares (
+        id INTEGER PRIMARY KEY, token TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, target_id INTEGER NOT NULL,
+        label TEXT NOT NULL DEFAULT '', allow_download INTEGER NOT NULL DEFAULT 0, allow_review INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT, created_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, downloads INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS share_reviews (
+        id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+        photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE, reviewer TEXT NOT NULL DEFAULT '',
+        rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5), note TEXT, ts TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS share_reviews_share ON share_reviews(share_id);
     `);
   },
 ];

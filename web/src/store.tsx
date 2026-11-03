@@ -3,7 +3,8 @@ import { api } from './api';
 
 export type Settings = {
   sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean;
-  ai: 'off' | 'local' | 'external'; aiEndpoint: string;
+  ai: 'off' | 'local' | 'external'; aiEndpoint: string; aiModel: string; aiEmbedModel: string; aiExternalAck: boolean;
+  xmpWriteBack: boolean;
 };
 export type Summary = { due: number; resumable: boolean; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 
@@ -21,6 +22,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [summary, setSum] = useState<Summary | null>(null);
   const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); }, []);
   useEffect(() => {
+    // A share link's page has no login, and these calls need one: skip them there, or the browser asks a guest for a password.
+    if (window.location.pathname.startsWith('/s/')) return;
     api<{ settings: Settings }>('/settings').then((r) => setS(r.settings)).catch(() => {});
     refreshSummary();
   }, [refreshSummary]);

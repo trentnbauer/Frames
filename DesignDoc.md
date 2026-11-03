@@ -46,30 +46,34 @@ publishing software.
 
 ### Primary objectives
 
--   [ ] Preserve original photographs without modifying them.
--   [ ] Organise photographs by photoshoot, subject and tag.
--   [ ] Provide optional AI-powered image analysis and discovery.
--   [ ] Help users evaluate photographs over multiple review sessions.
--   [ ] Learn photographic preferences through review history.
--   [ ] Recommend individual photographs and complementary images.
--   [ ] Create and manage curated photographic collections.
--   [ ] Export collections for use in external software and printing.
--   [ ] Share button on collections and photoshoots, generating a like with url/s/abc123 that allows a user to either download the files or review them
+-   [x] Preserve original photographs without modifying them.
+-   [x] Organise photographs by photoshoot, subject and tag.
+-   [x] Provide optional AI-powered image analysis and discovery.
+-   [x] Help users evaluate photographs over multiple review sessions.
+-   [x] Learn photographic preferences through review history.
+-   [x] Recommend individual photographs and complementary images.
+-   [x] Create and manage curated photographic collections.
+-   [x] Export collections for use in external software and printing.
+-   [x] Share button on collections and photoshoots, generating a like with url/s/abc123 that allows a user to either download the files or review them
+-   [ ] Optionally restrict access with sign-in through OAuth providers.
 
 ## 2. Product Requirements
 
 ### 2.1 Deployment and Storage
 
--   [ ] The application must be self-hostable and deployable using
+-   [x] The application must be self-hostable and deployable using
     Docker.
 -   [ ] Support both internally managed photo storage and externally
     referenced image libraries including cloud storage
--   [ ] Preserve original photographs without modification.
--   [ ] Keep generated thumbnails, previews and other derivatives
+    -   *Done: uploaded photos (internal) and read-only library folders
+        (external), including a cloud drive mounted as a folder.*
+    -   *Not done: built-in cloud connectors (S3, WebDAV, Google Drive).*
+-   [x] Preserve original photographs without modification.
+-   [x] Keep generated thumbnails, previews and other derivatives
     separate from originals.
--   [ ] Support persistent application data and configuration.
--   [ ] External libraries must be read-only by default.
--   [ ] Support rescanning external libraries to identify new, changed
+-   [x] Support persistent application data and configuration.
+-   [x] External libraries must be read-only by default.
+-   [x] Support rescanning external libraries to identify new, changed
     or removed photographs.
 
 The developer is free to choose the implementation technologies and
@@ -77,17 +81,20 @@ architecture.
 
 ### 2.2 Image Support and Processing
 
--   [ ] Support common photographic formats, including RAW, TIFF, JPEG
+-   [x] Support common photographic formats, including RAW, TIFF, JPEG
     and PNG.
--   [ ] Support bulk image ingestion.
--   [ ] Extract EXIF/IPTC metadata, including camera, lens, capture
+-   [x] Support bulk image ingestion.
+-   [x] Extract EXIF/IPTC metadata, including camera, lens, capture
     date, dimensions and GPS information where available.
--   [ ] Extract embedded JPEG previews from RAW files wherever
+-   [x] Extract embedded JPEG previews from RAW files wherever
     available.
 -   [ ] Generate previews when embedded previews are unavailable.
--   [ ] Generate and cache thumbnails.
--   [ ] Identify exact duplicates and potential near-duplicates.
--   [ ] Support edited variations and alternative crops associated with
+    -   *Done for JPEG, PNG and TIFF.*
+    -   *Not done for a RAW file that has no embedded preview: that needs
+        RAW development, which is out of scope. It shows a placeholder.*
+-   [x] Generate and cache thumbnails.
+-   [x] Identify exact duplicates and potential near-duplicates.
+-   [x] Support edited variations and alternative crops associated with
     their original photographs.
 
 Original photographs must remain untouched.
@@ -98,49 +105,49 @@ AI functionality must be optional.
 
 When enabled, AI should support:
 
--   [ ] Subject, object, animal and environment recognition.
--   [ ] Automatic descriptions, tags and keywords.
--   [ ] Colour palette identification.
--   [ ] Composition, lighting and visual characteristic analysis.
--   [ ] Image similarity and semantic search.
--   [ ] Recommendations based on image content.
+-   [x] Subject, object, animal and environment recognition.
+-   [x] Automatic descriptions, tags and keywords.
+-   [x] Colour palette identification.
+-   [x] Composition, lighting and visual characteristic analysis.
+-   [x] Image similarity and semantic search.
+-   [x] Recommendations based on image content.
 
 Additional requirements:
 
--   [ ] Users can review, edit and reject AI-generated information.
--   [ ] Support local and external AI providers.
--   [ ] The application remains fully usable for core library
+-   [x] Users can review, edit and reject AI-generated information.
+-   [x] Support local and external AI providers.
+-   [x] The application remains fully usable for core library
     management, reviews and manual collections when AI is disabled.
--   [ ] Make external AI processing and its privacy implications clear
+-   [x] Make external AI processing and its privacy implications clear
     to users.
 
 ### 2.4 Photo Organisation
 
 **Photoshoots**
 
--   [ ] Create and manage photoshoots.
--   [ ] Associate photographs with photoshoots.
--   [ ] Record dates, locations and descriptions.
--   [ ] Suggest groupings based on folders, capture dates and metadata.
+-   [x] Create and manage photoshoots.
+-   [x] Associate photographs with photoshoots.
+-   [x] Record dates, locations and descriptions.
+-   [x] Suggest groupings based on folders, capture dates and metadata.
 
 **Subjects and Tags**
 
--   [ ] Create and manage subjects and tags.
--   [ ] Associate multiple subjects and tags with photographs.
--   [ ] Browse and filter photographs using these attributes.
+-   [x] Create and manage subjects and tags.
+-   [x] Associate multiple subjects and tags with photographs.
+-   [x] Browse and filter photographs using these attributes.
 
 Photographs must remain independently accessible regardless of their
 organisational associations.
 
 ### 2.5 Search and Discovery
 
--   [ ] Search filenames and metadata.
--   [ ] Filter by photoshoot, subject and tag.
--   [ ] Filter by capture date and location.
--   [ ] Find visually similar photographs.
--   [ ] Search using colours and composition.
--   [ ] Support natural-language searches when AI is enabled.
--   [ ] Combine multiple search criteria.
+-   [x] Search filenames and metadata.
+-   [x] Filter by photoshoot, subject and tag.
+-   [x] Filter by capture date and location.
+-   [x] Find visually similar photographs.
+-   [x] Search using colours and composition.
+-   [x] Support natural-language searches when AI is enabled.
+-   [x] Combine multiple search criteria.
 
 Basic searching and filtering must work without AI.
 
@@ -148,23 +155,23 @@ Basic searching and filtering must work without AI.
 
 Allow photographs to be evaluated over multiple sessions.
 
--   [ ] Provide six review sessions by default.
--   [ ] Allow the number of sessions and review intervals to be
+-   [x] Provide six review sessions by default.
+-   [x] Allow the number of sessions and review intervals to be
     configured.
--   [ ] Support ratings from one to five stars.
--   [ ] Allow optional review notes.
--   [ ] Maintain complete review history.
--   [ ] Display average ratings and rating trends.
--   [ ] Randomise review ordering.
--   [ ] Hide previous ratings during subsequent reviews.
--   [ ] Track review completion.
--   [ ] Allow photographs to be reviewed again.
+-   [x] Support ratings from one to five stars.
+-   [x] Allow optional review notes.
+-   [x] Maintain complete review history.
+-   [x] Display average ratings and rating trends.
+-   [x] Randomise review ordering.
+-   [x] Hide previous ratings during subsequent reviews.
+-   [x] Track review completion.
+-   [x] Allow photographs to be reviewed again.
 
 Review frequency should adapt to rating consistency:
 
--   [ ] Consistently rated photographs receive less frequent reviews.
--   [ ] Inconsistently rated photographs receive more frequent reviews.
--   [ ] Allow users to exclude or archive consistently low-rated
+-   [x] Consistently rated photographs receive less frequent reviews.
+-   [x] Inconsistently rated photographs receive more frequent reviews.
+-   [x] Allow users to exclude or archive consistently low-rated
     photographs.
 
 Review status must never prevent a photograph from appearing in normal
@@ -175,31 +182,31 @@ browsing, searching or collections.
 Provide recommendations using photographic metadata, optional AI
 analysis and review history.
 
--   [ ] Recommend consistently highly rated photographs.
--   [ ] Identify photographs with improving ratings.
--   [ ] Identify overlooked or forgotten photographs.
--   [ ] Recommend visually similar photographs.
--   [ ] Recommend complementary photographs.
--   [ ] Find photographs sharing subjects, colours or composition.
--   [ ] Identify photographs from different photoshoots that work well
+-   [x] Recommend consistently highly rated photographs.
+-   [x] Identify photographs with improving ratings.
+-   [x] Identify overlooked or forgotten photographs.
+-   [x] Recommend visually similar photographs.
+-   [x] Recommend complementary photographs.
+-   [x] Find photographs sharing subjects, colours or composition.
+-   [x] Identify photographs from different photoshoots that work well
     together.
--   [ ] Suggest potential photographic collections.
--   [ ] Learn from accepted and rejected recommendations.
+-   [x] Suggest potential photographic collections.
+-   [x] Learn from accepted and rejected recommendations.
 
 ### 2.8 Collections
 
 Collections allow users to assemble and curate groups of photographs for
 particular purposes.
 
--   [ ] Create, edit and delete manual collections.
--   [ ] Generate optional AI-assisted collection suggestions.
--   [ ] Add and remove photographs.
--   [ ] Reorder photographs.
--   [ ] Add collection names, descriptions and themes.
--   [ ] Suggest complementary photographs.
--   [ ] Identify repetitive or visually similar photographs.
--   [ ] Suggest alternative photographs.
--   [ ] Compare photographs within a collection.
+-   [x] Create, edit and delete manual collections.
+-   [x] Generate optional AI-assisted collection suggestions.
+-   [x] Add and remove photographs.
+-   [x] Reorder photographs.
+-   [x] Add collection names, descriptions and themes.
+-   [x] Suggest complementary photographs.
+-   [x] Identify repetitive or visually similar photographs.
+-   [x] Suggest alternative photographs.
+-   [x] Compare photographs within a collection.
 
 #### Collection Picture Specifications
 
@@ -208,15 +215,15 @@ individual collections. These specifications help determine whether
 photographs are suitable for their intended purpose, particularly
 printing.
 
--   [ ] Set a minimum pixel resolution.
--   [ ] Specify an intended print size and required DPI/PPI.
--   [ ] Set an orientation requirement: portrait, landscape or either.
--   [ ] Set an optional preferred or required aspect ratio.
--   [ ] Identify photographs that meet or fail the collection's
+-   [x] Set a minimum pixel resolution.
+-   [x] Specify an intended print size and required DPI/PPI.
+-   [x] Set an orientation requirement: portrait, landscape or either.
+-   [x] Set an optional preferred or required aspect ratio.
+-   [x] Identify photographs that meet or fail the collection's
     specifications.
--   [ ] Clearly communicate why a photograph does not meet a
+-   [x] Clearly communicate why a photograph does not meet a
     requirement.
--   [ ] Allow specifications to be changed or removed without affecting
+-   [x] Allow specifications to be changed or removed without affecting
     the photographs themselves.
 
 Specifications are optional. Collections without defined requirements
@@ -232,16 +239,16 @@ Every collection must provide a prominent **Download files** button.
 Selecting this button should download the original photographs in that
 collection as individual files (no ZIP archive).
 
--   [ ] Provide a clearly visible Download files button on each
+-   [x] Provide a clearly visible Download files button on each
     collection.
--   [ ] Include all photographs in the collection.
--   [ ] Preserve original image files and their quality.
--   [ ] Support collections containing RAW, TIFF, JPEG and PNG files.
--   [ ] Use meaningful filenames.
--   [ ] Preserve collection ordering information where practical.
--   [ ] Show export progress and completion.
--   [ ] Notify users if any photographs cannot be included.
--   [ ] Do not modify or convert original photographs during export.
+-   [x] Include all photographs in the collection.
+-   [x] Preserve original image files and their quality.
+-   [x] Support collections containing RAW, TIFF, JPEG and PNG files.
+-   [x] Use meaningful filenames.
+-   [x] Preserve collection ordering information where practical.
+-   [x] Show export progress and completion.
+-   [x] Notify users if any photographs cannot be included.
+-   [x] Do not modify or convert original photographs during export.
 
 The purpose is to provide a straightforward way to download a complete
 collection for printing or further work in external creative software.
@@ -249,15 +256,54 @@ collection for printing or further work in external creative software.
 The application does not perform print layout, image editing or
 production management.
 
+### 2.9 Authentication and Access
+
+Authentication must be optional. With nothing configured, the
+application behaves as it does today. Where it is turned on, people sign
+in through an OAuth provider instead of a shared password.
+
+-   [ ] Authentication is optional and off by default. The application
+    works fully with no sign-in.
+-   [ ] Sign in with an OAuth 2.0 / OpenID Connect provider. Support
+    well-known providers (for example Google, GitHub and Microsoft) and
+    any standards-based OIDC provider (for example Authentik, Keycloak
+    or Authelia) that a self-hoster already runs.
+-   [ ] Allow one or more providers to be configured (client ID, client
+    secret, and for generic OIDC the issuer address). Secrets are
+    stored safely and never sent back to the browser or included in
+    backups.
+-   [ ] Restrict who may sign in with an allow-list (email addresses,
+    email domains or provider account IDs). Anyone else is refused with
+    a clear message and gets no access.
+-   [ ] Everyone who is allowed in has the same access. This is access
+    control for the owner and trusted people, not per-person
+    permissions or collaboration.
+-   [ ] Sessions use secure cookies with an expiry and a sign-out. The
+    protections against cross-site requests continue to apply.
+-   [ ] Work behind a reverse proxy and over HTTPS, with a callback
+    address that can be set, and show the exact address to register with
+    the provider.
+-   [ ] Never lock the owner out: a configuration mistake or an
+    unavailable provider has a documented way back in (for example an
+    environment setting that switches sign-in off).
+-   [ ] Keep the existing shared-password option for simple setups, as a
+    choice alongside OAuth.
+-   [ ] Share links keep working without signing in, and never grant
+    access to anything beyond what the link shares.
+-   [ ] The health check stays reachable without signing in.
+
+OAuth is used to decide who may sign in. Multi-user collaboration stays
+out of scope (section 6).
+
 ## 3. Metadata and Portability
 
--   [ ] Read existing XMP sidecar files.
--   [ ] Export approved metadata to XMP sidecars.
--   [ ] Maintain application metadata independently of original image
+-   [x] Read existing XMP sidecar files.
+-   [x] Export approved metadata to XMP sidecars.
+-   [x] Maintain application metadata independently of original image
     files.
--   [ ] Support portable metadata between photographic applications.
--   [ ] Make external metadata write-back configurable.
--   [ ] Provide sensible handling for conflicting metadata.
+-   [x] Support portable metadata between photographic applications.
+-   [x] Make external metadata write-back configurable.
+-   [x] Provide sensible handling for conflicting metadata.
 
 External libraries remain read-only by default.
 
@@ -265,13 +311,13 @@ External libraries remain read-only by default.
 
 Provide a simple overview of the photographic archive.
 
--   [ ] Show total photographs and storage consumption.
--   [ ] Show photographs per photoshoot.
--   [ ] Show subject and tag distribution.
--   [ ] Show review completion.
--   [ ] Show rating distribution and trends.
--   [ ] Show highest-rated photographs.
--   [ ] Show the number of photographs in collections.
+-   [x] Show total photographs and storage consumption.
+-   [x] Show photographs per photoshoot.
+-   [x] Show subject and tag distribution.
+-   [x] Show review completion.
+-   [x] Show rating distribution and trends.
+-   [x] Show highest-rated photographs.
+-   [x] Show the number of photographs in collections.
 
 Complex analytics dashboards are not required.
 
@@ -281,61 +327,62 @@ The following is a suggested development sequence.
 
 ### Phase 1 --- Foundation
 
--   [ ] Docker-based deployment.
--   [ ] Internal and external storage support.
--   [ ] Image ingestion.
--   [ ] Metadata extraction.
--   [ ] Thumbnail and preview generation.
--   [ ] Embedded RAW preview extraction.
+-   [x] Docker-based deployment.
+-   [x] Internal and external storage support.
+-   [x] Image ingestion.
+-   [x] Metadata extraction.
+-   [x] Thumbnail and preview generation.
+-   [x] Embedded RAW preview extraction.
 
 ### Phase 2 --- Organisation
 
--   [ ] Photoshoot management.
--   [ ] Subject and tag management.
--   [ ] Image variants.
--   [ ] Duplicate detection.
--   [ ] Basic browsing and filtering.
--   [ ] External library rescanning.
+-   [x] Photoshoot management.
+-   [x] Subject and tag management.
+-   [x] Image variants.
+-   [x] Duplicate detection.
+-   [x] Basic browsing and filtering.
+-   [x] External library rescanning.
 
 ### Phase 3 --- AI and Discovery
 
--   [ ] AI provider integration.
--   [ ] Automatic tagging and descriptions.
--   [ ] Image similarity analysis.
--   [ ] Visual similarity search.
--   [ ] Semantic search.
--   [ ] Colour and composition analysis.
+-   [x] AI provider integration.
+-   [x] Automatic tagging and descriptions.
+-   [x] Image similarity analysis.
+-   [x] Visual similarity search.
+-   [x] Semantic search.
+-   [x] Colour and composition analysis.
 
 ### Phase 4 --- Reviews
 
--   [ ] Multi-session reviews.
--   [ ] Rating history.
--   [ ] Review scheduling.
--   [ ] Adaptive review frequency.
--   [ ] Review statistics.
+-   [x] Multi-session reviews.
+-   [x] Rating history.
+-   [x] Review scheduling.
+-   [x] Adaptive review frequency.
+-   [x] Review statistics.
 
 ### Phase 5 --- Recommendations
 
--   [ ] Personalised recommendations.
--   [ ] Complementary image discovery.
--   [ ] Collection suggestions.
+-   [x] Personalised recommendations.
+-   [x] Complementary image discovery.
+-   [x] Collection suggestions.
 
 ### Phase 6 --- Collections and Export
 
--   [ ] Manual collections.
--   [ ] AI-assisted collection suggestions.
--   [ ] Collection comparison.
--   [ ] Collection picture specifications.
--   [ ] Print suitability indicators.
--   [ ] Download of original photographs as individual files.
+-   [x] Manual collections.
+-   [x] AI-assisted collection suggestions.
+-   [x] Collection comparison.
+-   [x] Collection picture specifications.
+-   [x] Print suitability indicators.
+-   [x] Download of original photographs as individual files.
 
 ### Phase 7 --- Refinement
 
--   [ ] XMP portability.
--   [ ] Processing reliability.
--   [ ] Performance optimisation.
--   [ ] Basic statistics.
--   [ ] Backup and recovery improvements.
+-   [x] XMP portability.
+-   [x] Processing reliability.
+-   [x] Performance optimisation.
+-   [x] Basic statistics.
+-   [x] Backup and recovery improvements.
+-   [ ] Optional OAuth sign-in (section 2.9).
 
 ## 6. Out of Scope
 
@@ -346,7 +393,8 @@ The initial application is not intended to provide:
 -   [ ] Gallery wall or framing previews.
 -   [ ] Exhibition management.
 -   [ ] Social networking or public galleries.
--   [ ] Multi-user collaboration.
+-   [ ] Multi-user collaboration. (Optional sign-in, section 2.9, only
+    controls who may get in. Everyone allowed in has the same access.)
 -   [ ] Advanced photography journaling.
 -   [ ] Gamification or photography challenges.
 -   [ ] Complex analytics and reporting.
@@ -359,21 +407,23 @@ The initial application is not intended to provide:
 
 The application should allow a user to:
 
--   [ ] Import or reference a large photographic archive without
+-   [x] Import or reference a large photographic archive without
     modifying original photographs.
--   [ ] Organise photographs by photoshoot, subject and tag.
--   [ ] Browse and discover photographs with or without AI.
--   [ ] Review photographs over multiple sessions and build a meaningful
+-   [x] Organise photographs by photoshoot, subject and tag.
+-   [x] Browse and discover photographs with or without AI.
+-   [x] Review photographs over multiple sessions and build a meaningful
     rating history.
--   [ ] Receive useful recommendations based on photographic
+-   [x] Receive useful recommendations based on photographic
     preferences.
--   [ ] Assemble cohesive photographic collections.
--   [ ] Define picture specifications for individual collections.
--   [ ] Identify photographs that are unsuitable for a collection's
+-   [x] Assemble cohesive photographic collections.
+-   [x] Define picture specifications for individual collections.
+-   [x] Identify photographs that are unsuitable for a collection's
     intended print requirements.
--   [ ] Download an entire collection as its original photograph
+-   [x] Download an entire collection as its original photograph
     files.
--   [ ] Deploy and maintain the application through Docker.
+-   [x] Deploy and maintain the application through Docker.
+-   [ ] Optionally require sign-in through an OAuth provider, with
+    share links still working for the people they are sent to.
 
 ------------------------------------------------------------------------
 

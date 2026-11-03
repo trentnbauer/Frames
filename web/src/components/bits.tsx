@@ -1,10 +1,10 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { imgUrl } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 
-type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean };
+type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean; share?: string };
 
 /** The photo preview, or a grey striped stand-in when no preview exists (for example a RAW with no embedded JPEG). */
 export function Img({ p, kind = 'thumb', className = '', style }: { p: P; kind?: 'thumb' | 'preview'; className?: string; style?: React.CSSProperties }) {
@@ -15,12 +15,22 @@ export function Img({ p, kind = 'thumb', className = '', style }: { p: P; kind?:
   if (p.hasImage === false || failed) {
     return <div className={'ph ' + className} role="img" aria-label="No preview available" style={{ ...st, background: `repeating-linear-gradient(135deg, hsl(${hue} 6% 22%) 0 10px, hsl(${hue} 6% 25%) 10px 20px)` }} />;
   }
-  return <img className={'ph ' + className} src={imgUrl(p.id, kind)} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...st, objectFit: 'cover' }} />;
+  return <img className={'ph ' + className} src={imgUrl(p.id, kind, p.share)} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...st, objectFit: 'cover' }} />;
 }
 
 /** Contained, never cropped. The parent sets --fit-h (the height available to the photo). */
 export function Fit({ p, className }: { p: P; className?: string }) {
   return <Img p={p} kind="preview" className={className} style={{ width: `min(100%, calc(var(--fit-h) * ${p.ar}))`, height: 'auto' }} />;
+}
+
+/** The colours found in a photograph, widest first. */
+export function Swatches({ palette }: { palette: { hex: string; pct: number; name: string }[] }) {
+  if (!palette.length) return null;
+  return (
+    <div className="swatches" role="img" aria-label={`Colours: ${palette.map((s) => `${s.name} ${s.pct}%`).join(', ')}`}>
+      {palette.map((s) => <i key={s.hex} title={`${s.name} · ${s.pct}%`} style={{ background: s.hex, flexGrow: Math.max(s.pct, 4) }} />)}
+    </div>
+  );
 }
 
 export function Mark({ w = 24 }: { w?: number }) {
@@ -82,21 +92,35 @@ export function BottomNav({ onSearch }: { onSearch: () => void }) {
 }
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
-export function Justified({ photos, h = 190, onPick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void }) {
+export function Justified({ photos, h = 190, onPick, captions }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string }) {
   return (
     <div className="just">
       {photos.map((p) => {
         // Archived photos stay in the grid, just dimmed: they are only left out of review.
         const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1 };
+        const cap = captions?.(p);
+        const inner = <><Img p={p} />{cap && <em className="cap">{cap}</em>}</>;
         return onPick ? (
-          <button key={p.id} style={st} onClick={() => onPick(p)} aria-label={p.title}><Img p={p} /></button>
+          <button key={p.id} style={{ ...st, position: 'relative' }} onClick={() => onPick(p)} aria-label={p.title}>{inner}</button>
         ) : (
-          <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}><Img p={p} /></Link>
+          <Link key={p.id} to={`/photo/${p.id}`} style={{ ...st, position: 'relative' }} aria-label={p.title}>{inner}</Link>
         );
       })}
       <i />
     </div>
   );
+}
+
+/**
+ * A text field's value that follows the server, but only when the server's value actually changes.
+ * Resetting on every refresh would wipe what is being typed into a different field.
+ */
+export function useField(server: string, scope: string | number = ''): [string, (v: string) => void] {
+  const [v, setV] = useState(server);
+  const last = useRef(`${scope}\u0000${server}`);
+  const now = `${scope}\u0000${server}`; // scope = which record, so moving to another photo never carries typed text over
+  if (last.current !== now) { last.current = now; setV(server); }
+  return [v, setV];
 }
 
 export function useKey(handler: (e: KeyboardEvent) => void, deps: unknown[] = []) {

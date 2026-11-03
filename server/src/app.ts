@@ -3,13 +3,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import { aiConfig, createAiWorker, getSecret } from './ai.js';
+import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
-import { derivPath, pending, scan, type Cfg } from './ingest.js';
+import { derivPath, pending, scan } from './ingest.js';
+import { parseTarget } from './target.js';
 import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { registerInsights } from './routes/insights.js';
+import { registerLibrary } from './routes/library.js';
+import { isPublicPath, registerShare } from './routes/share.js';
+import { registerPhotos } from './routes/photos.js';
 
-type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string };
+export type { AppCfg } from './ctx.js';
 
 const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0);
@@ -19,13 +25,15 @@ const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 export function buildApp(db: DB, cfg: AppCfg) {
-  const app = Fastify({ logger: false });
+  // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
+  const app = Fastify({ logger: false, trustProxy: !!cfg.trustProxy });
   let scanning = false;
 
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
     // Optional single-user login (HTTP Basic). Set AUTH_PASSWORD to turn it on. /api/health stays open for container health checks.
-    if (cfg.authPassword && req.url !== '/api/health') {
+    // Only the exact share-link addresses (and the page assets they need) are public; see routes/share.ts.
+    if (cfg.authPassword && req.url !== '/api/health' && !isPublicPath(req.url)) {
       const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
       const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
       const ok = crypto.timingSafeEqual(digest(u + ':' + rest.join(':')), digest(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
@@ -38,7 +46,8 @@ export function buildApp(db: DB, cfg: AppCfg) {
       if (!sameHost || req.headers['sec-fetch-site'] === 'cross-site') return rep.code(403).send({ error: 'Cross-site request blocked' });
     }
   });
-  app.addHook('onSend', async (_req, rep) => {
+  app.addHook('onSend', async (req, rep) => {
+    if (/^\/(api\/)?s\//.test(req.url)) rep.header('X-Robots-Tag', 'noindex, nofollow'); // share pages are never for search engines
     rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY');
   });
   // Never echo internal errors (SQL, file paths) to the client.
@@ -50,8 +59,9 @@ export function buildApp(db: DB, cfg: AppCfg) {
   });
 
   // ---------- DTO helpers ----------
+  // accepted: 1 = in use, 0 = suggested (AI), -1 = rejected. Rejected tags are remembered so they are not suggested again, but never shown.
   const tagsOf = (id: number) =>
-    (db.prepare('SELECT name, source, accepted FROM tags WHERE photo_id = ? ORDER BY name').all(id) as Row[]).map((t) => ({ name: t.name, source: t.source, accepted: !!t.accepted }));
+    (db.prepare('SELECT name, kind, source, accepted FROM tags WHERE photo_id = ? AND accepted >= 0 ORDER BY kind DESC, name').all(id) as Row[]).map((t) => ({ name: t.name, kind: t.kind, source: t.source, accepted: t.accepted === 1 }));
   const reviewsOf = (id: number) =>
     (db.prepare('SELECT session, date, rating, note FROM reviews WHERE photo_id = ? ORDER BY session, id').all(id) as Row[]).map((r) => ({ session: r.session, date: r.date, rating: r.rating, note: r.note ?? undefined }));
   // The server path of an original is never sent to the browser.
@@ -64,29 +74,60 @@ export function buildApp(db: DB, cfg: AppCfg) {
       capturedAt: p.captured_at, camera: p.camera, lens: p.lens, exposure: p.exposure,
       fileType: p.file_type, sizeMb: Math.round(p.size_bytes / 1048576), archived: !!p.archived, missing: !!p.missing,
       nextReviewAt: p.next_review_at, reviewCount: g ? g.n : ratings.length, avgRating: g ? g.a : avgOf(ratings),
-      ...(full ? { tags: tagsOf(p.id), reviews: reviewsOf(p.id) } : {}),
+      lat: p.lat, lon: p.lon, place: p.place, parentId: p.parent_id,
+      palette: p.palette ? JSON.parse(p.palette) : [], brightness: p.brightness, contrast: p.contrast, saturation: p.saturation,
+      xmpRating: p.xmp_rating, aiStatus: p.ai_status,
+      ...(full ? {
+        tags: tagsOf(p.id), reviews: reviewsOf(p.id), description: p.description, descSource: p.desc_source,
+        aiSuggestion: aiSuggestion(p), variants: (db.prepare('SELECT id FROM photos WHERE parent_id = ?').all(p.id) as Row[]).map((r) => r.id as number),
+        conflicts: db.prepare('SELECT field, mine, theirs FROM xmp_conflicts WHERE photo_id = ?').all(p.id),
+      } : {}),
     };
+  };
+  // The AI's own description and notes, shown for the user to accept or reject. Never used as fact until accepted.
+  const aiSuggestion = (p: Row) => {
+    if (!p.ai_json) return null;
+    try {
+      const a = JSON.parse(p.ai_json);
+      return a.descriptionRejected ? { ...a, description: '' } : a;
+    } catch { return null; }
   };
   const shootDto = (s: Row) => {
     const st = db.prepare('SELECT COUNT(*) n, MIN(captured_at) a, MAX(captured_at) b, MIN(id) first FROM photos WHERE shoot_id = ?').get(s.id) as Row;
     const sessions = loadSettings(db).sessions;
     const done = (db.prepare(`SELECT COUNT(*) n FROM (SELECT photo_id, COUNT(*) c FROM reviews WHERE photo_id IN (SELECT id FROM photos WHERE shoot_id = ?) GROUP BY photo_id HAVING c >= ?)`).get(s.id, sessions) as Row).n;
     const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-    const dates = st.a ? (st.a.slice(0, 10) === st.b.slice(0, 10) ? fmt(st.a) : `${fmt(st.a)} – ${fmt(st.b)}`) : fmt(s.imported_at);
-    return { id: s.id, name: s.name, source: s.source, place: s.place, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
+    // Dates the user typed win; otherwise they come from the photographs' capture times, then the import date.
+    const from = s.date_from ?? st.a, to = s.date_to ?? st.b;
+    const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
+    return { id: s.id, name: s.name, source: s.source, place: s.place, description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
   const collectionDto = (c: Row) => {
     const rows = db.prepare('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos').all(c.id) as Row[];
-    return { id: c.id, name: c.name, description: c.description, target: c.target ? JSON.parse(c.target) : null, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id) };
+    return { id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', target: c.target ? JSON.parse(c.target) : null, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id) };
   };
 
   const notFound = (rep: any, what = 'Not found') => rep.code(404).send({ error: what });
   const one = (sql: string, ...a: unknown[]) => db.prepare(sql).get(...a) as Row | undefined;
+  const all = (sql: string, ...a: unknown[]) => db.prepare(sql).all(...a) as Row[];
+  const ratingAgg = () => new Map(all('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
+  // Photographs are analysed in the background once AI is on. Errors are retried a few times and never block anything else.
+  const ai = createAiWorker(db, cfg);
+  const kickAi = () => { if (aiConfig(db)) void ai.run().catch((e) => console.error('AI run failed', e)); };
 
   // ---------- health / settings ----------
   app.get('/api/health', async () => ({ ok: true, version: cfg.version ?? 'dev' }));
-  app.get('/api/settings', async () => ({ settings: loadSettings(db), libraries: cfg.libraries.map((l) => ({ path: l, exists: fs.existsSync(l), lastScan: getSetting<string | null>(db, `lastScan:${l}`, null) })) }));
-  app.put('/api/settings', async (req) => saveSettings(db, (req.body ?? {}) as any));
+  app.get('/api/settings', async () => ({
+    settings: loadSettings(db),
+    hasKey: !!getSecret(db, 'aiKey'), // the key itself is never sent to the browser
+    internalDir: path.join(cfg.dataDir, 'originals'),
+    libraries: cfg.libraries.map((l) => ({ path: l, exists: fs.existsSync(l), lastScan: getSetting<string | null>(db, `lastScan:${l}`, null) })),
+  }));
+  app.put('/api/settings', async (req) => {
+    const s = saveSettings(db, (req.body ?? {}) as any);
+    kickAi();
+    return s;
+  });
 
   // ---------- library / photos ----------
   app.get('/api/library/pending', async () => {
@@ -115,6 +156,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
       scanning = false;
       scanState.running = false;
       scanState.finishedAt = new Date().toISOString();
+      kickAi();
     }
     return scanState;
   };
@@ -127,56 +169,6 @@ export function buildApp(db: DB, cfg: AppCfg) {
   });
   app.get('/api/library/scan/status', async () => scanState);
 
-  app.get('/api/photos', async (req) => {
-    const q = req.query as Row;
-    const where: string[] = [];
-    const args: unknown[] = [];
-    if (q.shoot) { where.push('p.shoot_id = ?'); args.push(num(q.shoot)); }
-    if (q.tag) { where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(String(q.tag)); }
-    // Archived only means "left out of review". It never hides a photograph from browsing or search.
-    // Escape LIKE wildcards so a "%" or "_" typed into search matches literally.
-    const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
-    for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-      where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-      args.push(like(w), like(w), like(w), like(w), w, like(w));
-    }
-    if (q.rating) {
-      // Filtered in SQL so it applies before the row limit, not after.
-      const avg = '(SELECT AVG(r.rating) FROM reviews r WHERE r.photo_id = p.id)';
-      where.push(String(q.rating) === '4+' ? `${avg} >= 4` : String(q.rating) === '3+' ? `${avg} >= 3` : `${avg} < 3`);
-    }
-    const order = q.order === 'oldest' ? 'ASC' : 'DESC';
-    const agg = new Map((db.prepare('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').all() as Row[]).map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
-    const photos = (db.prepare(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order} LIMIT 5000`).all(...args) as Row[]).map((p) => photoDto(p, false, agg));
-    return { total: (one('SELECT COUNT(*) n FROM photos') as Row).n, photos };
-  });
-  app.get('/api/photos/:id', async (req, rep) => {
-    const p = one('SELECT * FROM photos WHERE id = ?', num((req.params as Row).id));
-    if (!p) return notFound(rep);
-    return photoDto(p, true);
-  });
-  app.patch('/api/photos/:id', async (req, rep) => {
-    const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
-    const b = (req.body ?? {}) as Row;
-    if (typeof b.title === 'string' && b.title.trim()) db.prepare('UPDATE photos SET title = ? WHERE id = ?').run(b.title.trim().slice(0, 200), id);
-    if (typeof b.archived === 'boolean') db.prepare('UPDATE photos SET archived = ? WHERE id = ?').run(b.archived ? 1 : 0, id);
-    if (b.reviewAgain === true) db.prepare('UPDATE photos SET next_review_at = ? WHERE id = ?').run(new Date().toISOString(), id);
-    return photoDto(one('SELECT * FROM photos WHERE id = ?', id)!, true);
-  });
-  app.put('/api/photos/:id/tags', async (req, rep) => {
-    // Body: { name, accepted?: boolean, remove?: boolean }. Adding a tag by hand makes it a user tag.
-    const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
-    const b = (req.body ?? {}) as Row;
-    const name = String(b.name ?? '').trim().toLowerCase().slice(0, 60);
-    if (!name) return rep.code(400).send({ error: 'name required' });
-    if (b.remove) db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(id, name);
-    else if (b.accepted === false) db.prepare('UPDATE tags SET accepted = 0 WHERE photo_id = ? AND name = ?').run(id, name);
-    else db.prepare("INSERT INTO tags(photo_id, name, source, accepted) VALUES(?, ?, 'user', 1) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1").run(id, name);
-    return tagsOf(id);
-  });
-  app.get('/api/tags', async () => (db.prepare('SELECT name, COUNT(*) n FROM tags WHERE accepted = 1 GROUP BY name ORDER BY n DESC, name').all() as Row[]));
 
   // images: only ever served by id, never by path
   const sendImage = (kind: 'thumb' | 'preview') => async (req: any, rep: any) => {
@@ -190,21 +182,6 @@ export function buildApp(db: DB, cfg: AppCfg) {
 
   // ---------- shoots ----------
   app.get('/api/shoots', async () => (db.prepare('SELECT * FROM shoots ORDER BY imported_at DESC, id DESC').all() as Row[]).map(shootDto));
-  app.post('/api/shoots', async (req, rep) => {
-    const b = (req.body ?? {}) as Row;
-    const name = String(b.name ?? '').trim();
-    if (!name) return rep.code(400).send({ error: 'name required' });
-    const id = Number(db.prepare('INSERT INTO shoots(name, source, place, imported_at) VALUES(?, ?, ?, ?)').run(name.slice(0, 120), 'Manual', String(b.place ?? '').slice(0, 120), new Date().toISOString()).lastInsertRowid);
-    return shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
-  });
-  app.patch('/api/shoots/:id', async (req, rep) => {
-    const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
-    const b = (req.body ?? {}) as Row;
-    if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
-    if (typeof b.place === 'string') db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(b.place.slice(0, 120), id);
-    return shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
-  });
 
   // ---------- reviews ----------
   type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
@@ -279,18 +256,14 @@ export function buildApp(db: DB, cfg: AppCfg) {
   });
 
   // ---------- collections ----------
-  const parseTarget = (t: any) => {
-    if (t === null || t === undefined) return null;
-    const size = ['A4', 'A3', 'A2'].includes(t.size) ? t.size : 'A3';
-    const orientation = ['portrait', 'landscape', 'any'].includes(t.orientation) ? t.orientation : 'any';
-    return { count: Math.max(1, Math.round(num(t.count, 1))), size, orientation, ppi: Math.min(600, Math.max(72, Math.round(num(t.ppi, 300)))) };
-  };
   app.get('/api/collections', async () => (db.prepare('SELECT * FROM collections ORDER BY id DESC').all() as Row[]).map(collectionDto));
   app.post('/api/collections', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const name = String(b.name ?? '').trim();
     if (!name) return rep.code(400).send({ error: 'name required' });
-    const id = Number(db.prepare('INSERT INTO collections(name, description, target) VALUES(?, ?, ?)').run(name.slice(0, 120), String(b.description ?? '').slice(0, 1000), b.target ? JSON.stringify(parseTarget(b.target)) : null).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO collections(name, description, theme, target) VALUES(?, ?, ?, ?)').run(name.slice(0, 120), String(b.description ?? '').slice(0, 1000), String(b.theme ?? '').slice(0, 120), b.target ? JSON.stringify(parseTarget(b.target)) : null).lastInsertRowid);
+    // A suggested set arrives with its photographs.
+    (Array.isArray(b.photoIds) ? b.photoIds : []).slice(0, 500).forEach((pid: unknown, i: number) => db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) SELECT ?, id, ? FROM photos WHERE id = ?').run(id, i, num(pid)));
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
   app.get('/api/collections/:id', async (req, rep) => {
@@ -303,6 +276,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const b = (req.body ?? {}) as Row;
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     if (typeof b.description === 'string') db.prepare('UPDATE collections SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
+    if (typeof b.theme === 'string') db.prepare('UPDATE collections SET theme = ? WHERE id = ?').run(b.theme.slice(0, 120), id);
     if ('target' in b) {
       const t = b.target ? parseTarget(b.target) : null;
       db.prepare('UPDATE collections SET target = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, id);
@@ -348,47 +322,13 @@ export function buildApp(db: DB, cfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  // ---------- stats / recommendations ----------
-  app.get('/api/stats', async () => {
-    const p = one('SELECT COUNT(*) n, COALESCE(SUM(size_bytes), 0) bytes FROM photos WHERE archived = 0') as Row;
-    const sessions = loadSettings(db).sessions;
-    const complete = (one('SELECT COUNT(*) n FROM (SELECT photo_id FROM reviews GROUP BY photo_id HAVING COUNT(*) >= ?)', sessions) as Row).n;
-    const dist = [1, 2, 3, 4, 5].map((v) => ({ value: v, n: (one('SELECT COUNT(*) n FROM reviews WHERE rating = ?', v) as Row).n }));
-    const avg = (one('SELECT AVG(rating) a FROM reviews') as Row).a ?? 0;
-    const perShoot = (db.prepare('SELECT s.id, s.name, COUNT(p.id) n FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id GROUP BY s.id ORDER BY s.imported_at DESC').all() as Row[]);
-    const inCollections = (one('SELECT COUNT(DISTINCT photo_id) n FROM collection_photos') as Row).n;
-    const top = (db.prepare('SELECT p.* FROM photos p JOIN reviews r ON r.photo_id = p.id WHERE p.archived = 0 GROUP BY p.id ORDER BY AVG(r.rating) DESC, COUNT(r.id) DESC LIMIT 10').all() as Row[]).map((r) => photoDto(r));
-    return { photos: p.n, bytes: p.bytes, completePct: p.n ? Math.round((complete / p.n) * 100) : 0, avgRating: avg, inCollections, dist, perShoot, top };
-  });
-
-  app.get('/api/recommendations', async () => {
-    const dismissed = new Set((db.prepare("SELECT kind || ':' || photo_id k FROM dismissed").all() as Row[]).map((r) => r.k));
-    const settings = loadSettings(db);
-    const all = (db.prepare('SELECT * FROM photos WHERE archived = 0').all() as Row[]);
-    // One query for every review, grouped here, instead of one query per photo.
-    const byPhoto = new Map<number, Row[]>();
-    for (const r of db.prepare('SELECT photo_id, rating, date FROM reviews ORDER BY photo_id, session, id').all() as Row[]) {
-      (byPhoto.get(r.photo_id) ?? byPhoto.set(r.photo_id, []).get(r.photo_id)!).push(r);
-    }
-    const withRatings = all.map((p) => ({ p, rs: byPhoto.get(p.id) ?? [] }));
-    const inColl = new Set((db.prepare('SELECT DISTINCT photo_id FROM collection_photos').all() as Row[]).map((r) => r.photo_id));
-    const keep = (kind: string, p: Row) => !dismissed.has(`${kind}:${p.id}`);
-    const growing = withRatings.filter(({ p, rs }) => rs.length >= 3 && rs[rs.length - 1].rating - rs[0].rating >= 1 && keep('growing', p)).slice(0, 12)
-      .map(({ p, rs }) => ({ ...photoDto(p), from: rs[0].rating, to: rs[rs.length - 1].rating }));
-    const quiet = withRatings.filter(({ p, rs }) => rs.length >= Math.min(4, settings.sessions) && avgOf(rs.map((r) => r.rating)) >= 4.5 && !inColl.has(p.id) && keep('quiet', p)).slice(0, 12).map(({ p }) => photoDto(p));
-    const yearAgo = Date.now() - 365 * 86_400_000;
-    const forgotten = withRatings.filter(({ rs }) => rs.length > 0 && rs[0].rating >= 4 && new Date(rs[rs.length - 1].date).getTime() < yearAgo).slice(0, 14).map(({ p }) => photoDto(p));
-    const archive = settings.archiveSuggest
-      ? withRatings.filter(({ p, rs }) => rs.length >= 4 && avgOf(rs.map((r) => r.rating)) < 2 && keep('archive', p)).slice(0, 12).map(({ p }) => photoDto(p))
-      : [];
-    // "Belongs together" and "More like this" need image analysis, which is not built yet.
-    return { growing, quiet, forgotten, archive, needsAi: ['together', 'similar'] };
-  });
-  app.post('/api/recommendations/dismiss', async (req) => {
-    const b = (req.body ?? {}) as Row;
-    for (const id of Array.isArray(b.photoIds) ? b.photoIds : []) db.prepare('INSERT OR IGNORE INTO dismissed(kind, photo_id) VALUES(?, ?)').run(String(b.kind).slice(0, 20), num(id));
-    return { ok: true };
-  });
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: runScan, scanning: () => scanning };
+  registerPhotos(app, ctx);
+  registerLibrary(app, ctx);
+  registerInsights(app, ctx);
+  registerShare(app, ctx);
+  // Pick up where it left off after a restart.
+  setTimeout(kickAi, 2000).unref();
 
   // ---------- web UI ----------
   if (cfg.webDir && fs.existsSync(cfg.webDir)) {

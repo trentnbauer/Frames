@@ -1,19 +1,28 @@
-// Shared types and the pure print-suitability maths. All real data comes from the server (see api.ts).
+// Shared types and small helpers. All real data comes from the server (see api.ts).
+export { checkTarget, parseTarget, requiredPx, targetProblem, type Target } from './target';
+import type { Target } from './target';
 
-export type Tag = { name: string; source: 'user' | 'ai'; accepted: boolean };
+export type Tag = { name: string; kind: 'tag' | 'subject'; source: string; accepted: boolean };
 export type Review = { session: number; date: string; rating: number; note?: string };
+export type Swatch = { hex: string; pct: number; name: string };
 export type PhotoLite = {
   id: number; title: string; file: string; shootId: number; w: number; h: number; ar: number; hasImage: boolean;
   capturedAt: string | null; camera: string; lens: string; exposure: string; fileType: string; sizeMb: number;
   archived: boolean; missing: boolean; nextReviewAt: string | null; reviewCount: number; avgRating: number;
+  lat: number | null; lon: number | null; place: string; parentId: number | null;
+  palette: Swatch[]; brightness: number | null; contrast: number | null; saturation: number | null;
+  xmpRating: number | null; aiStatus: string | null; similarity?: number;
 };
-export type PhotoFull = PhotoLite & { tags: Tag[]; reviews: Review[] };
+export type AiSuggestion = { description: string; subjects: string[]; tags: string[]; environment: string; composition: string; lighting: string; mood: string; model?: string } | null;
+export type PhotoFull = PhotoLite & {
+  tags: Tag[]; reviews: Review[]; description: string; descSource: string; aiSuggestion: AiSuggestion;
+  variants: number[]; conflicts: { field: string; mine: string; theirs: string }[];
+};
 export type Shoot = {
-  id: number; name: string; source: string; place: string; dates: string; importedAt: string;
-  count: number; coverId: number | null; reviewPct: number; sessions: number;
+  id: number; name: string; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
+  dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; sessions: number;
 };
-export type Target = { count: number; size: 'A4' | 'A3' | 'A2'; orientation: 'portrait' | 'landscape' | 'any'; ppi: number };
-export type Collection = { id: number; name: string; description: string; target: Target | null; photoIds: number[]; chosenIds: number[] };
+export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[] };
 
 export const RATINGS = [
   { value: 1, emoji: '😐', label: 'meh' },
@@ -23,26 +32,8 @@ export const RATINGS = [
   { value: 5, emoji: '😍', label: 'love' },
 ] as const;
 
-export const PAPER_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594] } as const;
-
-/** Minimum pixels needed for a paper size at a given PPI, short side first. */
-export function requiredPx(size: Target['size'], ppi: number): [number, number] {
-  const [a, b] = PAPER_MM[size];
-  return [Math.round((a / 25.4) * ppi), Math.round((b / 25.4) * ppi)];
-}
-
-/** Returns null if the photo meets the target, else a plain-language reason. */
-export function targetProblem(p: Pick<PhotoLite, 'w' | 'h'>, t: Target | null): string | null {
-  if (!t) return null;
-  if (!p.w || !p.h) return 'Pixel size unknown.';
-  const portrait = p.h > p.w;
-  if (t.orientation === 'portrait' && !portrait) return 'Landscape. Target is portrait.';
-  if (t.orientation === 'landscape' && portrait) return 'Portrait. Target is landscape.';
-  const [short, long] = requiredPx(t.size, t.ppi);
-  const [needW, needH] = portrait ? [short, long] : [long, short];
-  if (p.w < needW || p.h < needH) return `${p.w} × ${p.h} px. ${t.size} at ${t.ppi} PPI needs ${needW} × ${needH}.`;
-  return null;
-}
-
+/** Capture times have no timezone; they are the wall-clock time as written, so format them as is. */
 export const fmtDate = (iso: string | null | undefined, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }) =>
   iso ? new Date(iso).toLocaleDateString('en-AU', opts) : '';
+
+export const fmtCoord = (lat: number, lon: number) => `${Math.abs(lat).toFixed(4)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(4)}°${lon < 0 ? 'W' : 'E'}`;

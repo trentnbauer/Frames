@@ -5,20 +5,24 @@ import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 import { Justified } from './bits';
 
-const SUBJECTS = ['fog', 'water', 'birds', 'dusk', 'architecture', 'coast', 'minimal', 'portrait', 'street', 'night'];
+type Parsed = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
+type Chip = { key: string; label: string };
 
 /**
- * AI off: plain filename / metadata / tag search.
- * AI on: the same search, plus recognised subject words shown as removable chips.
- * Semantic parsing ("early morning", "no people") needs the AI pipeline, which is not built yet.
+ * AI off: filename, metadata, tag and place search.
+ * AI on: the same, ranked by meaning, and the sentence is split into removable chips
+ * ("fog over water, early morning, no people" becomes a subject, a time of day and an exclusion).
  */
 export function Search({ onClose }: { onClose: () => void }) {
   const { settings } = useStore();
   const ai = !!settings && settings.ai !== 'off';
   const nav = useNavigate();
   const [q, setQ] = useState('');
+  const [parsed, setParsed] = useState<Parsed | null>(null);
   const [removed, setRemoved] = useState<string[]>([]);
   const [results, setResults] = useState<PhotoLite[]>([]);
+  const [count, setCount] = useState(0);
+  const [semantic, setSemantic] = useState(false);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
@@ -28,39 +32,65 @@ export function Search({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', f);
   }, [onClose]);
 
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const chips = ai ? words.filter((w) => SUBJECTS.includes(w) && !removed.includes(w)) : [];
-  const effective = words.filter((w) => !(ai && removed.includes(w))).join(' ');
+  const chips: Chip[] = [];
+  if (parsed) {
+    if (parsed.subjects.length) chips.push({ key: 'subjects', label: `Subject: ${parsed.subjects.join(', ')}` });
+    if (parsed.exclude.length) chips.push({ key: 'exclude', label: `Exclude: ${parsed.exclude.join(', ')}` });
+    if (parsed.time) chips.push({ key: 'time', label: `Time: ${parsed.time.from}–${parsed.time.to}` });
+    if (parsed.colours.length) chips.push({ key: 'colours', label: `Colour: ${parsed.colours.join(', ')}` });
+  }
+  const live = chips.filter((c) => !removed.includes(c.key));
 
+  const params = () => {
+    const p = new URLSearchParams();
+    const text = parsed?.text || q;
+    if (text.trim()) p.set('q', text.trim());
+    if (parsed) {
+      if (!removed.includes('subjects') && parsed.subjects.length) p.set('subject', parsed.subjects.join(','));
+      if (!removed.includes('exclude') && parsed.exclude.length) p.set('exclude', parsed.exclude.join(','));
+      if (!removed.includes('time') && parsed.time) p.set('time', `${parsed.time.from}-${parsed.time.to}`);
+      if (!removed.includes('colours') && parsed.colours.length) p.set('colour', parsed.colours.join(','));
+    }
+    if (ai && q.trim()) p.set('semantic', '1');
+    return p;
+  };
+
+  // Debounced: understand the sentence, then search.
   useEffect(() => {
-    if (!effective) { setResults([]); return; }
+    if (!q.trim()) { setResults([]); setParsed(null); setCount(0); return; }
     setBusy(true);
-    const t = setTimeout(() => {
-      api<{ photos: PhotoLite[] }>(`/photos?q=${encodeURIComponent(effective)}`).then((r) => setResults(r.photos)).catch(() => setResults([])).finally(() => setBusy(false));
-    }, 200);
+    const t = setTimeout(async () => {
+      try {
+        let pr = parsed;
+        if (ai && !parsed) {
+          pr = (await api<{ parsed: Parsed | null }>('/search/parse', { body: { q } }).catch(() => ({ parsed: null }))).parsed;
+          setParsed(pr);
+        }
+        const p = params();
+        // Subject chips narrow the search; the sentence itself still ranks by meaning.
+        const r = await api<{ photos: PhotoLite[]; count: number; semantic: boolean }>(`/photos?${p}`);
+        setResults(r.photos); setCount(r.count); setSemantic(r.semantic);
+      } catch { setResults([]); setCount(0); } finally { setBusy(false); }
+    }, 350);
     return () => clearTimeout(t);
-  }, [effective]);
+  }, [q, removed.join(','), parsed ? 1 : 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shoots = new Set(results.map((p) => p.shootId)).size;
+  const openAll = () => { onClose(); nav(`/library?${params()}`); };
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="panel" role="dialog" aria-label="Search">
-        <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search filenames, metadata and tags…" aria-label="Search query" />
+        <input ref={ref} value={q} onChange={(e) => { setQ(e.target.value); setParsed(null); setRemoved([]); }} onKeyDown={(e) => { if (e.key === 'Enter') openAll(); }}
+          placeholder={ai ? 'Describe what you are looking for…' : 'Search filenames, metadata, places and tags…'} aria-label="Search query" />
         <div className="chips">
-          {chips.map((c) => (
-            <span key={c} className="chip">Subject: {c} <button aria-label={`Remove ${c}`} onClick={() => setRemoved([...removed, c])}>✕</button></span>
-          ))}
+          {live.map((c) => <span key={c.key} className="chip">{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved([...removed, c.key])}>✕</button></span>)}
         </div>
         <div className="spread" style={{ marginBottom: 12, fontSize: 12.5 }}>
-          <span className="t2">{busy ? 'Searching…' : `${results.length} photographs · ${shoots} ${shoots === 1 ? 'shoot' : 'shoots'}`}</span>
-          <span className="faint">{ai ? 'Filename, metadata and tag search' : 'AI off · filename, metadata and tag search'}</span>
+          <span className="t2">{busy ? 'Searching…' : `${count} ${count === 1 ? 'photograph' : 'photographs'} · ${shoots} ${shoots === 1 ? 'shoot' : 'shoots'}`}</span>
+          <span className="faint">{ai ? (semantic ? 'Ranked by meaning' : 'AI on · text match') : 'AI off · filename, metadata, place and tag search'}</span>
         </div>
-        {results.length ? (
-          <Justified photos={results.slice(0, 10)} h={110} onPick={(p) => { onClose(); nav(`/photo/${p.id}`); }} />
-        ) : (
-          <div className="empty">{effective && !busy ? 'Nothing matches.' : 'Type to search.'}</div>
-        )}
-        <div className="foot"><span>Esc close</span></div>
+        {results.length ? <Justified photos={results.slice(0, 10)} h={110} onPick={(p) => { onClose(); nav(`/photo/${p.id}`); }} /> : <div className="empty">{q.trim() && !busy ? 'Nothing matches.' : 'Type to search.'}</div>}
+        <div className="foot"><span>↵ open all results in Library</span><span>Esc close</span></div>
       </div>
     </div>
   );

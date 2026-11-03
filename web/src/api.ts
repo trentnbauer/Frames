@@ -26,4 +26,5 @@ export function useApi<T>(path: string | null) {
   return { data, error, loading: data === null && error === null, reload, set: setData };
 }
 
-export const imgUrl = (id: number, kind: 'thumb' | 'preview') => `/api/photos/${id}/${kind}`;
+/** A photo's image. On a share page the guest's own link token is used instead of the login. */
+export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => (share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`);
