@@ -15,20 +15,48 @@ Open http://localhost:3000, go to **Photoshoots** and press **Sync library** (or
 - The database and generated previews live in the `frames-data` volume. Back that up (see *Backup*).
 - The container runs as an unprivileged user with a read-only filesystem, no extra capabilities, and a health check.
 
-### Settings (`.env`)
+### Environment variables
 
-| Setting | What it does |
-|---|---|
-| `PHOTOS_DIR` | Folder of photographs, mounted read-only at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. |
-| `AUTH_USER` / `AUTH_PASSWORD` | Turn on a login (HTTP Basic). Empty password = no login. |
-| `BIND_ADDRESS`, `PORT` | Where to listen. Default `127.0.0.1` (this machine only). |
-| `AUTH_DISABLE` | `1` switches **all** sign-in off. Use it to get back in if sign-in is misconfigured (see *Security*). |
-| `OIDC_ALLOW_HTTP` | `1` allows an OpenID Connect server on plain `http://` (only on a trusted network). |
-| `SESSION_DAYS` | How long a sign-in lasts (default 14, renewed by use). |
-| `ALLOWED_HOSTS` | Public host name(s), if a reverse proxy rewrites the `Host` header. |
-| `TRUST_PROXY` | `1` behind a reverse proxy, so share links rate-limit each visitor. |
-| `MAX_UPLOAD_MB` | Largest single upload (default 2048). |
-| `FRAMES_IMAGE` | Run a published release instead of building (see *Versions*). |
+Two layers. The **stack variables** are set in `.env` (or in Portainer's stack form) and are read by `docker-compose.yml`; the compose file hands the **container variables** to Frames. Leave anything you do not need empty.
+
+**Stack variables** (`.env`, see `.env.example`)
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PHOTOS_DIR` | `./photos` | Folder of photographs on the Docker host, mounted **read-only** at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. Required in the Portainer file. |
+| `BIND_ADDRESS` | `127.0.0.1` | Which address the published port listens on. `127.0.0.1` is this machine only; `0.0.0.0` is every interface (turn on sign-in first). |
+| `PORT` | `3000` | The port published on the host. (Inside the container Frames always listens on 3000.) |
+| `FRAMES_IMAGE` | `frames:local` (built from source) | Run a published release instead of building, for example `ghcr.io/trentnbauer/frames:1.2.3` (see *Versions*). |
+| `FRAMES_VERSION` | `latest` | Portainer file only: the image tag to pull. |
+
+**Container variables** (passed to Frames by the compose files)
+
+| Variable | Default | What it does |
+|---|---|---|
+| `AUTH_USER` | `frames` | User name for the optional shared password. |
+| `AUTH_PASSWORD` | empty | A shared password (HTTP Basic, so use HTTPS across networks you do not trust). Empty = none. For Google, GitHub, Microsoft or your own OpenID Connect server use Settings, Access instead; both can be on. |
+| `AUTH_DISABLE` | empty | `1` switches **all** sign-in off, so a misconfigured provider cannot lock you out (see *Security*). Remove it again afterwards. |
+| `OIDC_ALLOW_HTTP` | empty | `1` allows an OpenID Connect server on plain `http://`, on a network you trust. |
+| `SESSION_DAYS` | `14` | How long a sign-in lasts (renewed by use). |
+| `ALLOWED_HOSTS` | empty | Comma-separated public host names (for example `frames.example.com`), needed only when a reverse proxy rewrites the `Host` header. |
+| `TRUST_PROXY` | empty | `1` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
+| `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
+
+**Set by the image itself** (change only if you run Frames without the supplied compose files)
+
+| Variable | Value in the image | What it does |
+|---|---|---|
+| `DATA_DIR` | `/data` | Where the database, previews, backups and copied cloud photos live (the `frames-data` volume). |
+| `LIBRARY_DIRS` | `/library` | Comma-separated read-only photo folders to scan. (`LIBRARY_DIR` is the older single-folder name.) |
+| `PORT` | `3000` | The port Frames listens on inside the container. |
+| `HOST` | `0.0.0.0` | The address Frames listens on inside the container. |
+| `WEB_DIR` | `/app/web` | The built web app. |
+| `APP_VERSION` | the release version, or `dev` | Shown in the app; set at build time. |
+| `NODE_ENV` | `production` | Standard Node setting. |
+
+Everything else (AI, sign-in providers, portfolio, sync) is set in the app, under Settings, and kept in the database.
+
+**Portainer**: use `docker-compose.portainer.yml` (Stacks, Add stack, Web editor). It pulls the published image, reads no files, and takes every stack and container variable above from the stack's *Environment variables* section; only `PHOTOS_DIR` is required.
 
 ### Versions and releases
 
