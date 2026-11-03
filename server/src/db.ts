@@ -142,6 +142,24 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS cloud_files_rel ON cloud_files(conn_id, rel);
     `);
   },
+  // 6: several AI sources instead of one. The single old configuration becomes the first source and stays active.
+  (db) => {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string } | undefined;
+    if (!row) return;
+    const st = JSON.parse(row.value) as Record<string, any>;
+    if (st.ai !== undefined && st.ai !== 'off' || st.aiEndpoint) {
+      const local = st.ai === 'local';
+      const id = 'first';
+      const src = { id, type: local ? 'ollama' : 'custom', name: local ? 'Ollama' : 'My AI service', endpoint: st.aiEndpoint ?? '', model: st.aiModel ?? '', embedModel: st.aiEmbedModel ?? '', ack: !!st.aiExternalAck };
+      db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)').run('aiSources', JSON.stringify([src]));
+      const key = db.prepare("SELECT value FROM settings WHERE key = 'secret:aiKey'").get() as { value: string } | undefined;
+      if (key) db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)').run(`secret:ai:${id}:key`, key.value);
+      if (st.ai !== 'off') st.aiActive = id;
+    }
+    for (const k of ['ai', 'aiEndpoint', 'aiModel', 'aiEmbedModel', 'aiExternalAck']) delete st[k];
+    db.prepare("UPDATE settings SET value = ? WHERE key = 'settings'").run(JSON.stringify(st));
+    db.prepare("DELETE FROM settings WHERE key = 'secret:aiKey'").run();
+  },
 ];
 
 export function migrate(db: DB) {

@@ -3,10 +3,11 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
-import { aiConfig, aiCounts, getSecret, ping, setSecret } from '../ai.js';
+import { aiConfig, aiCounts, ping } from '../ai.js';
+import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadSources, newSource, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
-import { loadSettings } from '../settings.js';
+import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
@@ -208,10 +209,50 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if (!c) return rep.code(400).send({ ok: false, detail: 'AI is off or not fully set up' });
     return ping(c);
   });
-  // The key is write-only: it is stored, used, and never sent back to the browser.
-  app.put('/api/ai/key', async (req) => {
-    setSecret(db, 'aiKey', String(((req.body ?? {}) as Row).key ?? '').slice(0, 500));
-    return { hasKey: !!getSecret(db, 'aiKey') };
+  // ---------- AI sources: as many as you like, one active ----------
+  const sourceDto = (src: AiSource) => ({ ...src, hasKey: !!sourceKey(db, src.id), ready: isReady(src), why: whyNotReady(src) });
+  const sourcesDto = () => ({ types: AI_TYPES, active: loadSettings(db).aiActive, sources: loadSources(db).map(sourceDto) });
+  const cfgOf = (src: AiSource): AiCfg => { const t = aiType(src.type)!; return { protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(db, src.id) }; };
+  app.get('/api/ai/sources', async () => sourcesDto());
+  app.post('/api/ai/sources', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    try {
+      const src = newSource(String(b.type ?? ''), b);
+      saveSources(db, [...loadSources(db), src]);
+      if (typeof b.key === 'string' && b.key) setSourceKey(db, src.id, b.key.slice(0, 500)); // write-only: stored, used, never sent back
+      return rep.code(201).send(sourcesDto());
+    } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
   });
-  app.get('/api/ai/key', async () => ({ hasKey: !!getSecret(db, 'aiKey') }));
+  app.put('/api/ai/sources/:id', async (req, rep) => {
+    const list = loadSources(db);
+    const i = list.findIndex((s) => s.id === (req.params as Row).id);
+    if (i < 0) return x.notFound(rep);
+    const b = (req.body ?? {}) as Row;
+    try { list[i] = applySource(list[i], b); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+    saveSources(db, list);
+    if (typeof b.key === 'string' && b.key) setSourceKey(db, list[i].id, b.key.slice(0, 500));
+    if (b.clearKey === true) setSourceKey(db, list[i].id, '');
+    // Changing the active source so it is no longer ready (an emptied model, a withdrawn acknowledgement) switches AI off rather than sending photos somewhere unconfirmed.
+    if (loadSettings(db).aiActive === list[i].id && !isReady(list[i])) saveSettings(db, { aiActive: '' });
+    return sourcesDto();
+  });
+  app.delete('/api/ai/sources/:id', async (req, rep) => {
+    const id = (req.params as Row).id;
+    if (!getSource(db, id)) return x.notFound(rep);
+    if (loadSettings(db).aiActive === id) saveSettings(db, { aiActive: '' });
+    saveSources(db, loadSources(db).filter((s) => s.id !== id));
+    setSourceKey(db, id, '');
+    return sourcesDto();
+  });
+  // Sends one short text prompt (no photographs), so it needs no acknowledgement.
+  app.post('/api/ai/sources/:id/test', async (req, rep) => {
+    const src = getSource(db, (req.params as Row).id);
+    if (!src) return x.notFound(rep);
+    if (!src.endpoint || !src.model) return rep.code(400).send({ ok: false, detail: whyNotReady(src) });
+    return ping(cfgOf(src));
+  });
+  app.put('/api/ai/active', async (req, rep) => {
+    try { saveSettings(db, { aiActive: String(((req.body ?? {}) as Row).id ?? '') }); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+    return sourcesDto();
+  });
 }

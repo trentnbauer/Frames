@@ -11,7 +11,7 @@ const DESCRIPTIONS = [
   { description: 'Sunlit desert dunes with long shadows', subjects: ['desert', 'dunes'], tags: ['warm', 'minimal'] },
   { description: 'Dense green forest after rain', subjects: ['forest'], tags: ['green', 'moody'] },
 ];
-const seen = { chat: 0, embed: 0, auth: [] as string[], images: 0, paths: [] as string[], failNext: 0 };
+const seen = { chat: 0, embed: 0, auth: [] as string[], xkeys: [] as string[], images: 0, paths: [] as string[], failNext: 0 };
 const vec = (text: string) => {
   const v = new Array(24).fill(0);
   for (const w of text.toLowerCase().split(/[^a-z]+/).filter(Boolean)) { let h = 0; for (const c of w) h = (h * 31 + c.charCodeAt(0)) % 24; v[h] += 1; }
@@ -26,23 +26,25 @@ beforeAll(async () => {
     req.on('end', () => {
       seen.paths.push(req.url ?? '');
       if (req.headers.authorization) seen.auth.push(req.headers.authorization);
+      if (req.headers['x-api-key']) seen.xkeys.push(String(req.headers['x-api-key']) + '|' + String(req.headers['anthropic-version']));
       const j = body ? JSON.parse(body) : {};
       const send = (o: unknown, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
       if (seen.failNext > 0) { seen.failNext--; return send({ error: 'boom' }, 500); }
       const chatText = (j.messages?.[0]?.content as string | { text: string }[]) ?? '';
-      const prompt = typeof chatText === 'string' ? chatText : chatText[0].text;
+      const prompt = typeof chatText === 'string' ? chatText : (chatText as any[]).find((b) => b.type === 'text').text;
       const hasImage = !!j.messages?.[0]?.images?.length || Array.isArray(chatText);
-      if (req.url === '/api/chat' || req.url === '/v1/chat/completions') {
+      if (req.url === '/api/chat' || req.url === '/v1/chat/completions' || req.url === '/v1/messages' || req.url === '/v1beta/openai/chat/completions') {
         seen.chat++;
         if (hasImage) seen.images++;
         let out: unknown;
         if (prompt.startsWith('Convert this photo-library search')) out = { text: 'fog', subjects: ['harbour'], exclude: ['people'], colours: [], time: { from: '05:00', to: '08:00' } };
         else if (prompt.includes('"ok": true')) out = { ok: true };
         else out = DESCRIPTIONS[(seen.images - 1) % DESCRIPTIONS.length] && { ...DESCRIPTIONS[(seen.images - 1) % DESCRIPTIONS.length], environment: 'outdoors', composition: 'centred', lighting: 'soft', mood: 'calm' };
+        if (req.url === '/v1/messages') return send({ content: [{ type: 'text', text: JSON.stringify(out) }] });
         return send(req.url === '/api/chat' ? { message: { content: JSON.stringify(out) } } : { choices: [{ message: { content: JSON.stringify(out) } }] });
       }
       if (req.url === '/api/embed') { seen.embed++; return send({ embeddings: [vec(j.input)] }); }
-      if (req.url === '/v1/embeddings') { seen.embed++; return send({ data: [{ embedding: vec(j.input) }] }); }
+      if (req.url === '/v1/embeddings' || req.url === '/v1beta/openai/embeddings') { seen.embed++; return send({ data: [{ embedding: vec(j.input) }] }); }
       send({ error: 'not found' }, 404);
     });
   });
@@ -63,6 +65,13 @@ beforeAll(async () => {
 });
 afterAll(() => cleanup(env));
 
+/** Adds an AI source (the way the Settings page does) and, if asked, makes it the active one. */
+const addSource = async (type: string, fields: Record<string, unknown>, activate = true) => {
+  const r = await A.post('/api/ai/sources', { type, ...fields });
+  const src = (r.body.sources as any[]).at(-1);
+  if (activate) return { r, src, act: await A.put('/api/ai/active', { id: src.id }) };
+  return { r, src, act: null };
+};
 const photos = async () => (await A.get('/api/photos')).body.photos as any[];
 
 describe('turning AI on', () => {
@@ -72,22 +81,29 @@ describe('turning AI on', () => {
     expect((await photos()).every((p) => p.aiStatus === null)).toBe(true);
   });
   it('needs an address and a model, and a valid URL', async () => {
-    expect((await A.put('/api/settings', { ai: 'local' })).status).toBe(400);
-    expect((await A.put('/api/settings', { ai: 'local', aiEndpoint: 'ftp://x', aiModel: 'm' })).status).toBe(400);
-    expect((await A.put('/api/settings', { ai: 'local', aiEndpoint: 'not a url', aiModel: 'm' })).status).toBe(400);
+    expect((await A.post('/api/ai/sources', { type: 'nope' })).status).toBe(400);
+    expect((await A.post('/api/ai/sources', { type: 'ollama', endpoint: 'ftp://x' })).status).toBe(400);
+    expect((await A.post('/api/ai/sources', { type: 'ollama', endpoint: 'not a url' })).status).toBe(400);
+    const { src, act } = await addSource('local-openai', { endpoint: '', model: '' });
+    expect(act!.status).toBe(400); // an empty address and model cannot be switched on
+    expect((await A.get('/api/ai/status')).body.enabled).toBe(false);
+    await A.del(`/api/ai/sources/${src.id}`);
   });
-  it('refuses an external provider until the user confirms previews will be sent to a third party', async () => {
-    const r = await A.put('/api/settings', { ai: 'external', aiEndpoint: base, aiModel: 'vision', aiEmbedModel: 'embed' });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/third party/);
+  it('refuses an outside service until the user confirms previews will be sent to a third party', async () => {
+    const { src, act } = await addSource('custom', { endpoint: base, model: 'vision', embedModel: 'embed' });
+    expect(act!.status).toBe(400);
+    expect(act!.body.error).toMatch(/third party/);
     expect((await A.get('/api/ai/status')).body.enabled).toBe(false);
     expect(seen.chat).toBe(0); // nothing was sent anywhere
+    await A.del(`/api/ai/sources/${src.id}`);
   });
 });
 
 describe('local provider', () => {
   it('analyses photos in the background: descriptions, subjects, tags and embeddings, as suggestions', async () => {
-    expect((await A.put('/api/settings', { ai: 'local', aiEndpoint: base + '/', aiModel: 'llava', aiEmbedModel: 'nomic' })).status).toBe(200);
+    const { act } = await addSource('ollama', { endpoint: base + '/', model: 'llava', embedModel: 'nomic' });
+    expect(act!.status).toBe(200);
+    expect((await A.get('/api/settings')).body.settings.ai).toBe('local');
     expect((await A.post('/api/ai/test')).body.ok).toBe(true);
     const r = await A.raw('POST', '/api/ai/run?wait=1', {});
     expect(r.body).toMatchObject({ enabled: true, pending: 0, done: 3, failed: 0 });
@@ -152,7 +168,7 @@ describe('local provider', () => {
     expect((await photos()).every((p) => p.aiStatus === 'done')).toBe(true);
   });
   it('switching AI off stops all calls and hides suggestions from search', async () => {
-    await A.put('/api/settings', { ai: 'off' });
+    await A.put('/api/ai/active', { id: '' });
     const before = seen.chat + seen.embed;
     expect((await A.get('/api/photos?q=foggy&semantic=1')).body.semantic).toBe(false);
     expect((await A.post('/api/search/parse', { q: 'x' })).body).toEqual({ ai: false, parsed: null });
@@ -160,25 +176,94 @@ describe('local provider', () => {
   });
 });
 
-describe('external provider', () => {
-  it('works once acknowledged, sends the key as a bearer token, and never returns the key', async () => {
-    await A.put('/api/ai/key', { key: 'sk-test-123' });
-    const r = await A.put('/api/settings', { ai: 'external', aiEndpoint: base, aiModel: 'gpt-vision', aiEmbedModel: 'text-embed', aiExternalAck: true });
-    expect(r.status).toBe(200);
+describe('outside services', () => {
+  it('ChatGPT-style: works once acknowledged, sends the key as a bearer token, and never returns the key', async () => {
+    const { src, act } = await addSource('openai', { endpoint: base, model: 'gpt-vision', embedModel: 'text-embed', ack: true, key: 'sk-test-123' });
+    expect(act!.status).toBe(200);
+    expect((await A.get('/api/settings')).body.settings.ai).toBe('external');
     expect((await A.post('/api/ai/test')).body.ok).toBe(true);
     expect(seen.auth).toContain('Bearer sk-test-123');
     expect(seen.paths).toContain('/v1/chat/completions');
     env.db.prepare("UPDATE photos SET ai_status = NULL, ai_json = NULL WHERE id = 1").run();
     await A.raw('POST', '/api/ai/run?wait=1', {});
     expect(seen.paths).toContain('/v1/embeddings');
-    expect(JSON.stringify((await A.get('/api/settings')).body)).not.toContain('sk-test-123');
-    expect((await A.get('/api/ai/key')).body).toEqual({ hasKey: true });
+    const shown = JSON.stringify([(await A.get('/api/settings')).body, (await A.get('/api/ai/sources')).body]);
+    expect(shown).not.toContain('sk-test-123');
+    expect((await A.get('/api/ai/sources')).body.sources.find((x: any) => x.id === src.id)).toMatchObject({ hasKey: true, ready: true });
   });
-  it('stops sending photos if the acknowledgement is withdrawn', async () => {
-    await A.put('/api/settings', { ai: 'off' });
-    await A.put('/api/settings', { aiExternalAck: false });
+  it('Gemini-style: an address that already has a path is used as given', async () => {
+    const { act } = await addSource('gemini', { endpoint: base + '/v1beta/openai', key: 'g-key', ack: true });
+    expect(act!.status).toBe(200);
+    expect((await A.post('/api/ai/test')).body.ok).toBe(true);
+    expect(seen.paths).toContain('/v1beta/openai/chat/completions');
+    expect(seen.auth).toContain('Bearer g-key');
+  });
+  it('Claude: uses its own API, key header and version, sends the photo as an image block, and skips embeddings', async () => {
+    const { act } = await addSource('anthropic', { endpoint: base, key: 'ant-key', ack: true });
+    expect(act!.status).toBe(200);
+    expect((await A.post('/api/ai/test')).body.ok).toBe(true);
+    expect(seen.xkeys).toContain('ant-key|2023-06-01');
+    expect(seen.auth).not.toContain('Bearer ant-key');
+    env.db.prepare("UPDATE photos SET ai_status = NULL, ai_json = NULL WHERE id = 1").run();
+    const embeds = seen.embed, images = seen.images;
+    const r = await A.raw('POST', '/api/ai/run?wait=1', {});
+    expect(r.body).toMatchObject({ pending: 0, failed: 0 });
+    expect(seen.images).toBe(images + 1);
+    expect(seen.embed).toBe(embeds); // Claude has no embeddings
+    expect(r.body.lastError ?? null).toBeNull();
+    expect((await A.get('/api/photos?q=foggy&semantic=1')).body.semantic).toBe(false);
+  });
+  it('can hold several at once, switch between them, and remove one', async () => {
+    const list = (await A.get('/api/ai/sources')).body;
+    expect(list.sources.map((s: any) => s.type)).toEqual(expect.arrayContaining(['ollama', 'openai', 'gemini', 'anthropic']));
+    expect(list.types.map((t: any) => t.id)).toEqual(expect.arrayContaining(['anthropic', 'gemini', 'openai', 'ollama', 'local-openai', 'openrouter', 'custom']));
+    const ollama = list.sources.find((s: any) => s.type === 'ollama');
+    expect((await A.put('/api/ai/active', { id: ollama.id })).body.active).toBe(ollama.id);
+    expect((await A.get('/api/settings')).body.settings.ai).toBe('local');
+    expect((await A.put('/api/ai/active', { id: 'nonsense' })).status).toBe(400);
+    const gem = list.sources.find((s: any) => s.type === 'gemini');
+    await A.put('/api/ai/active', { id: gem.id });
+    expect((await A.del(`/api/ai/sources/${gem.id}`)).body.active).toBe(''); // removing the one in use turns AI off
+    expect((await A.get('/api/ai/status')).body.enabled).toBe(false);
+    expect(env.db.prepare("SELECT COUNT(*) n FROM settings WHERE key = ?").get(`secret:ai:${gem.id}:key`)).toEqual({ n: 1 }); // emptied, not left readable
+    expect(env.db.prepare("SELECT value FROM settings WHERE key = ?").get(`secret:ai:${gem.id}:key`)).toEqual({ value: '""' });
+  });
+  it('stops sending photos if the acknowledgement is withdrawn from the active one', async () => {
+    const oa = (await A.get('/api/ai/sources')).body.sources.find((s: any) => s.type === 'openai');
+    await A.put('/api/ai/active', { id: oa.id });
+    expect((await A.get('/api/settings')).body.settings.ai).toBe('external');
+    await A.put(`/api/ai/sources/${oa.id}`, { ack: false });
     const s = (await A.get('/api/settings')).body.settings;
     expect(s.ai).toBe('off');
-    expect((await A.put('/api/settings', { ai: 'external' })).status).toBe(400);
+    expect(s.aiActive).toBe('');
+    expect((await A.put('/api/ai/active', { id: oa.id })).status).toBe(400);
+  });
+  it('lets the key be replaced or cleared, and testing needs no acknowledgement (no photo is sent)', async () => {
+    const { src } = await addSource('openai', { endpoint: base, model: 'm' }, false);
+    expect((await A.post(`/api/ai/sources/${src.id}/test`)).body.ok).toBe(true);
+    await A.put(`/api/ai/sources/${src.id}`, { key: 'k-new' });
+    expect((await A.get('/api/ai/sources')).body.sources.find((x: any) => x.id === src.id).hasKey).toBe(true);
+    await A.put(`/api/ai/sources/${src.id}`, { clearKey: true });
+    expect((await A.get('/api/ai/sources')).body.sources.find((x: any) => x.id === src.id).hasKey).toBe(false);
+  });
+});
+
+describe('moving from the old single setup', () => {
+  it('keeps an existing configuration as the first source, still active, with its key', async () => {
+    const e = makeEnv();
+    try {
+      e.db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('settings', ?)").run(JSON.stringify({ ai: 'external', aiEndpoint: 'https://old.example.com', aiModel: 'm1', aiEmbedModel: 'e1', aiExternalAck: true }));
+      e.db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('secret:aiKey', ?)").run(JSON.stringify('old-key'));
+      e.db.pragma('user_version = 5');
+      const { migrate } = await import('./db.js');
+      migrate(e.db);
+      const st = JSON.parse((e.db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as any).value);
+      expect(st).toMatchObject({ aiActive: 'first' });
+      expect(st.ai).toBeUndefined();
+      const src = JSON.parse((e.db.prepare("SELECT value FROM settings WHERE key = 'aiSources'").get() as any).value)[0];
+      expect(src).toMatchObject({ id: 'first', endpoint: 'https://old.example.com', model: 'm1', embedModel: 'e1', ack: true });
+      expect(JSON.parse((e.db.prepare("SELECT value FROM settings WHERE key = 'secret:ai:first:key'").get() as any).value)).toBe('old-key');
+      expect(e.db.prepare("SELECT 1 FROM settings WHERE key = 'secret:aiKey'").get()).toBeUndefined();
+    } finally { cleanup(e); }
   });
 });
