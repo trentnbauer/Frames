@@ -28,7 +28,7 @@ afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 describe('library', () => {
   it('reports pending files, imports them once, skips exact duplicates', async () => {
     expect((await j('GET', '/api/library/pending')).body.count).toBe(3);
-    const s = (await j('POST', '/api/library/scan')).body;
+    const s = (await j('POST', '/api/library/scan?wait=1')).body;
     expect(s.imported).toBe(2);
     expect(s.duplicates).toBe(1);
     expect((await j('GET', '/api/library/pending')).body.count).toBe(0);

@@ -86,7 +86,8 @@ export function Justified({ photos, h = 190, onPick }: { photos: PhotoLite[]; h?
   return (
     <div className="just">
       {photos.map((p) => {
-        const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar) };
+        // Archived photos stay in the grid, just dimmed: they are only left out of review.
+        const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1 };
         return onPick ? (
           <button key={p.id} style={st} onClick={() => onPick(p)} aria-label={p.title}><Img p={p} /></button>
         ) : (
