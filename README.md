@@ -22,6 +22,9 @@ Open http://localhost:3000, go to **Photoshoots** and press **Sync library** (or
 | `PHOTOS_DIR` | Folder of photographs, mounted read-only at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. |
 | `AUTH_USER` / `AUTH_PASSWORD` | Turn on a login (HTTP Basic). Empty password = no login. |
 | `BIND_ADDRESS`, `PORT` | Where to listen. Default `127.0.0.1` (this machine only). |
+| `AUTH_DISABLE` | `1` switches **all** sign-in off. Use it to get back in if sign-in is misconfigured (see *Security*). |
+| `OIDC_ALLOW_HTTP` | `1` allows an OpenID Connect server on plain `http://` (only on a trusted network). |
+| `SESSION_DAYS` | How long a sign-in lasts (default 14, renewed by use). |
 | `ALLOWED_HOSTS` | Public host name(s), if a reverse proxy rewrites the `Host` header. |
 | `TRUST_PROXY` | `1` behind a reverse proxy, so share links rate-limit each visitor. |
 | `MAX_UPLOAD_MB` | Largest single upload (default 2048). |
@@ -47,7 +50,12 @@ A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `la
 
 ## Security
 
-- **Login.** Set `AUTH_PASSWORD` to require a login. It is HTTP Basic, so **use HTTPS** (a reverse proxy) if the password crosses a network you don't trust. There is no rate limiting on failed logins; put one on your proxy if it is internet-facing.
+- **Sign-in (optional).** Frames works with no sign-in. To protect it you can use either or both of:
+  - **OAuth providers** (Settings, Access): Google, GitHub, Microsoft, any OpenID Connect server (Authentik, Keycloak, Authelia and so on), or another OAuth 2 service. Add a provider with its client ID and secret, register the redirect address Frames shows you, list who may sign in (emails, whole domains such as `@family.com`, or account ids), press **Test sign-in**, then turn **Require sign-in** on. Everyone on the list has the same access.
+  - **A shared password** (`AUTH_PASSWORD`). This is HTTP Basic, so **use HTTPS** if it crosses a network you don't trust.
+- **You can't lock yourself out.** Sign-in can only be switched on after a test sign-in by an account that is on the list, and you can't save a list that removes your own account or change a provider while sign-in is on. If it still goes wrong, set `AUTH_DISABLE=1` on the container and restart.
+- **How OAuth is handled.** Standard authorization-code flow with PKCE, state and nonce; the ID token's signature, issuer, audience and expiry are all checked; email entries only count if the provider says the address is verified. Sessions are random, HttpOnly, SameSite=Lax cookies (Secure over https), kept as a hash in the database. Client secrets are write-only: never sent back to the browser and left out of every backup. Failed and repeated sign-in attempts are rate-limited. Share links and the health check never need a sign-in.
+- Login failures are not rate-limited for the shared password; put that on your proxy if it is internet-facing.
 - **Exposure.** By default Frames only listens on this machine. To reach it from other devices set `BIND_ADDRESS=0.0.0.0`, and set a password first. Frames warns at start-up if there is no password.
 - Cross-site writes are blocked, responses carry a strict Content-Security-Policy, original files are only ever served by photo id, symlinks in the library are ignored, and the AI key is write-only (never sent back, never in a backup).
 - The page loads its fonts from Google Fonts (allowed in the policy). Self-host them if that matters to you.
@@ -106,7 +114,7 @@ cd web && npm install && npm run dev         # UI on :5173, proxies /api to :300
 
 ## Known limits
 
-- **RAW files**: the embedded JPEG preview is used. A RAW file with none shows a placeholder, and its real pixel size is only known if its metadata has it. Tested with generated RAW-style files, not with real camera files from every maker.
+- **RAW files**: every RAW (uploaded or in a library) gets a JPEG thumbnail and preview. Frames uses the biggest JPEG the camera embedded (found with ExifTool, so it works across makers). If there is none or it is small, the RAW is developed with `dcraw` just to make the preview. The RAW itself is never changed. Checked with a real Nikon D5600 file and the ExifTool sample set (Canon, Nikon, Fuji, Panasonic, Adobe DNG), not every camera. A file with no picture data at all shows a placeholder.
 - **AI**: tested against a stand-in model server, not against real models. Quality depends on the model you choose.
 - **Cloud storage**: use a cloud drive mounted as a folder. There are no built-in connectors for S3, WebDAV or Google Drive.
-- **Login**: one shared password, no accounts or per-person permissions.
+- **Access**: everyone allowed in has the same access (no per-person permissions). OAuth sign-in is tested against stand-in providers that follow the standards, not against live Google, GitHub or Microsoft.

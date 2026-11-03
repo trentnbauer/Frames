@@ -3,7 +3,7 @@ import type { Cfg } from './ingest.js';
 import type { createAiWorker } from './ai.js';
 
 export type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean };
+export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean; authDisabled?: boolean; allowInsecureOidc?: boolean };
 
 /** What the route modules share. Built once in buildApp. */
 export type Ctx = {

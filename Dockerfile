@@ -20,6 +20,11 @@ COPY --from=server /app/server/node_modules ./server/node_modules
 COPY --from=server /app/server/dist ./server/dist
 COPY --from=server /app/server/package.json ./server/package.json
 COPY --from=web /app/web/dist ./web
+# RAW files: ExifTool finds the JPEG preview each camera maker embeds (and reads their metadata), and
+# dcraw develops a RAW that has no usable preview. Both only read the file.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libimage-exiftool-perl dcraw \
+ && rm -rf /var/lib/apt/lists/*
 # The app runs as the unprivileged "node" user, so it must own the data folder
 # (a fresh named volume copies this ownership).
 RUN mkdir -p /data /library && chown node:node /data
