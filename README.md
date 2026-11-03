@@ -15,20 +15,48 @@ Open http://localhost:3000, go to **Photoshoots** and press **Sync library** (or
 - The database and generated previews live in the `frames-data` volume. Back that up (see *Backup*).
 - The container runs as an unprivileged user with a read-only filesystem, no extra capabilities, and a health check.
 
-### Settings (`.env`)
+### Environment variables
 
-| Setting | What it does |
-|---|---|
-| `PHOTOS_DIR` | Folder of photographs, mounted read-only at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. |
-| `AUTH_USER` / `AUTH_PASSWORD` | Turn on a login (HTTP Basic). Empty password = no login. |
-| `BIND_ADDRESS`, `PORT` | Where to listen. Default `127.0.0.1` (this machine only). |
-| `AUTH_DISABLE` | `1` switches **all** sign-in off. Use it to get back in if sign-in is misconfigured (see *Security*). |
-| `OIDC_ALLOW_HTTP` | `1` allows an OpenID Connect server on plain `http://` (only on a trusted network). |
-| `SESSION_DAYS` | How long a sign-in lasts (default 14, renewed by use). |
-| `ALLOWED_HOSTS` | Public host name(s), if a reverse proxy rewrites the `Host` header. |
-| `TRUST_PROXY` | `1` behind a reverse proxy, so share links rate-limit each visitor. |
-| `MAX_UPLOAD_MB` | Largest single upload (default 2048). |
-| `FRAMES_IMAGE` | Run a published release instead of building (see *Versions*). |
+Two layers. The **stack variables** are set in `.env` (or in Portainer's stack form) and are read by `docker-compose.yml`; the compose file hands the **container variables** to Frames. Leave anything you do not need empty.
+
+**Stack variables** (`.env`, see `.env.example`)
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PHOTOS_DIR` | `./photos` | Folder of photographs on the Docker host, mounted **read-only** at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. Required in the Portainer file. |
+| `BIND_ADDRESS` | `127.0.0.1` | Which address the published port listens on. `127.0.0.1` is this machine only; `0.0.0.0` is every interface (turn on sign-in first). |
+| `PORT` | `3000` | The port published on the host. (Inside the container Frames always listens on 3000.) |
+| `FRAMES_IMAGE` | `frames:local` (built from source) | Run a published release instead of building, for example `ghcr.io/trentnbauer/frames:1.2.3` (see *Versions*). |
+| `FRAMES_VERSION` | `latest` | Portainer file only: the image tag to pull. |
+
+**Container variables** (passed to Frames by the compose files)
+
+| Variable | Default | What it does |
+|---|---|---|
+| `AUTH_USER` | `frames` | User name for the optional shared password. |
+| `AUTH_PASSWORD` | empty | A shared password (HTTP Basic, so use HTTPS across networks you do not trust). Empty = none. For Google, GitHub, Microsoft or your own OpenID Connect server use Settings, Access instead; both can be on. |
+| `AUTH_DISABLE` | empty | `1` switches **all** sign-in off, so a misconfigured provider cannot lock you out (see *Security*). Remove it again afterwards. |
+| `OIDC_ALLOW_HTTP` | empty | `1` allows an OpenID Connect server on plain `http://`, on a network you trust. |
+| `SESSION_DAYS` | `14` | How long a sign-in lasts (renewed by use). |
+| `ALLOWED_HOSTS` | empty | Comma-separated public host names (for example `frames.example.com`), needed only when a reverse proxy rewrites the `Host` header. |
+| `TRUST_PROXY` | empty | `1` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
+| `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
+
+**Set by the image itself** (change only if you run Frames without the supplied compose files)
+
+| Variable | Value in the image | What it does |
+|---|---|---|
+| `DATA_DIR` | `/data` | Where the database, previews, backups and copied cloud photos live (the `frames-data` volume). |
+| `LIBRARY_DIRS` | `/library` | Comma-separated read-only photo folders to scan. (`LIBRARY_DIR` is the older single-folder name.) |
+| `PORT` | `3000` | The port Frames listens on inside the container. |
+| `HOST` | `0.0.0.0` | The address Frames listens on inside the container. |
+| `WEB_DIR` | `/app/web` | The built web app. |
+| `APP_VERSION` | the release version, or `dev` | Shown in the app; set at build time. |
+| `NODE_ENV` | `production` | Standard Node setting. |
+
+Everything else (AI, sign-in providers, portfolio, sync) is set in the app, under Settings, and kept in the database.
+
+**Portainer**: use `docker-compose.portainer.yml` (Stacks, Add stack, Web editor). It pulls the published image, reads no files, and takes every stack and container variable above from the stack's *Environment variables* section; only `PHOTOS_DIR` is required.
 
 ### Versions and releases
 
@@ -38,7 +66,7 @@ Releases are Docker images on GitHub's container registry: `ghcr.io/trentnbauer/
 docker compose pull && docker compose up -d --no-build
 ```
 
-Pin an exact version to choose when you upgrade. The running version is shown in Settings, About.
+Pin an exact version to choose when you upgrade. The running version is shown in the corner of every page (and in Settings, About). Click it for **What's new**: the merged pull requests so far. After an update it opens by itself once, listing only what is new since that browser last looked (the first visit is never shown the whole history). A build from source shows "dev build" and an empty list.
 
 **Publishing a release** (maintainers): push a version tag. The release workflow runs the tests, then builds and pushes the image.
 
@@ -46,7 +74,7 @@ Pin an exact version to choose when you upgrade. The running version is shown in
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `latest`. The first publish creates the package as private: make it public in the package settings if others should pull it.
+The release also writes the "What's new" list from the merged pull requests (`.github/scripts/generate-changelog.sh`), so a clear pull request title is the changelog line. A tag with a suffix (`v1.2.3-rc.1`) publishes only that exact version, never `latest`. The first publish creates the package as private: make it public in the package settings if others should pull it.
 
 ## Security
 
@@ -80,6 +108,17 @@ Settings, Portfolio turns one collection into a public website (your name, tagli
 - **What visitors get when they open a photo** is your choice: a resized copy with all camera data removed (the default), the original file (which can contain camera details and the place it was taken, so Frames warns you), or nothing extra. RAW and TIFF originals always get the resized copy.
 - **Its own address.** At `/portfolio/` on this server, or give it a hostname (for example `photography.example.com`). Point a tunnel or reverse proxy at Frames and that hostname shows **only** the portfolio: every other address, including the app, share links and the API, returns "not found" on it. That is what makes it safe to expose.
 - It stays public even when sign-in is required for the rest of Frames.
+
+## Cloud sync (Google Drive, Dropbox, OneDrive)
+
+Settings, Cloud sync copies the photographs from a cloud folder into Frames, then adds them like any other photo (the folder is `cloud/` in the data volume). It is one way and careful:
+
+- **Read-only on the cloud side.** Frames asks each service for read access to files and nothing more.
+- **Nothing is deleted or overwritten.** A photo already copied is never fetched again. If you edit it online, Frames tells you and keeps the copy you have. Removing a file online, or disconnecting an account, leaves your copies alone.
+- **Photos and sidecars only.** Image and RAW files and `.xmp` sidecars are copied; everything else is skipped.
+- **Set up once per service.** A self-hosted app has no shared account with these services, so you register a small app of your own in the service's developer console (free) and paste its client ID and secret into Settings. The return address to give them is shown on that page (it is `<your Frames address>/api/cloud/callback`; set the public address in Settings, Access if Frames is behind a proxy).
+- **Secrets stay put.** The client secret and the refresh token are kept on the server only, are never shown again and are left out of backups.
+- Pick a folder, then sync by hand or let Frames check as often as every 15 minutes. Connect as many accounts as you like.
 
 ## Backup
 

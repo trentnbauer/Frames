@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav, useKey } from './components/bits';
+import { Changelog } from './components/Changelog';
 import { Search } from './components/Search';
 import { Today } from './pages/Today';
 import { Library } from './pages/Library';
@@ -58,6 +59,7 @@ function Shell() {
         <Route path="*" element={<Today />} />
       </Routes>
       {!inReview && <BottomNav onSearch={() => setSearching(true)} />}
+      {!inReview && <Changelog />}
       {searching && <Search onClose={() => setSearching(false)} />}
     </>
   );

@@ -254,7 +254,7 @@ describe('moving from the old single setup', () => {
     try {
       e.db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('settings', ?)").run(JSON.stringify({ ai: 'external', aiEndpoint: 'https://old.example.com', aiModel: 'm1', aiEmbedModel: 'e1', aiExternalAck: true }));
       e.db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('secret:aiKey', ?)").run(JSON.stringify('old-key'));
-      e.db.pragma('user_version = 4');
+      e.db.pragma('user_version = 5');
       const { migrate } = await import('./db.js');
       migrate(e.db);
       const st = JSON.parse((e.db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as any).value);

@@ -132,7 +132,17 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires);
     `);
   },
-  // 5: several AI sources instead of one. The single old configuration becomes the first source and stays active.
+  // 5: what has been copied from each cloud connection (so a file is fetched once and never overwritten)
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cloud_files (
+        conn_id TEXT NOT NULL, remote_id TEXT NOT NULL, rel TEXT NOT NULL, version TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0, synced TEXT NOT NULL,
+        PRIMARY KEY (conn_id, remote_id)
+      );
+      CREATE INDEX IF NOT EXISTS cloud_files_rel ON cloud_files(conn_id, rel);
+    `);
+  },
+  // 6: several AI sources instead of one. The single old configuration becomes the first source and stays active.
   (db) => {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string } | undefined;
     if (!row) return;

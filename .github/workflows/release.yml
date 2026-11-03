@@ -21,6 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: read
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/frames
     steps:
@@ -32,6 +33,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The "What's new" list inside the app: the merged pull requests so far, baked into the image.
+      - name: Generate changelog.json from merged PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: .github/scripts/generate-changelog.sh
       - id: meta
         uses: docker/metadata-action@v6
         with:
