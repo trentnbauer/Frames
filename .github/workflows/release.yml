@@ -43,7 +43,7 @@ jobs:
           # latest only for a plain release, not a pre-release
           flavor: |
             latest=auto
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
