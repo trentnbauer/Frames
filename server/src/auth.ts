@@ -17,7 +17,7 @@ import { getUser, OWNER_ID, type User } from './users.js';
  *  - OAuth only answers "who is this?". A separate allow-list decides who may come in. Everyone allowed has the same access.
  *  - Sessions are random tokens in HttpOnly cookies. Only a hash of each token is stored.
  *  - It cannot lock the owner out: it can only be switched on after a test sign-in by an allowed account, and
- *    AUTH_DISABLE=1 switches it off from outside.
+ *    AUTH_DISABLE=true switches it off from outside.
  */
 
 export type ProviderType = 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2';

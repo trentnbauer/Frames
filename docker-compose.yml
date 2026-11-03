@@ -15,13 +15,13 @@ services:
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       # Public host name(s), only needed behind a reverse proxy that rewrites Host.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
-      # Break-glass: 1 switches ALL sign-in off (see README, Security). Leave empty normally.
-      AUTH_DISABLE: ${AUTH_DISABLE:-}
-      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP:-}
+      # true switches ALL sign-in inside Frames off: for one person behind something else that protects it, or to get back in (see README, Security).
+      AUTH_DISABLE: ${AUTH_DISABLE:-false}
+      OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP:-false}
       SESSION_DAYS: ${SESSION_DAYS:-}
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
-      ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-}
-      TRUST_PROXY: ${TRUST_PROXY:-}
+      ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}
     volumes:
       # Your photographs. Read-only: Frames never writes to them.
