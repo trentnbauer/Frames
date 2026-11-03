@@ -6,7 +6,7 @@ import { Header, Img, Loading, Title } from '../components/bits';
 import { useStore } from '../store';
 
 type Pending = { count: number; folders: { folder: string; count: number }[]; lastScan: string | null };
-type ScanResult = { imported: number; duplicates: number; errors: { file: string; error: string }[]; shootName: string | null };
+type ScanResult = { imported: number; duplicates: number; relinked: number; errors: { file: string; error: string }[]; shootName: string | null };
 
 export function Shoots() {
   const shoots = useApi<Shoot[]>('/shoots');
@@ -65,6 +65,7 @@ export function Shoots() {
           <span>
             Imported <b>{result.imported}</b> {result.imported === 1 ? 'photo' : 'photos'}{result.shootName && <> into <b>{result.shootName}</b></>}.
             {result.duplicates > 0 && <span className="muted"> {result.duplicates} exact {result.duplicates === 1 ? 'duplicate' : 'duplicates'} skipped.</span>}
+            {result.relinked > 0 && <span className="muted"> {result.relinked} moved {result.relinked === 1 ? 'file was' : 'files were'} reconnected to existing photos.</span>}
             {result.errors.length > 0 && <span className="reason"> {result.errors.length} could not be read: {result.errors.slice(0, 3).map((e) => e.file.split('/').pop()).join(', ')}.</span>}
           </span>
           <button className="pill" onClick={() => setResult(null)}>Dismiss</button>

@@ -1,4 +1,5 @@
 import { getSetting, setSetting, type DB } from './db.js';
+import { INTERVAL_OPTIONS } from './schedule.js';
 
 export type Settings = {
   sessions: number;
@@ -26,7 +27,10 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   const cur = loadSettings(db);
   const next: Settings = { ...cur };
   if (patch.sessions !== undefined) next.sessions = Math.min(12, Math.max(1, Math.round(Number(patch.sessions)) || cur.sessions));
-  if (Array.isArray(patch.intervals)) next.intervals = patch.intervals.map(String).slice(0, 12);
+  if (Array.isArray(patch.intervals)) {
+    const ok = patch.intervals.map(String).filter((i) => INTERVAL_OPTIONS.includes(i)).slice(0, 12);
+    if (ok.length) next.intervals = ok;
+  }
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
   if (patch.ai === 'off' || patch.ai === 'local' || patch.ai === 'external') next.ai = patch.ai;

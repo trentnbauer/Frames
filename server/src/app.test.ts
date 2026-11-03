@@ -83,27 +83,28 @@ describe('reviews', () => {
 });
 
 describe('collections', () => {
-  it('exports the untouched originals in order as a ZIP', async () => {
+  it('keeps photos in the order they were added and lets them be reordered', async () => {
     const c = (await j('POST', '/api/collections', { name: 'Test set', target: { count: 2, size: 'A3', orientation: 'portrait', ppi: 300 } })).body;
     await j('PUT', `/api/collections/${c.id}/photos/2`);
     await j('PUT', `/api/collections/${c.id}/photos/1`);
-    const z = await j('GET', `/api/collections/${c.id}/zip`);
-    expect(z.status).toBe(200);
-    const buf = z.body as Buffer;
-    expect(buf.subarray(0, 2).toString()).toBe('PK');
-    expect(buf.includes(fs.readFileSync(path.join(lib, 'a.jpg')))).toBe(true);
-    expect(buf.includes(Buffer.from('1_b.jpg'))).toBe(true);
-    expect(buf.includes(Buffer.from('2_a.jpg'))).toBe(true);
-    expect(Number(z.headers['x-skipped'])).toBe(0);
+    expect((await j('GET', `/api/collections/${c.id}`)).body.photoIds).toEqual([2, 1]);
+    expect((await j('PATCH', `/api/collections/${c.id}`, { order: [1, 2] })).body.photoIds).toEqual([1, 2]);
   });
-  it('lists missing files instead of failing', async () => {
-    const c = (await j('POST', '/api/collections', { name: 'Gone' })).body;
-    await j('PUT', `/api/collections/${c.id}/photos/2`);
+  it('downloads an original byte for byte, with the order prefix in the saved name', async () => {
+    const r = await j('GET', '/api/photos/1/original?n=3&pad=2');
+    expect(r.status).toBe(200);
+    expect(r.headers['content-disposition']).toContain('filename="03_a.jpg"');
+    expect((r.body as Buffer).equals(fs.readFileSync(path.join(lib, 'a.jpg')))).toBe(true);
+    expect(r.headers['content-length']).toBe(String(fs.statSync(path.join(lib, 'a.jpg')).size));
+  });
+  it('says so when the original is missing, and when the photo does not exist', async () => {
     fs.renameSync(path.join(lib, 'b.jpg'), path.join(lib, 'b.moved'));
-    const z = await j('GET', `/api/collections/${c.id}/zip`);
-    expect(z.headers['x-skipped']).toBe('1');
-    expect((z.body as Buffer).includes(Buffer.from('NOT_INCLUDED.txt'))).toBe(true);
+    expect((await j('GET', '/api/photos/2/original')).status).toBe(404);
     fs.renameSync(path.join(lib, 'b.moved'), path.join(lib, 'b.jpg'));
+    expect((await j('GET', '/api/photos/999/original')).status).toBe(404);
+  });
+  it('cannot be tricked into serving other files through the name', async () => {
+    expect((await j('GET', '/api/photos/..%2F..%2Fetc%2Fpasswd/original')).status).toBe(404);
   });
 });
 

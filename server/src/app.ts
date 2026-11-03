@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import archiver from 'archiver';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { getSetting, setSetting, type DB } from './db.js';
@@ -10,28 +9,62 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { loadSettings, saveSettings } from './settings.js';
 
 type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string };
+export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[] };
 
 const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0);
+const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
+
+// Fonts come from Google Fonts. Everything else must be same-origin.
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 export function buildApp(db: DB, cfg: AppCfg) {
   const app = Fastify({ logger: false });
+  let scanning = false;
+
+  // ---------- security ----------
+  app.addHook('onRequest', async (req, rep) => {
+    // Optional single-user login (HTTP Basic). Set AUTH_PASSWORD to turn it on. /api/health stays open for container health checks.
+    if (cfg.authPassword && req.url !== '/api/health') {
+      const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
+      const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
+      const ok = crypto.timingSafeEqual(digest(u + ':' + rest.join(':')), digest(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
+      if (!m || !ok) return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
+    }
+    // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      const origin = req.headers.origin;
+      const sameHost = !origin || (() => { try { const h = new URL(origin).host; return h === req.headers.host || (cfg.allowedHosts ?? []).includes(h); } catch { return false; } })();
+      if (!sameHost || req.headers['sec-fetch-site'] === 'cross-site') return rep.code(403).send({ error: 'Cross-site request blocked' });
+    }
+  });
+  app.addHook('onSend', async (_req, rep) => {
+    rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY');
+  });
+  // Never echo internal errors (SQL, file paths) to the client.
+  app.setErrorHandler((e, _req, rep) => {
+    const err = e as { statusCode?: number; message?: string };
+    const code = err.statusCode && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
+    if (code === 500) console.error(e);
+    return rep.code(code).send({ error: code === 500 ? 'Internal error' : err.message });
+  });
 
   // ---------- DTO helpers ----------
   const tagsOf = (id: number) =>
     (db.prepare('SELECT name, source, accepted FROM tags WHERE photo_id = ? ORDER BY name').all(id) as Row[]).map((t) => ({ name: t.name, source: t.source, accepted: !!t.accepted }));
   const reviewsOf = (id: number) =>
     (db.prepare('SELECT session, date, rating, note FROM reviews WHERE photo_id = ? ORDER BY session, id').all(id) as Row[]).map((r) => ({ session: r.session, date: r.date, rating: r.rating, note: r.note ?? undefined }));
-  const photoDto = (p: Row, full = false) => {
-    const ratings = (db.prepare('SELECT rating FROM reviews WHERE photo_id = ?').all(p.id) as Row[]).map((r) => r.rating);
+  // The server path of an original is never sent to the browser.
+  const photoDto = (p: Row, full = false, agg?: Map<number, { n: number; a: number }>) => {
+    const ratings = agg ? [] : (db.prepare('SELECT rating FROM reviews WHERE photo_id = ?').all(p.id) as Row[]).map((r) => r.rating);
+    const g = agg?.get(p.id);
     return {
       id: p.id, title: p.title, file: p.file, shootId: p.shoot_id, w: p.w, h: p.h,
       ar: p.w && p.h ? p.w / p.h : 1.5, hasImage: !!p.has_derivs,
       capturedAt: p.captured_at, camera: p.camera, lens: p.lens, exposure: p.exposure,
       fileType: p.file_type, sizeMb: Math.round(p.size_bytes / 1048576), archived: !!p.archived, missing: !!p.missing,
-      nextReviewAt: p.next_review_at, reviewCount: ratings.length, avgRating: avgOf(ratings),
-      ...(full ? { tags: tagsOf(p.id), reviews: reviewsOf(p.id), path: p.path } : {}),
+      nextReviewAt: p.next_review_at, reviewCount: g ? g.n : ratings.length, avgRating: g ? g.a : avgOf(ratings),
+      ...(full ? { tags: tagsOf(p.id), reviews: reviewsOf(p.id) } : {}),
     };
   };
   const shootDto = (s: Row) => {
@@ -60,14 +93,21 @@ export function buildApp(db: DB, cfg: AppCfg) {
     const p = pending(db, cfg);
     return { count: p.count, folders: p.folders, lastScan: getSetting<string | null>(db, 'lastScan', null) };
   });
-  app.post('/api/library/scan', async () => {
-    const r = await scan(db, cfg);
-    const stamp = new Date().toISOString();
-    setSetting(db, 'lastScan', stamp);
-    for (const l of cfg.libraries) setSetting(db, `lastScan:${l}`, stamp);
-    // Flag files that disappeared from disk. Never delete anything.
-    for (const p of db.prepare('SELECT id, path FROM photos').all() as Row[]) db.prepare('UPDATE photos SET missing = ? WHERE id = ?').run(fs.existsSync(p.path) ? 0 : 1, p.id);
-    return { ...r, errors: r.errors.slice(0, 20) };
+  app.post('/api/library/scan', async (_req, rep) => {
+    // One scan at a time, otherwise two overlapping scans import the same files twice.
+    if (scanning) return rep.code(409).send({ error: 'A sync is already running' });
+    scanning = true;
+    try {
+      const r = await scan(db, cfg);
+      const stamp = new Date().toISOString();
+      setSetting(db, 'lastScan', stamp);
+      for (const l of cfg.libraries) setSetting(db, `lastScan:${l}`, stamp);
+      // Flag files that disappeared from disk. Never delete anything.
+      for (const p of db.prepare('SELECT id, path FROM photos').all() as Row[]) db.prepare('UPDATE photos SET missing = ? WHERE id = ?').run(fs.existsSync(p.path) ? 0 : 1, p.id);
+      return { ...r, errors: r.errors.slice(0, 20).map((e) => ({ file: path.basename(e.file), error: 'unreadable' })) };
+    } finally {
+      scanning = false;
+    }
   });
 
   app.get('/api/photos', async (req) => {
@@ -82,7 +122,8 @@ export function buildApp(db: DB, cfg: AppCfg) {
       args.push(`%${w}%`, `%${w}%`, `%${w}%`, `%${w}%`, w, `%${w}%`);
     }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
-    let photos = (db.prepare(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order} LIMIT 5000`).all(...args) as Row[]).map((p) => photoDto(p));
+    const agg = new Map((db.prepare('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').all() as Row[]).map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
+    let photos = (db.prepare(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order} LIMIT 5000`).all(...args) as Row[]).map((p) => photoDto(p, false, agg));
     if (q.rating) {
       const f = String(q.rating);
       photos = photos.filter((p) => p.reviewCount > 0 && (f === '4+' ? p.avgRating >= 4 : f === '3+' ? p.avgRating >= 3 : p.avgRating < 3));
@@ -92,9 +133,7 @@ export function buildApp(db: DB, cfg: AppCfg) {
   app.get('/api/photos/:id', async (req, rep) => {
     const p = one('SELECT * FROM photos WHERE id = ?', num((req.params as Row).id));
     if (!p) return notFound(rep);
-    const dto = photoDto(p, true) as Row;
-    delete dto.path;
-    return dto;
+    return photoDto(p, true);
   });
   app.patch('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -264,27 +303,20 @@ export function buildApp(db: DB, cfg: AppCfg) {
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', num(id))!);
   });
 
-  // Originals only, stored uncompressed so the files are byte-for-byte what is on disk.
-  app.get('/api/collections/:id/zip', async (req, rep) => {
-    const c = one('SELECT * FROM collections WHERE id = ?', num((req.params as Row).id));
-    if (!c) return notFound(rep);
-    const rows = db.prepare('SELECT p.* FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? ORDER BY cp.pos').all(c.id) as Row[];
-    const present = rows.filter((p) => fs.existsSync(p.path));
-    const skipped = rows.filter((p) => !fs.existsSync(p.path));
-    const pad = String(rows.length).length;
-    const safe = String(c.name).replace(/[^\w\- ]+/g, '').trim() || 'collection';
-    const zip = archiver('zip', { store: true });
-    zip.on('error', () => rep.raw.destroy());
-    present.forEach((p, i) => zip.file(p.path, { name: `${String(i + 1).padStart(pad, '0')}_${p.file}` }));
-    if (skipped.length) zip.append(`These photographs could not be included because their files are missing:\n${skipped.map((p) => p.file).join('\n')}\n`, { name: 'NOT_INCLUDED.txt' });
-    void zip.finalize();
+  // The original file, byte for byte, as a download. ?n=3&pad=2 prefixes the saved name with "03_" so a
+  // collection saved in order sorts correctly. Looked up by id only, never by a client-supplied path.
+  app.get('/api/photos/:id/original', async (req, rep) => {
+    const p = one('SELECT path, file FROM photos WHERE id = ?', num((req.params as Row).id));
+    if (!p || !fs.existsSync(p.path)) return notFound(rep, 'The original file is missing');
+    const n = Math.round(num((req.query as Row).n, 0));
+    const pad = Math.min(4, Math.max(0, Math.round(num((req.query as Row).pad, 0))));
+    const name = (n > 0 ? `${String(n).padStart(pad, '0')}_` : '') + p.file;
+    const ascii = name.replace(/[^\x20-\x7e]|["\\;]/g, '_');
     return rep
-      .header('Content-Type', 'application/zip')
-      .header('Content-Disposition', `attachment; filename="${safe}.zip"`)
-      .header('X-Total-Bytes', String(present.reduce((n, p) => n + p.size_bytes, 0)))
-      .header('X-Skipped', String(skipped.length))
-      .header('Access-Control-Expose-Headers', 'X-Total-Bytes, X-Skipped')
-      .send(zip);
+      .header('Content-Type', 'application/octet-stream')
+      .header('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`)
+      .header('Content-Length', String(fs.statSync(p.path).size))
+      .send(fs.createReadStream(p.path));
   });
 
   // ---------- stats / recommendations ----------

@@ -29,7 +29,7 @@ export function Collections() {
         </form>
       )}
       {(colls.loading || colls.error) && <Loading error={colls.error} />}
-      {colls.data?.length === 0 && <div className="empty">No collections yet. A collection is a curated set of photographs you can export as a ZIP.</div>}
+      {colls.data?.length === 0 && <div className="empty">No collections yet. A collection is a curated set of photographs you can download as untouched original files.</div>}
       <div className="card-grid">
         {colls.data?.map((c) => (
           <Link key={c.id} to={`/collections/${c.id}`}>
@@ -45,7 +45,7 @@ export function Collections() {
   );
 }
 
-type Zip = { done: number; total: number; skipped: number; state: 'working' | 'ready' | 'failed' };
+type Dl = { done: number; total: number; skipped: number; state: 'working' | 'ready' };
 
 export function CollectionDetail() {
   const { id } = useParams();
@@ -55,8 +55,8 @@ export function CollectionDetail() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos?archived=all');
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [zip, setZip] = useState<Zip | null>(null);
-  const abort = useRef<AbortController>();
+  const [dl, setDl] = useState<Dl | null>(null);
+  const cancelled = useRef(false);
 
   const c = coll.data;
   if (!c) return <div className="page"><Header /><Loading error={coll.error} /></div>;
@@ -84,34 +84,27 @@ export function CollectionDetail() {
     save({ order: o });
   };
 
-  // Streams the ZIP, reading the response so progress is real bytes, then hands the blob to the browser.
+  // Hands each original to the browser's own downloader, in collection order. The browser streams
+  // every file straight to disk, so nothing is held in memory and the files are never altered.
   const download = async () => {
-    abort.current = new AbortController();
-    setZip({ done: 0, total: photos.length, skipped: 0, state: 'working' });
-    try {
-      const r = await fetch(`/api/collections/${c.id}/zip`, { signal: abort.current.signal });
-      if (!r.ok || !r.body) throw new Error('export failed');
-      const totalBytes = Number(r.headers.get('X-Total-Bytes')) || 0;
-      const skipped = Number(r.headers.get('X-Skipped')) || 0;
-      const reader = r.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value); got += value.length;
-        setZip({ done: totalBytes ? Math.min(photos.length, Math.floor((got / totalBytes) * (photos.length - skipped))) : 0, total: photos.length - skipped, skipped, state: 'working' });
-      }
-      const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: 'application/zip' }));
+    const present = photos.filter((p) => !p.missing);
+    const skipped = photos.length - present.length;
+    const pad = String(present.length).length;
+    cancelled.current = false;
+    setDl({ done: 0, total: present.length, skipped, state: 'working' });
+    for (let i = 0; i < present.length; i++) {
+      if (cancelled.current) { setDl(null); return; }
       const a = document.createElement('a');
-      a.href = url; a.download = `${c.name}.zip`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      setZip({ done: photos.length - skipped, total: photos.length - skipped, skipped, state: 'ready' });
-      setTimeout(() => setZip((z) => (z?.state === 'ready' ? null : z)), 6000);
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') setZip({ done: 0, total: photos.length, skipped: 0, state: 'failed' });
-      else setZip(null);
+      a.href = `/api/photos/${present[i].id}/original?n=${i + 1}&pad=${pad}`;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setDl({ done: i + 1, total: present.length, skipped, state: 'working' });
+      await new Promise((r) => setTimeout(r, 450)); // browsers drop downloads fired in the same instant
     }
+    setDl({ done: present.length, total: present.length, skipped, state: 'ready' });
+    setTimeout(() => setDl((z) => (z?.state === 'ready' ? null : z)), 8000);
   };
 
   const candidates = (lib.data?.photos ?? []).filter((p) => !c.photoIds.includes(p.id));
@@ -125,15 +118,15 @@ export function CollectionDetail() {
           <button onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
         </span>
       </div>
-      {zip && (
+      {dl && (
         <div className="toast" role="status">
-          <b>{zip.state === 'ready' ? 'ZIP ready' : zip.state === 'failed' ? 'Export failed' : 'Preparing ZIP'}</b>
-          <div className="bar"><i style={{ width: `${zip.total ? (zip.done / zip.total) * 100 : 0}%` }} /></div>
+          <b>{dl.state === 'ready' ? 'Downloads started' : 'Downloading originals'}</b>
+          <div className="bar"><i style={{ width: `${dl.total ? (dl.done / dl.total) * 100 : 0}%` }} /></div>
           <div className="muted" style={{ fontSize: 12 }}>
-            {zip.state === 'failed' ? 'Nothing was changed. Try again.' : `${zip.done} of ${zip.total} · originals, unmodified`}
-            {zip.skipped > 0 && <span className="reason"> {zip.skipped} could not be included. See NOT_INCLUDED.txt in the ZIP.</span>}
+            {dl.state === 'ready' ? `${dl.total} files sent to your browser’s downloads, in order · ` : `${dl.done} of ${dl.total} · `}originals, unmodified
+            {dl.skipped > 0 && <span className="reason"> {dl.skipped} could not be included because the original file is missing.</span>}
           </div>
-          {zip.state === 'working' && <button className="t2" style={{ fontSize: 12, marginTop: 6 }} onClick={() => abort.current?.abort()}>Cancel</button>}
+          {dl.state === 'working' && <button className="t2" style={{ fontSize: 12, marginTop: 6 }} onClick={() => { cancelled.current = true; }}>Cancel</button>}
         </div>
       )}
       <div className="spread" style={{ alignItems: 'flex-end' }}>
@@ -142,7 +135,7 @@ export function CollectionDetail() {
           <input aria-label="Description" className="t2" placeholder="Add a description" defaultValue={c.description} onBlur={(e) => e.target.value !== c.description && save({ description: e.target.value })} style={{ fontSize: 13.5, background: 'none', border: 0, outline: 'none', width: '100%', marginTop: 8 }} />
         </div>
         <div style={{ textAlign: 'right', flex: 'none' }}>
-          <button className="pill primary big" onClick={download} disabled={photos.length === 0 || zip?.state === 'working'}>Download ZIP</button>
+          <button className="pill primary big" onClick={download} disabled={photos.length === 0 || dl?.state === 'working'}>Download files</button>
           <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{photos.length} originals{types && ` · ${types}`} · {bytes} MB · in order</div>
         </div>
       </div>

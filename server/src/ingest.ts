@@ -39,7 +39,7 @@ export function pending(db: DB, cfg: Cfg) {
   for (const lib of cfg.libraries) for (const f of walk(lib)) if (!known.has(f)) files.push(f);
   const folders = new Map<string, number>();
   for (const f of files) {
-    const lib = cfg.libraries.find((l) => f.startsWith(l))!;
+    const lib = cfg.libraries.find((l) => f.startsWith(l + path.sep))!;
     const rel = path.relative(lib, path.dirname(f));
     const key = path.join(path.basename(lib), rel) || path.basename(lib);
     folders.set(key, (folders.get(key) ?? 0) + 1);
@@ -82,12 +82,12 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
   return meta;
 }
 
-export type ScanResult = { imported: number; duplicates: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null };
+export type ScanResult = { imported: number; duplicates: number; relinked: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null };
 
 /** Imports every new file into one photoshoot named for today's date. Originals are only ever read. */
 export async function scan(db: DB, cfg: Cfg): Promise<ScanResult> {
   const { files } = pending(db, cfg);
-  const result: ScanResult = { imported: 0, duplicates: 0, errors: [], shootId: null, shootName: null };
+  const result: ScanResult = { imported: 0, duplicates: 0, relinked: 0, errors: [], shootId: null, shootName: null };
   if (!files.length) return result;
 
   const now = new Date();
@@ -104,9 +104,16 @@ export async function scan(db: DB, cfg: Cfg): Promise<ScanResult> {
   for (const f of files) {
     try {
       const hash = await hashFile(f);
-      if (db.prepare('SELECT 1 FROM photos WHERE hash = ?').get(hash)) {
-        db.prepare('INSERT OR IGNORE INTO duplicates(path, hash) VALUES(?, ?)').run(f, hash);
-        result.duplicates++;
+      const same = db.prepare('SELECT id, path FROM photos WHERE hash = ?').get(hash) as { id: number; path: string } | undefined;
+      if (same) {
+        if (!fs.existsSync(same.path)) {
+          // The known file moved: keep its reviews and tags, just point it at the new location.
+          db.prepare('UPDATE photos SET path = ?, file = ?, missing = 0 WHERE id = ?').run(f, path.basename(f), same.id);
+          result.relinked++;
+        } else {
+          db.prepare('INSERT OR IGNORE INTO duplicates(path, hash) VALUES(?, ?)').run(f, hash);
+          result.duplicates++;
+        }
         continue;
       }
       const ext = path.extname(f).toLowerCase();

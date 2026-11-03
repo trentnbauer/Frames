@@ -226,12 +226,12 @@ intended physical print size. DPI/PPI alone is not sufficient.
 
 #### Collection Export
 
-Every collection must provide a prominent **Download ZIP** button.
+Every collection must provide a prominent **Download files** button.
 
-Selecting this button should download a ZIP archive containing the
-original photographs in that collection.
+Selecting this button should download the original photographs in that
+collection as individual files (no ZIP archive).
 
--   [ ] Provide a clearly visible Download ZIP button on each
+-   [ ] Provide a clearly visible Download files button on each
     collection.
 -   [ ] Include all photographs in the collection.
 -   [ ] Preserve original image files and their quality.
@@ -326,7 +326,7 @@ The following is a suggested development sequence.
 -   [ ] Collection comparison.
 -   [ ] Collection picture specifications.
 -   [ ] Print suitability indicators.
--   [ ] ZIP export of original photographs.
+-   [ ] Download of original photographs as individual files.
 
 ### Phase 7 --- Refinement
 
@@ -370,8 +370,8 @@ The application should allow a user to:
 -   [ ] Define picture specifications for individual collections.
 -   [ ] Identify photographs that are unsuitable for a collection's
     intended print requirements.
--   [ ] Download an entire collection as a ZIP archive containing
-    original photographs.
+-   [ ] Download an entire collection as its original photograph
+    files.
 -   [ ] Deploy and maintain the application through Docker.
 
 ------------------------------------------------------------------------
