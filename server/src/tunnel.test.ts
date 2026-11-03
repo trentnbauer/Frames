@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTunnelRunner } from './tunnel.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
 
-const TOKEN = 'eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5eiIsInMiOiJzZWNyZXQifQ==';
+// Built at run time, in the shape of a real tunnel token (base64 JSON), so no token-like literal sits in the repo.
+const TOKEN = Buffer.from(JSON.stringify({ a: '1234567890', t: 'abcdefghijklmnopqrstuvwxyz', s: 'secret' })).toString('base64');
 
 /** A stand-in for cloudflared: records how it was started, serves /ready on the metrics port, and logs the token (so redaction is tested). */
 function fakeBin(dir: string, kind: 'ok' | 'die'): string {
