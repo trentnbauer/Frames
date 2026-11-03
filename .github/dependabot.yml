@@ -4,6 +4,11 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    # better-sqlite3 13+ ships no prebuilt binaries, so the slim Docker image can't install it
+    # (and arm64 builds would compile under emulation). Stay on 11 until that changes.
+    ignore:
+      - dependency-name: better-sqlite3
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /web
     schedule:
