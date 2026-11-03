@@ -9,8 +9,8 @@ This document describes what the application does, not how it looks.
 Screen list, navigation and layout are deliberately left to the
 designer.
 
--   The checkboxes in this document mark requirements. They are not a
-    progress tracker.
+-   The checkboxes in this document are both requirements and a to-do
+    list. An unticked box is still to be built.
 -   There is a single user: one photographer. There is no sharing,
     login-based collaboration or multi-user UI.
 -   Reviewing photographs is the core daily habit of the product. Review
