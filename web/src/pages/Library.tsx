@@ -8,6 +8,7 @@ import { useUi } from '../ui';
 import { api } from '../api';
 import type { Collection } from '../data';
 import { AddToComposition } from '../components/AddToComposition';
+import { MoveToShoot } from '../components/MoveToShoot';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const RATING_OPTS = [['4+', '4 or better on average'], ['3+', '3 or better on average'], ['under', 'Under 3 on average']];
@@ -147,7 +148,8 @@ export function Library() {
           <b style={{ fontWeight: 500 }}>{picked.size} selected</b>
           <button style={{ color: '#a8a59f' }} onClick={() => setPicked(new Set())}>Clear</button>
           {lastActive && <button disabled={picked.size === 0} style={{ borderRadius: 999, padding: '10px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }} onClick={async () => { for (const id of picked) await api(`/collections/${lastActive.id}/photos/${id}`, { method: 'PUT' }); setNote(`Added ${picked.size} to “${lastActive.name}”.`); setPicked(new Set()); colls.reload(); }}>Add to {lastActive.name}</button>}
-          {(colls.data ?? []).filter((c) => !c.printedAt).length > 1 && <AddToComposition up label="Add to another…" ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
+          {<AddToComposition up label="Add to a composition…" ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
+          <MoveToShoot up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); list.reload(); shoots.reload(); }} />
           <button disabled={picked.size === 0} onClick={() => openNew({ name: 'New composition', photoIds: [...picked] })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.size ? 1 : 0.5 }}>New composition from {picked.size}</button>
           {note && <span className="muted" role="status">{note}</span>}
         </div>
