@@ -3,8 +3,9 @@ import { api, useApi } from '../api';
 import { fmtDate } from '../data';
 import { CardFooter, Destructive, EditRow, useOne, type One } from '../components/editcard';
 
+type Folder = { id: string; name: string };
 type Result = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number; shrunk?: number; freed?: number };
-type Conn = { id: string; provider: string; account: string; folderId: string | null; folderName: string; intervalMin: number; enabled: boolean; lastSync: string | null; lastResult: Result | null; needsReconnect: boolean; shrink?: boolean };
+type Conn = { id: string; provider: string; account: string; folderId: string | null; folderName: string; folders?: Folder[]; intervalMin: number; enabled: boolean; lastSync: string | null; lastResult: Result | null; needsReconnect: boolean; shrink?: boolean };
 type Prov = { id: string; label: string; console: string; configured: boolean; clientId?: string; hasSecret?: boolean };
 type Data = { shrinkEnforced: boolean; redirectUri: string; providers: Prov[]; connections: Conn[]; progress: { running: boolean; connId: string | null; downloaded: number; current: string } };
 
@@ -22,7 +23,7 @@ export function CloudSettings() {
   }, []);
   const one = useOne();
   // A connection with no folder yet opens its card, so the next step is in front of you.
-  const fresh = d.data?.connections.find((c) => c.folderId === null && !c.needsReconnect)?.id;
+  const fresh = d.data?.connections.find((c) => (c.folders ?? []).length === 0 && !c.needsReconnect)?.id;
   useEffect(() => { if (fresh) one.set(fresh); }, [fresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const running = d.data?.progress.running;
   useEffect(() => { if (!running) return; const t = setInterval(d.reload, 1500); return () => clearInterval(t); }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,6 +121,7 @@ function Service({ one, p, act }: { one: One; p: Prov; act: (fn: () => Promise<u
 
 function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean; one: One; c: Conn; p: Prov; progress: Data['progress']; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [picking, setPicking] = useState(false);
+  const chosen = c.folders ?? [];
   const busy = progress.running && progress.connId === c.id;
   const r = c.lastResult;
   const put = (body: Record<string, unknown>) => act(() => api(`/cloud/${c.id}`, { method: 'PUT', body }));
@@ -128,22 +130,31 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
       <>
         <b>{p.label}</b> {c.account && <span className="muted">{c.account}</span>}{' '}
         <span className={c.needsReconnect ? 'reason' : 'faint'}>
-          {c.needsReconnect ? 'needs to be reconnected' : busy ? `copying… ${progress.downloaded} so far` : c.folderId === null ? 'choose a folder' : c.folderName || 'whole account'}
+          {c.needsReconnect ? 'needs to be reconnected' : busy ? `copying… ${progress.downloaded} so far` : chosen.length === 0 ? 'choose folders' : chosen.length === 1 ? (chosen[0].name || 'whole account') : `${chosen.length} folders`}
         </span>
       </>
     )}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
-          <b>Folder</b>: {c.folderId === null ? 'none yet' : c.folderName || 'Everything in the account'}{' '}
-          <button className="t2" onClick={() => setPicking(!picking)}>{picking ? 'Close' : 'Choose a folder'}</button>
-          {picking && <Picker c={c} onPick={(id, name) => { setPicking(false); put({ folderId: id, folderName: name }); }} />}
+          <b>Folders to copy</b>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+            {chosen.length === 0 && <span className="muted" style={{ fontSize: 13 }}>None yet. Frames won't copy anything until you choose at least one.</span>}
+            {chosen.map((f) => (
+              <span key={f.id} className="chip" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '3px 10px', borderRadius: 999, background: 'rgba(255,255,255,.08)', fontSize: 13 }}>
+                {f.name || 'Everything in this account'}
+                <button className="t2" aria-label={`Stop copying ${f.name || 'the whole account'}`} onClick={() => put({ folders: chosen.filter((x) => x.id !== f.id) })}>×</button>
+              </span>
+            ))}
+          </div>
+          <button className="t2" onClick={() => setPicking(!picking)}>{picking ? 'Close' : chosen.length ? 'Add or change folders' : 'Choose folders'}</button>
+          {picking && <FolderBrowser c={c} chosen={chosen} onDone={(list) => { setPicking(false); if (JSON.stringify(list) !== JSON.stringify(chosen)) put({ folders: list }); }} />}
         </div>
         <label>Copy new photos{' '}
           <select aria-label="How often" value={c.intervalMin} onChange={(e) => put({ intervalMin: Number(e.target.value) })}>
             {EVERY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
-        <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={c.enabled} disabled={c.folderId === null || c.needsReconnect} onChange={(e) => put({ enabled: e.target.checked })} /> Keep this folder up to date automatically</label>
+        <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={c.enabled} disabled={chosen.length === 0 || c.needsReconnect} onChange={(e) => put({ enabled: e.target.checked })} /> Keep these folders up to date automatically</label>
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink || enforced} disabled={enforced} onChange={(e) => {
@@ -167,27 +178,52 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
       <CardFooter>
         {c.needsReconnect
           ? <button className="pill primary" onClick={() => act(async () => { const x = await api<{ url: string }>(`/cloud/connect/${c.provider}`, { body: {} }); window.location.assign(x.url); })}>Reconnect</button>
-          : <button className="pill primary" disabled={c.folderId === null || progress.running} onClick={() => act(() => api(`/cloud/${c.id}/sync`, { body: {} }))}>{busy ? 'Copying…' : 'Sync now'}</button>}
+          : <button className="pill primary" disabled={chosen.length === 0 || progress.running} onClick={() => act(() => api(`/cloud/${c.id}/sync`, { body: {} }))}>{busy ? 'Copying…' : 'Sync now'}</button>}
         <Destructive onClick={() => { if (window.confirm(c.shrink ? `Disconnect this account?\n\nPhotos already copied stay in Frames, but the ones kept as a smaller copy can only be exported at full size again once you connect this account again.` : 'Disconnect this account? Photos already copied stay in Frames.')) act(() => api(`/cloud/${c.id}`, { method: 'DELETE' }), 'Disconnected. The photos already copied stay.'); }}>Disconnect</Destructive>
       </CardFooter>
     </EditRow>
   );
 }
 
-function Picker({ c, onPick }: { c: Conn; onPick: (id: string, name: string) => void }) {
-  const [trail, setTrail] = useState<{ id: string; name: string }[]>([]);
+function FolderBrowser({ c, chosen, onDone }: { c: Conn; chosen: Folder[]; onDone: (list: Folder[]) => void }) {
+  const [sel, setSel] = useState<Folder[]>(chosen);
+  const [trail, setTrail] = useState<Folder[]>([]);
   const here = trail[trail.length - 1];
-  const list = useApi<{ id: string; name: string }[]>(`/cloud/${c.id}/folders${here ? `?parent=${encodeURIComponent(here.id)}` : ''}`);
+  const root = ROOT[c.provider];
+  const list = useApi<Folder[]>(`/cloud/${c.id}/folders${here ? `?parent=${encodeURIComponent(here.id)}` : ''}`);
+  const has = (id: string) => sel.some((x) => x.id === id);
+  const toggle = (f: Folder) => setSel(has(f.id) ? sel.filter((x) => x.id !== f.id) : [...sel, f]);
+  const inherited = has(root) || trail.some((t) => has(t.id)); // a folder above is chosen, so everything in here already is
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid rgba(255,255,255,.06)' };
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 8, padding: 12, marginTop: 8 }}>
-      <p className="muted" style={{ margin: '0 0 8px', fontSize: 13 }}>{['Your account', ...trail.map((t) => t.name)].join(' / ')}</p>
-      {list.error && <p className="reason">{list.error}</p>}
-      {!list.data && !list.error && <p className="muted">Loading…</p>}
-      {list.data?.length === 0 && <p className="muted">No folders in here.</p>}
-      {list.data?.map((f) => <div key={f.id}><button className="t2" onClick={() => setTrail([...trail, f])}>{f.name}</button></div>)}
-      <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-        {trail.length > 0 && <button className="t2" onClick={() => setTrail(trail.slice(0, -1))}>Up</button>}
-        <button className="pill primary" onClick={() => onPick(here ? here.id : ROOT[c.provider], here ? here.name : '')}>Sync {here ? `“${here.name}”` : 'the whole account'}</button>
+      <p className="muted" style={{ margin: '0 0 8px', fontSize: 13 }}>
+        {trail.length > 0 && <button className="t2" aria-label="Back" onClick={() => setTrail(trail.slice(0, -1))}>‹</button>}{' '}
+        {['Your account', ...trail.map((t) => t.name)].join(' / ')}
+      </p>
+      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+        {trail.length === 0 && (
+          <label style={row}><input type="checkbox" checked={has(root)} onChange={() => toggle({ id: root, name: '' })} /> <b>Everything in this account</b></label>
+        )}
+        {list.error && <p className="reason">{list.error}</p>}
+        {!list.data && !list.error && <p className="muted">Loading…</p>}
+        {list.data?.length === 0 && <p className="muted">No folders in here.</p>}
+        {list.data?.map((f) => {
+          const off = inherited && !has(f.id);
+          return (
+            <div key={f.id} style={{ ...row, opacity: off ? 0.55 : 1 }}>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1 }}>
+                <input type="checkbox" checked={has(f.id) || off} disabled={off} onChange={() => toggle(f)} /> {f.name}
+                {off && <span className="faint" style={{ fontSize: 12 }}>included by a folder above</span>}
+              </label>
+              <button className="t2" aria-label={`Open ${f.name}`} onClick={() => setTrail([...trail, f])}>Open ›</button>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="muted" style={{ fontSize: 13, flex: 1 }}>{sel.length} {sel.length === 1 ? 'folder' : 'folders'} chosen · subfolders are included</span>
+        <button className="pill primary" onClick={() => onDone(sel)}>Done</button>
       </div>
     </div>
   );

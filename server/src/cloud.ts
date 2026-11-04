@@ -28,6 +28,8 @@ export const isProvider = (v: unknown): v is ProviderId => PROVIDERS.some((p) =>
 
 export type Conn = {
   id: string; provider: ProviderId; account: string;
+  /** The folders to copy from (each with its subfolders). `folderId` and `folderName` are the first of them, kept for older settings. */
+  folders?: { id: string; name: string }[];
   folderId: string | null; folderName: string; intervalMin: number; enabled: boolean;
   lastSync: string | null; lastResult: SyncResult | null; needsReconnect: boolean;
   /** Keep only a smaller copy of each photograph in Frames (JPEG, quality 80, the same pixels). The original stays in the cloud and is fetched when it is exported. */
@@ -38,7 +40,13 @@ export type SyncResult = { downloaded: number; skipped: number; changedRemotely:
   shrunk?: number; freed?: number };
 type CloudCfg = { clients: Partial<Record<ProviderId, { clientId: string }>>; connections: Conn[] };
 
-export const loadCloud = (db: DB): CloudCfg => ({ clients: {}, connections: [], ...getSetting<Partial<CloudCfg>>(db, 'cloud', {}) });
+/** A connection from before several folders could be chosen has one: it becomes the list's only entry. */
+export const foldersOf = (c: Pick<Conn, 'folders' | 'folderId' | 'folderName'>): { id: string; name: string }[] => c.folders ?? (c.folderId === null ? [] : [{ id: c.folderId, name: c.folderName }]);
+export const loadCloud = (db: DB): CloudCfg => {
+  const c = { clients: {}, connections: [], ...getSetting<Partial<CloudCfg>>(db, 'cloud', {}) } as CloudCfg;
+  c.connections = c.connections.map((k) => { const f = foldersOf(k); return { ...k, folders: f, folderId: f[0]?.id ?? null, folderName: f[0]?.name ?? '' }; });
+  return c;
+};
 export const saveCloud = (db: DB, c: CloudCfg) => setSetting(db, 'cloud', c);
 /**
  * The app registration (client ID and secret from the service's developer console) belongs to the whole server: an administrator
@@ -327,7 +335,7 @@ export const progressOf = (cfg: AppCfg): Progress => { let p = progresses.get(cf
 export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<SyncResult> {
   const c0 = loadCloud(db).connections.find((c) => c.id === id);
   if (!c0) throw new CloudError('No such connection.');
-  if (!c0.folderId && c0.folderId !== '') throw new CloudError('Choose a folder to sync first.');
+  if (foldersOf(c0).length === 0) throw new CloudError('Choose at least one folder to sync first.');
   const progress = progressOf(cfg);
   if (progress.running) throw new CloudError('A cloud sync is already running.');
   Object.assign(progress, { running: true, connId: id, downloaded: 0, current: '' });
@@ -346,7 +354,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const shrinkRow = db.prepare('UPDATE cloud_files SET rel = ?, shrunk = 1, orig_size = ?, orig_w = ?, orig_h = ?, remote_name = ?, size = ? WHERE conn_id = ? AND remote_id = ?');
   try {
     const seen = new Set<string>();
-    const queue: { id: string; rel: string[]; depth: number }[] = [{ id: c0.folderId!, rel: [], depth: 0 }];
+    const queue: { id: string; rel: string[]; depth: number }[] = foldersOf(c0).map((f) => ({ id: f.id, rel: [] as string[], depth: 0 })); // each chosen folder, with everything inside it
     let entries = 0;
     while (queue.length) {
       const f = queue.shift()!;
