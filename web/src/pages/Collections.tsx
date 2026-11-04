@@ -147,6 +147,7 @@ export function CollectionDetail() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const insights = useApi<Insights>(`/collections/${id}/insights`);
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
+  const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
   const [editing, setEditing] = useState(false);
   const [qs] = useSearchParams();
   const [adding, setAdding] = useState(qs.get('add') === '1'); // a new, empty composition opens with the photographs to choose from
@@ -186,10 +187,17 @@ export function CollectionDetail() {
 
   if (!c) return <div className="page"><Header /><Loading error={coll.error} /></div>;
   const printed = !!c.printedAt;
-  const reload = () => { ranking.reload(); insights.reload(); };
+  const reload = () => { ranking.reload(); insights.reload(); suggestions.reload(); };
   const save = async (patch: Record<string, unknown>) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: patch })); reload(); };
   // Takes a photograph out of this composition (it stays in the library, and any print slot it held is freed).
   const removeFromComp = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' })); reload(); };
+  // A guest's suggestion: swap it into the print it was for (in the same slot), or put it aside.
+  const useSuggestion = async (forId: number, photoId: number) => {
+    const next = c.chosenIds.map((x) => (x === forId ? photoId : x));
+    await api(`/collections/${c.id}/suggestions?forId=${forId}&photoId=${photoId}`, { method: 'DELETE' });
+    await save({ chosenIds: next, order: [...next, ...c.photoIds.filter((x) => !next.includes(x))] });
+  };
+  const dismissSuggestion = async (forId: number, photoId: number) => { await api(`/collections/${c.id}/suggestions?forId=${forId}&photoId=${photoId}`, { method: 'DELETE' }); suggestions.reload(); };
   const addPhoto = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' })); reload(); };
   const req = target ? requiredPx(target) : null;
   const chosen = c.chosenIds.map((pid) => byId.get(pid)).filter((p): p is PhotoLite => !!p);
@@ -436,6 +444,24 @@ export function CollectionDetail() {
             <div style={{ marginBottom: 10 }}>{rk && rk.guests > 0 ? `${rk.guests} ${rk.guests === 1 ? 'guest' : 'guests'} rated these photographs. Their scores count for ${w}% of the ranking.` : 'No one has rated these yet. Send a link and their scores feed the ranking.'}</div>
             <button onClick={() => setSharing(true)} style={{ borderRadius: 999, padding: '8px 14px', fontSize: 13, boxShadow: ring, color: '#efede8' }}>{rk && rk.guests > 0 ? 'Ask more people' : 'Share for review'}</button>
           </div>
+          {(suggestions.data?.suggestions ?? []).length > 0 && !printed && (
+            <div>{heading('Guest suggestions')}
+              {suggestions.data!.suggestions.map((g) => (
+                <div key={`${g.forId}-${g.photoId}`} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <img src={thumb(g.photoId)} alt={byId.get(g.photoId)?.title ?? ''} style={{ height: 52, borderRadius: 4 }} />
+                    <span style={{ color: '#6f6c67' }}>instead of</span>
+                    <img src={thumb(g.forId)} alt={byId.get(g.forId)?.title ?? ''} style={{ height: 52, borderRadius: 4 }} />
+                  </div>
+                  <div style={{ marginBottom: 6 }}>{g.by.join(', ')} {g.by.length === 1 ? 'suggests' : 'suggest'} this for print {c.chosenIds.indexOf(g.forId) + 1}.{g.notes.map((n, i) => <div key={i} style={{ fontStyle: 'italic', color: '#8f8c86' }}>“{n}”</div>)}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => useSuggestion(g.forId, g.photoId)} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '6px 12px', fontSize: 12.5 }}>Use it</button>
+                    <button onClick={() => dismissSuggestion(g.forId, g.photoId)} style={{ borderRadius: 999, padding: '6px 12px', fontSize: 12.5, boxShadow: ring }}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {ins && ins.repetitive.length > 0 && (
             <div>{heading('Nearly the same')}
               {ins.repetitive.map((g) => <div key={g.photoIds.join('-')} style={{ marginBottom: 8 }}>{g.photoIds.map((x) => byId.get(x)?.title ?? 'A photo').slice(0, 2).join(' and ')} look alike. Only one is likely to make the wall. <Link className="t2" style={{ textDecoration: 'underline' }} to={`/compare?a=${g.photoIds[0]}&b=${g.photoIds[1]}`}>Compare</Link></div>)}

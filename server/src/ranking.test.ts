@@ -64,6 +64,30 @@ describe('ranking a composition', () => {
     expect((await A.post('/api/review/rate', { photoId: ids[1], rating: 4 })).status).toBe(200);
   });
 
+  it('lets a guest suggest another candidate for a chosen print, and shows the owner what was suggested', async () => {
+    await A.patch(`/api/collections/${compId}`, { chosenIds: [ids[0]] });
+    const page = (await env.app.inject(`/api/s/${token}`)).json();
+    expect(page.chosenIds).toEqual([ids[0]]); // the guest sees which are the prints
+    const sug = (payload: object) => env.app.inject({ method: 'POST', url: `/api/s/${token}/suggest`, payload });
+    expect((await sug({ forId: ids[0], photoId: ids[2], reviewer: 'Sam', note: 'warmer' })).statusCode).toBe(200);
+    expect((await sug({ forId: ids[0], photoId: ids[2], reviewer: 'Ana' })).statusCode).toBe(200);
+    expect((await sug({ forId: ids[0], photoId: ids[1], reviewer: 'Ana' })).statusCode).toBe(200); // Ana changes her mind: replaced, not added
+    expect((await sug({ forId: ids[1], photoId: ids[2], reviewer: 'Sam' })).statusCode).toBe(400); // not a chosen print
+    expect((await sug({ forId: ids[0], photoId: ids[0], reviewer: 'Sam' })).statusCode).toBe(400); // already chosen
+    expect((await sug({ forId: ids[0], photoId: 99999, reviewer: 'Sam' })).statusCode).toBe(400);
+    const got = (await A.get(`/api/collections/${compId}/suggestions`)).body.suggestions;
+    expect(got).toEqual([{ forId: ids[0], photoId: ids[2], by: ['Sam'], notes: ['warmer'] }, { forId: ids[0], photoId: ids[1], by: ['Ana'], notes: [] }]);
+    expect((await sug({ forId: ids[0], photoId: null, reviewer: 'Sam' })).statusCode).toBe(200); // takes it back
+    expect((await A.get(`/api/collections/${compId}/suggestions`)).body.suggestions).toHaveLength(1);
+    expect((await A.del(`/api/collections/${compId}/suggestions?forId=${ids[0]}&photoId=${ids[1]}`)).body.removed).toBe(1);
+    expect((await A.get(`/api/collections/${compId}/suggestions`)).body.suggestions).toEqual([]);
+  });
+
+  it('refuses suggestions when the link does not allow review', async () => {
+    const closed = (await A.post('/api/shares', { kind: 'collection', id: compId, allowReview: false })).body.token;
+    expect((await env.app.inject({ method: 'POST', url: `/api/s/${closed}/suggest`, payload: { forId: ids[0], photoId: ids[1] } })).statusCode).toBe(403);
+  });
+
   it('marks a composition printed, and reopening clears it', async () => {
     expect((await A.get(`/api/collections/${compId}`)).body.printedAt).toBeNull();
     expect((await A.patch(`/api/collections/${compId}`, { printed: true })).body.printedAt).toMatch(/^\d{4}-/);

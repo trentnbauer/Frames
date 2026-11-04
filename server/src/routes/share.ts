@@ -97,7 +97,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- public side (no login) ----------
-  type Resolved = { share: Row; name: string; description: string; photoIds: number[] };
+  type Resolved = { share: Row; name: string; description: string; photoIds: number[]; chosenIds?: number[]; target?: unknown };
   const resolve = (token: string, req: any, rep: any): Resolved | null => {
     if (!new RegExp(`^${TOKEN}$`).test(token)) { if (!limited(req, rep, 'lookup')) rep.code(404).send({ error: 'This link does not exist' }); return null; }
     const share = one('SELECT * FROM shares WHERE token = ?', token);
@@ -106,7 +106,9 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (share.kind === 'collection') {
       const c = one('SELECT name, description FROM collections WHERE id = ?', share.target_id);
       if (!c) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
-      return { share, name: c.name, description: c.description, photoIds: all('SELECT photo_id FROM collection_photos WHERE collection_id = ? ORDER BY pos', share.target_id).map((r) => r.photo_id) };
+      const rows = all('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos', share.target_id);
+      const t = one('SELECT target FROM collections WHERE id = ?', share.target_id);
+      return { share, name: c.name, description: c.description, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), target: t?.target ? JSON.parse(t.target) : null };
     }
     const s = one('SELECT name, description FROM shoots WHERE id = ?', share.target_id);
     if (!s) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
@@ -121,7 +123,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!r) return;
     db.prepare('UPDATE shares SET views = views + 1 WHERE id = ?').run(r.share.id);
     const photos = r.photoIds.map((id, i) => { const p = one('SELECT id, title, w, h FROM photos WHERE id = ?', id); return p ? { id: p.id, title: p.title, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
-    return { kind: r.share.kind, name: r.name, description: r.description, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, expiresAt: r.share.expires_at, photos };
+    return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, expiresAt: r.share.expires_at, photos };
   });
 
   const image = (kind: 'thumb' | 'preview') => async (req: any, rep: any) => {
@@ -168,6 +170,27 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       .header('Content-Disposition', `attachment; filename="${name.replace(/[^\x20-\x7e]|["\\;]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`)
       .header('Content-Length', String(fs.statSync(p.path).size))
       .send(fs.createReadStream(p.path));
+  });
+
+  // A guest suggests another candidate in place of one of the chosen prints. One suggestion per person per print; sending none takes theirs back.
+  const MAX_SUGGESTIONS = 2000;
+  app.post('/api/s/:token/suggest', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'review')) return;
+    const r = resolve((req.params as Row).token, req, rep);
+    if (!r) return;
+    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    const b = (req.body ?? {}) as Row;
+    const forId = num(b.forId), photoId = b.photoId === null ? null : num(b.photoId);
+    const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
+    if (!r.chosenIds?.includes(forId)) return rep.code(400).send({ error: 'That is not one of the prints' });
+    if (photoId !== null && (!r.photoIds.includes(photoId) || r.chosenIds.includes(photoId))) return rep.code(400).send({ error: 'That photograph cannot be suggested' }); // checked first, so a bad request never wipes an earlier good one
+    db.prepare('DELETE FROM share_suggestions WHERE share_id = ? AND for_id = ? AND reviewer = ?').run(r.share.id, forId, reviewer);
+    if (photoId === null) return { ok: true };
+    if ((one('SELECT COUNT(*) n FROM share_suggestions WHERE share_id = ?', r.share.id) as Row).n >= MAX_SUGGESTIONS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
+    const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
+    db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
+    return { ok: true };
   });
 
   const MAX_GUEST_REVIEWS = 5000; // a ceiling on what one public link can store

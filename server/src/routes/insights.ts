@@ -148,6 +148,29 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     setSetting(db, GUEST_WEIGHT_KEY, Math.round(w));
     return { weight: guestWeight() };
   });
+  // What guests suggested for a composition: another candidate in place of a chosen print, grouped, most suggested first.
+  app.get('/api/collections/:id/suggestions', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return rep.code(404).send({ error: 'Not found' });
+    const rows = all("SELECT s.for_id, s.photo_id, s.reviewer, s.note FROM share_suggestions s JOIN shares sh ON sh.id = s.share_id WHERE sh.kind = 'collection' AND sh.target_id = ? ORDER BY s.ts", id);
+    const chosen = new Set(all('SELECT photo_id FROM collection_photos WHERE collection_id = ? AND chosen = 1', id).map((r) => r.photo_id as number));
+    const g = new Map<string, { forId: number; photoId: number; by: string[]; notes: string[] }>();
+    for (const r of rows) {
+      // Only what can still be acted on: the print it would replace is still chosen, and the suggestion is not already chosen.
+      if (!chosen.has(r.for_id) || chosen.has(r.photo_id)) continue;
+      const k = `${r.for_id}:${r.photo_id}`;
+      const e = g.get(k) ?? g.set(k, { forId: r.for_id, photoId: r.photo_id, by: [], notes: [] }).get(k)!;
+      e.by.push(r.reviewer); if (r.note) e.notes.push(r.note);
+    }
+    return { suggestions: [...g.values()].sort((a, b) => b.by.length - a.by.length) };
+  });
+  app.delete('/api/collections/:id/suggestions', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const q = req.query as Row;
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return rep.code(404).send({ error: 'Not found' });
+    const r = db.prepare("DELETE FROM share_suggestions WHERE for_id = ? AND photo_id = ? AND share_id IN (SELECT id FROM shares WHERE kind = 'collection' AND target_id = ?)").run(num(q.forId), num(q.photoId), id);
+    return { removed: r.changes };
+  });
   // What guests thought of one photograph, across every share link it was in.
   app.get('/api/photos/:id/guests', async (req, rep) => {
     const id = num((req.params as Row).id);
