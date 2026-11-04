@@ -3,7 +3,7 @@ import { loadCloud } from '../cloud.js';
 import type { Ctx, Row } from '../ctx.js';
 
 /** One thing for the person to do: a kind, how many photographs it covers, and the first few of them. */
-export type TodoItem = { key: string; title: string; detail: string; count: number; photoIds: number[]; link?: string };
+export type TodoItem = { key: string; title: string; detail: string; count: number; photoIds: number[]; /** Every photograph in the item (newest first), so the photograph page can step through them. */ ids?: number[]; link?: string };
 
 const SAMPLE = 24;
 
@@ -18,7 +18,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const items: TodoItem[] = [];
     const ids = (sql: string): number[] => (all(sql) as Row[]).map((r) => r.id as number);
     const add = (key: string, title: string, detail: string, list: number[], link?: string) => {
-      if (list.length) items.push({ key, title, detail, count: list.length, photoIds: list.slice(0, SAMPLE), link });
+      if (list.length) items.push({ key, title, detail, count: list.length, photoIds: list.slice(0, SAMPLE), ids: list.slice(0, 2000), link });
     };
 
     // AI suggestions waiting for a yes or no: suggested tags and subjects, and a suggested description.

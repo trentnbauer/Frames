@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { RATINGS, fmtCoord, fmtDate, requiredPx, type Collection, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { PAPER_MM } from '../target';
@@ -27,6 +27,13 @@ export function PhotoDetail() {
   const colls = useApi<Collection[]>('/collections');
   const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
   const [msg, setMsg] = useState('');
+  // Opened from the To do list: Previous and Next walk what still needs doing, not the whole library.
+  const [qs] = useSearchParams();
+  const todoKey = qs.get('todo');
+  const todo = useApi<{ items: { key: string; ids?: number[] }[] }>(todoKey ? '/todo' : null);
+  const snapshot = useRef<number[] | null>(null); // the list as it was when this page was opened, so the order does not shuffle as items are done
+  const live = todo.data?.items.find((i) => i.key === todoKey)?.ids ?? null;
+  if (todoKey && live && !snapshot.current) snapshot.current = live;
   const p = photo.data;
   // Each field follows the server only when its own value changes, so a refresh never wipes text being typed elsewhere.
   const [title, setTitle] = useField(p?.title ?? '', p?.id);
@@ -34,10 +41,19 @@ export function PhotoDetail() {
   const [place, setPlace] = useField(p?.place ?? '', p?.id);
   useEffect(() => setMsg(''), [p?.id]);
 
-  const list = all.data?.photos ?? [];
-  const idx = list.findIndex((x) => x.id === Number(id));
-  const go = (d: number) => list.length && nav(`/photo/${list[(idx + d + list.length) % list.length].id}`);
-  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, list.length]);
+  const here = Number(id);
+  const libList = all.data?.photos ?? [];
+  // In the To do walk: skip photographs already dealt with (no longer on the live list), but keep the order from when it was opened.
+  const walk = todoKey ? (snapshot.current ?? []).filter((x) => x === here || !live || live.includes(x)) : null;
+  const list = libList;
+  const stepIds = walk ?? libList.map((x) => x.id);
+  const idx = stepIds.indexOf(here);
+  const go = (d: number) => {
+    if (!stepIds.length) return;
+    const n = stepIds[(idx + d + stepIds.length) % stepIds.length];
+    nav(`/photo/${n}${todoKey ? `?todo=${todoKey}` : ''}`);
+  };
+  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, stepIds.length]);
 
   if (!p) return <div className="page"><Header /><Loading error={photo.error} /></div>;
   const ai = !!settings && settings.ai !== 'off';
@@ -79,12 +95,12 @@ export function PhotoDetail() {
     <div className="page">
       <Header />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
-        <Link to={shoot ? `/shoots/${shoot.id}` : '/library'} style={{ color: '#a8a59f' }}>← {shoot?.name ?? 'Library'}</Link>
+        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
         <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
           <Link to={`/library?similarTo=${p.id}`}>Find similar</Link>
           {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare</Link>}
           <button onClick={() => go(-1)}>← Previous</button>
-          {idx >= 0 && <span style={{ color: '#6f6c67' }}>{idx + 1} of {list.length}</span>}
+          {idx >= 0 && <span style={{ color: '#6f6c67' }}>{idx + 1} of {stepIds.length}</span>}
           <button onClick={() => go(1)}>Next →</button>
         </span>
       </div>
