@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkTarget, fmtCoord, parseTarget, requiredPx } from './data';
+import { checkTarget, fmtCoord, parseTarget, printRatio, requiredPx } from './data';
 
 const t = (o: object) => parseTarget({ size: 'none', orientation: 'any', ppi: 300, count: 1, ...o })!;
 
@@ -22,6 +22,24 @@ describe('print target', () => {
     expect(checkTarget({ w: 4000, h: 6000 }, t({ size: 'A3', orientation: 'portrait' })).problem).toBeNull();
     expect(checkTarget({ w: 10, h: 10 }, null).problem).toBeNull();
     expect(checkTarget({ w: 0, h: 0 }, t({ size: 'A3' })).problem).toBe('Pixel size unknown.');
+  });
+});
+
+describe('the shape of a print slot', () => {
+  it('follows the paper and the orientation', () => {
+    expect(printRatio(t({ size: 'A4', orientation: 'landscape' }))).toBeCloseTo(297 / 210, 3);
+    expect(printRatio(t({ size: 'A4', orientation: 'portrait' }))).toBeCloseTo(210 / 297, 3);
+    expect(printRatio(t({ size: 'custom', widthMm: 200, heightMm: 300, orientation: 'portrait' }))).toBeCloseTo(2 / 3, 3);
+  });
+  it('with no orientation follows the photograph in the slot, and is landscape when empty', () => {
+    expect(printRatio(t({ size: 'A3' }))).toBeGreaterThan(1);
+    expect(printRatio(t({ size: 'A3' }), { w: 2000, h: 3000 })).toBeLessThan(1);
+    expect(printRatio(t({ size: 'A3' }), { w: 3000, h: 2000 })).toBeGreaterThan(1);
+  });
+  it('uses the aspect ratio, or the minimum pixels, when there is no paper, and 3:2 when there is nothing', () => {
+    expect(printRatio(t({ aspect: '4:5', orientation: 'portrait' }))).toBeCloseTo(0.8, 3);
+    expect(printRatio(t({ minWidth: 4000, minHeight: 3000 }))).toBeCloseTo(4 / 3, 3);
+    expect(printRatio(t({}))).toBeCloseTo(1.5, 3);
   });
 });
 
