@@ -62,6 +62,12 @@ export function Header({ right }: { right?: ReactNode }) {
         {right}
         {links}
         {/* Always there when someone is signed in with OAuth, whatever the page puts on the right. */}
+        {me?.user && (
+          <span className="faint" style={{ fontSize: 13, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${me.user.name ? `${me.user.name}, ` : ''}${me.user.email} (${me.role === 'admin' ? 'administrator' : 'member'}, signed in with ${me.user.provider})`}>
+            {me.user.name && me.user.email && me.user.name !== me.user.email ? `${me.user.name} · ${me.user.email}` : me.user.email || me.user.name}{me.role === 'admin' ? ' · admin' : ''}
+          </span>
+        )}
+        {me && !me.user && me.mode === 'password' && <span className="faint" style={{ fontSize: 13 }} title="Signed in with the shared password">Shared password</span>}
         {me?.user && <button className="toplinks" style={{ fontSize: 13 }} onClick={signOut} title={me.user.email || me.user.name}>Sign out</button>}
       </div>
     </header>
