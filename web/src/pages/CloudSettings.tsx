@@ -46,6 +46,34 @@ export function CloudSettings() {
   );
 }
 
+const link = (href: string, text: string) => <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{text}</a>;
+
+/** Exactly what to choose in each service's console. Frames signs you in with OAuth (authorization code with PKCE) and only reads. */
+function Steps({ p }: { p: Prov }) {
+  return (
+    <ol className="muted" style={{ fontSize: 13, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+      {p.id === 'google' && <>
+        <li>In {link(p.console, 'Google Cloud console')}, make or pick a project. Under <b>APIs &amp; Services, Library</b>, enable the <b>Google Drive API</b>.</li>
+        <li><b>OAuth consent screen</b> (Google Auth platform): user type <b>External</b>, add yourself as a <b>test user</b>. Add the scope <span className="mono">.../auth/drive.readonly</span> (“See and download all your Google Drive files”). While the app is in <i>Testing</i>, Google ends the connection every 7 days; press <b>Publish app</b> to avoid that (you can ignore the unverified-app warning for your own app).</li>
+        <li><b>Credentials, Create credentials, OAuth client ID</b>, application type <b>Web application</b> (not a service account, not an API key). Under <b>Authorised redirect URIs</b> add the return address above exactly.</li>
+        <li>Copy the <b>client ID</b> and <b>client secret</b> into the boxes above.</li>
+      </>}
+      {p.id === 'dropbox' && <>
+        <li>In the {link(p.console, 'Dropbox App Console')} press <b>Create app</b>, choose <b>Scoped access</b> and <b>Full Dropbox</b> (or <i>App folder</i> to limit it to one folder), and name it.</li>
+        <li>On the <b>Permissions</b> tab tick <span className="mono">files.metadata.read</span>, <span className="mono">files.content.read</span> and <span className="mono">account_info.read</span>, then press <b>Submit</b>. Nothing that writes is needed.</li>
+        <li>On the <b>Settings</b> tab add the return address above under <b>Redirect URIs</b>. Leave <i>Allow public clients (Implicit Grant &amp; PKCE)</i> as it is.</li>
+        <li>Copy the <b>App key</b> (the client ID) and <b>App secret</b> into the boxes above.</li>
+      </>}
+      {p.id === 'onedrive' && <>
+        <li>In {link(p.console, 'Microsoft Entra, App registrations')} press <b>New registration</b>. Supported account types: <b>Personal Microsoft accounts only</b> for OneDrive, or the option that includes personal accounts if you also use work accounts.</li>
+        <li><b>Redirect URI</b>: platform <b>Web</b>, and the return address above.</li>
+        <li><b>API permissions, Add a permission, Microsoft Graph, Delegated</b>: <span className="mono">Files.Read</span>, <span className="mono">User.Read</span> and <span className="mono">offline_access</span>. They need no admin consent.</li>
+        <li><b>Certificates &amp; secrets, New client secret</b>: copy its <b>Value</b> (shown once). The <b>Application (client) ID</b> on the Overview page is the client ID.</li>
+      </>}
+    </ol>
+  );
+}
+
 function Service({ p, act }: { p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [id, setId] = useState(p.clientId);
   const [secret, setSecret] = useState('');
@@ -55,7 +83,8 @@ function Service({ p, act }: { p: Prov; act: (fn: () => Promise<unknown>, ok?: s
       <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520, marginTop: 10 }}>
         <label>Client ID <input aria-label={`${p.label} client ID`} value={id} onChange={(e) => setId(e.target.value)} /></label>
         <label>Client secret <input type="password" autoComplete="off" aria-label={`${p.label} client secret`} value={secret} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} onChange={(e) => setSecret(e.target.value)} /></label>
-        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>Create the app in <a href={p.console} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{p.label}’s developer console</a> with read-only access to files. The secret is kept on this server only, never shown again and left out of backups.</p>
+        <Steps p={p} />
+        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The secret is kept on this server only, never shown again and left out of backups.</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="pill" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save</button>
           <button className="pill primary" disabled={!p.clientId} onClick={() => act(async () => { const r = await api<{ url: string }>(`/cloud/connect/${p.id}`, { body: {} }); window.location.assign(r.url); })}>Connect an account</button>
