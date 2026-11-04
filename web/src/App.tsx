@@ -3,6 +3,9 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { BottomNav, useKey } from './components/bits';
 import { Changelog } from './components/Changelog';
 import { Search } from './components/Search';
+import { NewComposition } from './components/NewComposition';
+import { UiContext, type NewCompositionStart } from './ui';
+import { Todo } from './pages/Todo';
 import { Today } from './pages/Today';
 import { Library } from './pages/Library';
 import { PhotoDetail } from './pages/PhotoDetail';
@@ -22,6 +25,7 @@ import { useStore } from './store';
 
 function Shell() {
   const [searching, setSearching] = useState(false);
+  const [creating, setCreating] = useState<NewCompositionStart | null>(null);
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
@@ -48,7 +52,7 @@ function Shell() {
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
-    <>
+    <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       <Routes>
         <Route path="/" element={<Today />} />
         <Route path="/library" element={<Library />} />
@@ -61,16 +65,18 @@ function Shell() {
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
+        <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
-      {!inReview && <BottomNav onSearch={() => setSearching(true)} />}
+      {!inReview && <BottomNav onSearch={() => setSearching(true)} onNew={() => setCreating({})} />}
       {!inReview && <Changelog />}
       {searching && <Search onClose={() => setSearching(false)} />}
-    </>
+      {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
+    </UiContext.Provider>
   );
 }
 

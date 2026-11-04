@@ -18,6 +18,7 @@ import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
+import { registerTodo } from './routes/todo.js';
 import { createAccessGate } from './access.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerCloud } from './routes/cloud.js';
@@ -433,6 +434,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
+  registerTodo(app, ctx);
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);

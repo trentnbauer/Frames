@@ -1,67 +1,150 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useApi } from '../api';
-import type { PhotoLite } from '../data';
+import { api, imgUrl, useApi } from '../api';
+import type { Collection, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
-import { Header, Img } from '../components/bits';
+import { useUi } from '../ui';
+import { Header } from '../components/bits';
 
+type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: PhotoLite[] };
+
+const serif = "'Instrument Serif',Georgia,serif";
+const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' } as const;
+const lightBtn = { background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999 } as const;
+const cover = (id: number) => imgUrl(id, 'thumb');
+
+/** Home: what is due to review, a way into composing, compositions in progress, and the newest shoots. */
 export function Today() {
-  const { summary } = useStore();
+  const { summary: s } = useStore();
+  const { openNew, openSearch } = useUi();
   const nav = useNavigate();
-  const recs = useApi<{ forgotten: PhotoLite[] }>('/recommendations');
-  const date = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
-  const s = summary;
-  const forgotten = recs.data?.forgotten ?? [];
+  const recs = useApi<SuggestedSet[]>('/collections/suggestions');
+  const comps = useApi<Collection[]>('/collections');
+  const shoots = useApi<Shoot[]>('/shoots');
+  const lib = useApi<{ photos: PhotoLite[] }>('/photos');
+  const byId = new Map((lib.data?.photos ?? []).map((p) => [p.id, p]));
+  const suggestion = recs.data?.[0];
+  const shootsOf = (ids: number[]) => new Set(ids.map((id) => byId.get(id)?.shootId)).size;
+
+  const startSuggested = async (x: SuggestedSet) => {
+    const c = await api<Collection>('/collections', { body: { name: x.name, photoIds: x.photoIds } });
+    await api('/recommendations/feedback', { body: { kind: 'together', photoIds: x.photoIds, verdict: 'accept' } });
+    nav(`/collections/${c.id}`);
+  };
+  const begin = () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review');
+  const active = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && c.target).slice(0, 3);
+  const recent = [...(shoots.data ?? [])].filter((x) => x.count > 0).slice(0, 8);
+
+  if (s && s.total === 0) {
+    return (
+      <div className="page">
+        <Header />
+        <div style={{ maxWidth: 560 }}>
+          <h1 className="serif" style={{ fontSize: 64, lineHeight: 1, margin: '0 0 20px' }}>Your library is empty.</h1>
+          <p className="t2" style={{ fontSize: 14, lineHeight: 1.55, margin: '0 0 24px' }}>Put photographs in the library folder you mounted, then bring them in. Originals are never changed.</p>
+          <Link to="/shoots" className="pill primary">Go to Photoshoots</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const dueLine = !s ? 'Loading…' : s.due === 0 ? 'Nothing is waiting to be seen again.' : `${s.due} ${s.due === 1 ? 'photograph is' : 'photographs are'} waiting to be seen again.`;
+  const dueText = s && s.due > 0
+    ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}. ` : ''}About ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'}. Your ratings rank every composition they belong to.`
+    : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.';
 
   return (
     <div className="page">
-      <Header right={<span className="t2" style={{ fontSize: 13 }}>{date}</span>} />
-      {s && s.total === 0 ? (
-        <div style={{ maxWidth: 560 }}>
-          <h1 className="serif" style={{ fontSize: 64, lineHeight: 1, margin: '0 0 20px' }}>Your library is empty.</h1>
-          <p className="t2" style={{ fontSize: 14, lineHeight: 1.55, margin: '0 0 24px' }}>
-            Put photographs in the library folder you mounted, then bring them in. Originals are never changed.
-          </p>
-          <Link to="/shoots" className="pill primary">Go to Photoshoots</Link>
-        </div>
-      ) : (
-        <div className="today">
-          <div>
-            <h1>
-              {!s ? 'Loading…' : s.due === 0 ? 'Nothing is waiting to be seen again.' : `${s.due} ${s.due === 1 ? 'photograph is' : 'photographs are'} waiting to be seen again.`}
-            </h1>
-            <p className="t2" style={{ fontSize: 14, lineHeight: 1.55, maxWidth: 400, margin: '0 0 24px' }}>
-              {s && s.due > 0
-                ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}. ` : ''}About ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'} at your usual pace.`
-                : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.'}
-            </p>
+      <Header />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 24, marginBottom: 56 }}>
+        <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#161615', minHeight: 380, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 32 }}>
+          {s?.nextId && <img src={cover(s.nextId)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(28px) brightness(.55)', transform: 'scale(1.15)' }} />}
+          <div style={{ position: 'relative' }}>
+            <div style={{ ...eyebrow, color: '#efede8', opacity: 0.8, marginBottom: 14 }}>Review</div>
+            <h1 style={{ font: `400 52px/1 ${serif}`, margin: '0 0 16px', textWrap: 'pretty' }}>{dueLine}</h1>
+            <p style={{ fontSize: 14, lineHeight: 1.55, maxWidth: 400, margin: '0 0 24px', color: '#efede8' }}>{dueText}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              {s && s.due === 0 && !s.resumable && s.early > 0
-                ? <button className="pill primary" onClick={() => nav('/review?early')}>Review anyway: the {s.early === 1 ? 'one' : s.early} seen longest ago</button>
-                : (
-                  <>
-                    <button className="pill primary" onClick={() => nav('/review')} disabled={!s || s.due === 0}>
-                      {s?.resumable ? 'Resume review' : 'Begin review'}
-                    </button>
-                    <span className="muted" style={{ fontSize: 13 }}>or press R</span>
-                  </>
-                )}
+              <button onClick={begin} disabled={!s || (s.due === 0 && !s.resumable && s.early === 0)} style={{ ...lightBtn, padding: '13px 24px', fontSize: 14.5 }}>
+                {s?.resumable ? 'Resume review' : s && s.due === 0 && s.early > 0 ? 'Review anyway' : 'Begin review'}
+              </button>
+              <span style={{ fontSize: 13, color: '#efede8', opacity: 0.75 }}>or press R</span>
             </div>
           </div>
-          <div style={{ aspectRatio: '3 / 2', overflow: 'hidden', borderRadius: 8, background: 'var(--surface)' }}>
-            {s?.nextId && <Img p={{ id: s.nextId, ar: 1.5 }} className="blur" style={{ aspectRatio: '3 / 2', width: '100%', height: '100%' }} />}
-          </div>
         </div>
-      )}
-      {forgotten.length > 0 && (
-        <>
-          <div className="spread" style={{ marginBottom: 14 }}>
-            <h2 className="serif" style={{ fontSize: 28 }}>Not seen in over a year</h2>
-            <span className="muted" style={{ fontSize: 12.5 }}>Rated 4+ the first time</span>
+
+        <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#161615', minHeight: 380, display: 'flex', flexDirection: 'column', padding: 32 }}>
+          <div style={{ ...eyebrow, color: '#6f6c67', marginBottom: 14 }}>Compose</div>
+          <h1 style={{ font: `400 52px/1 ${serif}`, margin: '0 0 16px' }}>Turn a shoot into prints.</h1>
+          <p style={{ fontSize: 14, lineHeight: 1.55, maxWidth: 420, margin: '0 0 20px', color: '#a8a59f' }}>Pick a theme and a print size. Frames ranks the candidates by your scores and your guests’, and checks each one is sharp enough to print.</p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 'auto' }}>
+            <button onClick={() => openNew()} style={{ ...lightBtn, padding: '13px 24px', fontSize: 14.5 }}>New composition</button>
+            <button onClick={openSearch} style={{ borderRadius: 999, padding: '13px 20px', fontSize: 14, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>From a search…</button>
           </div>
-          <div className="strip">
-            {forgotten.map((p) => (
-              <Link key={p.id} to={`/photo/${p.id}`} style={{ aspectRatio: String(p.ar) }} aria-label={p.title}>
-                <Img p={p} style={{ height: '100%', width: 'auto' }} />
+          {suggestion && (
+            <div style={{ marginTop: 28, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 14 }}>
+              <div style={{ fontSize: 12, color: '#8f8c86', marginBottom: 10 }}>Suggested: looks like a set</div>
+              <div style={{ display: 'flex', gap: 8, height: 64, overflow: 'hidden' }}>
+                {suggestion.photos.slice(0, 5).map((p) => <img key={p.id} src={cover(p.id)} alt="" style={{ height: '100%', flex: `${p.ar} 1 0`, minWidth: 0, objectFit: 'cover', borderRadius: 3, display: 'block' }} />)}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 10, fontSize: 13 }}>
+                <span><span style={{ font: `400 19px ${serif}` }}>{suggestion.name}</span> <span style={{ color: '#8f8c86' }}>· {suggestion.photoIds.length} well-liked photographs{shootsOf(suggestion.photoIds) > 0 ? `, ${shootsOf(suggestion.photoIds)} ${shootsOf(suggestion.photoIds) === 1 ? 'shoot' : 'shoots'}` : ''}</span></span>
+                <button onClick={() => startSuggested(suggestion)} style={{ color: '#efede8', textDecoration: 'underline', textUnderlineOffset: 3 }}>Start it</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {active.length > 0 && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+            <h2 style={{ font: `400 28px ${serif}`, margin: 0 }}>Compositions in progress</h2>
+            <Link to="/collections" style={{ fontSize: 13, color: '#a8a59f' }}>All compositions →</Link>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px', marginBottom: 56 }}>
+            {active.map((c) => {
+              const t = c.target!;
+              const full = c.chosenIds.length >= t.count;
+              const order = [...c.chosenIds, ...c.photoIds.filter((id) => !c.chosenIds.includes(id))];
+              const three = [order[0], order[1] ?? order[0], order[2] ?? order[0]];
+              return (
+                <div key={c.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                  <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr', gap: 4, aspectRatio: '2.2', borderRadius: 6, overflow: 'hidden', background: '#161615', marginBottom: 12 }}>
+                    <img src={cover(three[0])} alt="" style={{ gridRow: 'span 2', width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <img src={cover(three[1])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <img src={cover(three[2])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </Link>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
+                    <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
+                    <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{t.count} × {t.size === 'custom' ? 'custom' : t.size === 'none' ? 'pixels' : t.size}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, margin: '8px 0 6px' }}>
+                    {Array.from({ length: Math.min(t.count, 12) }, (_, i) => <i key={i} style={{ width: 10, height: 14, display: 'inline-block', background: i < c.chosenIds.length ? '#efede8' : 'transparent', boxShadow: i < c.chosenIds.length ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />)}
+                    <span style={{ fontSize: 12, color: '#8f8c86', marginLeft: 6 }}>{full ? 'Ready to export' : `${c.chosenIds.length} of ${t.count} chosen · ${c.photoIds.length} candidates`}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                    <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 16px', fontSize: 13, fontWeight: 500, background: full ? '#efede8' : 'rgba(255,255,255,.08)', color: full ? '#0d0d0d' : '#efede8' }}>{full ? 'Export for print' : 'Continue picking'}</Link>
+                    <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 14px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>Open</Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {recent.length > 0 && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+            <h2 style={{ font: `400 28px ${serif}`, margin: 0 }}>Recent shoots</h2>
+            <Link to="/shoots" style={{ fontSize: 13, color: '#a8a59f' }}>Upload a shoot →</Link>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 20 }}>
+            {recent.map((x) => (
+              <Link key={x.id} to={`/shoots/${x.id}`} style={{ textAlign: 'left' }}>
+                {x.coverId ? <img src={cover(x.coverId)} alt="" style={{ width: '100%', aspectRatio: '1.8', objectFit: 'cover', borderRadius: 6, display: 'block', marginBottom: 10 }} /> : <div style={{ width: '100%', aspectRatio: '1.8', borderRadius: 6, background: '#161615', marginBottom: 10 }} />}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: `400 19px ${serif}` }}>{x.name}</span><span style={{ fontSize: 12, color: '#8f8c86' }}>{x.count}</span></div>
+                <div style={{ height: 2, background: 'rgba(255,255,255,.1)', margin: '8px 0 6px' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${x.reviewPct}%` }} /></div>
+                <div style={{ fontSize: 11.5, color: '#6f6c67' }}>{x.reviewPct >= 100 ? `All ${x.sessions} sessions done` : `Reviews ${x.reviewPct}% done`}</div>
               </Link>
             ))}
           </div>

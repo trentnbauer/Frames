@@ -48,6 +48,8 @@ export function Header({ right }: { right?: ReactNode }) {
   const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
   const links = (
     <nav className="toplinks">
+      <NavLink to="/library" className={({ isActive }) => (isActive ? 'active' : '')}>Library</NavLink>
+      <NavLink to="/for-you" className={({ isActive }) => (isActive ? 'active' : '')}>For you</NavLink>
       <NavLink to="/stats" className={({ isActive }) => (isActive ? 'active' : '')}>Stats</NavLink>
       <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
     </nav>
@@ -59,6 +61,7 @@ export function Header({ right }: { right?: ReactNode }) {
         Frames
       </Link>
       <div style={{ display: 'flex', gap: 20, alignItems: 'baseline' }}>
+        <span className="t2" style={{ fontSize: 13 }}>{new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         {right}
         {links}
         {/* Always there when someone is signed in with OAuth, whatever the page puts on the right. */}
@@ -85,22 +88,23 @@ export function Title({ children, count }: { children: ReactNode; count?: string
 
 export const Loading = ({ error }: { error?: string | null }) => <div className="empty" role={error ? 'alert' : 'status'}>{error ? `Something went wrong: ${error}` : 'Loading…'}</div>;
 
-export function BottomNav({ onSearch }: { onSearch: () => void }) {
-  const { summary } = useStore();
+export function BottomNav({ onSearch, onNew }: { onSearch: () => void; onNew: () => void }) {
+  const { summary, todo } = useStore();
   const nav = useNavigate();
   const item = (to: string, label: string) => (
     <NavLink to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>{label}</NavLink>
   );
   return (
     <nav className="nav" aria-label="Primary">
-      {item('/', 'Today')}
+      {item('/', 'Home')}
       {item('/library', 'Library')}
       {item('/shoots', 'Shoots')}
       {item('/collections', 'Compositions')}
-      {item('/for-you', 'For you')}
       <span className="div" />
       <button className="search" onClick={onSearch}>Search or ask… <span>⌘K</span></button>
       <button className="review" onClick={() => nav('/review')}>Review · {summary?.due ?? 0}</button>
+      <button className="newcomp" onClick={onNew}>+ Composition</button>
+      {todo > 0 && <NavLink to="/todo" className={({ isActive }) => 'todo' + (isActive ? ' active' : '')}>To do · {todo}</NavLink>}
     </nav>
   );
 }
