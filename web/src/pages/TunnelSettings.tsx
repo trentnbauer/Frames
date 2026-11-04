@@ -99,7 +99,21 @@ export function TunnelSettings() {
           : (
             <>
               <p>Each address gets a route to this server (<span className="mono">{t.service}</span>) and a proxied DNS record, made and updated by Frames. There is nothing to add in Cloudflare yourself.</p>
-              {t.hostnames.map((h) => <div className="row" key={h.hostname}><span className="mono">{h.hostname}</span><span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`}</span></div>)}
+              {t.hostnames.map((h) => {
+                const login = t.accessApps.find((a) => a.decision === 'allow' && a.addresses.includes(h.hostname));
+                const open = t.accessApps.some((a) => a.decision === 'bypass' && a.addresses.some((x) => x === h.hostname || x.startsWith(h.hostname + '/')));
+                const policy = h.kind === 'app'
+                  ? (login ? `Access: login, allow ${login.who.join(', ') || 'no one'}${open ? '; share links and portfolio public' : ''}` : open ? 'Access: share links and portfolio public, the rest not behind Access' : 'no Access policy')
+                  : (open ? 'Access: public, no login' : 'no Access policy');
+                const dest = h.kind === 'app' ? t.service.replace(/^https?:\/\//, '') : `portfolio${h.who ? `: ${h.who}` : ''} (only the public portfolio)`;
+                return (
+                  <div className="row" key={h.hostname} style={{ display: 'block' }}>
+                    <span className="mono" style={{ userSelect: 'all' }}>{h.hostname}</span>
+                    <span className="faint"> {'>>'} {policy} {'>>'} </span>
+                    <span className="mono">{dest}</span>
+                  </div>
+                );
+              })}
               <h4 style={{ margin: '16px 0 4px' }}>Cloudflare Access</h4>
               {t.accessApps.length === 0
                 ? <p className="muted" style={{ fontSize: 13 }}>{t.hasApiToken ? 'No Access applications yet. Tick “Protect the App URL with Cloudflare Access” above to put a login in front of the app.' : 'Frames sets these up once the API token is saved.'}</p>
