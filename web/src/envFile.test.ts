@@ -26,10 +26,10 @@ describe('one line of an .env file', () => {
 
 describe('the whole file', () => {
   it('has sections, only what was filled in, and explicit true or false for switches', () => {
-    const f = buildEnv({ ...good, AUTH_DISABLE: 'true', ALLOW_SIGNUPS: 'false', PORT: '8080', TRUST_PROXY: '' }, { version: '1.2.3', date: new Date('2026-11-04T00:00:00Z') });
+    const f = buildEnv({ ...good, AUTH_DISABLE: 'true', ALLOW_SIGNUPS: 'false', HOST_PORT: '8080', TRUST_PROXY: '' }, { version: '1.2.3', date: new Date('2026-11-04T00:00:00Z') });
     expect(f).toContain('# Frames 1.2.3 settings, made on the Deployment page on 2026-11-04.');
     expect(f).toContain('# Sign-in\nAUTH_DISABLE=true\nALLOW_SIGNUPS=false');
-    expect(f).toContain('# The server\nPORT=8080');
+    expect(f).toContain('# The server\nHOST_PORT=8080');
     expect(f).toContain('# Cloudflare tunnel\nCLOUDFLARE_API_TOKEN=tok\nCLOUDFLARE_ACCOUNT_ID=' + 'a'.repeat(32) + '\nAPP_HOSTNAME=frames.example.com\nACCESS_EMAILS=me@example.com,you@example.com\nPORTFOLIO_HOSTNAME=gallery.example.com');
     expect(f).not.toContain('TRUST_PROXY');
     expect(f).not.toContain('TUNNEL_NAME=Studio');
@@ -67,7 +67,7 @@ describe('what would not work', () => {
     expect(p({ ACCESS_EMAILS: 'nope' })).toMatch(/not an email address/);
     expect(p({ APP_HOSTNAME: 'no_dots' })).toMatch(/not a valid hostname/);
     expect(p({ PORTFOLIO_HOSTNAME: 'frames.example.com' })).toMatch(/must be different/);
-    expect(p({ PORT: 'eighty' })).toMatch(/PORT must be a number/);
+    expect(p({ HOST_PORT: 'eighty' })).toMatch(/HOST_PORT must be a number/);
     expect(p({ APP_HOSTNAME: '', PORTFOLIO_HOSTNAME: '' })).toMatch(/set the app address and\/or the portfolio address/);
   });
 });

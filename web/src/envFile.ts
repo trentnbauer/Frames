@@ -16,7 +16,7 @@ export const FIELDS: Field[] = [
   { group: 'Sign-in', key: 'OIDC_ALLOW_HTTP', label: 'Allow an OpenID Connect server on plain http', kind: 'bool', help: 'Only on a network you trust.' },
   { group: 'The server', key: 'PHOTOS_DIR', label: 'Photo folder on the host', kind: 'text', help: 'Where your photographs are on the Docker host, mounted read-only at /library.', placeholder: '/srv/photos' },
   { group: 'The server', key: 'BIND_ADDRESS', label: 'Listen on', kind: 'text', help: '127.0.0.1 is this machine only; 0.0.0.0 is every network interface.', placeholder: '127.0.0.1' },
-  { group: 'The server', key: 'PORT', label: 'Port', kind: 'text', help: 'The port published on the host.', placeholder: '3000' },
+  { group: 'The server', key: 'HOST_PORT', label: 'Port on the host', kind: 'text', help: 'The port published on the host. If your stack loads this file with env_file:, write the port in the compose file instead: env_file only sets variables inside the container.', placeholder: '3000' },
   { group: 'The server', key: 'FRAMES_VERSION', label: 'Image version', kind: 'text', help: 'Pin a release such as 1.2.3, or leave empty for latest.', placeholder: 'latest' },
   { group: 'The server', key: 'MAX_UPLOAD_MB', label: 'Largest upload (MB)', kind: 'text', help: 'Default 2048.', placeholder: '2048' },
   { group: 'The server', key: 'TRUST_PROXY', label: 'Behind a reverse proxy', kind: 'bool', help: 'So share links rate-limit each visitor, not the proxy.' },
@@ -56,7 +56,7 @@ export function problems(v: Values): string[] {
     if (app && !emails.length) out.push('The app address needs at least one email for Cloudflare Access: it is never published without a login.');
     for (const e of emails) if (!EMAIL.test(e.toLowerCase())) out.push(`“${e}” is not an email address.`);
   }
-  for (const k of ['SESSION_DAYS', 'MAX_UPLOAD_MB', 'PORT']) if (t(v, k) && !/^\d{1,6}$/.test(t(v, k))) out.push(`${k} must be a number.`);
+  for (const k of ['SESSION_DAYS', 'MAX_UPLOAD_MB', 'HOST_PORT']) if (t(v, k) && !/^\d{1,6}$/.test(t(v, k))) out.push(`${k} must be a number.`);
   if (t(v, 'AUTH_PASSWORD') && !t(v, 'AUTH_USER')) out.push('A shared password works best with a user name too (default “frames” is used if empty).');
   for (const f of FIELDS) if (/[\r\n]/.test(v[f.key] ?? '')) out.push(`${f.label} cannot contain a line break.`);
   return [...new Set(out)];
