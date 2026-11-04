@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
@@ -42,6 +43,14 @@ const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
   const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy });
+  // A ceiling per visitor on everything, high enough that a grid of thousands of thumbnails never meets it, low enough to stop a flood.
+  // (The sign-in, password and share-link routes have their own, much stricter limits.)
+  void app.register(rateLimit, { global: false, max: 6000, timeWindow: '1 minute', allowList: (req) => req.url === '/api/health' });
+  // Routes are added below before the plugin has loaded, so the limit is attached as a hook on the whole app instead of per route.
+  // It is the first hook, so a flood is counted before sign-in or anything else runs.
+  let limit: (req: any, rep: any) => Promise<unknown> = async () => undefined;
+  app.addHook('onRequest', async (req, rep) => { await limit(req, rep); });
+  app.after(() => { limit = app.rateLimit() as typeof limit; });
   // Who the people are lives in the system database. Each person's library is their own database (see tenants.ts), and `db` and
   // `cfg` below answer from the library of whoever is making the request, so a route can only ever reach its own caller's data.
   const sys = openSystemDb(baseCfg.dataDir);
