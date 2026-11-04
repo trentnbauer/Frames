@@ -43,13 +43,27 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    needs: test
+    # No `needs: test`: when this has nothing to do it should finish at once, not wait for the tests.
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - run: docker build -t frames:ci .
+      # Building and starting the image is slow and can only newly break when the Dockerfile or the dependencies change, so a pull
+      # request does it only then (and otherwise this check finishes in seconds and passes). Every push to main, and every release,
+      # always does it, so a problem is caught right after a merge at the latest, and the release builds it again before publishing.
+      - name: Does this change affect the image?
+        id: image
+        run: |
+          run=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            git fetch -q --depth=1 origin "${{ github.base_ref }}"
+            git diff --name-only FETCH_HEAD... | grep -qE '^(Dockerfile|\.dockerignore|(server|web)/package(-lock)?\.json)$' || run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - if: steps.image.outputs.run == 'true'
+        run: docker build -t frames:ci .
       - name: Starts and reports healthy
+        if: steps.image.outputs.run == 'true'
         run: |
           mkdir -p photos
           docker run -d --name frames -p 3000:3000 -v "$PWD/photos:/library:ro" -v frames-data:/data frames:ci
@@ -59,22 +73,12 @@ jobs:
           done
           docker logs frames
           exit 1
-      # The release publishes arm64 too. Building it under emulation takes two minutes, and it can only break when the Dockerfile or
-      # the dependencies change, so a pull request does it only then. Every push to main, and every release, always does.
-      - name: Does this change affect the arm64 build?
-        id: arm
-        run: |
-          run=true
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            git fetch -q --depth=1 origin "${{ github.base_ref }}"
-            git diff --name-only FETCH_HEAD... | grep -qE '^(Dockerfile|\.dockerignore|(server|web)/package(-lock)?\.json)$' || run=false
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-      - if: steps.arm.outputs.run == 'true'
+      # The release publishes arm64 too. Building it under emulation takes two minutes.
+      - if: steps.image.outputs.run == 'true'
         uses: docker/setup-qemu-action@v4
-      - if: steps.arm.outputs.run == 'true'
+      - if: steps.image.outputs.run == 'true'
         uses: docker/setup-buildx-action@v4
-      - if: steps.arm.outputs.run == 'true'
+      - if: steps.image.outputs.run == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
