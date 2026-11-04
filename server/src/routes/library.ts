@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
-import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
+import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
@@ -242,7 +242,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   });
   // ---------- AI sources: as many as you like, one active ----------
   const sourceDto = (src: AiSource) => ({ ...src, hasKey: !!sourceKey(db, src.id), ready: isReady(src), why: whyNotReady(src) });
-  const sourcesDto = () => ({ types: AI_TYPES, active: loadSettings(db).aiActive, sources: loadSources(db).map(sourceDto) });
+  const sourcesDto = () => ({ types: AI_TYPES, active: loadSettings(db).aiActive, sources: [...loadSources(db).map(sourceDto), ...loadShared(db).map((s) => ({ ...sourceDto(s), shared: true }))] });
   const cfgOf = (src: AiSource): AiCfg => { const t = aiType(src.type)!; return { protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(db, src.id) }; };
   app.get('/api/ai/sources', async () => sourcesDto());
   app.post('/api/ai/sources', async (req, rep) => {
@@ -269,7 +269,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   });
   app.delete('/api/ai/sources/:id', async (req, rep) => {
     const id = (req.params as Row).id;
-    if (!getSource(db, id)) return x.notFound(rep);
+    if (!loadSources(db).some((s) => s.id === id)) return x.notFound(rep); // the shared ones are the administrator's to remove
     if (loadSettings(db).aiActive === id) saveSettings(db, { aiActive: '' });
     saveSources(db, loadSources(db).filter((s) => s.id !== id));
     removeSourceKey(db, id);

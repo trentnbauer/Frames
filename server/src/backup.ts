@@ -1,9 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import Database from 'better-sqlite3';
 import type { DB } from './db.js';
 
 const KEEP = 7;
+
+/** A tar archive of files, streamed one after the other (ustar, names up to 100 characters). Enough for a handful of database copies. */
+export function tarOf(files: { name: string; file: string }[]): Readable {
+  async function* gen() {
+    for (const f of files) {
+      const size = fs.statSync(f.file).size;
+      const h = Buffer.alloc(512);
+      h.write(f.name.slice(0, 100), 0, 'utf8');
+      h.write('0000644\0', 100); h.write('0000000\0', 108); h.write('0000000\0', 116);
+      h.write(size.toString(8).padStart(11, '0') + '\0', 124);
+      h.write(Math.floor(fs.statSync(f.file).mtimeMs / 1000).toString(8).padStart(11, '0') + '\0', 136);
+      h.write('        ', 148); h.write('0', 156); h.write('ustar\0' + '00', 257);
+      h.write(h.reduce((a, b) => a + b, 0).toString(8).padStart(6, '0') + '\0 ', 148);
+      yield h;
+      for await (const chunk of fs.createReadStream(f.file)) yield chunk as Buffer;
+      if (size % 512) yield Buffer.alloc(512 - (size % 512));
+    }
+    yield Buffer.alloc(1024);
+  }
+  return Readable.from(gen());
+}
 
 /**
  * A backup is a copy anyone with the file can read, so it must not carry keys or logins:

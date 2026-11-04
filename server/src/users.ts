@@ -97,6 +97,10 @@ export function resolveUser(sys: DB, who: Who, allowSignups: boolean): User | nu
     }
   }
   if (!u) {
+    // The first person to sign in becomes the administrator (the owner of the library that already exists); everyone after is a member.
+    if (bindOwner(sys, who)) u = getUser(sys, OWNER_ID);
+  }
+  if (!u) {
     if (!allowSignups) return null;
     const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES(?, ?, ?, ?, 'member', ?, ?)").run(who.provider, who.sub, who.email, who.name, uniqueFolder(sys, who.email, who.name), now).lastInsertRowid);
     u = getUser(sys, id);

@@ -5,6 +5,9 @@ import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionCookie } from '../aut
 import type { Ctx, Row } from '../ctx.js';
 import type { DB } from '../db.js';
 import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
+import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
+import { ping } from '../ai.js';
+import { scrubCopy, tarOf } from '../backup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, updateUser, validFolder, type User } from '../users.js';
 
@@ -63,6 +66,70 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       bytes: t ? usedBytes(x.tenants.owner().cfg.dataDir, u.id) : 0,
     };
   };
+
+  // ---------- AIs for everyone on this server ----------
+  // Set up here once, they appear in everyone's list (read-only) and each person chooses whether to use one. Kept in the server's own database.
+  const sharedDto = (s: AiSource) => ({ ...s, hasKey: !!sourceKey(sys, s.id), ready: isReady(s), why: whyNotReady(s) });
+  const sharedList = () => ({ types: AI_TYPES, active: '', sources: loadSources(sys).map(sharedDto) });
+  app.get('/api/admin/ai/sources', async () => sharedList());
+  app.post('/api/admin/ai/sources', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    try {
+      const src = newSource(String(b.type ?? ''), b);
+      saveSources(sys, [...loadSources(sys), src]);
+      if (typeof b.key === 'string' && b.key) setSourceKey(sys, src.id, b.key.slice(0, 500));
+      return rep.code(201).send(sharedList());
+    } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+  });
+  app.put('/api/admin/ai/sources/:id', async (req, rep) => {
+    const list = loadSources(sys);
+    const i = list.findIndex((s) => s.id === (req.params as Row).id);
+    if (i < 0) return x.notFound(rep);
+    const b = (req.body ?? {}) as Row;
+    try { list[i] = applySource(list[i], b); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+    saveSources(sys, list);
+    if (typeof b.key === 'string' && b.key) setSourceKey(sys, list[i].id, b.key.slice(0, 500));
+    if (b.clearKey === true) setSourceKey(sys, list[i].id, '');
+    return sharedList();
+  });
+  app.delete('/api/admin/ai/sources/:id', async (req, rep) => {
+    const id = (req.params as Row).id;
+    if (!loadSources(sys).some((s) => s.id === id)) return x.notFound(rep);
+    saveSources(sys, loadSources(sys).filter((s) => s.id !== id));
+    removeSourceKey(sys, id);
+    return sharedList();
+  });
+  app.post('/api/admin/ai/sources/:id/test', async (req, rep) => {
+    const src = loadSources(sys).find((s) => s.id === (req.params as Row).id);
+    if (!src) return x.notFound(rep);
+    if (!src.endpoint || !src.model) return rep.code(400).send({ ok: false, detail: whyNotReady(src) });
+    const t = aiType(src.type)!;
+    return ping({ protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(sys, src.id) });
+  });
+
+  // ---------- the whole server's backup ----------
+  // The server's own database (people, sign-in, the tunnel) and every person's library database, as one archive. Keys, secrets and
+  // sign-in sessions are taken out of every copy, as for a single library. Photographs are not in it: back those up as you already do.
+  app.get('/api/admin/backup', async (_req, rep) => {
+    const dir = path.join(x.tenants.owner().cfg.dataDir, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 10), made: { name: string; file: string }[] = [];
+    const snap = async (name: string, db: DB) => { const f = path.join(dir, `server-${Date.now()}-${made.length}.db`); await db.backup(f); scrubCopy(f); made.push({ name, file: f }); };
+    await snap('system.db', sys);
+    for (const t of x.tenants.all()) await snap(`library-${t.user.id}-${(t.user.folder || t.user.name || 'owner').replace(/[^A-Za-z0-9._-]/g, '_')}.db`, t.db);
+    const cleanup = () => { for (const m of made) fs.rmSync(m.file, { force: true }); };
+    rep.raw.on('close', cleanup);
+    return rep.header('Content-Type', 'application/x-tar').header('Content-Disposition', `attachment; filename="frames-server-backup-${stamp}.tar"`).header('Cache-Control', 'no-store').send(tarOf(made));
+  });
+  app.get('/api/admin/backup/list', async () => {
+    const out: { name: string; whose: string; bytes: number }[] = [];
+    for (const t of x.tenants.all()) {
+      const dir = path.join(t.cfg.dataDir, 'backups');
+      if (!fs.existsSync(dir)) continue;
+      for (const n of fs.readdirSync(dir).filter((f) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(f))) out.push({ name: n, whose: t.user.name || t.user.email || `person ${t.user.id}`, bytes: fs.statSync(path.join(dir, n)).size });
+    }
+    return out.sort((a, b) => b.name.localeCompare(a.name));
+  });
 
   // ---------- administrators ----------
   app.get('/api/admin/users', async () => ({ users: listUsers(sys).map(dto), signups: x.cfg.allowSignups !== false, libraryRoots: x.tenants.owner().cfg.libraryRoots ?? [] }));

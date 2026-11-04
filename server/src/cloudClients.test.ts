@@ -20,6 +20,7 @@ beforeAll(async () => {
   env.app = buildApp(env.db, env.cfg);
   sys = (env.app as any).frames.sys;
   setSetting(sys, 'auth', { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['@x.test'], publicUrl: '', testedBy: null });
+  resolveUser(sys, { provider: 'g', sub: 'o0', email: 'owner@x.test', emailVerified: true, name: 'Owner' }, true); // the first person to sign in is the administrator
   alice = resolveUser(sys, { provider: 'g', sub: 'a1', email: 'alice@x.test', emailVerified: true, name: 'Alice' }, true)!;
 });
 afterAll(() => { env.app.close(); cleanup(env); });

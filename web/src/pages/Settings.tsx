@@ -14,8 +14,8 @@ import { People } from './People';
 import { YourData } from './YourData';
 
 // Yours: everything about your own library, for every signed-in person. Administrator: the whole instance (sign-in, the tunnel, people, the env file).
-const YOURS = ['Reviews', 'Libraries & storage', 'Cloud sync', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Portfolio', 'Backup', 'Your data'] as const;
-const ADMIN = ['Access', 'Cloudflare tunnel', 'Cloud services', 'People', 'Env file'] as const;
+const YOURS = ['Reviews', 'Cloud sync', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Portfolio', 'Your data'] as const;
+const ADMIN = ['Access', 'Cloudflare tunnel', 'Libraries & storage', 'Cloud services', 'Shared AI', 'People', 'Backup', 'Env file'] as const;
 const SECTIONS = [...YOURS, ...ADMIN, 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
@@ -57,6 +57,7 @@ export function SettingsPage() {
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
           {sec === 'Reviews' && <Reviews s={s} save={save} />}
           {sec === 'AI' && <AiSettings />}
+          {sec === 'Shared AI' && <AiSettings server />}
           {sec === 'Libraries & storage' && <Libraries />}
           {sec === 'Portfolio' && <PortfolioSettings />}
           {sec === 'Cloud sync' && <CloudSettings />}
@@ -109,20 +110,6 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
 
 function Libraries() {
   const info = useApi<{ internalDir: string; libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const rebuild = async (all: boolean) => {
-    setBusy(true); setMsg('');
-    try {
-      await api(`/library/rebuild${all ? '?all=1' : ''}`, { method: 'POST', body: {} });
-      for (;;) {
-        const r = await api<{ running: boolean; done: number; total: number; result: { checked: number; rebuilt: number } | null }>('/library/rebuild/status');
-        setMsg(`Working… ${r.done}/${r.total}`);
-        if (!r.running) { setMsg(r.result ? `Checked ${r.result.checked}, rebuilt ${r.result.rebuilt}.` : 'Done.'); break; }
-        await new Promise((x) => setTimeout(x, 700));
-      }
-    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
-  };
   return (
     <>
       <div className="field">
@@ -135,13 +122,6 @@ function Libraries() {
           </div>
         ))}
         <p style={{ marginTop: 12 }}>Photos uploaded from the <Link to="/shoots" className="t2" style={{ textDecoration: 'underline' }}>Photoshoots</Link> page are kept in Frames’ own data folder.</p>
-      </div>
-      <div className="field">
-        <h3>Previews</h3>
-        <p>Thumbnails, previews and colour analysis are made from your originals and kept separately. If any are missing or damaged, rebuild them.</p>
-        <button className="pill" disabled={busy} onClick={() => rebuild(false)}>Rebuild missing</button>{' '}
-        <button className="pill" disabled={busy} onClick={() => rebuild(true)}>Rebuild all</button>
-        {msg && <span role="status" className="muted" style={{ marginLeft: 12, fontSize: 13 }}>{msg}</span>}
       </div>
     </>
   );
@@ -214,23 +194,24 @@ function Metadata({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pr
 }
 
 function Backup() {
-  const list = useApi<{ name: string; bytes: number }[]>('/backup/list');
+  const list = useApi<{ name: string; whose: string; bytes: number }[]>('/admin/backup/list');
   return (
     <>
       <div className="field">
-        <h3>Back up</h3>
-        <p>Everything Frames knows (reviews, tags, collections, settings) is in one database. Your originals are not part of it: back those up the way you already do. The AI key is never included.</p>
-        <a className="pill primary" href="/api/backup" download>Download a backup</a>
+        <h3>Back up the whole server</h3>
+        <p>One archive with the server’s own database (people, sign-in, the tunnel) and every person’s library database (reviews, tags, collections, settings). Photographs are not in it: back those up the way you already do. Keys, secrets and sign-in sessions are taken out of every copy, so it is safe to keep.</p>
+        <a className="pill primary" href="/api/admin/backup" download>Download a server backup</a>
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Each person can also download their own library under Settings, Your data.</p>
       </div>
       <div className="field">
         <h3>Automatic backups</h3>
-        <p>One a day, the last seven kept, in the data folder’s <span className="mono">backups</span> directory.</p>
+        <p>One a day for each library, the last seven kept, in each library’s <span className="mono">backups</span> directory in the data folder.</p>
         {list.data?.length === 0 && <p className="muted">None yet. The first is made shortly after start-up.</p>}
-        {list.data?.map((b) => <div className="row" key={b.name}><span className="mono">{b.name}</span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
+        {list.data?.map((b) => <div className="row" key={b.whose + b.name}><span><span className="mono">{b.name}</span> <span className="muted">{b.whose}</span></span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
       </div>
       <div className="field">
         <h3>Restore</h3>
-        <p>Stop Frames, replace <span className="mono">frames.db</span> in the data folder with a backup (delete any <span className="mono">frames.db-wal</span> and <span className="mono">-shm</span> files beside it), then start it again. Use Settings, Libraries &amp; storage, “Rebuild all” if previews are missing. Previews and analysis are rebuilt from your originals.</p>
+        <p>Stop Frames, replace <span className="mono">system.db</span> and a library’s <span className="mono">frames.db</span> in the data folder (<span className="mono">users/&lt;number&gt;/</span> for everyone but the first administrator) with the copies from a backup, delete any <span className="mono">-wal</span> and <span className="mono">-shm</span> files next to them, and start Frames. A restored copy has no keys or sign-in sessions: enter the keys again and sign in.</p>
       </div>
     </>
   );
