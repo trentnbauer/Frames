@@ -2,7 +2,7 @@
  * Builds a .env file for the Docker stack from what is typed on the Deployment page. Pure functions, so the file is
  * exactly what the tests say it is: secrets are only ever in the browser, never sent to the server.
  */
-export type Field = { key: string; label: string; kind: 'text' | 'secret' | 'bool'; help: string; group: string; placeholder?: string };
+export type Field = { key: string; label: string; kind: 'text' | 'secret' | 'bool'; help: string; group: string; placeholder?: string; link?: { href: string; text: string } };
 export type Values = Record<string, string>;
 
 export const GROUPS = ['Sign-in', 'The server', 'Cloudflare tunnel'] as const;
@@ -21,10 +21,10 @@ export const FIELDS: Field[] = [
   { group: 'The server', key: 'MAX_UPLOAD_MB', label: 'Largest upload (MB)', kind: 'text', help: 'Default 2048.', placeholder: '2048' },
   { group: 'The server', key: 'TRUST_PROXY', label: 'Behind a reverse proxy', kind: 'bool', help: 'So share links rate-limit each visitor, not the proxy.' },
   { group: 'The server', key: 'ALLOWED_HOSTS', label: 'Public host names', kind: 'text', help: 'Only if a reverse proxy rewrites the Host header. Comma-separated.', placeholder: 'frames.example.com' },
-  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_API_TOKEN', label: 'API token', kind: 'secret', help: 'Needs Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read. It cannot be read back, so paste it again.' },
-  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Account ID', kind: 'text', help: '32 letters and numbers, from the Cloudflare dashboard.' },
+  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_API_TOKEN', label: 'API token', kind: 'secret', help: 'Needs Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read. It cannot be read back, so paste it again.', link: { href: 'https://dash.cloudflare.com/profile/api-tokens', text: 'Make an API token' } },
+  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Account ID', kind: 'text', help: '32 letters and numbers: choose your domain in the dashboard and look for Account ID in the right-hand column.', link: { href: 'https://dash.cloudflare.com', text: 'Open the Cloudflare dashboard' } },
   { group: 'Cloudflare tunnel', key: 'TUNNEL_NAME', label: 'Tunnel name', kind: 'text', help: 'Default Frames.', placeholder: 'Frames' },
-  { group: 'Cloudflare tunnel', key: 'APP_HOSTNAME', label: 'App address', kind: 'text', help: 'The app, behind Cloudflare Access. Needs the emails below.', placeholder: 'frames.example.com' },
+  { group: 'Cloudflare tunnel', key: 'APP_HOSTNAME', label: 'App address', kind: 'text', help: 'The app, behind Cloudflare Access. Needs the emails below, and One-time PIN turned on in Zero Trust.', placeholder: 'frames.example.com', link: { href: 'https://one.dash.cloudflare.com', text: 'Open Zero Trust (Settings, Authentication, Login methods)' } },
   { group: 'Cloudflare tunnel', key: 'ACCESS_EMAILS', label: 'Emails Access lets in', kind: 'text', help: 'Comma-separated.', placeholder: 'me@example.com' },
   { group: 'Cloudflare tunnel', key: 'PORTFOLIO_HOSTNAME', label: 'Portfolio address', kind: 'text', help: 'Shows only the portfolio, public, no login.', placeholder: 'gallery.example.com' },
 ];
