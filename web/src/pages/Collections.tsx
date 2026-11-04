@@ -28,18 +28,25 @@ const targetShort = (t: Target) => `${t.count} × ${sizeName(t)}`;
 const targetLabel = (t: Target) => [t.count > 1 ? `${t.count} ×` : '', sizeName(t), t.orientation !== 'any' ? t.orientation : '', `${t.ppi} PPI`].filter(Boolean).join(' ');
 const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 
+/** The cover of a composition card: only the photographs chosen for the prints, laid out by how many there are. */
+export function CompCover({ c }: { c: Collection }) {
+  const ids = c.chosenIds.slice(0, 3);
+  const img = (id: number, extra: React.CSSProperties = {}) => <img key={id} src={thumb(id)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', ...extra }} />;
+  const grid: React.CSSProperties = ids.length >= 3 ? { gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr' } : ids.length === 2 ? { gridTemplateColumns: '1fr 1fr' } : { gridTemplateColumns: '1fr' };
+  return (
+    <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'grid', ...grid, gap: 4, aspectRatio: '2.2', borderRadius: 6, overflow: 'hidden', background: '#161615', marginBottom: 12, alignItems: 'center', justifyItems: 'center' }}>
+      {ids.length === 0 && <span style={{ fontSize: 12.5, color: '#6f6c67' }}>Nothing chosen yet</span>}
+      {ids.length >= 3 ? <>{img(ids[0], { gridRow: 'span 2' })}{img(ids[1])}{img(ids[2])}</> : ids.map((id) => img(id))}
+    </Link>
+  );
+}
+
 function Card({ c }: { c: Collection }) {
   const t = c.target;
   const full = !!t && c.chosenIds.length >= t.count;
-  const order = [...c.chosenIds, ...c.photoIds.filter((id) => !c.chosenIds.includes(id))];
-  const three = [order[0], order[1] ?? order[0], order[2] ?? order[0]];
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr', gap: 4, aspectRatio: '2.2', borderRadius: 6, overflow: 'hidden', background: '#161615', marginBottom: 12 }}>
-        {three[0] ? <img src={thumb(three[0])} alt="" style={{ gridRow: 'span 2', width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span style={{ gridRow: 'span 2' }} />}
-        {three[1] ? <img src={thumb(three[1])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span />}
-        {three[2] ? <img src={thumb(three[2])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span />}
-      </Link>
+      <CompCover c={c} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
         <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
         <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{t ? targetShort(t) : 'No target'}</span>
