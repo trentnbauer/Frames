@@ -4,6 +4,9 @@ import { useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Justified, Loading, Title } from '../components/bits';
 import { useStore } from '../store';
+import { useUi } from '../ui';
+import { api } from '../api';
+import type { Collection } from '../data';
 import { AddToComposition } from '../components/AddToComposition';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
@@ -19,6 +22,13 @@ export function Library() {
   const [open, setOpen] = useState<string | null>(null);
   const [text, setText] = useState(sp.get('q') ?? '');
   const [selecting, setSelecting] = useState(false);
+  const { openNew, openSearch } = useUi();
+  const colls = useApi<Collection[]>('/collections');
+  const lastActive = (colls.data ?? []).find((c) => !c.printedAt);
+  const inComps = new Map<number, string[]>();
+  for (const c of colls.data ?? []) for (const id of c.photoIds) inComps.set(id, [...(inComps.get(id) ?? []), c.name]);
+  const badge = (p: PhotoLite) => { const n = inComps.get(p.id); return n ? (n.length === 1 ? n[0] : `${n.length} compositions`) : undefined; };
+  const cap = (p: PhotoLite) => `${p.reviewCount ? p.avgRating.toFixed(1) : '–'} · ${p.title}`;
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [note, setNote] = useState('');
   const tick = (p: PhotoLite) => setPicked((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; });
@@ -77,7 +87,7 @@ export function Library() {
             {(tags.data ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
             {(tags.data ?? []).map((t) => <Item key={t.name} on={multi(sp.get('tag')).includes(t.name)} onClick={() => toggle('tag', t.name)}>{t.name} <span className="faint">{t.n}</span></Item>)}
           </Menu>
-          <Menu id="rating" label="Rating">
+          <Menu id="rating" label="Score">
             {RATING_OPTS.map(([v, l]) => <Item key={v} on={sp.get('rating') === v} onClick={() => { set('rating', v); setOpen(null); }}>{l}</Item>)}
           </Menu>
           <Menu id="colour" label="Colour">
@@ -102,11 +112,9 @@ export function Library() {
         </div>
       </div>
 
-      <form className="searchrow" onSubmit={(e) => { e.preventDefault(); set('q', text.trim() || null); }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={ai ? 'Search filenames, places, tags… or describe a photo' : 'Search filenames, places, tags and metadata'} aria-label="Search the library" />
-        {ai && <label className="check"><input type="checkbox" checked={sp.get('semantic') === '1'} onChange={(e) => set('semantic', e.target.checked ? '1' : null)} /> Search by meaning</label>}
-        <button className="pill">Search</button>
-      </form>
+      <button onClick={openSearch} aria-label="Search the library" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161615', borderRadius: 999, padding: '11px 18px', color: '#8f8c86', fontSize: 14, marginBottom: 28, textAlign: 'left' }}>
+        {ai ? "Describe what you're looking for, or search filenames, places and tags" : 'Search filenames, places, tags and metadata'}<span style={{ color: '#6f6c67', fontSize: 12 }}>⌘K</span>
+      </button>
       {(chips.length > 0 || sp.get('q')) && (
         <div className="chips-row">
           {sp.get('q') && <span className="chip">“{sp.get('q')}” <button aria-label="Clear search" onClick={() => { setText(''); set('q', null); }}>✕</button></span>}
@@ -118,20 +126,29 @@ export function Library() {
 
       {(list.loading || list.error) && <Loading error={list.error} />}
       {list.data && count === 0 && <div className="empty">{chips.length || sp.get('q') ? 'No photographs match.' : <>No photographs yet. Add some on the <Link to="/shoots" className="t2" style={{ textDecoration: 'underline' }}>Photoshoots</Link> page.</>}</div>}
-      {flat && list.data && count > 0 && <Justified {...tiles} photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : undefined} />}
+      {flat && list.data && count > 0 && <Justified {...tiles} badges={badge} photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : cap} />}
       {groups.map(({ s, photos }) => (
         <section className="group" key={s.id}>
-          <h2><Link to={`/shoots/${s.id}`}>{s.name}</Link></h2>
-          <div className="meta">{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
-          <Justified {...tiles} photos={photos} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14 }}>
+            <div>
+              <h2 style={{ margin: 0 }}><Link to={`/shoots/${s.id}`}>{s.name}</Link></h2>
+              <div className="meta" style={{ marginTop: 4, marginBottom: 0 }}>{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: '#a8a59f' }}>
+              {selecting && <button onClick={() => setPicked((x) => new Set([...x, ...photos.map((p) => p.id)]))}>Select all {photos.length}</button>}
+              <button style={{ color: '#efede8' }} onClick={() => openNew({ name: s.name, photoIds: photos.map((p) => p.id) })}>Compose from these →</button>
+            </div>
+          </div>
+          <Justified {...tiles} badges={badge} captions={cap} photos={photos} />
         </section>
       ))}
       {selecting && (
-        <div className="selbar" role="region" aria-label="Selected photographs">
-          <span>{picked.size} selected</span>
-          <button className="t2" onClick={() => setPicked(new Set((list.data?.photos ?? []).map((p) => p.id)))}>Select all {count.toLocaleString()} shown</button>
-          {picked.size > 0 && <button className="t2" onClick={() => setPicked(new Set())}>Clear</button>}
-          <AddToComposition up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); }} />
+        <div className="selbar float" role="region" aria-label="Selected photographs">
+          <b style={{ fontWeight: 500 }}>{picked.size} selected</b>
+          <button style={{ color: '#a8a59f' }} onClick={() => setPicked(new Set())}>Clear</button>
+          {lastActive && <button disabled={picked.size === 0} style={{ borderRadius: 999, padding: '10px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }} onClick={async () => { for (const id of picked) await api(`/collections/${lastActive.id}/photos/${id}`, { method: 'PUT' }); setNote(`Added ${picked.size} to “${lastActive.name}”.`); setPicked(new Set()); colls.reload(); }}>Add to {lastActive.name}</button>}
+          {(colls.data ?? []).filter((c) => !c.printedAt).length > 1 && <AddToComposition up label="Add to another…" ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
+          <button disabled={picked.size === 0} onClick={() => openNew({ name: 'New composition', photoIds: [...picked] })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.size ? 1 : 0.5 }}>New composition from {picked.size}</button>
           {note && <span className="muted" role="status">{note}</span>}
         </div>
       )}

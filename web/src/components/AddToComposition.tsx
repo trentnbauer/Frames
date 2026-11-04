@@ -3,7 +3,7 @@ import { api, useApi } from '../api';
 import type { Collection } from '../data';
 
 /** Add these photographs to a composition that exists, or start a new one with them. */
-export function AddToComposition({ ids, onDone, up = false }: { ids: number[]; onDone: (msg: string) => void; up?: boolean }) {
+export function AddToComposition({ ids, onDone, up = false, label }: { ids: number[]; onDone: (msg: string) => void; up?: boolean; label?: string }) {
   const colls = useApi<Collection[]>('/collections');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -17,7 +17,7 @@ export function AddToComposition({ ids, onDone, up = false }: { ids: number[]; o
   };
   return (
     <span style={{ position: 'relative' }}>
-      <button className="pill primary" disabled={ids.length === 0} aria-haspopup="menu" aria-expanded={open} onClick={() => { if (!open) colls.reload(); setOpen(!open); }}>Add {ids.length || ''} to a composition</button>
+      <button className={label ? 'pill' : 'pill primary'} disabled={ids.length === 0} aria-haspopup="menu" aria-expanded={open} onClick={() => { if (!open) colls.reload(); setOpen(!open); }}>{label ?? `Add ${ids.length || ''} to a composition`}</button>
       {open && (
         <div className="menu" role="menu" style={up ? { bottom: '110%', top: 'auto', minWidth: 240 } : { minWidth: 240 }}>
           {(colls.data ?? []).length === 0 && <span className="faint menu-note">No compositions yet</span>}
