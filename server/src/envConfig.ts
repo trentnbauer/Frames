@@ -1,5 +1,5 @@
 import { bindOwner, OWNER_ID } from './users.js';
-import { getSetting, setSetting, type DB } from './db.js';
+import { getSetting, openSecret, setSetting, type DB } from './db.js';
 import type { AuthConfig } from './auth.js';
 import { friendlyEntries, pathEntries, readFriendly, readPathVars } from './envFlat.js';
 
@@ -39,7 +39,7 @@ export function snapshot(db: DB): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const r of db.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[]) {
     if (!isConfigKey(r.key) || (r.key.startsWith('secret:') && r.value === '""')) continue; // nothing to carry for an emptied secret
-    try { out[r.key] = JSON.parse(r.value); } catch { /* not ours to export */ }
+    try { const v = JSON.parse(r.value); out[r.key] = r.key.startsWith('secret:') ? openSecret(db, v) : v; } catch { /* not ours to export */ }
   }
   return out;
 }

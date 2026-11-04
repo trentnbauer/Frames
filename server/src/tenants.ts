@@ -59,7 +59,7 @@ export function createTenants(sys: DB, base: AppCfg, ownerDb: DB) {
     const user = getUser(sys, id);
     if (!user || user.disabled || user.invited) return null;
     const cfg = cfgFor(user);
-    const db = id === OWNER_ID ? ownerDb : linkSys(openDb(userDir(base, id)), sys);
+    const db = id === OWNER_ID ? ownerDb : linkSys(openDb(userDir(base, id), base.dataDir), sys);
     const t: Tenant = { user, db, cfg, ai: createAiWorker(db, cfg), scan: { running: false, done: 0, total: 0, startedAt: null, finishedAt: null, result: null, error: null }, bag: new Map() };
     open.set(id, t);
     return t;
