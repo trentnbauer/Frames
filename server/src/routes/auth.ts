@@ -32,7 +32,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo) }));
     } catch (e) {
       console.error('sign-in start failed', (e as Error).message);
-      return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Settings, Access.'));
+      return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Administration, Access.'));
     }
   });
 
@@ -51,7 +51,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const allowed = isAllowed(who, conf.allow);
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
-      if (flow.test) return rep.redirect('/settings?access=notallowed');
+      if (flow.test) return rep.redirect('/admin?access=notallowed');
       return rep.code(403).type('text/html').send(auth.messagePage('Not on the list', `${who.email || 'That account'} is not allowed to use this Frames. Ask the owner to add it.`));
     }
     if (flow.test) {
@@ -67,7 +67,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     // A signed-in session even for a test, so turning sign-in on never signs the person who tested it out.
     const token = createSession(db, user.id);
     rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
-    return rep.redirect(flow.test ? '/settings?access=tested' : flow.returnTo);
+    return rep.redirect(flow.test ? '/admin?access=tested' : flow.returnTo);
   });
 
   app.post('/auth/logout', async (req, rep) => {

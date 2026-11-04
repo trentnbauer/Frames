@@ -119,7 +119,7 @@ describe('the tunnel page: App URL, Portfolios and the credentials', () => {
     const t = (await A.get('/api/tunnel')).body;
     expect(t).toMatchObject({ appUrl: '', hostnames: [], hasToken: false, managedByEnv: false, config: { enabled: false, portfolios: false } });
   });
-  it('the App URL is the public address under Settings, Access: setting either one shows in both', async () => {
+  it('the App URL is the public address under Administration, Access: setting either one shows in both', async () => {
     const r = await A.put('/api/tunnel', { appUrl: 'https://frames.example.com/' });
     expect(r.status).toBe(200);
     expect(r.body.appUrl).toBe('https://frames.example.com');

@@ -28,13 +28,15 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   );
 }
 
-export function SettingsPage() {
+/** Your own settings, or (admin) the administrator's: the server's sign-in, tunnel, libraries, shared AI, people, backup and env file. */
+export function SettingsPage({ admin = false }: { admin?: boolean }) {
   // Coming back from a test sign-in lands here with ?access=…, so open the Access section.
-  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return q.has('access') ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
+  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return admin ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
   const { settings: s, setSettings, me } = useStore();
   // Sign-in and the tunnel belong to the whole instance: only an administrator sees them.
   const isAdmin = me?.role !== 'member';
-  const groups: { title: string; items: readonly (typeof SECTIONS)[number][] }[] = [{ title: 'Your settings', items: YOURS }, ...(isAdmin ? [{ title: 'Administrator', items: ADMIN }] : []), { title: 'Frames', items: ['About'] as const }];
+  if (admin && me && !isAdmin) return <div className="page"><Header /><p className="empty">Only an administrator can open this page.</p></div>;
+  const groups: { title: string; items: readonly (typeof SECTIONS)[number][] }[] = admin ? [{ title: 'Administrator', items: ADMIN }] : [{ title: 'Your settings', items: YOURS }, { title: 'Frames', items: ['About'] as const }];
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
@@ -43,7 +45,7 @@ export function SettingsPage() {
     <div className="page">
       <Header />
       <div className="settings">
-        <nav className="snav" aria-label="Settings sections">
+        <nav className="snav" aria-label={admin ? 'Administration sections' : 'Settings sections'}>
           {groups.map((g) => (
             <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>
               <div className="faint" style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 0 4px 12px' }}>{g.title}</div>

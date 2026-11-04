@@ -38,7 +38,7 @@ export function TunnelSettings() {
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); return false; }
   };
   // Why Access protection is ticked but not in place, in plain words.
-  const protectProblem = t.protect && !t.protectApplied ? (t.accessPeople === 0 ? 'Nobody is on the allowed list, so Cloudflare Access would let no one in. Add an email or a whole domain under Settings, Access, and Frames sets it up.' : t.error || t.accessNote || 'Not set up yet: Frames applies it when you save, and again a few minutes after a problem.') : null;
+  const protectProblem = t.protect && !t.protectApplied ? (t.accessPeople === 0 ? 'Nobody is on the allowed list, so Cloudflare Access would let no one in. Add an email or a whole domain under Administration, Access, and Frames sets it up.' : t.error || t.accessNote || 'Not set up yet: Frames applies it when you save, and again a few minutes after a problem.') : null;
   const run = () => (t.config.enabled ? api('/tunnel/stop', { body: {} }) : api('/tunnel/start', { body: {} })).then(() => d.reload()).catch((e: Error) => setMsg({ ok: false, text: e.message }));
 
   return (
@@ -81,7 +81,7 @@ export function TunnelSettings() {
 
       <div className="field">
         <h3>2. Addresses</h3>
-        <p>The App URL is the address you open Frames at from outside. It is the same <b>public address</b> as under Settings, Access. Each person sets their own portfolio address under Settings, Portfolio.</p>
+        <p>The App URL is the address you open Frames at from outside. It is the same <b>public address</b> as under Administration, Access. Each person sets their own portfolio address under Settings, Portfolio.</p>
         <div className="form" style={{ maxWidth: 560 }}>
           <label>Frames: App URL <input aria-label="App URL" style={{ minWidth: 300 }} value={appUrl} placeholder="https://frames.example.com" onChange={(e) => setAppUrl(e.target.value)} /></label>
           <button className="pill" disabled={appUrl === t.appUrl} onClick={() => save({ appUrl }, 'App URL saved. It is the public address everywhere in Settings now.')}>Save</button>
@@ -92,13 +92,13 @@ export function TunnelSettings() {
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
           <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} onChange={(e) => save({ protect: e.target.checked })} />
-          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After it is set up, use <b>Test sign-in</b> under Settings, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
+          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Administration, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After it is set up, use <b>Test sign-in</b> under Administration, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
         </label>
         <div style={{ marginTop: 14 }}>
           <label>Who is allowed in (one per line: an email, or a whole domain like @family.com)
             <textarea className="area" rows={3} aria-label="Allowed people" style={{ maxWidth: 520, display: 'block', marginTop: 4 }} value={allow} onChange={(e) => setAllow(e.target.value)} />
           </label>
-          <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 8px' }}>The same list as under Settings, Access: it is who Cloudflare Access lets in, and who may sign in to Frames.</p>
+          <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 8px' }}>The same list as under Administration, Access: it is who Cloudflare Access lets in, and who may sign in to Frames.</p>
           <button className="pill" disabled={allow.trim() === t.allow.join('\n')} onClick={() => save({ allow }, 'Allowed list saved.')}>Save the list</button>
         </div>
         {protectProblem && <p className="reason" role="alert" style={{ margin: '8px 0 0 26px', fontSize: 13 }}>{protectProblem}</p>}

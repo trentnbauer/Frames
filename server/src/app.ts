@@ -87,7 +87,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (pg.mode === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
     if (pg.mode === 'allow') r.tenant = pg.tenant;
     else if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
-      // Optional sign-in: OAuth providers (Settings, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
+      // Optional sign-in: OAuth providers (Administration, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
       const v = auth.verify(req);
       if (!v.ok) return auth.deny(req, rep, v.limited);
       r.authUser = v.user;

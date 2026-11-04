@@ -147,7 +147,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
       const email = String(payload.email ?? '').toLowerCase();
       if (!email) throw new Error('no email');
       return { provider: p.id, sub: String(payload.sub ?? email), email, emailVerified: true, name: String(payload.name ?? '') || email };
-    } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Settings, Access.'); }
+    } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Administration, Access.'); }
   }
 
   const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };
