@@ -371,3 +371,29 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     expect((await A.get('/api/tunnel')).body.error).toMatch(/No domain on this Cloudflare account matches/);
   });
 });
+
+describe('coming back up with the server', () => {
+  it('starts the saved tunnel even when left-over environment variables for the Cloudflare API do not work', async () => {
+    const e = makeEnv({ cloudflareApi: 'http://127.0.0.1:9' });
+    const keys = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'APP_HOSTNAME', 'ACCESS_EMAILS', 'CLOUDFLARED_BIN'];
+    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    try {
+      // A tunnel set up in Settings and running, then the container is updated and still carries the old variables (a revoked token).
+      const sys0 = (e.app as any).frames.sys;
+      sys0.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('tunnel', ?)").run(JSON.stringify({ enabled: true }));
+      sys0.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('secret:cloudflare:tunnelToken', ?)").run(JSON.stringify(TOKEN));
+      await e.app.close();
+      Object.assign(process.env, { CLOUDFLARE_API_TOKEN: 'revoked-' + 'x'.repeat(30), CLOUDFLARE_ACCOUNT_ID: 'c'.repeat(32), APP_HOSTNAME: 'frames.example.com', ACCESS_EMAILS: 'me@example.com', CLOUDFLARED_BIN: fakeBin(e.tmp, 'ok') });
+      const { buildApp } = await import('./app.js');
+      const { openDb } = await import('./db.js');
+      e.app = buildApp(openDb(e.data), e.cfg);
+      const A = api(e);
+      let state = '';
+      for (let i = 0; i < 80 && state !== 'connected'; i++) { state = (await A.get('/api/tunnel')).body.status.state; if (state !== 'connected') await new Promise((r) => setTimeout(r, 100)); }
+      expect(state).toBe('connected');
+    } finally {
+      for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      await e.app.close(); cleanup(e);
+    }
+  });
+});

@@ -425,8 +425,10 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     startup.push(setTimeout(() => void apply(), 1500));
   } else {
     seedTunnelFromEnv(sys, ownerDb); // TUNNEL_TOKEN, APP_HOSTNAME and PORTFOLIO_HOSTNAME pre-fill Settings and win over what was saved
-    startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); ctx.tunnelRefresh?.(); }, 1500)); // the tunnel comes back up with the server, and is set up again (it turns itself on if it is not)
   }
+  // The tunnel saved in Settings comes back up with the server whatever else is set, and is set up again (it turns itself on if it is not).
+  // Left-over environment variables that fail (a revoked API token) must not keep it down: if they do work, they take over and restart it.
+  startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); ctx.tunnelRefresh?.(); }, 1500));
   startup.push(setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000)); // and so does AI analysis, where it left off
   for (const t of startup) t.unref();
   app.decorate('frames', { sys, tenants });
