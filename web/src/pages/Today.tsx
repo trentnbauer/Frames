@@ -4,6 +4,7 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { Header } from '../components/bits';
+import { CompCover } from './Collections';
 
 type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: PhotoLite[] };
 
@@ -104,15 +105,9 @@ export function Today() {
             {active.map((c) => {
               const t = c.target!;
               const full = c.chosenIds.length >= t.count;
-              const order = [...c.chosenIds, ...c.photoIds.filter((id) => !c.chosenIds.includes(id))];
-              const three = [order[0], order[1] ?? order[0], order[2] ?? order[0]];
               return (
                 <div key={c.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                  <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr', gap: 4, aspectRatio: '2.2', borderRadius: 6, overflow: 'hidden', background: '#161615', marginBottom: 12 }}>
-                    <img src={cover(three[0])} alt="" style={{ gridRow: 'span 2', width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    <img src={cover(three[1])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    <img src={cover(three[2])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  </Link>
+<CompCover c={c} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
                     <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
                     <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{t.count} × {t.size === 'custom' ? 'custom' : t.size === 'none' ? 'pixels' : t.size}</span>
