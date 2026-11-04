@@ -33,7 +33,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo) }));
     } catch (e) {
       console.error('sign-in start failed', (e as Error).message);
-      return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Administration, Access.'));
+      return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Settings, Sign-in & access.'));
     }
   });
 
@@ -52,7 +52,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const allowed = isAllowed(who, conf.allow);
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
-      if (flow.test) return rep.redirect('/admin?access=notallowed');
+      if (flow.test) return rep.redirect('/settings?section=access&access=notallowed');
       return rep.code(403).type('text/html').send(auth.messagePage('Not on the list', `${who.email || 'That account'} is not allowed to use this Frames. Ask the owner to add it.`));
     }
     if (flow.test) {
@@ -68,7 +68,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     // A signed-in session even for a test, so turning sign-in on never signs the person who tested it out.
     const token = createSession(db, user.id);
     rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
-    return rep.redirect(flow.test ? '/admin?access=tested' : flow.returnTo);
+    return rep.redirect(flow.test ? '/settings?section=access&access=tested' : flow.returnTo);
   });
 
   app.post('/auth/logout', async (req, rep) => {
@@ -129,7 +129,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
         };
         const err = validateProvider(p);
         if (err) return bad(err);
-        if (p.useCloudApp && !clientOf(cfg, db, p.type === 'microsoft' ? 'onedrive' : (p.type as 'google' | 'dropbox')).clientId) return bad(`Set up ${p.type === 'microsoft' ? 'OneDrive' : p.type === 'google' ? 'Google Drive' : 'Dropbox'} under Administration, Cloud services first: its client ID and secret are what this uses.`);
+        if (p.useCloudApp && !clientOf(cfg, db, p.type === 'microsoft' ? 'onedrive' : (p.type as 'google' | 'dropbox')).clientId) return bad(`Set up ${p.type === 'microsoft' ? 'OneDrive' : p.type === 'google' ? 'Google Drive' : 'Dropbox'} under Settings, Cloud storage providers first: its client ID and secret are what this uses.`);
         if (seen.has(p.id)) return bad(`Two providers use the id “${p.id}”`);
         seen.add(p.id);
         p.name ||= ({ google: 'Google', github: 'GitHub', microsoft: 'Microsoft', dropbox: 'Dropbox', oidc: 'OpenID Connect', oauth2: 'OAuth', cloudflare: 'Cloudflare Access' } as Record<string, string>)[p.type];

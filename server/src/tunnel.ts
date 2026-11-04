@@ -13,7 +13,7 @@ import { loadEnvState } from './tunnelEnv.js';
  * A Cloudflare tunnel run by Frames itself: cloudflared (bundled in the Docker image) makes an outbound-only connection to
  * Cloudflare, so you need no open ports. You create the tunnel in the Cloudflare dashboard and paste its token here; Frames runs it.
  *
- * The addresses are not typed in twice. The App URL is the public address (Administration, Access), and with "Portfolios" ticked each
+ * The addresses are not typed in twice. The App URL is the public address (Settings, Sign-in & access), and with "Portfolios" ticked each
  * person's own portfolio address (Settings, Portfolio) comes along. Given a Cloudflare account ID and API token, Frames finds
  * (or makes) its tunnel by name, sets the tunnel's routes to this server and keeps a proxied DNS record for each address, again
  * whenever an address changes. No tunnel id is stored: the tunnel is looked up by its name each time.
@@ -25,7 +25,7 @@ export type TunnelCfg = {
   enabled: boolean;
   /** Also serve each person's portfolio address through the tunnel. */
   portfolios: boolean;
-  /** Put the App URL behind Cloudflare Access, letting in the people on the Administration, Access list, and sign them in to Frames from it. */
+  /** Put the App URL behind Cloudflare Access, letting in the people on the Settings, Sign-in & access list, and sign them in to Frames from it. */
   protect: boolean; protectApplied: boolean;
   /** The person switched the tunnel off themselves: setup keeps it off. Otherwise a tunnel that is set up runs. */
   stopped: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
@@ -185,7 +185,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       if (c.protect) {
         if (!appHost) throw new Error('Enter the App URL first: it is the address Cloudflare Access protects.');
         const people = accessPeople(sys);
-        if (!people.emails.length && !people.domains.length) throw new Error('Add the people allowed in (an email or a whole domain) under Administration, Access first: with nobody on the list, Cloudflare Access would let no one in.');
+        if (!people.emails.length && !people.domains.length) throw new Error('Add the people allowed in (an email or a whole domain) under Settings, Sign-in & access first: with nobody on the list, Cloudflare Access would let no one in.');
         // The team domain needs a separate permission (Access: Organizations, Identity Providers, and Groups, Read). Without it the login is
         // still put in place; only the automatic sign-in method has to wait.
         let authDomain = '';
@@ -269,7 +269,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
   /** An environment-managed tunnel is changed by editing its variables, not here. */
   const locked = (rep: any) => loadTunnel(db).env ? rep.code(409).send({ error: 'This tunnel is set up by environment variables (CLOUDFLARE_API_TOKEN, APP_HOSTNAME and the others). Change them and restart Frames.' }) : null;
 
-  /** The App URL, the Portfolios box and the token. The App URL is the same public address as under Administration, Access. */
+  /** The App URL, the Portfolios box and the token. The App URL is the same public address as under Settings, Sign-in & access. */
   app.put('/api/tunnel', async (req, rep) => {
     if (locked(rep)) return;
     const b = (req.body ?? {}) as Row;
@@ -277,7 +277,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     const n: TunnelCfg = { ...cur };
     const bad = (error: string) => rep.code(400).send({ error });
     if (b.allow !== undefined) {
-      // The same list as Administration, Access (one list, edited in either place), with the same protection against locking yourself out.
+      // The same list as Settings, Sign-in & access (one list, edited in either place), with the same protection against locking yourself out.
       const list = cleanAllow(b.allow), a = loadAuth(db);
       if (a.enabled && a.testedBy && !isAllowed(a.testedBy, list)) return bad('That list would lock you out: the account that tested sign-in is not on it.');
       saveAuth(db, { ...a, allow: list });

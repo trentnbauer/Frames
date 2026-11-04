@@ -164,13 +164,13 @@ describe('it cannot lock the owner out', () => {
   it('a test sign-in by someone NOT on the list proves nothing', async () => {
     const r = await signIn('fake', { sub: 'stranger', email: 'stranger@evil.test', verified: true }, { test: true });
     expect(r.statusCode).toBe(302);
-    expect(r.headers.location).toBe('/admin?access=notallowed');
+    expect(r.headers.location).toBe('/settings?section=access&access=notallowed');
     expect(cookieOf(r)).toBe('');
     expect((await put({ enabled: true })).json().error).toMatch(/Test sign-in/);
   });
   it('a successful test by an allowed account unlocks turning it on, and keeps that person signed in', async () => {
     const r = await signIn('fake', { sub: 'u1', email: 'owner@example.test', verified: true, name: 'Owner' }, { test: true });
-    expect(r.headers.location).toBe('/admin?access=tested');
+    expect(r.headers.location).toBe('/settings?section=access&access=tested');
     const sess = sessionHeader(r);
     expect(sess.cookie).toMatch(/^frames_session=.{40,}/);
     const on = await put({ enabled: true });
@@ -384,7 +384,7 @@ describe('with sign-in on', () => {
       expect((await put({ providers: [{ ...withUrls(), clientId: 'frames-app' }, ghUrls()] })).json().testedBy).toBeNull(); // changed provider: must be tested again
       expect((await put({ enabled: true })).statusCode).toBe(400);
       const t = await signIn('fake', { sub: 'u1', email: 'owner@example.test', verified: true }, { test: true });
-      expect(t.headers.location).toBe('/admin?access=tested');
+      expect(t.headers.location).toBe('/settings?section=access&access=tested');
       expect((await put({ enabled: true })).statusCode).toBe(200);
       sess = sessionHeader(t);
     });

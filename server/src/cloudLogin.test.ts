@@ -4,7 +4,7 @@ import { setSetting, type DB } from './db.js';
 import { resolveUser } from './users.js';
 import { cleanup, makeEnv, type Env } from './testutil.js';
 
-/** Signing in with Google, Microsoft or Dropbox using the app already registered under Administration, Cloud services. */
+/** Signing in with Google, Microsoft or Dropbox using the app already registered under Settings, Cloud storage providers. */
 let env: Env, sys: DB;
 const cookie = { get: () => ({ cookie: `${SESSION_COOKIE}=${createSession(sys, 1)}` }) };
 const call = async (method: string, url: string, payload?: unknown, headers: Record<string, string> = cookie.get()) => {
@@ -32,7 +32,7 @@ describe('sign in with the cloud services’ own app', () => {
   it('is refused until that service is set up under Cloud services', async () => {
     const r = await call('PUT', '/api/auth/config', { providers: [{ id: 'dbx', type: 'dropbox', useCloudApp: true }] });
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Set up Dropbox under Administration, Cloud services first/);
+    expect(r.body.error).toMatch(/Set up Dropbox under Settings, Cloud storage providers first/);
   });
   it('once it is, saves without a client ID and sends people to Dropbox with the cloud app’s ID', async () => {
     expect((await call('PUT', '/api/cloud/client/dropbox', { clientId: 'DBX-CID', clientSecret: CLIENT_SECRET })).status).toBe(200);

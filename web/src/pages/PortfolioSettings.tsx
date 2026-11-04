@@ -93,7 +93,7 @@ export function PortfolioSettings() {
             <p style={{ marginBottom: 6 }}><b>DNS for {d.data.config.host}</b>: at the company that manages this domain, add a record that points it at this Frames.</p>
             {d.data.dnsTarget
               ? <div className="row"><span className="mono" style={{ userSelect: 'all' }}>{d.data.config.host}</span><span className="faint">CNAME → <span className="mono" style={{ userSelect: 'all' }}>{d.data.dnsTarget}</span> (proxied, if it is on Cloudflare)</span></div>
-              : <p className="muted">Set the App URL under Administration, Cloudflare tunnel first: the record points at that address.</p>}
+              : <p className="muted">Set the App URL under Settings, Cloudflare tunnel first: the record points at that address.</p>}
             <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>If the domain is on the same Cloudflare account as the tunnel, Frames makes this record and the route itself, and lets the portfolio through Cloudflare Access without a login.</p>
           </div>
         )}

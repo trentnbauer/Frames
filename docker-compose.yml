@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     ports:
       # Listens on this machine only by default. Before using 0.0.0.0 (all interfaces) turn on
-      # sign-in: AUTH_PASSWORD here, or an OAuth provider in Administration, Access.
+      # sign-in: AUTH_PASSWORD here, or an OAuth provider in Settings, Sign-in & access.
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
     environment:
       AUTH_USER: ${AUTH_USER:-frames}
@@ -22,7 +22,7 @@ services:
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      # An env file exported from Administration, Env file holds every setting and secret as plain variables (AI_1_URL, AUTH_1_KEY and so on) and
+      # An env file exported from Settings, Env file holds every setting and secret as plain variables (AI_1_URL, AUTH_1_KEY and so on) and
       # the switch that stops a second export. It reaches Frames through env_file below.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
       # Optional Cloudflare tunnel, set up by Frames itself (see README, Cloudflare tunnel). Leave empty to run without it.
