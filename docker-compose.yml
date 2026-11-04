@@ -23,6 +23,7 @@ services:
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       # Optional Cloudflare tunnel, set up by Frames itself (see README, Cloudflare tunnel). Leave empty to run without it.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
       TUNNEL_NAME: ${TUNNEL_NAME:-Frames}

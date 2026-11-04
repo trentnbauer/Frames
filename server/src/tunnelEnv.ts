@@ -36,7 +36,8 @@ export function readEnvTunnel(env: Record<string, string | undefined> = process.
   const appHost = bareHost(env.APP_HOSTNAME ?? '');
   const portfolioHost = bareHost(env.PORTFOLIO_HOSTNAME ?? '');
   const emails = [...new Set((env.ACCESS_EMAILS ?? '').split(/[,\s;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
-  if (!token && !accountId && !appHost && !portfolioHost && !emails.length) return { cfg: null, problems: [] };
+  // Without Cloudflare API credentials this is not the API setup: the addresses and TUNNEL_TOKEN just pre-fill Settings (seedTunnelFromEnv).
+  if (!token && !accountId) return { cfg: null, problems: [] };
   const problems: string[] = [];
   if (!token) problems.push('CLOUDFLARE_API_TOKEN is not set.');
   if (!/^[0-9a-f]{32}$/i.test(accountId)) problems.push('CLOUDFLARE_ACCOUNT_ID must be the 32 letters and numbers from the Cloudflare dashboard.');
@@ -47,6 +48,28 @@ export function readEnvTunnel(env: Record<string, string | undefined> = process.
   for (const e of emails) if (!EMAIL.test(e)) problems.push(`ACCESS_EMAILS has “${e}”, which is not an email address.`);
   if (problems.length) return { cfg: null, problems };
   return { cfg: { token, accountId, name: (env.TUNNEL_NAME ?? '').trim().slice(0, 60) || 'Frames', appHost, portfolioHost, emails }, problems };
+}
+
+/**
+ * The simple setup: you made the tunnel in the Cloudflare dashboard. The variables pre-fill Settings, Cloudflare tunnel, and win over
+ * what was saved there: TUNNEL_TOKEN (the name cloudflared itself reads) turns the tunnel on, APP_HOSTNAME is the App URL (the public
+ * address under Access too), PORTFOLIO_HOSTNAME is the owner's portfolio address and ticks Portfolios.
+ */
+export function seedTunnelFromEnv(sys: DB, ownerDb: DB, env: Record<string, string | undefined> = process.env): void {
+  const token = (env.TUNNEL_TOKEN ?? '').trim();
+  const appHost = bareHost(env.APP_HOSTNAME ?? '');
+  const portfolioHost = bareHost(env.PORTFOLIO_HOSTNAME ?? '');
+  if (token) { setSecret(sys, 'cloudflare:tunnelToken', token); setSetting(sys, 'tunnel', { ...loadTunnel(sys), enabled: true }); }
+  if (appHost && HOSTNAME.test(appHost)) setSetting(sys, 'auth', { ...getSetting<Record<string, unknown>>(sys, 'auth', {}), publicUrl: `https://${appHost}` });
+  if (portfolioHost && HOSTNAME.test(portfolioHost)) {
+    const taken = sys.prepare('SELECT user_id FROM portfolio_hosts WHERE host = ?').get(portfolioHost) as { user_id: number } | undefined;
+    if (!taken || taken.user_id === OWNER_ID) {
+      sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(OWNER_ID);
+      sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(portfolioHost, OWNER_ID);
+      setSetting(ownerDb, 'portfolio', { ...getSetting<Record<string, unknown>>(ownerDb, 'portfolio', {}), host: portfolioHost });
+      setSetting(sys, 'tunnel', { ...loadTunnel(sys), portfolios: true });
+    }
+  }
 }
 
 export type ApplyDeps = { sys: DB; ownerDb: DB; runner: TunnelRunner; port: number; apiBase?: string };

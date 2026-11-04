@@ -2,34 +2,33 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
-import { CloudflareError, cloudflare } from './cloudflare.js';
-import type { Ctx, Row } from './ctx.js';
+import { loadAccess, PUBLIC_DESTINATIONS } from './access.js';
 import { loadAuth, saveAuth } from './auth.js';
-import { loadAccess } from './access.js';
-import { PUBLIC_DESTINATIONS } from './access.js';
-import { loadEnvState } from './tunnelEnv.js';
+import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
+import { loadEnvState } from './tunnelEnv.js';
 
 /**
- * A Cloudflare tunnel run by Frames itself: cloudflared (bundled in the Docker image) makes an outbound-only
- * connection to Cloudflare, so you need no open ports. Two ways to set it up:
- *  - token:  you made the tunnel in the Cloudflare dashboard and paste its token.
- *  - api:    you give Frames a scoped API token and it creates the tunnel, its routes and the DNS records.
+ * A Cloudflare tunnel run by Frames itself: cloudflared (bundled in the Docker image) makes an outbound-only connection to
+ * Cloudflare, so you need no open ports. You create the tunnel in the Cloudflare dashboard and paste its token here; Frames runs it.
  *
- * Safety: traffic always goes to this Frames server, never an address you type in. A hostname for the portfolio only
- * shows the portfolio (see portfolio.ts). A hostname for the whole app is allowed with sign-in off, for people who lock the address
- * down in Cloudflare (Access, an IP rule): the page says plainly when nothing in Frames protects it.
+ * The addresses are not typed in twice. The App URL is the public address (Settings, Access), and with "Portfolios" ticked each
+ * person's own portfolio address (Settings, Portfolio) comes along. Frames lists them so you can add them as public hostnames in
+ * Cloudflare, and traffic always goes to this server, never an address you type in.
+ * (Setting the tunnel up through the Cloudflare API is done from environment variables, see tunnelEnv.ts.)
  */
 
 export type HostKind = 'portfolio' | 'app';
 export type TunnelCfg = {
-  enabled: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
+  enabled: boolean;
+  /** Also serve each person's portfolio address through the tunnel. */
+  portfolios: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
   hostnames: { hostname: string; kind: HostKind }[];
   dns: Record<string, { zoneId: string; recordId: string }>; // records Frames made, so it only ever removes its own
   /** Set up from environment variables (tunnelEnv.ts): shown read-only, changed by editing the variables. */
   env?: boolean;
 };
-const DEFAULTS: TunnelCfg = { enabled: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {} };
+const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {} };
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
 const saveTunnel = (db: DB, c: TunnelCfg) => setSetting(db, 'tunnel', c);
 
@@ -106,47 +105,38 @@ export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: num
 }
 export type TunnelRunner = ReturnType<typeof createTunnelRunner>;
 
-/**
- * The app's public address (Settings, Access) and the portfolio address (Settings, Portfolio) are the same two addresses as the
- * tunnel's whole-app and portfolio hostnames, so changing one changes the other. This keeps the tunnel's side in step; the callers
- * keep their own side. An environment-managed tunnel is left alone: its variables are the source of truth.
- */
-export function linkTunnelHost(sys: DB, kind: HostKind, from: string, to: string): boolean {
-  const c = loadTunnel(sys);
-  if (c.env) return false;
-  const old = from.toLowerCase(), next = to.toLowerCase();
-  if (old === next) return false;
-  const hostnames = c.hostnames.filter((h) => !(h.kind === kind && h.hostname === old));
-  const had = hostnames.length !== c.hostnames.length;
-  let out = hostnames;
-  if (next) {
-    if (c.hostnames.some((h) => h.hostname === next && h.kind !== kind)) return false; // that name is already used for the other kind
-    if (!out.some((h) => h.hostname === next)) out = had ? c.hostnames.map((h) => (h.kind === kind && h.hostname === old ? { hostname: next, kind } : h)) : [...out, { hostname: next, kind }];
-  }
-  if (out.length === c.hostnames.length && out.every((h, i) => h.hostname === c.hostnames[i].hostname && h.kind === c.hostnames[i].kind)) return false;
-  saveTunnel(sys, { ...c, hostnames: out });
-  return true;
-}
 export const hostOfUrl = (u: string) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } };
 
-const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+export type Wanted = { hostname: string; kind: HostKind; who: string };
+/** The addresses to add as public hostnames in Cloudflare, worked out from Settings every time rather than kept in a second list. */
+export function wantedHostnames(sys: DB): Wanted[] {
+  const c = loadTunnel(sys);
+  if (c.env) return c.hostnames.map((h) => ({ ...h, who: '' })); // an environment-managed tunnel says what it made
+  const app = hostOfUrl(loadAuth(sys).publicUrl);
+  const people = c.portfolios
+    ? (sys.prepare('SELECT h.host host, u.name name, u.email email FROM portfolio_hosts h JOIN users u ON u.id = h.user_id ORDER BY h.user_id').all() as { host: string; name: string; email: string }[])
+    : [];
+  return [...(app ? [{ hostname: app, kind: 'app' as const, who: '' }] : []), ...people.map((p) => ({ hostname: p.host.toLowerCase(), kind: 'portfolio' as const, who: p.name || p.email }))];
+}
 
 export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunner) {
   const db = x.sys;
   const port = () => Number(process.env.PORT ?? 3000);
-  /** Every portfolio address anyone has set (each person has their own). */
-  const portfolioHosts = () => (db.prepare('SELECT host FROM portfolio_hosts ORDER BY user_id').all() as { host: string }[]).map((r) => r.host.toLowerCase());
   const service = () => `http://localhost:${port()}`; // always this server, never a typed-in address
 
-  const dto = (c: TunnelCfg) => ({
-    config: { ...c, dns: undefined }, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'), hasApiToken: !!getSecret(db, 'cloudflare:apiToken') || (c.env && !!process.env.CLOUDFLARE_API_TOKEN),
-    managedByEnv: !!c.env,
-    // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
-    access: c.env ? { appHost: loadAccess(db)?.appHost ?? '', emails: loadAccess(db)?.emails ?? [], publicPaths: PUBLIC_DESTINATIONS, error: loadEnvState(db).error } : null,
-    status: { ...runner.status }, portfolioHost: portfolioHosts()[0] ?? '', signInOn: x.isProtected(), service: service(),
-    // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
-    appOpen: c.hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env,
-  });
+  const dto = (c: TunnelCfg) => {
+    const hostnames = wantedHostnames(db);
+    return {
+      config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
+      appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
+      status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
+      managedByEnv: !!c.env,
+      // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
+      appOpen: hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env,
+      // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
+      access: c.env ? { appHost: loadAccess(db)?.appHost ?? '', emails: loadAccess(db)?.emails ?? [], publicPaths: PUBLIC_DESTINATIONS, error: loadEnvState(db).error } : null,
+    };
+  };
 
   app.get('/api/tunnel', async () => dto(loadTunnel(db)));
   app.get('/api/tunnel/logs', async () => ({ lines: runner.logs.slice(-100) }));
@@ -154,113 +144,29 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
   /** An environment-managed tunnel is changed by editing its variables, not here. */
   const locked = (rep: any) => loadTunnel(db).env ? rep.code(409).send({ error: 'This tunnel is set up by environment variables (CLOUDFLARE_API_TOKEN, APP_HOSTNAME and the others). Change them and restart Frames.' }) : null;
 
-  /** Validates and saves the setup. Secrets are write-only. Does not touch Cloudflare. */
+  /** The App URL, the Portfolios box and the token. The App URL is the same public address as under Settings, Access. */
   app.put('/api/tunnel', async (req, rep) => {
     if (locked(rep)) return;
     const b = (req.body ?? {}) as Row;
     const cur = loadTunnel(db);
-    const n: TunnelCfg = { ...cur, hostnames: [...cur.hostnames] };
+    const n: TunnelCfg = { ...cur };
     const bad = (error: string) => rep.code(400).send({ error });
-    if (b.mode !== undefined) { if (b.mode !== 'token' && b.mode !== 'api') return bad('Unknown mode'); n.mode = b.mode; }
-    if (b.accountId !== undefined) { const v = String(b.accountId).trim(); if (v && !/^[0-9a-f]{32}$/i.test(v)) return bad('The account ID is 32 letters and numbers (find it in the Cloudflare dashboard).'); n.accountId = v; }
-    if (b.tunnelName !== undefined) n.tunnelName = String(b.tunnelName).trim().slice(0, 60) || 'Frames';
-    if (Array.isArray(b.hostnames)) {
-      const seen = new Set<string>();
-      n.hostnames = [];
-      for (const h of b.hostnames.slice(0, 10)) {
-        const hostname = String(h.hostname ?? '').trim().toLowerCase();
-        const kind: HostKind = h.kind === 'app' ? 'app' : 'portfolio';
-        if (!HOSTNAME.test(hostname)) return bad(`“${hostname}” is not a valid hostname`);
-        if (seen.has(hostname)) return bad(`${hostname} is listed twice`);
-        seen.add(hostname);
-        n.hostnames.push({ hostname, kind });
-      }
+    if (b.appUrl !== undefined) {
+      const v = String(b.appUrl).trim().replace(/\/+$/, '');
+      if (v) { try { const u = new URL(v); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(); } catch { return bad('The App URL must start with https:// (for example https://frames.example.com)'); } }
+      saveAuth(db, { ...loadAuth(db), publicUrl: v.slice(0, 300) });
     }
+    if (typeof b.portfolios === 'boolean') n.portfolios = b.portfolios;
     if (typeof b.tunnelToken === 'string' && b.tunnelToken.trim()) setSecret(db, 'cloudflare:tunnelToken', b.tunnelToken.trim().slice(0, 4000));
-    if (typeof b.apiToken === 'string' && b.apiToken.trim()) setSecret(db, 'cloudflare:apiToken', b.apiToken.trim().slice(0, 500));
     if (b.clearTunnelToken === true) setSecret(db, 'cloudflare:tunnelToken', '');
-    if (b.clearApiToken === true) setSecret(db, 'cloudflare:apiToken', '');
-
-    // --- the addresses are shared with Settings: a portfolio hostname here is the owner's portfolio address, the app hostname is the public address ---
-    const fresh = n.hostnames.filter((h) => h.kind === 'portfolio' && !portfolioHosts().includes(h.hostname));
-    if (fresh.length > 1) return bad('Only one new portfolio address can be added at a time: it becomes your portfolio’s own address. Add the others from Settings, Portfolio.');
-    if (fresh[0] && db.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ?').get(fresh[0].hostname)) return bad(`${fresh[0].hostname} is already used.`);
     if (typeof b.enabled === 'boolean') {
-      if (b.enabled && !getSecret(db, 'cloudflare:tunnelToken')) return bad(n.mode === 'token' ? 'Paste the tunnel token first.' : 'Set the tunnel up first (press “Create or update the tunnel”).');
+      if (b.enabled && !getSecret(db, 'cloudflare:tunnelToken')) return bad('Paste the tunnel token first.');
       n.enabled = b.enabled;
     }
     saveTunnel(db, n);
-    // The other side of the link.
-    if (fresh[0]) setOwnerPortfolioHost(fresh[0].hostname);
-    const appOld = cur.hostnames.find((h) => h.kind === 'app')?.hostname ?? '', appNew = n.hostnames.find((h) => h.kind === 'app')?.hostname ?? '';
-    if (appNew !== appOld) {
-      const a = loadAuth(db);
-      if (appNew) saveAuth(db, { ...a, publicUrl: `https://${appNew}` });
-      else if (hostOfUrl(a.publicUrl) === appOld) saveAuth(db, { ...a, publicUrl: '' });
-    }
     if (n.enabled) { if (b.enabled === true || b.tunnelToken) runner.restart(); } else if (cur.enabled) void runner.stop();
     return dto(n);
   });
-
-  /** The tunnel names a new portfolio address: it becomes the owner's own, replacing the one they had. */
-  function setOwnerPortfolioHost(host: string) {
-    const owner = x.tenants.owner();
-    const cur = getSetting<Record<string, unknown>>(owner.db, 'portfolio', {});
-    setSetting(owner.db, 'portfolio', { ...cur, host });
-    db.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(owner.user.id);
-    db.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(host, owner.user.id);
-  }
-
-  type Applied = { ok: boolean; result: { hostname: string; ok: boolean; detail: string }[]; tunnelId: string };
-  class Refused extends Error { constructor(public status: number, message: string) { super(message); } }
-
-  /** API mode: create the tunnel if needed, set its routes, point DNS at it, keep the token. Throws Refused with what to tell the person. */
-  async function applyTunnel(): Promise<Applied> {
-    const c = loadTunnel(db);
-    const apiToken = getSecret(db, 'cloudflare:apiToken');
-    if (c.mode !== 'api') throw new Refused(400, 'This is only for automatic setup. Switch the mode first.');
-    if (!apiToken || !c.accountId) throw new Refused(400, 'Enter the Cloudflare account ID and an API token first.');
-    if (!c.hostnames.length) throw new Refused(400, 'Add at least one hostname.');
-    for (const h of c.hostnames) {
-      if (h.kind === 'portfolio' && !portfolioHosts().includes(h.hostname)) throw new Refused(400, `${h.hostname} is not the portfolio’s address any more.`);
-    }
-    const cf = cloudflare(apiToken, c.accountId, x.cfg.cloudflareApi);
-    const result: Applied['result'] = [];
-    try {
-      const zones = new Map<string, { id: string; name: string }>();
-      for (const h of c.hostnames) zones.set(h.hostname, await cf.zoneFor(h.hostname)); // fail before changing anything
-      let id = c.tunnelId;
-      if (!id || !(await cf.tunnelExists(id))) id = (await cf.createTunnel(c.tunnelName)).id;
-      await cf.setRoutes(id, c.hostnames.map((h) => ({ hostname: h.hostname, service: service() })));
-      const dns: TunnelCfg['dns'] = {};
-      for (const h of c.hostnames) {
-        const z = zones.get(h.hostname)!;
-        try { dns[h.hostname] = { zoneId: z.id, recordId: await cf.pointDns(z.id, h.hostname, id) }; result.push({ hostname: h.hostname, ok: true, detail: `Points at the tunnel (${z.name})` }); }
-        catch (e) { result.push({ hostname: h.hostname, ok: false, detail: (e as Error).message }); }
-      }
-      // Remove only DNS records Frames made for hostnames you have since taken off.
-      for (const [host, rec] of Object.entries(c.dns)) if (!c.hostnames.some((h) => h.hostname === host)) await cf.removeDns(rec.zoneId, rec.recordId);
-      setSecret(db, 'cloudflare:tunnelToken', await cf.token(id));
-      saveTunnel(db, { ...c, tunnelId: id, dns });
-      if (c.enabled) runner.restart();
-      return { ok: result.every((r) => r.ok), result, tunnelId: id };
-    } catch (e) {
-      throw new Refused(e instanceof CloudflareError && e.status >= 400 && e.status < 500 ? 400 : 502, `Cloudflare said: ${(e as Error).message}`);
-    }
-  }
-
-  app.post('/api/tunnel/apply', async (_req, rep) => {
-    if (locked(rep)) return;
-    try { return await applyTunnel(); } catch (e) { if (e instanceof Refused) return rep.code(e.status).send({ error: e.message }); throw e; }
-  });
-
-  // After the app's public address or the portfolio address changes, Cloudflare is brought into line too, if the tunnel was set up by
-  // Frames (automatic mode, already created). Otherwise there is nothing to do: a token-mode tunnel is routed in the Cloudflare dashboard.
-  x.tunnelSync = async () => {
-    const c = loadTunnel(db);
-    if (c.env || c.mode !== 'api' || !c.tunnelId || !c.hostnames.length || !getSecret(db, 'cloudflare:apiToken')) return null;
-    try { await applyTunnel(); return { applied: true }; } catch (e) { return { applied: false, error: (e as Error).message }; }
-  };
 
   app.post('/api/tunnel/start', async (_req, rep) => {
     if (locked(rep)) return;
