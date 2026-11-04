@@ -3,6 +3,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
 import { createTunnelRunner } from './tunnel.js';
+import { createSession, SESSION_COOKIE } from './auth.js';
 import { seedTunnelFromEnv } from './tunnelEnv.js';
 import { resolveUser } from './users.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
@@ -227,6 +228,8 @@ describe('pre-filling from the environment', () => {
   });
 });
 
+const setSettingRaw = (db: any, key: string, v: unknown) => db.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)').run(key, JSON.stringify(v));
+
 describe('Frames sets up the tunnel through the Cloudflare API', () => {
   const ACCOUNT = 'b'.repeat(32), TUNNEL_TOKEN = Buffer.from(JSON.stringify({ a: 'acct', t: 'tunnel', s: 'secret' })).toString('base64');
   const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0, apps: [] as any[], policies: [] as any[], orgDenied: false };
@@ -353,6 +356,26 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     expect((await A.get('/api/auth/config')).body.providers.some((p: any) => p.type === 'cloudflare')).toBe(false); // the sign-in method waits
     cf.orgDenied = false;
     await A.put('/api/tunnel', { protect: false });
+  });
+  it('protects the App URL with Cloudflare Access by itself while only people on the allowed list can sign in, and not when anyone may', async () => {
+    const sys2 = (e.app as any).frames.sys;
+    const auth = () => JSON.parse((sys2.prepare("SELECT value FROM settings WHERE key = 'auth'").get() as any).value);
+    const owner = resolveUser(sys2, { provider: 'g', sub: 'own', email: 'owner@x.test', emailVerified: true, name: 'O' }, true)!;
+    const header = { cookie: `${SESSION_COOKIE}=${createSession(sys2, owner.id)}` };
+    const tunnel = async (method: 'GET' | 'PUT', payload?: unknown) => { const r = await e.app.inject({ method, url: '/api/tunnel', headers: header, payload: payload as any }); return { status: r.statusCode, body: r.json() }; };
+    setSettingRaw(sys2, 'auth', { ...auth(), allow: ['alice@x.test'], enabled: true, open: false, testedBy: { provider: 'g', sub: 'a', email: 'alice@x.test', emailVerified: true, name: 'A' }, providers: [{ id: 'g', type: 'google', name: 'G', clientId: 'c' }] });
+    // Sign-in is on, list mode: Access protection is required, not a choice.
+    expect((await tunnel('GET')).body).toMatchObject({ protect: true, protectForced: true });
+    const off = await tunnel('PUT', { protect: false });
+    expect(off.status).toBe(400);
+    expect(off.body.error).toMatch(/Required while only people on the allowed list/);
+    // "Anyone who signs in": protection is the person's own choice again.
+    setSettingRaw(sys2, 'auth', { ...auth(), open: true });
+    expect((await tunnel('GET')).body).toMatchObject({ protect: false, protectForced: false });
+    expect((await tunnel('PUT', { protect: true })).status).toBe(200);
+    expect((await tunnel('PUT', { protect: false })).status).toBe(200);
+    setSettingRaw(sys2, 'auth', { ...auth(), enabled: false, open: false });
+    await settle();
   });
   it('switches itself on once set up, and stays off after the person switches it off', async () => {
     expect((await A.get('/api/tunnel')).body.config.enabled).toBe(true); // nobody pressed Run

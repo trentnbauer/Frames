@@ -49,7 +49,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     const { who, flow } = done;
     const conf = loadAuth(db);
-    const allowed = isAllowed(who, conf.allow);
+    const allowed = !!conf.open || isAllowed(who, conf.allow); // open: anyone who signs in is let in
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
       if (flow.test) return rep.redirect('/settings?section=access&access=notallowed');
@@ -98,7 +98,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   const dto = (req: any, c: AuthConfig) => ({
-    enabled: c.enabled, allow: c.allow, publicUrl: c.publicUrl,
+    enabled: c.enabled, allow: c.allow, open: !!c.open, publicUrl: c.publicUrl,
     testedBy: c.testedBy ? { email: c.testedBy.email, name: c.testedBy.name, provider: c.testedBy.provider } : null,
     providers: c.providers.map((p) => ({ ...p, hasSecret: !!getSecret(db, `oauth:${p.id}`), redirectUrl: `${auth.baseUrl(req)}/auth/callback/${p.id}` })),
     passwordOption: !!cfg.authPassword, disabledByEnv: !!cfg.authDisabled, callbackBase: auth.baseUrl(req),
@@ -147,6 +147,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       next.publicUrl = v.slice(0, 300);
     }
     if (typeof b.enabled === 'boolean') next.enabled = b.enabled;
+    if (typeof b.open === 'boolean') next.open = b.open;
 
     // --- the lock-out protections ---
     if (changedProviders) {
@@ -157,11 +158,11 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const me = au && (req as any).authVia === 'session' ? { provider: au.provider, sub: au.sub, email: au.email, emailVerified: true } : null;
     if (next.enabled) {
       if (!next.providers.length) return bad('Add a provider first.');
-      if (!next.allow.length) return bad('Add at least one email, domain or account to the list of people allowed in.');
+      if (!next.open && !next.allow.length) return bad('Add at least one email, domain or account to the list of people allowed in, or choose “Anyone who signs in”.');
       if (!next.testedBy) return bad('Use “Test sign-in” with a provider first, so you know you can get back in.');
       if (!next.providers.some((p) => p.id === next.testedBy!.provider)) return bad('The account that tested sign-in uses a provider that is no longer set up. Test again.');
-      if (cur.enabled && me && !isAllowed(me, next.allow)) return bad('That list would lock you out: your own account is not on it.');
-      if (!isAllowed(next.testedBy, next.allow)) return bad('The account you tested with is not on the allowed list, so you would be locked out. Add it, or test with an allowed account.');
+      if (cur.enabled && me && !next.open && !isAllowed(me, next.allow)) return bad('That list would lock you out: your own account is not on it.');
+      if (!next.open && !isAllowed(next.testedBy, next.allow)) return bad('The account you tested with is not on the allowed list, so you would be locked out. Add it, or test with an allowed account.');
     }
     for (const [id, s] of Object.entries(secrets)) setSecret(db, `oauth:${id}`, s);
     for (const p of cur.providers) if (!next.providers.some((n) => n.id === p.id)) setSecret(db, `oauth:${p.id}`, ''); // a removed provider's secret goes with it

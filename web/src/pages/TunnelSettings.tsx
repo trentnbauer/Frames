@@ -5,7 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
-  allow: string[]; protect: boolean; protectApplied: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; orgNote: string | null; appliedAt: string | null;
+  allow: string[]; open: boolean; protect: boolean; protectForced: boolean; protectApplied: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; orgNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
   accessApps: { name: string; decision: 'allow' | 'bypass'; addresses: string[]; who: string[] }[];
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
@@ -22,6 +22,7 @@ export function TunnelSettings() {
   const [allow, setAllow] = useState('');
   const [account, setAccount] = useState('');
   const [apiToken, setApiToken] = useState('');
+  const [help, setHelp] = useState<boolean | null>(null); // null: open while the account ID or the token is missing, folded once both are in
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   useEffect(() => { if (d.data) { setAllow(d.data.allow.join('\n')); setAppUrl(d.data.appUrl); setAccount(d.data.accountId); } }, [d.data?.appUrl, d.data?.accountId, d.data?.allow.join('\n')]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -61,11 +62,21 @@ export function TunnelSettings() {
       <div className="field">
         <h3>1. Let Frames use your Cloudflare account</h3>
         <p>Frames makes the tunnel, its routes and the DNS records itself, and keeps them right when an address changes. It needs your account ID and an API token.</p>
-        <ol className="muted" style={{ fontSize: 13.5, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
-          <li>{link('https://dash.cloudflare.com/profile/api-tokens', 'Create an API token')} (Custom token) with the permissions below, then copy it.</li>
-          <li>Your <b>account ID</b> is on the right of the {link('https://dash.cloudflare.com/', 'dashboard')}’s home page for your domain, and in its address after <span className="mono">dash.cloudflare.com/</span>.</li>
-        </ol>
-        <TokenSheet />
+        {(() => {
+          const filled = !!t.accountId && t.hasApiToken;
+          const helpOpen = help ?? !filled;
+          return (
+            <>
+              <button className="t2" aria-expanded={helpOpen} style={{ fontSize: 13 }} onClick={() => setHelp(!helpOpen)}>{helpOpen ? '▾ Hide the steps' : '▸ Show how to get the account ID and API token'}</button>
+              {helpOpen && <div style={{ marginTop: 8 }}>        <ol className="muted" style={{ fontSize: 13.5, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+            <li>{link('https://dash.cloudflare.com/profile/api-tokens', 'Create an API token')} (Custom token) with the permissions below, then copy it.</li>
+            <li>Your <b>account ID</b> is on the right of the {link('https://dash.cloudflare.com/', 'dashboard')}’s home page for your domain, and in its address after <span className="mono">dash.cloudflare.com/</span>.</li>
+          </ol>
+          <TokenSheet />
+</div>}
+            </>
+          );
+        })()}
         <div className="form" style={{ marginTop: 12, maxWidth: 560 }}>
           <input aria-label="Account ID" value={account} placeholder="Account ID (32 letters and numbers)" onChange={(e) => setAccount(e.target.value)} />
           <input type="password" autoComplete="off" aria-label="API token" value={apiToken} placeholder={t.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token'} onChange={(e) => setApiToken(e.target.value)} />
@@ -82,25 +93,37 @@ export function TunnelSettings() {
       <div className="field">
         <h3>2. Addresses</h3>
         <p>The App URL is the address you open Frames at from outside. It is the same <b>public address</b> as under Settings, Sign-in & access. Each person sets their own portfolio address under Settings, Portfolio.</p>
-        <div className="form" style={{ maxWidth: 560 }}>
-          <label>Frames: App URL <input aria-label="App URL" style={{ minWidth: 300 }} value={appUrl} placeholder="https://frames.example.com" onChange={(e) => setAppUrl(e.target.value)} /></label>
-          <button className="pill" disabled={appUrl === t.appUrl} onClick={() => save({ appUrl }, 'App URL saved. It is the public address everywhere in Settings now.')}>Save</button>
+        <div style={{ maxWidth: 560 }}>
+          <div className="muted" style={{ fontSize: 12.5, marginBottom: 4 }}>Frames: App URL</div>
+          <div aria-label="App URL" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,.04)', fontSize: 13.5 }}>
+            <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" style={{ color: 'var(--faint)', flex: 'none' }}><rect x="0.5" y="5" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" /><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" /></svg>
+            <span className="mono">{t.appUrl || 'Not set yet'}</span>
+          </div>
+          <p className="muted" style={{ fontSize: 12.5, margin: '6px 0 0' }}>It is the public address from Sign-in & access. <a href="/settings?section=access" style={{ textDecoration: 'underline' }}>Change under Sign-in & access</a></p>
         </div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
           <input type="checkbox" aria-label="Portfolios" checked={t.config.portfolios} onChange={(e) => save({ portfolios: e.target.checked })} />
           <span><b>Portfolios</b>: also serve each person’s portfolio through this tunnel. A portfolio address shows only that person’s public portfolio, nothing else.</span>
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
-          <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} onChange={(e) => save({ protect: e.target.checked })} />
+          <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} disabled={t.protectForced} onChange={(e) => save({ protect: e.target.checked })} />
           <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Sign-in & access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After it is set up, use <b>Test sign-in</b> under Settings, Sign-in & access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
         </label>
-        <div style={{ marginTop: 14 }}>
+        {t.protectForced && (
+          <p style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 0 24px', fontSize: 12.5, color: 'var(--muted)', maxWidth: 600 }}>
+            <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" style={{ color: 'var(--faint)' }}><rect x="0.5" y="5" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" /><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" /></svg>
+            Required while only people on the allowed list can sign in. Set Sign-in & access to “Anyone who signs in” to turn it on or off yourself.
+            <a href="/settings?section=access" style={{ textDecoration: 'underline' }}>Change who is allowed in</a>
+          </p>
+        )}
+        {t.open && t.protect && <p role="alert" style={{ margin: '8px 0 0 24px', fontSize: 13, color: 'var(--warn)', maxWidth: 600 }}>Sign-in & access is set to “Anyone who signs in”, but this policy still only lets in the allowed list.</p>}
+        {!t.open && <div style={{ marginTop: 14 }}>
           <label>Who is allowed in (one per line: an email, or a whole domain like @family.com)
             <textarea className="area" rows={3} aria-label="Allowed people" style={{ maxWidth: 520, display: 'block', marginTop: 4 }} value={allow} onChange={(e) => setAllow(e.target.value)} />
           </label>
           <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 8px' }}>The same list as under Settings, Sign-in & access: it is who Cloudflare Access lets in, and who may sign in to Frames.</p>
           <button className="pill" disabled={allow.trim() === t.allow.join('\n')} onClick={() => save({ allow }, 'Allowed list saved.')}>Save the list</button>
-        </div>
+        </div>}
         {protectProblem && <p className="reason" role="alert" style={{ margin: '8px 0 0 26px', fontSize: 13 }}>{protectProblem}</p>}
         {t.appOpen && <div className="banner" role="status" style={{ marginTop: 14 }}><span>Frames’ own sign-in is off, so anyone who can reach the App URL can use Frames. That is fine if you protect it in Cloudflare (Access, an IP rule); if not, turn on sign-in under Access.</span></div>}
       </div>

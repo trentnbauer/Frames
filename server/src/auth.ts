@@ -31,7 +31,9 @@ export type Provider = {
   teamDomain?: string; aud?: string; // cloudflare: the Access team's domain, and the application's audience tag
 };
 export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
-export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null };
+export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null;
+  /** Anyone who signs in with a provider is let in (and gets their own library), whatever the allowed list says. The list is kept. */
+  open?: boolean };
 
 const EMPTY: AuthConfig = { enabled: false, providers: [], allow: [], publicUrl: '', testedBy: null };
 export const loadAuth = (db: DB): AuthConfig => ({ ...EMPTY, ...getSetting<Partial<AuthConfig>>(db, 'auth', {}) });

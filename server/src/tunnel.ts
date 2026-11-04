@@ -161,6 +161,10 @@ export function accessPeople(sys: DB): { emails: string[]; domains: string[] } {
 export const ACCESS_PROVIDER_ID = 'cloudflare';
 const accessAppName = (host: string) => `Frames (${host})`;
 
+/** While sign-in is on and only the people on the allowed list may use it, the App URL is protected by Cloudflare Access (when Frames can set that up): it is not a separate choice. */
+export const protectForced = (sys: DB) => { const a = loadAuth(sys); return a.enabled && !a.open && hasApi(sys); };
+export const protectOn = (sys: DB) => loadTunnel(sys).protect || protectForced(sys);
+
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
 export const hasApi = (sys: DB) => !!getSecret(sys, 'cloudflare:apiToken') && ACCOUNT_ID.test(loadTunnel(sys).accountId);
 
@@ -182,7 +186,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       // The login first: nothing new is published until the App URL is behind it (the same order as the environment setup).
       let protectApplied = c.protectApplied;
       let orgNote: string | null = null;
-      if (c.protect) {
+      if (protectOn(sys)) {
         if (!appHost) throw new Error('Enter the App URL first: it is the address Cloudflare Access protects.');
         const people = accessPeople(sys);
         if (!people.emails.length && !people.domains.length) throw new Error('Add the people allowed in (an email or a whole domain) under Settings, Sign-in & access first: with nobody on the list, Cloudflare Access would let no one in.');
@@ -249,7 +253,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       accessApps: accessApps(c, hostnames),
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
-      allow: loadAuth(db).allow, protect: c.protect, protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, orgNote: c.orgNote, appliedAt: c.appliedAt,
+      allow: loadAuth(db).allow, open: !!loadAuth(db).open, protect: protectOn(db), protectForced: protectForced(db), protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, orgNote: c.orgNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
@@ -288,7 +292,10 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       saveAuth(db, { ...loadAuth(db), publicUrl: v.slice(0, 300) });
     }
     if (typeof b.portfolios === 'boolean') n.portfolios = b.portfolios;
-    if (typeof b.protect === 'boolean') n.protect = b.protect;
+    if (typeof b.protect === 'boolean') {
+      if (!b.protect && protectForced(db)) return bad('Required while only people on the allowed list can sign in. Choose “Anyone who signs in” under Sign-in & access to turn it off.');
+      n.protect = b.protect;
+    }
     if (b.accountId !== undefined) {
       const v = String(b.accountId).trim();
       if (v && !ACCOUNT_ID.test(v)) return bad('The account ID is the 32 letters and numbers shown in the Cloudflare dashboard.');
