@@ -416,7 +416,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     startup.push(setTimeout(() => void apply(), 1500));
   } else {
     seedTunnelFromEnv(sys, ownerDb); // TUNNEL_TOKEN, APP_HOSTNAME and PORTFOLIO_HOSTNAME pre-fill Settings and win over what was saved
-    startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); }, 1500)); // the tunnel comes back up with the server
+    startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); ctx.tunnelRefresh?.(); }, 1500)); // the tunnel comes back up with the server, and is set up again (it turns itself on if it is not)
   }
   startup.push(setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000)); // and so does AI analysis, where it left off
   for (const t of startup) t.unref();

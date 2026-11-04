@@ -3,7 +3,7 @@ import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
 import { loadAccess, PUBLIC_DESTINATIONS } from './access.js';
-import { loadAuth, saveAuth } from './auth.js';
+import { loadAuth, saveAuth, type Provider } from './auth.js';
 import { CloudflareError, cloudflare, type Cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
@@ -24,7 +24,11 @@ export type HostKind = 'portfolio' | 'app';
 export type TunnelCfg = {
   enabled: boolean;
   /** Also serve each person's portfolio address through the tunnel. */
-  portfolios: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
+  portfolios: boolean;
+  /** Put the App URL behind Cloudflare Access, letting in the people on the Settings, Access list, and sign them in to Frames from it. */
+  protect: boolean; protectApplied: boolean;
+  /** The person switched the tunnel off themselves: setup keeps it off. Otherwise a tunnel that is set up runs. */
+  stopped: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
   /** The last problem talking to Cloudflare, and when the last run worked. */
   error: string | null; appliedAt: string | null;
   /** Set when the tunnel is fine but Cloudflare Access could not be told which addresses are public (the token may lack that permission). */
@@ -34,7 +38,7 @@ export type TunnelCfg = {
   /** Set up from environment variables (tunnelEnv.ts): shown read-only, changed by editing the variables. */
   env?: boolean;
 };
-const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {}, error: null, appliedAt: null, accessNote: null };
+const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, protect: false, protectApplied: false, stopped: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {}, error: null, appliedAt: null, accessNote: null };
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
 const saveTunnel = (db: DB, c: TunnelCfg) => setSetting(db, 'tunnel', c);
 
@@ -146,6 +150,15 @@ export async function ensureBypass(cf: Cloudflare, appHost: string, portfolioHos
   }
 }
 
+/** Who Cloudflare Access should let in: the emails and whole domains (@family.com) on the allow-list. Account ids mean nothing to Cloudflare. */
+export function accessPeople(sys: DB): { emails: string[]; domains: string[] } {
+  const allow = loadAuth(sys).allow.map((a) => a.trim().toLowerCase());
+  const EMAIL = /^[^\s@,]{1,64}@[^\s@,]{1,190}\.[^\s@,]{2,}$/, DOMAIN = /^@([a-z0-9.-]+\.[a-z]{2,})$/;
+  return { emails: allow.filter((a) => EMAIL.test(a)), domains: allow.map((a) => DOMAIN.exec(a)?.[1] ?? '').filter(Boolean) };
+}
+export const ACCESS_PROVIDER_ID = 'cloudflare';
+const accessAppName = (host: string) => `Frames (${host})`;
+
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
 export const hasApi = (sys: DB) => !!getSecret(sys, 'cloudflare:apiToken') && ACCOUNT_ID.test(loadTunnel(sys).accountId);
 
@@ -163,6 +176,27 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       const cf = cloudflare(getSecret(sys, 'cloudflare:apiToken'), c.accountId, apiBase);
       const zones = new Map<string, { id: string }>();
       for (const h of hosts) zones.set(h, await cf.zoneFor(h)); // fail before changing anything
+      const appHost = hostOfUrl(loadAuth(sys).publicUrl);
+      // The login first: nothing new is published until the App URL is behind it (the same order as the environment setup).
+      let protectApplied = c.protectApplied;
+      if (c.protect) {
+        if (!appHost) throw new Error('Enter the App URL first: it is the address Cloudflare Access protects.');
+        const people = accessPeople(sys);
+        if (!people.emails.length && !people.domains.length) throw new Error('Add the people allowed in (an email or a whole domain) under Settings, Access first: with nobody on the list, Cloudflare Access would let no one in.');
+        const authDomain = await cf.accessDomain();
+        const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost));
+        const main = await cf.saveAccessApp(found?.id ?? null, { name: accessAppName(appHost), destinations: [appHost], session: '24h' });
+        await cf.saveAccessPolicy(main.id, { name: 'Frames: allowed people', decision: 'allow', ...people });
+        // Frames signs people in from what Access vouches for: the matching sign-in provider is kept up to date.
+        const a = loadAuth(sys);
+        const want: Provider = { id: ACCESS_PROVIDER_ID, type: 'cloudflare', name: 'Cloudflare Access', clientId: '', teamDomain: authDomain, aud: main.aud };
+        const have = a.providers.find((p) => p.id === ACCESS_PROVIDER_ID);
+        if (JSON.stringify(have) !== JSON.stringify(want)) saveAuth(sys, { ...a, providers: [...a.providers.filter((p) => p.id !== ACCESS_PROVIDER_ID), want] });
+        protectApplied = true;
+      } else if (c.protectApplied) {
+        if (appHost) { const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost)); if (found) await cf.removeAccessApp(found.id); }
+        protectApplied = false;
+      }
       const id = (await cf.findTunnel(c.tunnelName)) ?? (await cf.createTunnel(c.tunnelName)).id;
       await cf.setRoutes(id, hosts.map((hostname) => ({ hostname, service: `http://localhost:${port}` })));
       const dns: TunnelCfg['dns'] = {};
@@ -174,8 +208,11 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       let accessNote: string | null = null;
       try { await ensureBypass(cf, hostOfUrl(loadAuth(sys).publicUrl), wantedHostnames(sys).filter((h) => h.kind === 'portfolio').map((h) => h.hostname)); }
       catch (e) { accessNote = `The tunnel is set up, but Cloudflare Access could not be told which addresses are public (${e instanceof CloudflareError ? e.message : (e as Error).message}). If you protect these addresses with Access, add the permission Access: Apps and Policies, Edit to the API token.`; }
-      saveTunnel(sys, { ...loadTunnel(sys), dns, error: null, accessNote, appliedAt: new Date().toISOString() });
-      if (changed && loadTunnel(sys).enabled) runner.restart(); // routes changed in Cloudflare need no restart; a new tunnel does
+      // A tunnel that is set up runs by itself, unless the person switched it off.
+      const turnOn = !loadTunnel(sys).enabled && !loadTunnel(sys).stopped;
+      saveTunnel(sys, { ...loadTunnel(sys), dns, protectApplied, error: null, accessNote, appliedAt: new Date().toISOString(), ...(turnOn ? { enabled: true } : {}) });
+      if (turnOn) runner.start();
+      else if (changed && loadTunnel(sys).enabled) runner.restart(); // routes changed in Cloudflare need no restart; a new tunnel does
     } catch (e) {
       saveTunnel(sys, { ...loadTunnel(sys), error: e instanceof CloudflareError ? `Cloudflare said: ${e.message}` : (e as Error).message });
     }
@@ -192,11 +229,11 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     return {
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
-      accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
+      protect: c.protect, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
-      appOpen: hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env,
+      appOpen: hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env && !c.protectApplied,
       // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
       access: c.env ? { appHost: loadAccess(db)?.appHost ?? '', emails: loadAccess(db)?.emails ?? [], publicPaths: PUBLIC_DESTINATIONS, error: loadEnvState(db).error } : null,
     };
@@ -225,6 +262,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       saveAuth(db, { ...loadAuth(db), publicUrl: v.slice(0, 300) });
     }
     if (typeof b.portfolios === 'boolean') n.portfolios = b.portfolios;
+    if (typeof b.protect === 'boolean') n.protect = b.protect;
     if (b.accountId !== undefined) {
       const v = String(b.accountId).trim();
       if (v && !ACCOUNT_ID.test(v)) return bad('The account ID is the 32 letters and numbers shown in the Cloudflare dashboard.');
@@ -232,14 +270,15 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     }
     if (typeof b.apiToken === 'string' && b.apiToken.trim()) setSecret(db, 'cloudflare:apiToken', b.apiToken.trim().slice(0, 500));
     if (b.clearApiToken === true) setSecret(db, 'cloudflare:apiToken', '');
-    if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
+    if (typeof b.enabled === 'boolean') { n.enabled = b.enabled; n.stopped = !b.enabled; }
     saveTunnel(db, n);
     await apply(); // creates the tunnel and its records, and fetches the token to run it with
+    if (typeof b.apiToken === 'string' && b.apiToken.trim() && b.enabled === undefined && getSecret(db, 'cloudflare:tunnelToken') && !loadTunnel(db).error) { n.enabled = true; saveTunnel(db, { ...loadTunnel(db), enabled: true }); runner.restart(); }
     if (n.enabled && !getSecret(db, 'cloudflare:tunnelToken')) {
       saveTunnel(db, { ...loadTunnel(db), enabled: false });
       return bad(loadTunnel(db).error || 'Enter the Cloudflare account ID and API token first.');
     }
-    if (n.enabled) { if (b.enabled === true) runner.restart(); } else if (cur.enabled) void runner.stop();
+    if (n.enabled) { if (b.enabled === true) runner.start(); } else if (cur.enabled) void runner.stop();
     return dto(loadTunnel(db));
   });
 
@@ -247,9 +286,9 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     if (locked(rep)) return;
     await apply();
     if (!getSecret(db, 'cloudflare:tunnelToken')) return rep.code(400).send({ error: loadTunnel(db).error || 'Enter the Cloudflare account ID and API token first.' });
-    saveTunnel(db, { ...loadTunnel(db), enabled: true });
+    saveTunnel(db, { ...loadTunnel(db), enabled: true, stopped: false });
     runner.start();
     return dto(loadTunnel(db));
   });
-  app.post('/api/tunnel/stop', async (_req, rep) => { if (locked(rep)) return; saveTunnel(db, { ...loadTunnel(db), enabled: false }); await runner.stop(); return dto(loadTunnel(db)); });
+  app.post('/api/tunnel/stop', async (_req, rep) => { if (locked(rep)) return; saveTunnel(db, { ...loadTunnel(db), enabled: false, stopped: true }); await runner.stop(); return dto(loadTunnel(db)); });
 }

@@ -15,7 +15,7 @@ export type AccessApp = { id: string; name: string; aud: string };
 export type AccessPolicy = { id: string; name: string };
 /** The shape of an Access application Frames asks for: one or more public paths (host/path/*) behind one policy. */
 export type AccessAppBody = { name: string; destinations: string[]; session: string };
-export type AccessPolicyBody = { name: string; decision: 'allow' | 'bypass'; emails?: string[] };
+export type AccessPolicyBody = { name: string; decision: 'allow' | 'bypass'; emails?: string[]; domains?: string[] };
 
 export function cloudflare(token: string, accountId: string, base = process.env.CLOUDFLARE_API_BASE || 'https://api.cloudflare.com/client/v4') {
   async function call<T = any>(method: string, path: string, body?: unknown): Promise<T> {
@@ -96,7 +96,7 @@ export function cloudflare(token: string, accountId: string, base = process.env.
     },
     /** One policy per application: created, or updated in place if it is already there. */
     async saveAccessPolicy(appId: string, b: AccessPolicyBody): Promise<void> {
-      const body = { name: b.name, decision: b.decision, include: b.decision === 'bypass' ? [{ everyone: {} }] : (b.emails ?? []).map((email) => ({ email: { email } })) };
+      const body = { name: b.name, decision: b.decision, include: b.decision === 'bypass' ? [{ everyone: {} }] : [...(b.emails ?? []).map((email) => ({ email: { email } })), ...(b.domains ?? []).map((domain) => ({ email_domain: { domain } }))] };
       const existing = await call<AccessPolicy[]>('GET', `${acct}/access/apps/${appId}/policies`);
       const mine = existing.find((p) => p.name === b.name);
       if (mine) await call('PUT', `${acct}/access/apps/${appId}/policies/${mine.id}`, body);

@@ -5,7 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
-  accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
+  protect: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
 };
@@ -83,6 +83,10 @@ export function TunnelSettings() {
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
           <input type="checkbox" aria-label="Portfolios" checked={t.config.portfolios} onChange={(e) => save({ portfolios: e.target.checked })} />
           <span><b>Portfolios</b>: also serve each person’s portfolio through this tunnel. A portfolio address shows only that person’s public portfolio, nothing else.</span>
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
+          <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} onChange={(e) => save({ protect: e.target.checked })} />
+          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i>. After it is set up, use <b>Test sign-in</b> under Settings, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
         </label>
         {t.appOpen && <div className="banner" role="status" style={{ marginTop: 14 }}><span>Frames’ own sign-in is off, so anyone who can reach the App URL can use Frames. That is fine if you protect it in Cloudflare (Access, an IP rule); if not, turn on sign-in under Access.</span></div>}
       </div>
