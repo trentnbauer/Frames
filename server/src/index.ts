@@ -32,6 +32,8 @@ const app = buildApp(db, {
   webDir: process.env.WEB_DIR ?? path.resolve('../web/dist'),
   version: process.env.APP_VERSION || 'dev',
   trustProxy: envBool('TRUST_PROXY', false),
+  // The env file may be downloaded while this is true. The file it makes sets it to false.
+  allowEnvExport: envBool('ALLOW_ENV_EXPORT', true),
   // Break-glass: switches every sign-in off, so a misconfigured provider can never lock the owner out.
   authDisabled,
   // Only for an OIDC server on a trusted plain-http network (its secrets then cross it unencrypted).

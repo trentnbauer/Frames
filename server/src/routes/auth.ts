@@ -91,7 +91,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     return {
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
-      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, signups: cfg.allowSignups !== false,
+      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: !!((process.env.FRAMES_CONFIG_SYSTEM ?? '') + (process.env.FRAMES_CONFIG_OWNER ?? '')).trim(), signups: cfg.allowSignups !== false,
     };
   });
 

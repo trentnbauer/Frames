@@ -4,7 +4,7 @@ import type { createAiWorker } from './ai.js';
 import type { Tenant, Tenants } from './tenants.js';
 
 export type Row = Record<string, any>;
-export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean; accessCertsBase?: string; libraryRoots?: string[]; skip?: string[]; allowSignups?: boolean; userId?: number; cloudflareApi?: string; authDisabled?: boolean; allowInsecureOidc?: boolean; cloudBase?: string };
+export type AppCfg = Cfg & { webDir?: string; authUser?: string; authPassword?: string; allowedHosts?: string[]; version?: string; maxUploadMb?: number; trustProxy?: boolean; allowEnvExport?: boolean; accessCertsBase?: string; libraryRoots?: string[]; skip?: string[]; allowSignups?: boolean; userId?: number; cloudflareApi?: string; authDisabled?: boolean; allowInsecureOidc?: boolean; cloudBase?: string };
 
 /** What the route modules share. Built once in buildApp. */
 export type Ctx = {
