@@ -47,6 +47,9 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 | `APP_HOSTNAME` | empty | The app's public address, for example `frames.example.com`. It is only published behind Cloudflare Access, so `ACCESS_EMAILS` is required with it. |
 | `ACCESS_EMAILS` | empty | Comma-separated emails that Cloudflare Access lets in to `APP_HOSTNAME`. |
 | `PORTFOLIO_HOSTNAME` | empty | The public portfolio's own address, for example `gallery.example.com`. It shows only the portfolio and needs no login. |
+| `ALLOW_ENV_EXPORT` | `true` | Whether Settings, Env file may download the env file (all your settings and secrets). The exported file sets it to `false`, so using the file switches the export off again; set it back to `true` and restart to export again. |
+| `FRAMES_CONFIG_SYSTEM` | empty | Written by the export: the instance-wide settings (sign-in, tunnel, privacy page) as JSON. Wins over what was saved in the app at every start. |
+| `FRAMES_CONFIG_OWNER` | empty | Written by the export: the owner's library settings (AI sources and keys, cloud accounts, portfolio, review settings) as JSON. Wins over what was saved in the app at every start. |
 | `TRUST_PROXY` | `false` | `true` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
 | `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
 
@@ -66,11 +69,16 @@ Everything else (AI, sign-in providers, portfolio, sync) is set in the app, unde
 
 **Portainer**: use `docker-compose.portainer.yml` (Stacks, Add stack, Web editor). It pulls the published image, reads no files, and takes every stack and container variable above from the stack's *Environment variables* section; only `PHOTOS_DIR` is required.
 
-### Setting up without any variables
+### Setting up without any variables, then exporting an env file
 
-You do not have to write the variables by hand. Start Frames with none at all (just the photo folder and the data volume), open **Settings, Deployment**, and fill in the form: sign-in, sign-ups, the port and photo folder, upload size, and the Cloudflare tunnel (API token, account ID, app address, allowed emails, portfolio address). It starts from how this server is set up now, checks what you type (for example that an app address always has emails for Cloudflare Access), and shows a preview of the file with secrets hidden. **Download frames.env** gives you the real file to use with the stack: `docker compose --env-file frames.env up -d`, or save it as `.env` next to your compose file, or in Portainer *Stack, Environment variables, Load variables from .env file*. Administrators only.
+You do not have to write the variables by hand. Start Frames with none at all (just the photo folder and the data volume), set everything up in the app, then open **Settings, Env file** (administrators only) and **Download frames.env**. That one file holds everything you configured, secrets included: sign-in providers and the allow-list, the Cloudflare tunnel token, AI sources and their keys, cloud accounts, your portfolio and review settings, and any variables Frames was started with.
 
-The file is built in your browser. The secrets you type there (the API token, a shared password) are never sent to the server or stored, which also means they cannot be read back later: type them again whenever you make a new file. Sign-in providers, the allow-list, people, AI settings and cloud accounts live in the data volume, not in the file, so they carry over by keeping the same volume.
+Use it as the stack's env: `docker compose --env-file frames.env up -d`, or save it as `.env` next to the compose file, or in Portainer *Stack, Environment variables, Load variables from .env file*. The compose files in this repository already pass the three variables it adds.
+
+- **The file wins.** `FRAMES_CONFIG_SYSTEM` (sign-in, the tunnel, the privacy page) and `FRAMES_CONFIG_OWNER` (the owner's library settings) are JSON objects of setting names and values. Every time Frames starts it writes them over what the app had saved, so the env file is the source of truth. A change you make in the app afterwards lasts until the next restart; Settings says so while a file is loaded.
+- **The secrets can only be downloaded once.** `ALLOW_ENV_EXPORT` (default `true`) controls whether the file can be downloaded at all, and the exported file contains `ALLOW_ENV_EXPORT=false`. So as soon as you use it, the export is switched off and the secrets cannot be downloaded a second time. To export again (to keep changes made in the app), set it to `true` in your env file, restart, and download a new one.
+- **What is not in the file**: people other than the owner, your photographs, previews, collections and everyone's sign-in sessions stay in the data volume, so keep using the same volume. The file is built fresh from the saved settings each time you download it, rather than being kept on disk, so there is no second copy of your secrets sitting in the data volume.
+- **If a value is wrong**: a `FRAMES_CONFIG_*` that is not valid JSON is ignored and reported in the log (the app's own settings are used).
 
 ### Versions and releases
 
