@@ -89,13 +89,13 @@ export function Review() {
   return (
     <div className="review-screen">
       <div className="counter">{s.index + 1} <span>/ {s.queue.length}</span></div>
-      <Link to="/" onClick={() => refreshSummary()} className="esc">Esc</Link>
+      <div className="esc" style={{ display: 'flex', gap: 16 }}><span>Review session</span><Link to="/" onClick={() => refreshSummary()}>Esc to finish</Link></div>
       <div className="photo">{cur && <Fit p={{ id: cur.id, ar: cur.ar }} />}</div>
       <div className="scale" role="group" aria-label="Rate this photograph">
         {RATINGS.map((x) => (
           <button key={x.value} className={sel === x.value ? 'sel' : ''} onClick={() => rate(x.value)} aria-label={`${x.value}, ${x.label}`}>
             <span className="e">{x.emoji}</span>
-            <span className="n">{x.value}</span>
+            <span className="n">{x.value} {x.label}</span>
           </button>
         ))}
       </div>

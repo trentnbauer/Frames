@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUi } from '../ui';
 import { api, useApi } from '../api';
 import { fmtDate, type Shoot } from '../data';
@@ -7,7 +7,7 @@ import { Header, Img, Loading } from '../components/bits';
 import { useStore } from '../store';
 
 type Pending = { count: number; folders: { folder: string; count: number }[]; lastScan: string | null };
-type ScanResult = { imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootName: string | null };
+type ScanResult = { shootId?: number | null; imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootName: string | null };
 type Suggestion = { shootId: number; shootName: string; groups: { name: string; reason: string; photoIds: number[] }[] };
 
 export function Shoots() {
@@ -15,9 +15,13 @@ export function Shoots() {
   const pending = useApi<Pending>('/library/pending');
   const suggestions = useApi<Suggestion[]>('/shoots/suggestions');
   const { refreshSummary } = useStore();
+  const { openNew } = useUi();
+  const nav = useNavigate();
+  const [box, setBox] = useState<'drop' | 'busy' | 'done' | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const made = useApi<{ photos: { id: number; ar: number }[] }>(box === 'done' && result?.shootId ? `/photos?shoot=${result.shootId}` : null);
   const [uploaded, setUploaded] = useState<{ saved: string[]; rejected: { file: string; reason: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
@@ -43,7 +47,7 @@ export function Shoots() {
 
   const upload = async (files: FileList | null) => {
     if (!files?.length) return;
-    setError(null); setUploaded(null);
+    setError(null); setUploaded(null); setBox('busy');
     const fd = new FormData();
     for (const f of files) fd.append('file', f);
     try {
@@ -51,7 +55,8 @@ export function Shoots() {
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Upload failed');
       setUploaded(await r.json());
       await sync();
-    } catch (e) { setError((e as Error).message); }
+      setBox('done');
+    } catch (e) { setError((e as Error).message); setBox(null); }
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -82,7 +87,7 @@ export function Shoots() {
             <button onClick={sync} disabled={busy} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
           </span>
           <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>New photoshoot</button>
-          <button onClick={() => fileInput.current?.click()} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>
+          <button onClick={() => setBox('drop')} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>
         </div>
       </div>
       {naming && (
@@ -91,6 +96,52 @@ export function Shoots() {
           <button className="pill primary">Create</button>
         </form>
       )}
+      {box && (
+        <div onMouseDown={(e) => e.target === e.currentTarget && box !== 'busy' && setBox(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div role="dialog" aria-label="Bring in a shoot" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+            {box === 'drop' && (
+              <>
+                <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Bring in a shoot</h2>
+                <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>One shoot or roll at a time works best. Frames groups by date and suggests splits.</p>
+                <button onClick={() => fileInput.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
+                  style={{ width: '100%', aspectRatio: '2', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(255,255,255,.03)' }}>
+                  <span style={{ font: "400 24px 'Instrument Serif',Georgia,serif" }}>Drop photographs here</span>
+                  <span style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Choose files</span>
+                  <span style={{ fontSize: 12, color: '#6f6c67' }}>JPEG · TIFF · RAW</span>
+                </button>
+                <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 14 }}>Or <button onClick={async () => { setBox('busy'); await sync(); setBox('done'); }} style={{ color: '#efede8', textDecoration: 'underline' }}>sync the library folder</button> · {p?.count ?? 0} new {p?.count === 1 ? 'file' : 'files'} found</div>
+              </>
+            )}
+            {box === 'busy' && (
+              <>
+                <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 18px' }}>{progress && progress.total ? `Importing ${progress.total} photographs…` : 'Importing…'}</h2>
+                <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', width: progress && progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : '8%', background: '#a8a59f' }} /></div>
+                <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 8 }}>Reading camera data and building previews. Originals are not touched.</div>
+              </>
+            )}
+            {box === 'done' && (
+              <>
+                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 }}>{result && result.imported > 0 ? `Imported ${result.imported} ${result.imported === 1 ? 'photograph' : 'photographs'}` : 'Nothing new to import'}</div>
+                <div style={{ font: "400 36px/1.1 'Instrument Serif',Georgia,serif", marginBottom: 4 }}>{result?.shootName ?? 'Your library is up to date'}</div>
+                {result?.errors && result.errors.length > 0 && <div className="reason" style={{ fontSize: 12.5, marginBottom: 8 }}>{result.errors.length} could not be read: {result.errors.slice(0, 3).map((e) => e.file).join(', ')}.</div>}
+                <div style={{ display: 'flex', gap: 4, height: 70, margin: '14px 0 22px', overflow: 'hidden' }}>
+                  {(made.data?.photos ?? []).slice(0, 8).map((x) => <Img key={x.id} p={x} style={{ height: '100%', width: 'auto', borderRadius: 2 }} />)}
+                </div>
+                {result?.shootId ? (
+                  <>
+                    <div style={{ fontSize: 13, color: '#a8a59f', marginBottom: 12 }}>What next?</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <button onClick={() => { setBox(null); openNew({ name: result.shootName ?? '', photoIds: (made.data?.photos ?? []).map((x) => x.id) }); }} style={{ textAlign: 'left', background: '#efede8', color: '#0d0d0d', borderRadius: 10, padding: '14px 16px' }}><b style={{ fontWeight: 500 }}>Start a composition from this shoot</b><div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 2 }}>Choose how many prints and what size</div></button>
+                      <button onClick={() => nav(`/shoots/${result.shootId}?share=1`)} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Send it for review</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>A link where friends rate the photos</div></button>
+                      <button onClick={() => nav('/review')} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Review it now</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>Your first session, a week apart from the next</div></button>
+                    </div>
+                  </>
+                ) : <button onClick={() => setBox(null)} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Close</button>}
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {error && <div className="banner" role="alert"><span className="reason">{error}</span></div>}
       {p && p.count > 0 && !busy && (
         <div className="banner" role="status">
@@ -98,13 +149,13 @@ export function Shoots() {
           <button className="pill primary" onClick={sync}>Import</button>
         </div>
       )}
-      {uploaded && (
+      {uploaded && !box && (
         <div className="banner" role="status">
           <span>Uploaded <b>{uploaded.saved.length}</b> {uploaded.saved.length === 1 ? 'file' : 'files'}.{uploaded.rejected.length > 0 && <span className="reason"> Not added: {uploaded.rejected.map((r) => `${r.file} (${r.reason})`).join(', ')}.</span>}</span>
           <button className="pill" onClick={() => setUploaded(null)}>Dismiss</button>
         </div>
       )}
-      {result && (
+      {result && !box && (
         <div className="banner" role="status">
           <span>
             Imported <b>{result.imported}</b> {result.imported === 1 ? 'photo' : 'photos'}{result.shootName && result.imported > 0 && <> into <b>{result.shootName}</b></>}.
