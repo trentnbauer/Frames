@@ -159,3 +159,26 @@ describe('the privacy page', () => {
     try { expect((await call('GET', '/privacy')).body).toContain('New accounts are switched off'); } finally { env.cfg.allowSignups = undefined; }
   });
 });
+
+describe('the deployment page', () => {
+  it('fills itself in from how this instance is set up, for administrators only, and never includes a secret', async () => {
+    setSetting(sys, 'tunnel', { enabled: true, mode: 'api', accountId: 'b'.repeat(32), tunnelName: 'Studio', tunnelId: 't', dns: {}, hostnames: [{ hostname: 'frames.example.com', kind: 'app' }, { hostname: 'gallery.example.com', kind: 'portfolio' }] });
+    setSetting(sys, 'secret:cloudflare:apiToken', 'api-token-secret-value');
+    setSetting(sys, 'secret:cloudflare:tunnelToken', 'tunnel-token-secret-value');
+    setSetting(sys, 'accessState', { appHost: 'frames.example.com', aud: 'a', authDomain: 'team.example.test', emails: ['me@example.com', 'you@example.com'] });
+    const r = await call('GET', '/api/admin/deployment', me);
+    expect(r.status).toBe(200);
+    expect(r.body.values).toMatchObject({ CLOUDFLARE_ACCOUNT_ID: 'b'.repeat(32), TUNNEL_NAME: 'Studio', APP_HOSTNAME: 'frames.example.com', PORTFOLIO_HOSTNAME: 'gallery.example.com', ACCESS_EMAILS: 'me@example.com,you@example.com', ALLOW_SIGNUPS: 'true', AUTH_DISABLE: 'false' });
+    expect(JSON.stringify(r.body)).not.toMatch(/secret-value/);
+    expect(Object.keys(r.body.values).some((k) => /TOKEN|PASSWORD|SECRET/.test(k))).toBe(false);
+    expect((await call('GET', '/api/admin/deployment', cookie(resolveUser(sys, who('f1', 'fay@x.test', 'Fay'), true)!))).status).toBe(403);
+    expect((await call('GET', '/api/admin/deployment')).status).toBe(401);
+  });
+  it('falls back to the email addresses on the allow-list when Access is not in use', async () => {
+    setSetting(sys, 'accessState', null);
+    setSetting(sys, 'auth', { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['@x.test', 'one@x.test', 'github:123'], publicUrl: '', testedBy: null });
+    const r = await call('GET', '/api/admin/deployment', me);
+    expect(r.body.values.ACCESS_EMAILS).toBe('one@x.test');
+    expect(r.body.oauthProviders).toBe(1);
+  });
+});
