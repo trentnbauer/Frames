@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
+import { api, cleanup, makeEnv } from './testutil.js';
 
 let tmp: string, lib: string, app: ReturnType<typeof buildApp>, appDb: ReturnType<typeof openDb>;
 const j = async (method: string, url: string, payload?: unknown) => {
@@ -62,6 +63,20 @@ describe('rate limit', () => {
     const r = await app.inject({ url: '/api/me' });
     expect(Number(r.headers['x-ratelimit-limit'])).toBeGreaterThan(1000);
     expect((await app.inject({ url: '/api/health' })).headers['x-ratelimit-limit']).toBeUndefined();
+  });
+});
+
+describe('the welcome tour', () => {
+  it('is for a new, empty library; a library with photographs counts as already welcomed; it can be marked done and shown again', async () => {
+    const e = makeEnv();
+    try {
+      const A = api(e);
+      expect((await A.get('/api/welcome')).body).toEqual({ done: false }); // nothing in it yet
+      expect((await A.put('/api/welcome', { done: true })).body).toEqual({ done: true });
+      expect((await A.get('/api/welcome')).body).toEqual({ done: true });
+      expect((await A.put('/api/welcome', { done: false })).body).toEqual({ done: false }); // "show me the tour again"
+    } finally { e.app.close(); cleanup(e); }
+    expect((await j('GET', '/api/welcome')).body).toEqual({ done: true }); // the library of the other tests already has photographs
   });
 });
 
