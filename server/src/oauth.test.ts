@@ -386,6 +386,21 @@ describe('with sign-in on', () => {
       expect(r.statusCode).toBe(400);
       expect(r.json().error).toMatch(/Turn sign-in off/);
     });
+    it('lets another provider be added while it is on, touching nothing that already works, and the tester stays valid', async () => {
+      const before = (await call('GET', '/api/auth/config', undefined, sess)).json();
+      const extra = { id: 'second', type: 'github', name: 'Second GitHub', clientId: 'cid-2' };
+      const r = await call('PUT', '/api/auth/config', { providers: [withUrls(), ghUrls(), extra] }, sess);
+      expect(r.json().error ?? '', 'the reason').toBe('');
+      expect(r.statusCode).toBe(200);
+      const after = r.json();
+      expect(after.enabled).toBe(true);
+      expect(after.testedBy).toEqual(before.testedBy); // not made to test again
+      expect(after.providers.map((p: any) => p.id)).toEqual([...before.providers.map((p: any) => p.id), 'second']);
+      // Taking one away, or changing one, is still refused.
+      expect((await call('PUT', '/api/auth/config', { providers: [withUrls(), ghUrls()] }, sess)).statusCode).toBe(400);
+      expect((await call('PUT', '/api/auth/config', { providers: [{ ...withUrls(), clientId: 'changed' }, ghUrls(), extra] }, sess)).statusCode).toBe(400);
+      expect((await call('PUT', '/api/auth/config', { providers: [withUrls(), ghUrls(), { ...extra, clientSecret: 'a-secret' }] }, sess)).statusCode).toBe(400); // a secret for a saved provider
+    });
     it('refuses to replace a secret while it is on', async () => {
       const r = await call('PUT', '/api/auth/config', { providers: [{ ...withUrls(), clientSecret: 'new-secret' }, ghUrls()] }, sess);
       expect(r.statusCode).toBe(400);
