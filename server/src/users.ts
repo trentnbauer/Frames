@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   created TEXT NOT NULL, expires TEXT NOT NULL, last_seen TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires);
+-- More ways to sign in to the same person. The first is on the person's own row; these are the ones linked later.
+CREATE TABLE IF NOT EXISTS identities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL, sub TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, UNIQUE (provider, sub)
+);
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 `;
 
@@ -71,8 +76,33 @@ export function uniqueFolder(sys: DB, email: string, name: string): string {
 
 // ---------- finding and creating people ----------
 export function findByIdentity(sys: DB, provider: string, sub: string): User | null {
-  const r = sys.prepare('SELECT * FROM users WHERE provider = ? AND sub = ?').get(provider, sub) as Row | undefined;
+  const r = (sys.prepare('SELECT * FROM users WHERE provider = ? AND sub = ?').get(provider, sub)
+    ?? sys.prepare('SELECT u.* FROM identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.sub = ?').get(provider, sub)) as Row | undefined;
   return r ? toUser(r) : null;
+}
+
+export type Linked = { id: number; provider: string; email: string; primary: boolean };
+/** Every way this person can sign in: the one they started with, then any linked since. */
+export function identitiesOf(sys: DB, userId: number): Linked[] {
+  const u = getUser(sys, userId);
+  if (!u) return [];
+  const first: Linked[] = u.provider === 'local' || u.invited ? [] : [{ id: 0, provider: u.provider, email: u.email, primary: true }];
+  return [...first, ...(sys.prepare('SELECT id, provider, email FROM identities WHERE user_id = ? ORDER BY id').all(userId) as Row[]).map((r) => ({ id: r.id as number, provider: r.provider as string, email: r.email as string, primary: false }))];
+}
+
+/**
+ * Adds a way to sign in to a person. 'taken' when that account already belongs to someone else (it is never moved),
+ * 'same' when it is already theirs. Signing in with it afterwards lands in this person's library.
+ */
+export function linkIdentity(sys: DB, userId: number, who: Who): 'ok' | 'same' | 'taken' {
+  const owner = findByIdentity(sys, who.provider, who.sub);
+  if (owner) return owner.id === userId ? 'same' : 'taken';
+  sys.prepare('INSERT INTO identities(user_id, provider, sub, email, created) VALUES(?, ?, ?, ?, ?)').run(userId, who.provider, who.sub, who.email, new Date().toISOString());
+  return 'ok';
+}
+/** Removes a linked way to sign in (never the one the person started with, so they cannot be locked out of their own library). */
+export function unlinkIdentity(sys: DB, userId: number, identityId: number): boolean {
+  return sys.prepare('DELETE FROM identities WHERE id = ? AND user_id = ?').run(identityId, userId).changes > 0;
 }
 
 /** An administrator can add someone by email before they ever sign in. Their first verified sign-in with that address claims it. */

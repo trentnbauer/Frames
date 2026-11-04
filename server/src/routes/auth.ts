@@ -3,7 +3,7 @@ import { envConfigLoaded } from '../envConfig.js';
 import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
-import { bindOwner, resolveUser, type User } from '../users.js';
+import { bindOwner, identitiesOf, linkIdentity, resolveUser, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
@@ -50,6 +50,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const { who, flow } = done;
     const conf = loadAuth(db);
     const allowed = !!conf.open || isAllowed(who, conf.allow); // open: anyone who signs in is let in
+    if (flow.linkUser) {
+      // Someone signed in is adding this account to themselves. The flow was started by their own session, so it is theirs to finish.
+      return rep.redirect(`/settings?section=sign-in-methods&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
+    }
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
       if (flow.test) return rep.redirect('/settings?section=access&access=notallowed');
@@ -69,6 +73,26 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const token = createSession(db, user.id);
     rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
     return rep.redirect(flow.test ? '/settings?section=access&access=tested' : flow.returnTo);
+  });
+
+  // Add another way to sign in to the person who is signed in now: they pass through the provider once, and that account is then theirs too.
+  app.get('/auth/link/:id', async (req, rep) => {
+    const u = (req as any).authUser as User | null;
+    const p = loadAuth(db).providers.find((x) => x.id === (req.params as Row).id);
+    if (!u || (req as any).authVia !== 'session' || !p) return rep.code(404).type('text/html').send(auth.messagePage('Not available', 'Sign in first, then add another way to sign in from Settings.'));
+    try { return rep.redirect(await auth.begin(p, req, { test: false, returnTo: '/', linkUser: u.id })); } catch (e) {
+      console.error('link start failed', (e as Error).message);
+      return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider.'));
+    }
+  });
+  app.get('/api/me/identities', async (req) => {
+    const u = (req as any).authUser as User | null;
+    return { identities: u ? identitiesOf(db, u.id) : [], providers: loadAuth(db).providers.filter((p) => p.type !== 'cloudflare').map((p) => ({ id: p.id, type: p.type })) };
+  });
+  app.delete('/api/me/identities/:id', async (req, rep) => {
+    const u = (req as any).authUser as User | null;
+    if (!u || !unlinkIdentity(db, u.id, Number((req.params as Row).id))) return rep.code(404).send({ error: 'Not found' });
+    return { ok: true };
   });
 
   app.post('/auth/logout', async (req, rep) => {

@@ -521,6 +521,47 @@ describe('backups never carry keys or logins', () => {
   });
 });
 
+describe('linking another way to sign in to the same person', () => {
+  /** A signed-in person adds an account from another provider: through the provider once, and back. */
+  async function link(id: string, who: Who, headers: Record<string, string>) {
+    fake.who = who;
+    const start = await call('GET', `/auth/link/${id}`, undefined, headers);
+    if (start.statusCode !== 302) return start;
+    const there = await fetch(start.headers.location as string, { redirect: 'manual' });
+    const back = new URL(there.headers.get('location')!);
+    return call('GET', back.pathname + back.search);
+  }
+  it('adds the account, lists it, and then signing in with it lands in the same library', async () => {
+    const before = (await call('GET', '/api/me', undefined, sess)).json();
+    const r = await link('ghlike', { sub: 'u7', email: 'owner@example.test', verified: true, name: 'Owner' }, sess);
+    expect(r.statusCode).toBe(302);
+    expect(r.headers.location).toBe('/settings?section=sign-in-methods&linked=ok');
+    const ids = (await call('GET', '/api/me/identities', undefined, sess)).json().identities;
+    expect(ids.map((i: any) => i.provider)).toEqual(['fake', 'ghlike']);
+    const viaGh = sessionHeader(await signIn('ghlike', { sub: 'u7', email: 'owner@example.test', verified: true, name: 'Owner' }));
+    expect((await call('GET', '/api/me', undefined, viaGh)).json().id).toBe(before.id);
+  });
+  it('says so when it is already yours, and refuses an account that belongs to someone else', async () => {
+    expect((await link('ghlike', { sub: 'u7', email: 'owner@example.test', verified: true }, sess)).headers.location).toBe('/settings?section=sign-in-methods&linked=same');
+    // a second person, with an account of their own
+    await put({ allow: ['owner@example.test', 'friend@example.test'] }, sess);
+    const friend = sessionHeader(await signIn('fake', { sub: 'f1', email: 'friend@example.test', verified: true, name: 'Friend' }));
+    expect((await link('ghlike', { sub: 'u7', email: 'owner@example.test', verified: true }, friend)).headers.location).toBe('/settings?section=sign-in-methods&linked=taken');
+    expect((await call('GET', '/api/me/identities', undefined, friend)).json().identities.map((i: any) => i.provider)).toEqual(['fake']); // nothing moved
+  });
+  it('refuses an account that is not allowed in, and needs a signed-in session to start at all', async () => {
+    expect((await link('ghlike', { sub: 'u9', email: 'stranger@evil.test', verified: true }, sess)).headers.location).toBe('/settings?section=sign-in-methods&linked=notallowed');
+    expect((await call('GET', '/auth/link/ghlike')).statusCode).toBe(401);
+  });
+  it('lets a linked account be removed, never the one they started with', async () => {
+    const list = (await call('GET', '/api/me/identities', undefined, sess)).json().identities as any[];
+    const extra = list.find((i) => !i.primary);
+    expect((await call('DELETE', '/api/me/identities/0', undefined, sess)).statusCode).toBe(404);
+    expect((await call('DELETE', `/api/me/identities/${extra.id}`, undefined, sess)).statusCode).toBe(200);
+    expect((await call('GET', '/api/me/identities', undefined, sess)).json().identities.map((i: any) => i.provider)).toEqual(['fake']);
+  });
+});
+
 describe('sign-in attempts are rate-limited', () => {
   it('slows down someone hammering the sign-in address', async () => {
     const e = makeEnv({ allowInsecureOidc: true });
