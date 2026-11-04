@@ -52,7 +52,7 @@ export function Deployment() {
                     <input type={f.kind === 'secret' ? 'password' : 'text'} autoComplete="off" aria-label={f.label} value={v[f.key] ?? ''} placeholder={f.placeholder ?? ''} onChange={(e) => set(f.key, e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
                   </label>
                 )}
-                <p className="muted" style={{ fontSize: 12.5, margin: '2px 0 0' }}>{f.help}</p>
+                <p className="muted" style={{ fontSize: 12.5, margin: '2px 0 0' }}>{f.help}{f.link && <> <a href={f.link.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{f.link.text}</a>.</>}</p>
               </div>
             ))}
           </div>

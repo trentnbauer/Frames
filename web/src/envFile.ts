@@ -2,7 +2,7 @@
  * Builds a .env file for the Docker stack from what is typed on the Deployment page. Pure functions, so the file is
  * exactly what the tests say it is: secrets are only ever in the browser, never sent to the server.
  */
-export type Field = { key: string; label: string; kind: 'text' | 'secret' | 'bool'; help: string; group: string; placeholder?: string };
+export type Field = { key: string; label: string; kind: 'text' | 'secret' | 'bool'; help: string; group: string; placeholder?: string; link?: { href: string; text: string } };
 export type Values = Record<string, string>;
 
 export const GROUPS = ['Sign-in', 'The server', 'Cloudflare tunnel'] as const;
@@ -16,15 +16,15 @@ export const FIELDS: Field[] = [
   { group: 'Sign-in', key: 'OIDC_ALLOW_HTTP', label: 'Allow an OpenID Connect server on plain http', kind: 'bool', help: 'Only on a network you trust.' },
   { group: 'The server', key: 'PHOTOS_DIR', label: 'Photo folder on the host', kind: 'text', help: 'Where your photographs are on the Docker host, mounted read-only at /library.', placeholder: '/srv/photos' },
   { group: 'The server', key: 'BIND_ADDRESS', label: 'Listen on', kind: 'text', help: '127.0.0.1 is this machine only; 0.0.0.0 is every network interface.', placeholder: '127.0.0.1' },
-  { group: 'The server', key: 'HOST_PORT', label: 'Port on the host', kind: 'text', help: 'The port published on the host. If your stack loads this file with env_file:, write the port in the compose file instead: env_file only sets variables inside the container.', placeholder: '3000' },
+  { group: 'The server', key: 'PORT', label: 'Port on the host', kind: 'text', help: 'The port published on the host (it can differ from the container’s own port, 3000). Used by the compose files’ ports line. If your stack also lists this file under env_file:, write the port in the compose file instead: env_file only sets variables inside the container.', placeholder: '3000' },
   { group: 'The server', key: 'FRAMES_VERSION', label: 'Image version', kind: 'text', help: 'Pin a release such as 1.2.3, or leave empty for latest.', placeholder: 'latest' },
   { group: 'The server', key: 'MAX_UPLOAD_MB', label: 'Largest upload (MB)', kind: 'text', help: 'Default 2048.', placeholder: '2048' },
   { group: 'The server', key: 'TRUST_PROXY', label: 'Behind a reverse proxy', kind: 'bool', help: 'So share links rate-limit each visitor, not the proxy.' },
   { group: 'The server', key: 'ALLOWED_HOSTS', label: 'Public host names', kind: 'text', help: 'Only if a reverse proxy rewrites the Host header. Comma-separated.', placeholder: 'frames.example.com' },
-  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_API_TOKEN', label: 'API token', kind: 'secret', help: 'Needs Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read. It cannot be read back, so paste it again.' },
-  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Account ID', kind: 'text', help: '32 letters and numbers, from the Cloudflare dashboard.' },
+  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_API_TOKEN', label: 'API token', kind: 'secret', help: 'Needs Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read. It cannot be read back, so paste it again.', link: { href: 'https://dash.cloudflare.com/profile/api-tokens', text: 'Make an API token' } },
+  { group: 'Cloudflare tunnel', key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Account ID', kind: 'text', help: '32 letters and numbers: choose your domain in the dashboard and look for Account ID in the right-hand column.', link: { href: 'https://dash.cloudflare.com', text: 'Open the Cloudflare dashboard' } },
   { group: 'Cloudflare tunnel', key: 'TUNNEL_NAME', label: 'Tunnel name', kind: 'text', help: 'Default Frames.', placeholder: 'Frames' },
-  { group: 'Cloudflare tunnel', key: 'APP_HOSTNAME', label: 'App address', kind: 'text', help: 'The app, behind Cloudflare Access. Needs the emails below.', placeholder: 'frames.example.com' },
+  { group: 'Cloudflare tunnel', key: 'APP_HOSTNAME', label: 'App address', kind: 'text', help: 'The app, behind Cloudflare Access. Needs the emails below, and One-time PIN turned on in Zero Trust.', placeholder: 'frames.example.com', link: { href: 'https://one.dash.cloudflare.com', text: 'Open Zero Trust (Settings, Authentication, Login methods)' } },
   { group: 'Cloudflare tunnel', key: 'ACCESS_EMAILS', label: 'Emails Access lets in', kind: 'text', help: 'Comma-separated.', placeholder: 'me@example.com' },
   { group: 'Cloudflare tunnel', key: 'PORTFOLIO_HOSTNAME', label: 'Portfolio address', kind: 'text', help: 'Shows only the portfolio, public, no login.', placeholder: 'gallery.example.com' },
 ];
@@ -56,7 +56,7 @@ export function problems(v: Values): string[] {
     if (app && !emails.length) out.push('The app address needs at least one email for Cloudflare Access: it is never published without a login.');
     for (const e of emails) if (!EMAIL.test(e.toLowerCase())) out.push(`“${e}” is not an email address.`);
   }
-  for (const k of ['SESSION_DAYS', 'MAX_UPLOAD_MB', 'HOST_PORT']) if (t(v, k) && !/^\d{1,6}$/.test(t(v, k))) out.push(`${k} must be a number.`);
+  for (const k of ['SESSION_DAYS', 'MAX_UPLOAD_MB', 'PORT']) if (t(v, k) && !/^\d{1,6}$/.test(t(v, k))) out.push(`${k} must be a number.`);
   if (t(v, 'AUTH_PASSWORD') && !t(v, 'AUTH_USER')) out.push('A shared password works best with a user name too (default “frames” is used if empty).');
   for (const f of FIELDS) if (/[\r\n]/.test(v[f.key] ?? '')) out.push(`${f.label} cannot contain a line break.`);
   return [...new Set(out)];
