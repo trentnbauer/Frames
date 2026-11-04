@@ -13,7 +13,10 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 
-const SECTIONS = ['Libraries & storage', 'Cloud sync', 'Access', 'Portfolio', 'Cloudflare tunnel', 'Reviews', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Backup', 'People', 'Env file', 'Your data', 'About'] as const;
+// Yours: everything about your own library, for every signed-in person. Administrator: the whole instance (sign-in, the tunnel, people, the env file).
+const YOURS = ['Reviews', 'Libraries & storage', 'Cloud sync', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Portfolio', 'Backup', 'Your data'] as const;
+const ADMIN = ['Access', 'Cloudflare tunnel', 'People', 'Env file'] as const;
+const SECTIONS = [...YOURS, ...ADMIN, 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -30,7 +33,8 @@ export function SettingsPage() {
   const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return q.has('access') ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
   const { settings: s, setSettings, me } = useStore();
   // Sign-in and the tunnel belong to the whole instance: only an administrator sees them.
-  const sections = SECTIONS.filter((x) => me?.role !== 'member' || !(x === 'Access' || x === 'Cloudflare tunnel' || x === 'People' || x === 'Env file'));
+  const isAdmin = me?.role !== 'member';
+  const groups: { title: string; items: readonly (typeof SECTIONS)[number][] }[] = [{ title: 'Your settings', items: YOURS }, ...(isAdmin ? [{ title: 'Administrator', items: ADMIN }] : []), { title: 'Frames', items: ['About'] as const }];
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
@@ -40,7 +44,12 @@ export function SettingsPage() {
       <Header />
       <div className="settings">
         <nav className="snav" aria-label="Settings sections">
-          {sections.map((x) => <button key={x} className={sec === x ? 'on' : ''} onClick={() => { setSec(x); setErr(''); }}>{x}</button>)}
+          {groups.map((g) => (
+            <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>
+              <div className="faint" style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 0 4px 12px' }}>{g.title}</div>
+              {g.items.map((x) => <button key={x} className={sec === x ? 'on' : ''} onClick={() => { setSec(x); setErr(''); }}>{x}</button>)}
+            </div>
+          ))}
         </nav>
         <div>
           <h1 className="serif" style={{ fontSize: 44, marginBottom: 12 }}>{sec}</h1>
