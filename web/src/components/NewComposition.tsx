@@ -1,16 +1,54 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
+import { fuzzyNames } from '../fuzzy';
 import type { NewCompositionStart } from '../ui';
 
+const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 } as const;
 const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
 const opt = (on: boolean) => ({ background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: ring });
 
+type Kind = 'subject' | 'tag' | 'colour';
+type Item = { name: string; n?: number };
+
+/** A box to type in: it suggests the names that contain what is typed, and a chosen name becomes a chip. */
+function PickField({ kind, title, items, chosen, fromName, onAdd, onRemove }: { kind: Kind; title: string; items: Item[]; chosen: string[]; fromName: string[]; onAdd: (n: string) => void; onRemove: (n: string) => void }) {
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const q = text.trim().toLowerCase();
+  const hits = (q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items).filter((i) => !chosen.includes(i.name)).slice(0, 8);
+  const add = (n: string) => { onAdd(n); setText(''); setOpen(false); };
+  if (items.length === 0 && chosen.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 16, position: 'relative' }}>
+      <div style={label}>{title}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', background: '#0d0d0d', borderRadius: 8, padding: '6px 8px', boxShadow: ring }}>
+        {chosen.map((n) => (
+          <span key={n} title={fromName.includes(n) ? 'Matched from the name' : undefined} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '4px 10px', borderRadius: 999, fontSize: 12.5, background: '#efede8', color: '#0d0d0d' }}>
+            {fromName.includes(n) && <span aria-hidden style={{ fontSize: 10 }}>✦</span>}{n}
+            <button aria-label={`Remove ${kind} ${n}`} onClick={() => onRemove(n)} style={{ color: '#6f6c67' }}>✕</button>
+          </span>
+        ))}
+        <input value={text} onChange={(e) => { setText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (hits[0]) add(hits[0].name); } if (e.key === 'Backspace' && !text && chosen.length) onRemove(chosen[chosen.length - 1]); }}
+          placeholder={chosen.length ? '' : `Search ${kind}s…`} aria-label={`Search ${kind}s`}
+          style={{ flex: 1, minWidth: 120, background: 'none', border: 0, outline: 'none', fontSize: 13, padding: '4px 2px' }} />
+      </div>
+      {open && hits.length > 0 && (
+        <div role="listbox" aria-label={`${title} suggestions`} style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5, marginTop: 4, background: '#1e1e1d', borderRadius: 8, boxShadow: '0 0 0 1px rgba(255,255,255,.1),0 12px 30px rgba(0,0,0,.5)', maxHeight: 220, overflow: 'auto' }}>
+          {hits.map((i) => <button key={i.name} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); add(i.name); }} style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13 }}><span>{i.name}</span>{i.n !== undefined && <span style={{ color: '#6f6c67' }}>{i.n}</span>}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * "+ Composition": a name, how many prints and what size, and optionally subjects and tags to look for. Photographs that have any of the
- * chosen subjects or tags are put in as the first candidates; otherwise they are added afterwards (or come with it, from a search, a shoot or a selection).
+ * "+ Composition": a name, how many prints and what size, and optionally subjects, tags and colours to look for. The name is matched
+ * against them as you type ("Birds at the Beach" picks the bird and beach ones; you can take any away). Photographs that have any of the
+ * chosen ones go in as the first candidates; otherwise they are added afterwards (or come with it, from a search, a shoot or a selection).
  */
 export function NewComposition({ start, onClose }: { start: NewCompositionStart; onClose: () => void }) {
   const nav = useNavigate();
@@ -21,29 +59,35 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const [err, setErr] = useState('');
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
   const tags = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
-  const [fSub, setFSub] = useState<string[]>([]);
-  const [fTag, setFTag] = useState<string[]>([]);
+  const known: Record<Kind, Item[]> = { subject: subjects.data ?? [], tag: tags.data ?? [], colour: COLOURS.map((name) => ({ name })) };
+  const [manual, setManual] = useState<Record<Kind, string[]>>({ subject: [], tag: [], colour: [] });
+  const [dismissed, setDismissed] = useState<string[]>([]); // names matched from the title that were taken away again
+  // What the title points to, less what has been taken away.
+  const auto = useMemo(() => {
+    const out = {} as Record<Kind, string[]>;
+    for (const k of ['subject', 'tag', 'colour'] as Kind[]) out[k] = fuzzyNames(name, known[k].map((i) => i.name)).filter((n) => !dismissed.includes(`${k}:${n}`));
+    return out;
+  }, [name, dismissed.join('|'), subjects.data, tags.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = (k: Kind) => [...new Set([...auto[k], ...manual[k]])];
+  const add = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: [...m[k], n] })); setDismissed((d) => d.filter((x) => x !== `${k}:${n}`)); };
+  const remove = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: m[k].filter((x) => x !== n) })); setDismissed((d) => [...d, `${k}:${n}`]); };
+
   const [found, setFound] = useState<number[]>([]);
   const [looking, setLooking] = useState(false);
-  // The photographs that have any of the chosen subjects or tags.
+  const queries = [...chosen('subject').map((n) => `subject=${encodeURIComponent(n)}`), ...chosen('tag').map((n) => `tag=${encodeURIComponent(n)}`), ...chosen('colour').map((n) => `colour=${encodeURIComponent(n)}`)];
+  // The photographs that have any of the chosen subjects, tags or colours.
   useEffect(() => {
-    if (!fSub.length && !fTag.length) { setFound([]); return; }
+    if (!queries.length) { setFound([]); setLooking(false); return; }
     let live = true; setLooking(true);
-    Promise.all([...fSub.map((n) => `subject=${encodeURIComponent(n)}`), ...fTag.map((n) => `tag=${encodeURIComponent(n)}`)].map((q) => api<{ photos: PhotoLite[] }>(`/photos?${q}`)))
-      .then((rs) => { if (live) { setFound([...new Set(rs.flatMap((r) => r.photos.map((p) => p.id)))]); setLooking(false); } })
-      .catch(() => { if (live) setLooking(false); });
-    return () => { live = false; };
-  }, [fSub.join('|'), fTag.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+    const t = setTimeout(() => {
+      Promise.all(queries.map((q) => api<{ photos: PhotoLite[] }>(`/photos?${q}`)))
+        .then((rs) => { if (live) { setFound([...new Set(rs.flatMap((r) => r.photos.map((p) => p.id)))]); setLooking(false); } })
+        .catch(() => { if (live) setLooking(false); });
+    }, 250); // wait for the typing to settle
+    return () => { live = false; clearTimeout(t); };
+  }, [queries.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
   const ids = [...new Set([...(start.photoIds ?? []), ...found])];
-  const flip = (list: string[], set: (v: string[]) => void, n: string) => set(list.includes(n) ? list.filter((x) => x !== n) : [...list, n]);
-  const chips = (title: string, items: { name: string; n: number }[] | null, list: string[], set: (v: string[]) => void) => (items ?? []).length > 0 && (
-    <>
-      <div style={label}>{title}</div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', maxHeight: 96, overflow: 'auto' }}>
-        {(items ?? []).map((t) => <button key={t.name} aria-pressed={list.includes(t.name)} onClick={() => flip(list, set, t.name)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, ...opt(list.includes(t.name)) }}>{t.name} · {t.n}</button>)}
-      </div>
-    </>
-  );
+
   const create = async () => {
     if (busy) return;
     setBusy(true); setErr('');
@@ -55,9 +99,9 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   };
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div role="dialog" aria-label="New composition" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <div role="dialog" aria-label="New composition" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 18px' }}>New composition</h2>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Neon signs" aria-label="Composition name"
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Birds at the beach" aria-label="Composition name"
           style={{ width: '100%', background: '#0d0d0d', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
         <div style={label}>Prints</div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -67,8 +111,10 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
           {(['A4', 'A3', 'A2'] as const).map((v) => <button key={v} aria-pressed={size === v} onClick={() => setSize(v)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, ...opt(size === v) }}>{v}</button>)}
         </div>
-        {chips('Subjects to look for (optional)', subjects.data, fSub, setFSub)}
-        {chips('Tags to look for (optional)', tags.data, fTag, setFTag)}
+        <PickField kind="subject" title="Subjects to look for (optional)" items={known.subject} chosen={chosen('subject')} fromName={auto.subject} onAdd={(n) => add('subject', n)} onRemove={(n) => remove('subject', n)} />
+        <PickField kind="tag" title="Tags to look for (optional)" items={known.tag} chosen={chosen('tag')} fromName={auto.tag} onAdd={(n) => add('tag', n)} onRemove={(n) => remove('tag', n)} />
+        <PickField kind="colour" title="Colours to look for (optional)" items={known.colour} chosen={chosen('colour')} fromName={auto.colour} onAdd={(n) => add('colour', n)} onRemove={(n) => remove('colour', n)} />
+        {(auto.subject.length + auto.tag.length + auto.colour.length) > 0 && <p style={{ fontSize: 12, color: '#8f8c86', margin: '-6px 0 16px' }}>✦ matched from the name. Take any away with ✕.</p>}
         {err && <p className="reason" role="alert">{err}</p>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{looking ? 'Looking…' : ids.length ? `${ids.length} candidates → best ${count} at ${size}` : `${count} × ${size}. You add the photographs next.`}</span>
