@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { dailyBackup, integrity } from './backup.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { dailyBackup, integrity, startAutoBackup } from './backup.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, A: ReturnType<typeof api>;
@@ -42,5 +42,18 @@ describe('comparing two photos', () => {
     expect(r.similarity).toBeGreaterThanOrEqual(0);
     expect(r.similarity).toBeLessThanOrEqual(1);
     expect((await A.get('/api/compare?a=1&b=99')).status).toBe(404);
+  });
+});
+
+describe('the unattended backup timer', () => {
+  it('survives a failure while listing what to back up: one skipped round, never the server', () => {
+    vi.useFakeTimers();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      startAutoBackup(() => { throw new Error('a library could not be opened'); });
+      expect(() => vi.advanceTimersByTime(10_001)).not.toThrow();
+      expect(err.mock.calls.flat().join(' ')).toMatch(/Backup could not start/);
+      expect(() => vi.advanceTimersByTime(6 * 3600_000)).not.toThrow(); // and it keeps trying on its next round
+    } finally { err.mockRestore(); vi.useRealTimers(); }
   });
 });

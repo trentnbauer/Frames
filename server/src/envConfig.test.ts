@@ -148,3 +148,50 @@ describe('export, import, and the block', () => {
     expect((await e.app.inject({ url: '/api/admin/env/export', headers: { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') } })).statusCode).toBe(200);
   });
 });
+
+describe('several AIs in the export', () => {
+  const KEYS = { claude: 'sk-ant-' + Buffer.from('one').toString('hex'), gemini: 'g-' + Buffer.from('two').toString('hex'), openai: 'sk-' + Buffer.from('three').toString('hex') };
+  it('carries every AI, its own key, its settings and which one is in use, and gives a fresh instance exactly that', async () => {
+    const a = mk(); const A = api(a);
+    const add = async (type: string, fields: object) => (await A.post('/api/ai/sources', { type, ...fields })).body.sources.at(-1);
+    const claude = await add('anthropic', { name: 'Claude for descriptions', endpoint: 'https://api.anthropic.com', model: 'claude-x', ack: true, key: KEYS.claude });
+    const gemini = await add('gemini', { endpoint: 'https://generativelanguage.example/v1beta/openai', model: 'gem-x', embedModel: 'gem-embed', ack: true, key: KEYS.gemini });
+    const openai = await add('openai', { model: 'gpt-x', embedModel: 'te-x', ack: true, key: KEYS.openai });
+    const local = await add('ollama', { endpoint: 'http://192.168.1.20:11434', model: 'llava', embedModel: 'nomic' }); // on the network, and no key
+    await A.put('/api/ai/active', { id: gemini.id });
+    await A.del(`/api/ai/sources/${openai.id}`); // a removed AI must not travel, and neither must its key
+
+    const text = Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString();
+    expect(text).toContain(KEYS.claude);
+    expect(text).toContain(KEYS.gemini);
+    expect(text).not.toContain(KEYS.openai);
+    const vars = parseEnv(text);
+    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+
+    const b = mk(); const B = api(b);
+    const got = (await B.get('/api/ai/sources')).body;
+    expect(got.sources.map((x: any) => `${x.type}:${x.name}`)).toEqual(['anthropic:Claude for descriptions', 'gemini:Gemini (Google)', 'ollama:Ollama']);
+    expect(got.active).toBe(gemini.id);
+    const by = Object.fromEntries(got.sources.map((x: any) => [x.type, x]));
+    expect(by.anthropic).toMatchObject({ id: claude.id, endpoint: 'https://api.anthropic.com', model: 'claude-x', ack: true, hasKey: true, ready: true });
+    expect(by.gemini).toMatchObject({ id: gemini.id, model: 'gem-x', embedModel: 'gem-embed', hasKey: true, ready: true });
+    expect(by.ollama).toMatchObject({ id: local.id, endpoint: 'http://192.168.1.20:11434', model: 'llava', hasKey: false, ready: true });
+    // The settings page sees one AI in use, and it is the one that was.
+    expect((await B.get('/api/settings')).body.settings).toMatchObject({ aiActive: gemini.id, ai: 'external' });
+    expect(JSON.stringify(got)).not.toMatch(/sk-ant-|g-[0-9a-f]{6}/); // still write-only through the API
+    // Each key belongs to its own AI: the one that is in use is sent its own key, nobody else's.
+    expect(b.db.prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${gemini.id}:key`)).toEqual({ value: JSON.stringify(KEYS.gemini) });
+    expect(b.db.prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${openai.id}:key`)).toBeUndefined();
+  });
+  it('the file wins over AIs added in the app since, at the next start', async () => {
+    const a = mk(); const A = api(a);
+    await A.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
+    const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
+    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+    const b = mk(); const B = api(b);
+    await B.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });
+    expect((await B.get('/api/ai/sources')).body.sources.map((x: any) => x.name)).toEqual(['From the file', 'Added later in the app']);
+    applyEnvConfig(sysOf(b), b.db); // what the next start does
+    expect((await B.get('/api/ai/sources')).body.sources.map((x: any) => x.name)).toEqual(['From the file']);
+  });
+});

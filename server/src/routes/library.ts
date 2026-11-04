@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
-import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadSources, newSource, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
+import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
@@ -272,7 +272,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if (!getSource(db, id)) return x.notFound(rep);
     if (loadSettings(db).aiActive === id) saveSettings(db, { aiActive: '' });
     saveSources(db, loadSources(db).filter((s) => s.id !== id));
-    setSourceKey(db, id, '');
+    removeSourceKey(db, id);
     return sourcesDto();
   });
   // Sends one short text prompt (no photographs), so it needs no acknowledgement.

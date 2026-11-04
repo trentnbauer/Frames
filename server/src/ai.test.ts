@@ -225,8 +225,7 @@ describe('outside services', () => {
     await A.put('/api/ai/active', { id: gem.id });
     expect((await A.del(`/api/ai/sources/${gem.id}`)).body.active).toBe(''); // removing the one in use turns AI off
     expect((await A.get('/api/ai/status')).body.enabled).toBe(false);
-    expect(env.db.prepare("SELECT COUNT(*) n FROM settings WHERE key = ?").get(`secret:ai:${gem.id}:key`)).toEqual({ n: 1 }); // emptied, not left readable
-    expect(env.db.prepare("SELECT value FROM settings WHERE key = ?").get(`secret:ai:${gem.id}:key`)).toEqual({ value: '""' });
+    expect(env.db.prepare('SELECT COUNT(*) n FROM settings WHERE key = ?').get(`secret:ai:${gem.id}:key`)).toEqual({ n: 0 }); // the key goes with the AI: not even an empty one is left
   });
   it('stops sending photos if the acknowledgement is withdrawn from the active one', async () => {
     const oa = (await A.get('/api/ai/sources')).body.sources.find((s: any) => s.type === 'openai');

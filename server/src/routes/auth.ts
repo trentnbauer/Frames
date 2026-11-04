@@ -117,6 +117,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       const seen = new Set<string>();
       const list: Provider[] = [];
       for (const raw of b.providers.slice(0, 10)) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bad('Each provider must be an object.');
         const p: Provider = {
           id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
           ...(raw.issuer ? { issuer: String(raw.issuer).trim().slice(0, 300) } : {}), ...(raw.tenant ? { tenant: String(raw.tenant).trim().slice(0, 100) } : {}),
