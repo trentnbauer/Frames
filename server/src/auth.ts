@@ -1,3 +1,4 @@
+import { clientOf } from './cloud.js';
 import crypto from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -20,11 +21,13 @@ import { getUser, OWNER_ID, type User } from './users.js';
  *    AUTH_DISABLE=true switches it off from outside.
  */
 
-export type ProviderType = 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2' | 'cloudflare';
+export type ProviderType = 'google' | 'github' | 'microsoft' | 'dropbox' | 'oidc' | 'oauth2' | 'cloudflare';
 export type Provider = {
   id: string; type: ProviderType; name: string; clientId: string;
   issuer?: string; tenant?: string; // oidc / microsoft
   authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; // oauth2 (GitHub has these built in)
+  /** google, microsoft and dropbox: sign in with the app registered under Administration, Cloud services, so no second client ID and secret. */
+  useCloudApp?: boolean;
   teamDomain?: string; aud?: string; // cloudflare: the Access team's domain, and the application's audience tag
 };
 export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
@@ -36,7 +39,8 @@ export const saveAuth = (db: DB, c: AuthConfig) => setSetting(db, 'auth', c);
 /** Is OAuth sign-in switched on, with at least one provider? */
 export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && a.providers.length > 0; };
 
-export const PRESETS: Record<'github', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
+export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
+  dropbox: { authUrl: 'https://www.dropbox.com/oauth2/authorize', tokenUrl: 'https://api.dropboxapi.com/oauth2/token', userUrl: 'https://api.dropboxapi.com/2/users/get_current_account', emailsUrl: '' },
   github: { authUrl: 'https://github.com/login/oauth/authorize', tokenUrl: 'https://github.com/login/oauth/access_token', userUrl: 'https://api.github.com/user', emailsUrl: 'https://api.github.com/user/emails' },
 };
 
@@ -62,13 +66,14 @@ export const cleanAllow = (v: unknown): string[] => [...new Set((Array.isArray(v
 
 export function validateProvider(p: Partial<Provider>): string | null {
   if (!/^[a-z0-9-]{1,30}$/.test(p.id ?? '')) return 'The provider needs a short id (letters, numbers, dashes)';
-  if (!['google', 'github', 'microsoft', 'oidc', 'oauth2', 'cloudflare'].includes(p.type as string)) return 'Unknown provider type';
+  if (!['google', 'github', 'microsoft', 'dropbox', 'oidc', 'oauth2', 'cloudflare'].includes(p.type as string)) return 'Unknown provider type';
   if (p.type === 'cloudflare') {
     if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(p.teamDomain ?? '')) return 'Enter your Cloudflare Zero Trust team domain (for example myteam.cloudflareaccess.com)';
     if (!/^[0-9a-f]{32,64}$/i.test(p.aud ?? '')) return 'Enter the Application Audience (AUD) tag of the Access application that protects Frames';
     return null; // no client ID or secret: Cloudflare Access signs the person in and passes a signed token
   }
-  if (!p.clientId?.trim()) return 'Enter the client ID';
+  if (p.useCloudApp && !['google', 'microsoft', 'dropbox'].includes(p.type as string)) return 'Only Google, Microsoft and Dropbox can use the cloud app';
+  if (!p.useCloudApp && !p.clientId?.trim()) return 'Enter the client ID';
   const url = (v?: string) => { try { const u = new URL(v ?? ''); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } };
   if (p.type === 'oidc' && !url(p.issuer)) return 'Enter the issuer address of your OpenID Connect server';
   if (p.type === 'microsoft' && !/^[0-9a-f-]{36}$|^[a-z0-9.-]+\.[a-z]+$/i.test(p.tenant ?? '')) return 'Enter your Microsoft tenant ID';
@@ -125,12 +130,18 @@ export function createAuth(db: DB, cfg: AppCfg) {
   const isSecure = (req: FastifyRequest) => baseUrl(req).startsWith('https://');
   const issuerOf = (p: Provider) => (p.type === 'google' ? 'https://accounts.google.com' : p.type === 'microsoft' ? `https://login.microsoftonline.com/${p.tenant}/v2.0` : p.issuer!);
 
+  /** The client ID and secret to sign in with: the provider's own, or the cloud app's (Administration, Cloud services) when it uses that. */
+  const creds = (p: Provider): { clientId: string; secret: string } => {
+    if (p.useCloudApp) { const k = clientOf(cfg, db, p.type === 'microsoft' ? 'onedrive' : (p.type as 'google' | 'dropbox')); return { clientId: k.clientId, secret: k.secret }; }
+    return { clientId: p.clientId, secret: getSecret(db, `oauth:${p.id}`) };
+  };
+
   async function oidcConfig(p: Provider) {
-    const secret = getSecret(db, `oauth:${p.id}`);
-    const key = JSON.stringify([p.type, p.clientId, p.issuer, p.tenant, !!secret]);
+    const { clientId, secret } = creds(p);
+    const key = JSON.stringify([p.type, clientId, p.issuer, p.tenant, !!secret]);
     const hit = configs.get(p.id);
     if (hit && hit.key === key && Date.now() - hit.at < 600_000) return hit.config;
-    const config = await oidc.discovery(new URL(issuerOf(p)), p.clientId, secret ? { client_secret: secret } : undefined, secret ? undefined : oidc.None(), { execute: http as any });
+    const config = await oidc.discovery(new URL(issuerOf(p)), clientId, secret ? { client_secret: secret } : undefined, secret ? undefined : oidc.None(), { execute: http as any });
     configs.set(p.id, { at: Date.now(), key, config });
     return config;
   }
@@ -160,18 +171,18 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const redirectUri = `${baseUrl(req)}/auth/callback/${p.id}`;
     flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri });
     if (p.type === 'cloudflare') return `${baseUrl(req)}/auth/callback/${p.id}?state=${state}`; // nothing to ask a provider: Access already signed the person in
-    if (p.type === 'github' || p.type === 'oauth2') {
-      const a = p.type === 'github' ? PRESETS.github : p;
+    if (p.type === 'github' || p.type === 'oauth2' || p.type === 'dropbox') {
+      const a = p.type === 'github' ? PRESETS.github : p.type === 'dropbox' ? PRESETS.dropbox : p;
       const u = new URL(a.authUrl!);
-      u.search = new URLSearchParams({ client_id: p.clientId, redirect_uri: redirectUri, response_type: 'code', scope: p.type === 'github' ? 'read:user user:email' : 'profile email', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString();
+      u.search = new URLSearchParams({ client_id: creds(p).clientId, redirect_uri: redirectUri, response_type: 'code', scope: p.type === 'github' ? 'read:user user:email' : p.type === 'dropbox' ? 'account_info.read' : 'profile email', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString();
       return u.toString();
     }
     const config = await oidcConfig(p);
     return oidc.buildAuthorizationUrl(config, { redirect_uri: redirectUri, scope: 'openid email profile', code_challenge: challenge, code_challenge_method: 'S256', state, nonce }).toString();
   }
 
-  const getJson = async (url: string, token: string) => {
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(15_000) });
+  const getJson = async (url: string, token: string, method: 'GET' | 'POST' = 'GET') => {
+    const r = await fetch(url, { method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(15_000) });
     if (!r.ok) throw new Error(`The provider answered ${r.status}`);
     return r.json() as Promise<Record<string, any>>;
   };
@@ -186,19 +197,20 @@ export function createAuth(db: DB, cfg: AppCfg) {
     if (q.error) throw new Error(`The provider did not sign you in (${q.error_description || q.error}).`);
     const p = loadAuth(db).providers.find((x) => x.id === id);
     if (!p) throw new Error('That provider is no longer set up.');
-    const secret = getSecret(db, `oauth:${p.id}`);
+    const { clientId, secret } = creds(p);
 
     if (p.type === 'cloudflare') return { who: await cloudflareIdentity(p, req), flow };
 
-    if (p.type === 'github' || p.type === 'oauth2') {
-      const a = p.type === 'github' ? PRESETS.github : (p as Required<Provider>);
+    if (p.type === 'github' || p.type === 'oauth2' || p.type === 'dropbox') {
+      const a = p.type === 'github' ? PRESETS.github : p.type === 'dropbox' ? PRESETS.dropbox : (p as Required<Provider>);
       if (!q.code) throw new Error('The provider sent no code.');
-      const body = new URLSearchParams({ grant_type: 'authorization_code', code: q.code, redirect_uri: flow.redirectUri, client_id: p.clientId, code_verifier: flow.verifier });
+      const body = new URLSearchParams({ grant_type: 'authorization_code', code: q.code, redirect_uri: flow.redirectUri, client_id: clientId, code_verifier: flow.verifier });
       if (secret) body.set('client_secret', secret);
       const tr = await fetch(a.tokenUrl, { method: 'POST', body, headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(15_000) });
       const t = (await tr.json().catch(() => ({}))) as Record<string, any>;
       if (!tr.ok || !t.access_token) throw new Error('The provider would not give out a sign-in token. Check the client ID and secret.');
-      const u = await getJson(a.userUrl, t.access_token);
+      // Dropbox asks who you are with a POST and an empty body; the others with a GET.
+      const u = await getJson(a.userUrl, t.access_token, p.type === 'dropbox' ? 'POST' : 'GET');
       let email = String(u.email ?? ''), verified = u.email_verified === true;
       if (a.emailsUrl) {
         // GitHub: the public profile email is unverified. Only the primary verified address counts.
@@ -206,9 +218,9 @@ export function createAuth(db: DB, cfg: AppCfg) {
         const best = Array.isArray(list) ? list.find((e) => e.primary && e.verified) ?? list.find((e) => e.verified) : undefined;
         if (best) { email = best.email; verified = true; }
       }
-      const sub = String(u.id ?? u.sub ?? '');
+      const sub = String(u.id ?? u.sub ?? u.account_id ?? '');
       if (!sub) throw new Error('The provider did not say who you are.');
-      return { who: { provider: p.id, sub, email, emailVerified: verified && !!email, name: String(u.name ?? u.login ?? email ?? sub) }, flow };
+      return { who: { provider: p.id, sub, email, emailVerified: verified && !!email, name: String((typeof u.name === 'object' ? u.name?.display_name : u.name) ?? u.login ?? email ?? sub) }, flow };
     }
 
     const config = await oidcConfig(p);
@@ -220,7 +232,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const meta = config.serverMetadata();
     if (!tokens.id_token || !meta.jwks_uri) throw new Error('The provider did not send a signed ID token.');
     const keys = jwksSets.get(meta.jwks_uri) ?? jwksSets.set(meta.jwks_uri, createRemoteJWKSet(new URL(meta.jwks_uri), { timeoutDuration: 10_000 })).get(meta.jwks_uri)!;
-    await jwtVerify(tokens.id_token, keys, { issuer: meta.issuer, audience: p.clientId, clockTolerance: 60 });
+    await jwtVerify(tokens.id_token, keys, { issuer: meta.issuer, audience: clientId, clockTolerance: 60 });
     const c = tokens.claims();
     if (!c?.sub) throw new Error('The provider did not say who you are.');
     const email = String(c.email ?? '');

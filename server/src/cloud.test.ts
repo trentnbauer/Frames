@@ -33,8 +33,8 @@ beforeAll(async () => {
       hits.tokenCalls.push(f);
       if (f.client_id !== 'CID') return send(res, 401, { error: 'invalid_client' });
       if (f.grant_type === 'authorization_code') {
-        if (f.code !== 'GOODCODE' || !f.code_verifier) return send(res, 400, { error: 'invalid_grant' });
-        return send(res, 200, { access_token: 'acc-1', expires_in: 3600, refresh_token: 'REFRESH-SECRET' });
+        if (!['GOODCODE', 'SECONDCODE'].includes(f.code) || !f.code_verifier) return send(res, 400, { error: 'invalid_grant' });
+        return send(res, 200, { access_token: f.code === 'SECONDCODE' ? 'acc-second' : 'acc-1', expires_in: 3600, refresh_token: 'REFRESH-SECRET' });
       }
       hits.refresh++;
       if (!refreshOk || f.refresh_token !== 'REFRESH-SECRET') return send(res, 400, { error: 'invalid_grant' });
@@ -45,7 +45,7 @@ beforeAll(async () => {
     hits.auth.add(bearer);
     const file = (id: string) => nodes.find((n) => n.id === id && !n.folder);
     if (p === 'google') {
-      if (rest === '/about') return send(res, 200, { user: { emailAddress: 'me@gmail.test' } });
+      if (rest === '/about') return send(res, 200, { user: { emailAddress: bearer === 'acc-second' ? 'second@gmail.test' : 'me@gmail.test' } });
       if (rest === '/files') {
         const parent = /'([^']+)' in parents/.exec(url.searchParams.get('q') ?? '')?.[1] ?? '';
         return send(res, 200, { files: kids(parent, 'root').map((n) => ({ id: n.id, name: n.name, mimeType: n.folder ? 'application/vnd.google-apps.folder' : 'image/jpeg', size: String(n.data?.length ?? 0), md5Checksum: n.version })) });
@@ -54,7 +54,7 @@ beforeAll(async () => {
       if (f && file(f[1])) return send(res, 200, file(f[1])!.data!, 'image/jpeg');
     }
     if (p === 'dropbox') {
-      if (rest === '/users/get_current_account') return send(res, 200, { email: 'me@dropbox.test' });
+      if (rest === '/users/get_current_account') return send(res, 200, { email: bearer === 'acc-second' ? 'second@dropbox.test' : 'me@dropbox.test' });
       if (rest === '/files/list_folder') {
         const path = (JSON.parse(body).path as string).replace(/^id:/, '');
         return send(res, 200, { entries: kids(path || 'ROOT', 'ROOT').map((n) => ({ '.tag': n.folder ? 'folder' : 'file', id: `id:${n.id}`, name: n.name, size: n.data?.length ?? 0, content_hash: n.version })), has_more: false });
@@ -62,7 +62,7 @@ beforeAll(async () => {
       if (rest === '/files/download') { const f = file(JSON.parse(String(req.headers['dropbox-api-arg'])).path.replace(/^id:/, '')); if (f) return send(res, 200, f.data!, 'application/octet-stream'); }
     }
     if (p === 'onedrive') {
-      if (rest === '/me') return send(res, 200, { userPrincipalName: 'me@onedrive.test' });
+      if (rest === '/me') return send(res, 200, { userPrincipalName: bearer === 'acc-second' ? 'second@onedrive.test' : 'me@onedrive.test' });
       const c = /^\/me\/drive\/items\/([^/]+)\/children$/.exec(rest);
       if (c) {
         const list = kids(c[1], 'root').map((n) => ({ id: n.id, name: n.name, size: n.data?.length ?? 0, ...(n.folder ? { folder: {} } : { file: { hashes: { sha1Hash: n.version } } }) }));
@@ -156,6 +156,26 @@ describe.each(['google', 'dropbox', 'onedrive'] as const)('cloud sync: %s', (pro
     expect(backup.includes('CLIENT-SECRET-VALUE')).toBe(false);
   });
 
+  it('holds several accounts of the same service, each with its own login and folder, and a repeated account renews its own', async () => {
+    const before = (await A.get('/api/cloud')).body.connections.length;
+    const connectWith = async (code: string) => {
+      const r = await A.post(`/api/cloud/connect/${provider}`);
+      const u = new URL(r.body.url);
+      await A.get(`/api/cloud/callback?code=${code}&state=${u.searchParams.get('state')}`);
+      return u;
+    };
+    const url = await connectWith('SECONDCODE');
+    const conns = (await A.get('/api/cloud')).body.connections;
+    expect(conns).toHaveLength(before + 1);
+    expect(conns.map((c: any) => c.account)).toEqual(expect.arrayContaining([`me@${provider === 'google' ? 'gmail' : provider}.test`, `second@${provider === 'google' ? 'gmail' : provider}.test`]));
+    expect(new Set(conns.map((c: any) => c.id)).size).toBe(conns.length); // each has its own id, so its own login and folder
+    // The browser is always asked which account, not quietly signed in as the one it already knows.
+    expect(`${url.searchParams.get('prompt') ?? ''}${url.searchParams.get('force_reauthentication') ?? ''}`).toMatch(/select_account|true/);
+    await connectWith('SECONDCODE'); // the same second account again
+    expect((await A.get('/api/cloud')).body.connections).toHaveLength(before + 1);
+    await A.del(`/api/cloud/${conns.find((c: any) => c.account.startsWith('second@')).id}`);
+    expect((await A.get('/api/cloud')).body.connections).toHaveLength(before);
+  });
   it('refuses a made-up, reused or missing state', async () => {
     expect(String((await A.get('/api/cloud/callback?code=GOODCODE&state=nope')).headers.location)).not.toBe('/settings?cloud=connected');
     const r = await A.post(`/api/cloud/connect/${provider}`);
@@ -163,8 +183,7 @@ describe.each(['google', 'dropbox', 'onedrive'] as const)('cloud sync: %s', (pro
     await A.get(`/api/cloud/callback?code=GOODCODE&state=${state}`);
     const again = await A.get(`/api/cloud/callback?code=GOODCODE&state=${state}`);
     expect(String(again.headers.location)).toContain('expired');
-    expect((await A.get('/api/cloud')).body.connections).toHaveLength(2); // the one extra from the valid use
-    await A.del(`/api/cloud/${(await A.get('/api/cloud')).body.connections[1].id}`);
+    expect((await A.get('/api/cloud')).body.connections).toHaveLength(1); // the same account again renews its connection instead of adding a second
     expect((await A.get('/api/cloud/callback?code=x')).status).toBe(302);
   });
 

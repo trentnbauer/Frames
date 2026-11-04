@@ -38,11 +38,11 @@ export function CloudSettings() {
 
       <div className="field">
         <h3>Connect an account</h3>
-        <p>Sign in to your own cloud account. The services are set up once for the whole server by an administrator, under Administration, Cloud services.</p>
+        <p>Sign in to your own cloud accounts, as many as you like, including several of the same service (two Dropbox accounts, say): each has its own folder. You are asked which account every time. The services are set up once for the whole server by an administrator, under Administration, Cloud services.</p>
         {providers.map((p) => (
           <div className="row" key={p.id}>
-            <span><b>{p.label}</b> <span className="faint">{p.configured ? '' : 'not set up on this server yet: ask an administrator'}</span></span>
-            <button className="pill primary" disabled={!p.configured} onClick={() => act(async () => { const r = await api<{ url: string }>(`/cloud/connect/${p.id}`, { body: {} }); window.location.assign(r.url); })}>Connect an account</button>
+            <span><b>{p.label}</b> <span className="faint">{p.configured ? (connections.filter((c) => c.provider === p.id).length ? `${connections.filter((c) => c.provider === p.id).length} connected` : '') : 'not set up on this server yet: ask an administrator'}</span></span>
+            <button className="pill primary" disabled={!p.configured} onClick={() => act(async () => { const r = await api<{ url: string }>(`/cloud/connect/${p.id}`, { body: {} }); window.location.assign(r.url); })}>{connections.some((c) => c.provider === p.id) ? 'Connect another account' : 'Connect an account'}</button>
           </div>
         ))}
       </div>

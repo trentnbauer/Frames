@@ -3,7 +3,7 @@ import { api, useApi } from '../api';
 import { useStore } from '../store';
 
 type Provider = {
-  id: string; type: 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2' | 'cloudflare'; name: string; clientId: string;
+  id: string; type: 'google' | 'github' | 'microsoft' | 'dropbox' | 'oidc' | 'oauth2' | 'cloudflare'; name: string; clientId: string; useCloudApp?: boolean;
   issuer?: string; tenant?: string; authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; teamDomain?: string; aud?: string;
   hasSecret?: boolean; redirectUrl?: string; clientSecret?: string;
 };
@@ -38,6 +38,11 @@ function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; ap
       <><b>Certificates &amp; secrets, New client secret</b>: copy its <b>Value</b> (not the Secret ID) into <i>Client secret</i>. The default permission (<span className="mono">User.Read</span>) is enough.</>,
       <>Press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
     ],
+    dropbox: [
+      <>Sign-in with Dropbox uses a Dropbox app. If you set one up for Cloud sync, tick <b>Use the app already set up</b> above and only add the redirect address below to it: in the {ext('https://www.dropbox.com/developers/apps', 'Dropbox App Console')}, <b>Settings</b>, <b>Redirect URIs</b>, add {uri}</>,
+      <>Otherwise create an app there (<b>Scoped access</b>, <b>Full Dropbox</b> or <b>App folder</b>), tick the permission <span className="mono">account_info.read</span> on the <b>Permissions</b> tab and press <b>Submit</b>, add {uri} as a Redirect URI, and copy the <b>App key</b> and <b>App secret</b> into the boxes above.</>,
+      <>Press <b>Save providers</b>, then <b>Test sign-in</b>. Frames asks Dropbox only for the account’s name and verified email; an allowed-list entry can be an email or <span className="mono">dropbox:dbid:…</span>.</>,
+    ],
     oidc: [
       <>In your OpenID Connect server (Authentik, Keycloak, Authelia and so on) create a new <b>client / application</b> of the <b>confidential</b> kind (it has a secret) using the <b>authorization code</b> flow.</>,
       <>Redirect URI: {uri}. Scopes: <span className="mono">openid email profile</span>.</>,
@@ -69,6 +74,7 @@ function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; ap
 const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
   { type: 'google', label: 'Google', hint: 'Sign in with a Google account.' },
   { type: 'github', label: 'GitHub', hint: 'Sign in with a GitHub account.' },
+  { type: 'dropbox', label: 'Dropbox', hint: 'Sign in with a Dropbox account.' },
   { type: 'microsoft', label: 'Microsoft', hint: 'Work or school (Entra ID). Needs your tenant ID.' },
   { type: 'oidc', label: 'OpenID Connect server', hint: 'Authentik, Keycloak, Authelia, or any standard OIDC provider.' },
   { type: 'cloudflare', label: 'Cloudflare Access', hint: 'No sign-in screen: people who got through Cloudflare Access are signed in by the email Access vouches for.' },
@@ -147,8 +153,14 @@ export function Access() {
                 <label>Application Audience (AUD) tag <input disabled={locked} value={p.aud ?? ''} placeholder="64 letters and numbers" aria-label={`${p.id} audience`} onChange={(e) => edit(i, { aud: e.target.value })} /></label>
                 <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>In Cloudflare Zero Trust: <b>Settings, Custom Pages</b> shows the team domain; <b>Access, Applications</b>, your Frames application, <b>Overview</b> shows the AUD tag. Open Frames through that application’s address to use <b>Test sign-in</b>.</p>
               </>}
-              {p.type !== 'cloudflare' && <label>Client ID <input disabled={locked} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
-              {p.type !== 'cloudflare' && <label>Client secret <input disabled={locked} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>}
+              {['google', 'microsoft', 'dropbox'].includes(p.type) && (
+                <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input type="checkbox" disabled={locked} aria-label={`${p.id}: use the app from Cloud services`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
+                  <span>Use the app already set up under <b>Administration, Cloud services</b> ({p.type === 'google' ? 'Google Drive' : p.type === 'microsoft' ? 'OneDrive' : 'Dropbox'}): the same client ID and secret, so there is nothing to enter here. Add the redirect address below to that app too.</span>
+                </label>
+              )}
+              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client ID <input disabled={locked} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
+              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client secret <input disabled={locked} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>}
               {p.type === 'oidc' && <label>Issuer address <input disabled={locked} value={p.issuer ?? ''} placeholder="https://auth.example.com/application/o/frames/" aria-label={`${p.id} issuer`} onChange={(e) => edit(i, { issuer: e.target.value })} /></label>}
               {p.type === 'microsoft' && <label>Tenant ID <input disabled={locked} value={p.tenant ?? ''} placeholder="00000000-0000-0000-0000-000000000000" aria-label={`${p.id} tenant`} onChange={(e) => edit(i, { tenant: e.target.value })} /></label>}
               {p.type === 'oauth2' && (['authUrl', 'tokenUrl', 'userUrl', 'emailsUrl'] as const).map((k) => (
