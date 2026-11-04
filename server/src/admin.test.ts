@@ -56,6 +56,10 @@ describe('managing people', () => {
     expect(r.status).toBe(201);
     expect(r.body).toMatchObject({ email: 'dana@y.test', invited: true, role: 'member' });
     expect(loadAuth(sys).allow).toContain('dana@y.test');
+    expect(r.body.allowedList).toBe('added'); // they were not on the list, so they were put on it
+    const ed = await call('POST', '/api/admin/users', me, { email: 'ed@x.test' }); // @x.test is already allowed
+    expect(ed.body.allowedList).toBe('already');
+    expect(loadAuth(sys).allow).not.toContain('ed@x.test');
     expect((await call('POST', '/api/admin/users', me, { email: 'dana@y.test' })).status).toBe(409);
     expect((await call('POST', '/api/admin/users', a, { email: 'x@y.test' })).status).toBe(403);
   });

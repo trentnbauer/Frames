@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
+import { CardFooter, Destructive, EditRow, useOne } from '../components/editcard';
 
 type Provider = {
   id: string; type: 'google' | 'github' | 'microsoft' | 'dropbox' | 'oidc' | 'oauth2' | 'cloudflare'; name: string; clientId: string; useCloudApp?: boolean;
@@ -107,6 +108,7 @@ export function Access() {
     try { await api('/auth/config', { method: 'PUT', body }); cfg.reload(); refreshMe(); setMsg({ ok: true, text: ok }); }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
+  const one = useOne();
   const edit = (i: number, patch: Partial<Provider>) => { setProviders(providers.map((p, j) => (j === i ? { ...p, ...patch } : p))); setDirty(true); };
   const add = (type: Provider['type']) => {
     let id: string = type, n = 2;
@@ -138,14 +140,9 @@ export function Access() {
         {locked && <p className="reason">Sign-in is on, so providers are locked. Turn sign-in off to change one, then test it and turn it on again.</p>}
         {providers.length === 0 && <p className="muted">No providers yet.</p>}
         {providers.map((p, i) => (
-          <div className="provider" key={p.id}>
-            <div className="spread"><b>{p.name} <span className="faint mono" style={{ fontSize: 11 }}>{p.id}</span></b>
-              <span className="t2" style={{ display: 'flex', gap: 14, fontSize: 12.5 }}>
-                {!dirty && p.hasSecret !== undefined && !locked && <a href={`/auth/login/${p.id}?test=1`}>Test sign-in</a>}
-                {locked && p.hasSecret !== undefined && <a href={`/auth/login/${p.id}?test=1`}>Test sign-in</a>}
-                <button disabled={locked} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</button>
-              </span>
-            </div>
+          <EditRow key={p.id} id={p.id} one={one} title={p.name || p.id} note={`How people sign in with ${p.name || 'this provider'}.`}
+            summary={<><b>{p.name}</b> <span className="faint mono" style={{ fontSize: 11 }}>{p.id}</span> <span className="muted">{KINDS.find((k) => k.type === p.type)?.label}</span></>}
+            right={p.hasSecret !== undefined && ((!dirty && !locked) || locked) ? <a className="t2" style={{ fontSize: 12.5 }} href={`/auth/login/${p.id}?test=1`}>Test sign-in</a> : undefined}>
             <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 520, marginTop: 10 }}>
               <label>Button label <input disabled={locked} value={p.name} aria-label={`${p.id} label`} onChange={(e) => edit(i, { name: e.target.value })} /></label>
               {p.type === 'cloudflare' && <>
@@ -173,7 +170,11 @@ export function Access() {
               </div>
             )}
             <SetupSteps p={p} redirect={p.redirectUrl ?? `${c.callbackBase}/auth/callback/${p.id}`} appUrl={publicUrl || c.callbackBase} />
-          </div>
+            <CardFooter>
+              <span className="muted" style={{ fontSize: 12.5 }}>{locked ? 'Turn sign-in off to change a provider.' : 'Press Save providers below to keep your changes.'}</span>
+              <Destructive disabled={locked} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</Destructive>
+            </CardFooter>
+          </EditRow>
         ))}
         {!locked && (
           <div style={{ marginTop: 12 }}>
