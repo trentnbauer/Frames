@@ -122,13 +122,14 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
           id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
           ...(raw.issuer ? { issuer: String(raw.issuer).trim().slice(0, 300) } : {}), ...(raw.tenant ? { tenant: String(raw.tenant).trim().slice(0, 100) } : {}),
           ...(raw.authUrl ? { authUrl: String(raw.authUrl).trim().slice(0, 300) } : {}), ...(raw.tokenUrl ? { tokenUrl: String(raw.tokenUrl).trim().slice(0, 300) } : {}),
+          ...(raw.teamDomain ? { teamDomain: String(raw.teamDomain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 253) } : {}), ...(raw.aud ? { aud: String(raw.aud).trim().toLowerCase().slice(0, 64) } : {}),
           ...(raw.userUrl ? { userUrl: String(raw.userUrl).trim().slice(0, 300) } : {}), ...(raw.emailsUrl ? { emailsUrl: String(raw.emailsUrl).trim().slice(0, 300) } : {}),
         };
         const err = validateProvider(p);
         if (err) return bad(err);
         if (seen.has(p.id)) return bad(`Two providers use the id “${p.id}”`);
         seen.add(p.id);
-        p.name ||= ({ google: 'Google', github: 'GitHub', microsoft: 'Microsoft', oidc: 'OpenID Connect', oauth2: 'OAuth' } as Record<string, string>)[p.type];
+        p.name ||= ({ google: 'Google', github: 'GitHub', microsoft: 'Microsoft', oidc: 'OpenID Connect', oauth2: 'OAuth', cloudflare: 'Cloudflare Access' } as Record<string, string>)[p.type];
         if (typeof raw.clientSecret === 'string' && raw.clientSecret) secrets[p.id] = raw.clientSecret.slice(0, 500);
         list.push(p);
       }
