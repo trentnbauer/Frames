@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useUi } from '../ui';
 import { api, useApi } from '../api';
 import { fmtDate, type Shoot } from '../data';
-import { Header, Img, Loading, Title } from '../components/bits';
+import { Header, Img, Loading } from '../components/bits';
 import { useStore } from '../store';
 
 type Pending = { count: number; folders: { folder: string; count: number }[]; lastScan: string | null };
@@ -62,14 +63,26 @@ export function Shoots() {
   return (
     <div className="page">
       <Header />
-      <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 28 }}>
-        <Title count={shoots.data ? `${shoots.data.length} ${shoots.data.length === 1 ? 'shoot' : 'shoots'}` : undefined}>Photoshoots</Title>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {p?.lastScan && <span className="faint" style={{ fontSize: 12 }}>Last synced {fmtDate(p.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
-          <input ref={fileInput} type="file" multiple hidden accept=".jpg,.jpeg,.png,.tif,.tiff,.raf,.cr2,.cr3,.nef,.arw,.dng,.orf,.rw2" onChange={(e) => upload(e.target.files)} aria-label="Choose photographs to upload" />
-          <button className="pill" onClick={() => fileInput.current?.click()} disabled={busy}>Upload photos</button>
-          <button className="pill" onClick={() => setNaming(!naming)}>New photoshoot</button>
-          <button className="pill primary" onClick={sync} disabled={busy}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 28 }}>
+        <h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Photoshoots</h1>
+        {shoots.data && <span style={{ fontSize: 13, color: '#8f8c86' }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
+      </div>
+      <input ref={fileInput} type="file" multiple hidden accept=".jpg,.jpeg,.png,.tif,.tiff,.raf,.cr2,.cr3,.nef,.arw,.dng,.orf,.rw2" onChange={(e) => upload(e.target.files)} aria-label="Choose photographs to upload" />
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
+        style={{ width: '100%', borderRadius: 12, padding: '30px 32px', marginBottom: 36, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', textAlign: 'left', background: 'rgba(255,255,255,.03)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>
+        <div>
+          <div style={{ font: "400 30px/1.1 'Instrument Serif',Georgia,serif" }}>Bring in a new shoot</div>
+          <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#6f6c67' }}>
+            {p?.lastScan ? `Last synced ${fmtDate(p.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
+            <button onClick={sync} disabled={busy} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
+          </span>
+          <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>New photoshoot</button>
+          <button onClick={() => fileInput.current?.click()} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>
         </div>
       </div>
       {naming && (
@@ -113,19 +126,26 @@ export function Shoots() {
       ))}
       {(shoots.loading || shoots.error) && <Loading error={shoots.error} />}
       {shoots.data?.length === 0 && <div className="empty">No photoshoots yet. Put photographs in your library folder and press Sync library, or upload some.</div>}
-      <div className="card-grid">{shoots.data?.map((s) => <ShootCard key={s.id} s={s} />)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px' }}>{shoots.data?.map((s) => <ShootCard key={s.id} s={s} />)}</div>
     </div>
   );
 }
 
 function ShootCard({ s }: { s: Shoot }) {
+  const { openNew } = useUi();
+  const photos = useApi<{ photos: { id: number }[] }>(`/photos?shoot=${s.id}`);
   return (
-    <Link to={`/shoots/${s.id}`}>
-      <div className="cover">{s.coverId && <Img p={{ id: s.coverId, ar: 2.2 }} style={{ aspectRatio: '2.2', width: '100%', height: '100%' }} />}</div>
-      <div className="spread"><h2 className="serif" style={{ fontSize: 22 }}>{s.name}</h2><span className="muted" style={{ fontSize: 12.5 }}>{s.count}</span></div>
-      <div className="muted" style={{ fontSize: 12, margin: '2px 0 10px' }}>{[s.place, s.source, s.dates].filter(Boolean).join(' · ')}</div>
-      <div className="bar"><i style={{ width: `${s.reviewPct}%` }} /></div>
-      <div className="faint" style={{ fontSize: 11.5, marginTop: 6 }}>{s.reviewPct === 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</div>
-    </Link>
+    <div>
+      <Link to={`/shoots/${s.id}`} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
+        <div className="cover" style={{ borderRadius: 6, marginBottom: 12 }}>{s.coverId && <Img p={{ id: s.coverId, ar: 2.2 }} style={{ aspectRatio: '2.2', width: '100%', height: '100%' }} />}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: "400 22px 'Instrument Serif',Georgia,serif" }}>{s.name}</span><span style={{ fontSize: 12.5, color: '#8f8c86' }}>{s.count}</span></div>
+        <div style={{ fontSize: 12, color: '#8f8c86', margin: '2px 0 10px' }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
+        <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${s.reviewPct}%` }} /></div>
+      </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: 11.5, color: '#6f6c67' }}>{s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</span>
+        <button onClick={() => openNew({ name: s.name, photoIds: (photos.data?.photos ?? []).map((p) => p.id) })} style={{ fontSize: 12.5, color: '#efede8' }}>Compose from this →</button>
+      </div>
+    </div>
   );
 }
