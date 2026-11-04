@@ -7,7 +7,7 @@ import { useStore, type Settings } from '../store';
 import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
 import { AiSettings } from './AiSettings';
-import { CloudSettings } from './CloudSettings';
+import { CloudServices, CloudSettings } from './CloudSettings';
 import { TunnelSettings } from './TunnelSettings';
 import { EnvExport } from './EnvExport';
 import { People } from './People';
@@ -15,7 +15,7 @@ import { YourData } from './YourData';
 
 // Yours: everything about your own library, for every signed-in person. Administrator: the whole instance (sign-in, the tunnel, people, the env file).
 const YOURS = ['Reviews', 'Libraries & storage', 'Cloud sync', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Portfolio', 'Backup', 'Your data'] as const;
-const ADMIN = ['Access', 'Cloudflare tunnel', 'People', 'Env file'] as const;
+const ADMIN = ['Access', 'Cloudflare tunnel', 'Cloud services', 'People', 'Env file'] as const;
 const SECTIONS = [...YOURS, ...ADMIN, 'About'] as const;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
@@ -60,6 +60,7 @@ export function SettingsPage() {
           {sec === 'Libraries & storage' && <Libraries />}
           {sec === 'Portfolio' && <PortfolioSettings />}
           {sec === 'Cloud sync' && <CloudSettings />}
+          {sec === 'Cloud services' && <CloudServices />}
           {sec === 'Cloudflare tunnel' && <TunnelSettings />}
           {sec === 'People' && <People />}
           {sec === 'Env file' && <EnvExport />}

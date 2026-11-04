@@ -36,7 +36,7 @@ const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 // Fonts come from Google Fonts. Everything else must be same-origin.
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
-const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin)(\/|\?|$)/;
+const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin|cloud\/client)(\/|\?|$)/;
 const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
@@ -45,6 +45,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // Who the people are lives in the system database. Each person's library is their own database (see tenants.ts), and `db` and
   // `cfg` below answer from the library of whoever is making the request, so a route can only ever reach its own caller's data.
   const sys = openSystemDb(baseCfg.dataDir);
+  baseCfg.sys = sys; // the instance-wide settings (the cloud services' app registrations) are reachable from a person's config
   migrateLegacy(sys, ownerDb);
   const tenants = createTenants(sys, baseCfg, ownerDb);
   // An env file (FRAMES_CONFIG_SYSTEM / FRAMES_CONFIG_OWNER) wins over what was saved in the app, every start.

@@ -34,6 +34,19 @@ type CloudCfg = { clients: Partial<Record<ProviderId, { clientId: string }>>; co
 
 export const loadCloud = (db: DB): CloudCfg => ({ clients: {}, connections: [], ...getSetting<Partial<CloudCfg>>(db, 'cloud', {}) });
 export const saveCloud = (db: DB, c: CloudCfg) => setSetting(db, 'cloud', c);
+/**
+ * The app registration (client ID and secret from the service's developer console) belongs to the whole server: an administrator
+ * enters it once, in the system database, and each person only connects their own account. Registrations saved before that, in a
+ * person's own library, are still honoured until an administrator enters one.
+ */
+export const loadClients = (sys: DB): Partial<Record<ProviderId, { clientId: string }>> => getSetting(sys, 'cloudClients', {});
+export const saveClients = (sys: DB, c: Partial<Record<ProviderId, { clientId: string }>>) => setSetting(sys, 'cloudClients', c);
+export function clientOf(cfg: AppCfg, db: DB, p: ProviderId): { clientId: string; secret: string } {
+  const sys = cfg.sys;
+  const id = sys ? loadClients(sys)[p]?.clientId ?? '' : '';
+  if (sys && id) return { clientId: id, secret: getSecret(sys, `cloud:client:${p}`) };
+  return { clientId: loadCloud(db).clients[p]?.clientId ?? '', secret: clientSecret(db, p) };
+}
 export const clientSecret = (db: DB, p: ProviderId) => getSecret(db, `cloud:client:${p}`);
 export const setClientSecret = (db: DB, p: ProviderId, v: string) => setSecret(db, `cloud:client:${p}`, v);
 type Tokens = { access: string; exp: number; refresh: string };
@@ -70,8 +83,8 @@ const pending = new Map<string, { provider: ProviderId; verifier: string; exp: n
 const b64u = (b: Buffer) => b.toString('base64url');
 
 export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirectUri: string): string {
-  const clientId = loadCloud(db).clients[provider]?.clientId;
-  if (!clientId) throw new CloudError(`Enter the ${PROVIDERS.find((p) => p.id === provider)!.label} client ID first.`);
+  const clientId = clientOf(cfg, db, provider).clientId;
+  if (!clientId) throw new CloudError(`${PROVIDERS.find((p) => p.id === provider)!.label} is not set up on this server yet. An administrator enters its client ID under Settings, Cloud services.`);
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   const state = b64u(crypto.randomBytes(24));
   const verifier = b64u(crypto.randomBytes(32));
@@ -84,8 +97,7 @@ export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirect
 }
 
 async function tokenCall(db: DB, cfg: AppCfg, provider: ProviderId, body: Record<string, string>): Promise<{ access_token: string; expires_in?: number; refresh_token?: string }> {
-  const clientId = loadCloud(db).clients[provider]?.clientId ?? '';
-  const secret = clientSecret(db, provider);
+  const { clientId, secret } = clientOf(cfg, db, provider);
   const form = new URLSearchParams({ client_id: clientId, ...(secret ? { client_secret: secret } : {}), ...body });
   const r = await fetch(urls(cfg, provider).token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: form, signal: AbortSignal.timeout(30_000) });
   const j = (await r.json().catch(() => ({}))) as any;
