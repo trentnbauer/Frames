@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, useApi } from '../api';
+import { AddToComposition } from '../components/AddToComposition';
 import { RATINGS, fmtCoord, fmtDate, type Collection, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { Fit, Header, Img, Loading, Swatches, useField, useKey } from '../components/bits';
 import { useStore } from '../store';
@@ -12,10 +13,8 @@ export function PhotoDetail() {
   const photo = useApi<PhotoFull>(`/photos/${id}`);
   const shoots = useApi<Shoot[]>('/shoots');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
-  const colls = useApi<Collection[]>('/collections');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
   const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
-  const [picker, setPicker] = useState(false);
   const [msg, setMsg] = useState('');
   const p = photo.data;
   // Each field follows the server only when its own value changes, so a refresh never wipes text being typed elsewhere.
@@ -168,23 +167,17 @@ export function PhotoDetail() {
           )}
 
           <div style={{ position: 'relative', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="pill" onClick={() => setPicker(!picker)}>Add to collection</button>
-            <button className="pill" aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio collection.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
+            <AddToComposition ids={[p.id]} onDone={setMsg} />
+            <button className="pill" aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio composition.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
             <button className="pill" onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
             <button className="pill" onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
             <a className="pill" href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
             <button className="pill" onClick={async () => {
-              if (!window.confirm(`Take “${p.title}” out of Frames?\n\nIts reviews, tags and collection places go with it. The file in your library folder is not touched (a copy Frames holds itself, such as an upload, is deleted). A scan will not bring it back.`)) return;
+              if (!window.confirm(`Take “${p.title}” out of Frames?\n\nIts reviews, tags and composition places go with it. The file in your library folder is not touched (a copy Frames holds itself, such as an upload, is deleted). A scan will not bring it back.`)) return;
               await api(`/photos/${p.id}`, { method: 'DELETE' });
               refreshSummary();
               nav(-1);
             }}>Delete from Frames</button>
-            {picker && (
-              <div className="menu" style={{ top: -8, transform: 'translateY(-100%)' }}>
-                {(colls.data ?? []).length === 0 && <span className="faint menu-note">No collections yet</span>}
-                {(colls.data ?? []).map((c) => <button key={c.id} onClick={async () => { await api(`/collections/${c.id}/photos/${p.id}`, { method: 'PUT' }); setPicker(false); setMsg(`Added to ${c.name}.`); }}>{c.name}</button>)}
-              </div>
-            )}
           </div>
           <label className="form" style={{ fontSize: 13 }}>
             <span className="t2">Photoshoot</span>

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { checkTarget, parseTarget, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
-import { Header, Img, Loading, Title } from '../components/bits';
+import { Header, Img, Justified, Loading, Title } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 
 type SuggestedSet = { name: string; reason: string; aiAssisted: boolean; photoIds: number[]; photos: PhotoLite[] };
@@ -30,17 +30,17 @@ export function Collections() {
     <div className="page">
       <Header />
       <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 28 }}>
-        <Title count={colls.data ? `${colls.data.length} ${colls.data.length === 1 ? 'collection' : 'collections'}` : undefined}>Collections</Title>
-        <button className="pill" onClick={() => setNaming(!naming)}>New collection</button>
+        <Title count={colls.data ? `${colls.data.length} ${colls.data.length === 1 ? 'composition' : 'compositions'}` : undefined}>Compositions</Title>
+        <button className="pill" onClick={() => setNaming(!naming)}>New composition</button>
       </div>
       {naming && (
         <form className="form" style={{ marginBottom: 24 }} onSubmit={(e) => { e.preventDefault(); create(); }}>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Collection name" aria-label="Collection name" style={{ width: 280 }} />
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Composition name" aria-label="Composition name" style={{ width: 280 }} />
           <button className="pill primary">Create</button>
         </form>
       )}
       {(colls.loading || colls.error) && <Loading error={colls.error} />}
-      {colls.data?.length === 0 && <div className="empty">No collections yet. A collection is a curated set of photographs you can download as untouched original files.</div>}
+      {colls.data?.length === 0 && <div className="empty">No compositions yet. A composition is a curated set of photographs you can download as untouched original files.</div>}
       <div className="card-grid">
         {colls.data?.map((c) => (
           <Link key={c.id} to={`/collections/${c.id}`}>
@@ -52,13 +52,13 @@ export function Collections() {
       </div>
       {(sets.data ?? []).length > 0 && (
         <section style={{ marginTop: 48 }}>
-          <h2 className="serif" style={{ fontSize: 28, marginBottom: 4 }}>Suggested collections</h2>
+          <h2 className="serif" style={{ fontSize: 28, marginBottom: 4 }}>Suggested compositions</h2>
           <p className="muted" style={{ fontSize: 12.5, margin: '0 0 18px' }}>Well-liked photographs from different photoshoots that look like they belong together.</p>
           {sets.data!.map((s) => (
             <div className="fy" key={s.photoIds.join('-')}>
               <div className="spread"><h3 className="serif" style={{ fontSize: 22, margin: 0 }}>{s.name}</h3><span className="muted" style={{ fontSize: 12 }}>{s.reason}{s.aiAssisted && ' · AI-assisted'}</span></div>
               <div className="strip" style={{ height: 120, marginTop: 10 }}>{s.photos.map((p) => <Link key={p.id} to={`/photo/${p.id}`} style={{ aspectRatio: String(p.ar) }} aria-label={p.title}><Img p={p} style={{ height: '100%', width: 'auto' }} /></Link>)}</div>
-              <div className="acts"><button className="pill primary" onClick={() => start(s)}>Start this collection</button><button className="pill" onClick={() => skip(s)}>Not for me</button></div>
+              <div className="acts"><button className="pill primary" onClick={() => start(s)}>Start this composition</button><button className="pill" onClick={() => skip(s)}>Not for me</button></div>
             </div>
           ))}
         </section>
@@ -79,6 +79,13 @@ export function CollectionDetail() {
   const insights = useApi<Insights>(`/collections/${id}/insights`);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [fSub, setFSub] = useState<string[]>([]);
+  const [fTag, setFTag] = useState<string[]>([]);
+  const [pick, setPick] = useState<Set<number>>(new Set());
+  const subjects = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=subject' : null);
+  const tagList = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=tag' : null);
+  const filt = new URLSearchParams(); if (fSub.length) filt.set('subject', fSub.join(',')); if (fTag.length) filt.set('tag', fTag.join(','));
+  const found = useApi<{ photos: PhotoLite[] }>(adding && (fSub.length || fTag.length) ? `/photos?${filt}` : null);
   const [dl, setDl] = useState<Dl | null>(null);
   const [cmp, setCmp] = useState<number[] | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -109,7 +116,7 @@ export function CollectionDetail() {
     save({ order: o });
   };
 
-  // Hands each original to the browser's own downloader, in collection order. The browser streams
+  // Hands each original to the browser's own downloader, in composition order. The browser streams
   // every file straight to disk, so nothing is held in memory and the files are never altered.
   const download = async () => {
     const present = photos.filter((p) => !p.missing);
@@ -130,7 +137,8 @@ export function CollectionDetail() {
     setTimeout(() => setDl((z) => (z?.state === 'ready' ? null : z)), 8000);
   };
 
-  const candidates = (lib.data?.photos ?? []).filter((p) => !c.photoIds.includes(p.id));
+  const candidates = ((fSub.length || fTag.length ? found.data?.photos : lib.data?.photos) ?? []).filter((p) => !c.photoIds.includes(p.id));
+  const addPicked = async () => { let last = c; for (const pid of pick) last = await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' }); coll.set(last); setPick(new Set()); insights.reload(); };
   const ins = insights.data;
   const repeatIds = new Set(ins?.repetitive.flatMap((g) => g.photoIds) ?? []);
   const hasInsights = !!ins && (ins.repetitive.length > 0 || ins.alternatives.length > 0 || ins.complementary.length > 0);
@@ -139,7 +147,7 @@ export function CollectionDetail() {
     <div className="page">
       <Header />
       <div className="spread" style={{ fontSize: 13, marginBottom: 20 }}>
-        <Link to="/collections" className="t2">← Collections</Link>
+        <Link to="/collections" className="t2">← Compositions</Link>
         <span className="t2" style={{ display: 'flex', gap: 18 }}>
           <button onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share</button>
           <button onClick={() => setCmp(cmp ? null : [])}>{cmp ? 'Cancel compare' : 'Compare'}</button>
@@ -161,7 +169,7 @@ export function CollectionDetail() {
       )}
       <div className="spread" style={{ alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <input className="serif inline" aria-label="Collection name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 52, lineHeight: 1 }} />
+          <input className="serif inline" aria-label="Composition name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 52, lineHeight: 1 }} />
           <input aria-label="Theme" className="t2 inline" placeholder="Theme (for example: quiet light)" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ fontSize: 13.5, marginTop: 8 }} />
           <input aria-label="Description" className="t2 inline" placeholder="Add a description" defaultValue={c.description} onBlur={(e) => e.target.value !== c.description && save({ description: e.target.value })} style={{ fontSize: 13.5, marginTop: 4 }} />
         </div>
@@ -192,11 +200,23 @@ export function CollectionDetail() {
       {adding && (
         <div style={{ marginBottom: 32 }}>
           <div className="label" style={{ marginBottom: 10 }}>Choose photographs to add</div>
-          <div className="just">
-            {candidates.slice(0, 80).map((p) => (
-              <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 110}px`, aspectRatio: String(p.ar) }} aria-label={`Add ${p.title}`} onClick={() => addPhoto(p.id)}><Img p={p} /></button>
-            ))}
-            <i />
+          <div className="chips-row" style={{ marginBottom: 12 }}>
+            <select aria-label="Filter by subject" value="" onChange={(e) => e.target.value && setFSub([...fSub, e.target.value])}>
+              <option value="">Filter by subject…</option>
+              {(subjects.data ?? []).filter((t) => !fSub.includes(t.name)).map((t) => <option key={t.name} value={t.name}>{t.name} ({t.n})</option>)}
+            </select>
+            <select aria-label="Filter by tag" value="" onChange={(e) => e.target.value && setFTag([...fTag, e.target.value])}>
+              <option value="">Filter by tag…</option>
+              {(tagList.data ?? []).filter((t) => !fTag.includes(t.name)).map((t) => <option key={t.name} value={t.name}>{t.name} ({t.n})</option>)}
+            </select>
+            {fSub.map((t) => <span key={'s' + t} className="chip">Subject: {t} <button aria-label={`Remove subject ${t}`} onClick={() => setFSub(fSub.filter((x) => x !== t))}>✕</button></span>)}
+            {fTag.map((t) => <span key={'t' + t} className="chip">Tag: {t} <button aria-label={`Remove tag ${t}`} onClick={() => setFTag(fTag.filter((x) => x !== t))}>✕</button></span>)}
+          </div>
+          <Justified h={110} photos={candidates.slice(0, 200)} picked={pick} onTick={(p) => setPick((x) => { const n = new Set(x); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })} />
+          <div className="selbar" style={{ position: 'static' }}>
+            <span>{pick.size} selected{(fSub.length || fTag.length) ? ` · ${candidates.length} match the filter` : ''}</span>
+            <button className="t2" onClick={() => setPick(new Set(candidates.slice(0, 200).map((p) => p.id)))}>Select all shown</button>
+            <button className="pill primary" disabled={pick.size === 0} onClick={addPicked}>Add {pick.size || ''} to this composition</button>
           </div>
           {candidates.length === 0 && <div className="empty">Every photograph is already here.</div>}
         </div>
@@ -208,7 +228,7 @@ export function CollectionDetail() {
           {cmp.length === 2 && <Link className="pill primary" to={`/compare?a=${cmp[0]}&b=${cmp[1]}`}>Compare side by side</Link>}
         </div>
       )}
-      {photos.length === 0 && !adding && <div className="empty">This collection is empty. Use Add photos, or Add to collection on a photograph.</div>}
+      {photos.length === 0 && !adding && <div className="empty">This composition is empty. Use Add photos, or Add to composition on a photograph.</div>}
       <div className="cand-wrap">
         <div className="cands">
           {photos.map((p) => {

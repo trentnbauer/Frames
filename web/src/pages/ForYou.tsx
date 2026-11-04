@@ -53,13 +53,13 @@ export function ForYou() {
         <>
           <Block kind="growing" h="Growing on you" why="Ratings rising across sessions" items={d.growing} badge />
           <Block kind="forgotten" h="Worth another look" why="Loved before, not seen for a while" items={d.forgotten} more />
-          <Block kind="quiet" h="Quietly excellent" why="Rated highly every time, in no collection" items={d.quiet} more />
+          <Block kind="quiet" h="Quietly excellent" why="Rated highly every time, in no composition" items={d.quiet} more />
           {d.together.map((s) => (
             <section className="fy" key={s.photoIds.join('-')}>
               <div className="spread"><h2>Belongs together: {s.name}</h2><span className="muted" style={{ fontSize: 12 }}>{s.reason}{s.aiAssisted && ' · AI-assisted'}</span></div>
               <Strip items={s.photos} />
               <div className="acts">
-                <button className="pill primary" onClick={async () => { const c = await api<Collection>('/collections', { body: { name: s.name, photoIds: s.photoIds } }); await feedback('together', s.photoIds.map((id) => ({ id })), 'accept'); nav(`/collections/${c.id}`); }}>Start a collection</button>
+                <button className="pill primary" onClick={async () => { const c = await api<Collection>('/collections', { body: { name: s.name, photoIds: s.photoIds } }); await feedback('together', s.photoIds.map((id) => ({ id })), 'accept'); nav(`/collections/${c.id}`); }}>Start a composition</button>
                 <button className="pill" onClick={() => feedback('together', s.photoIds.map((id) => ({ id })), 'reject')}>Not for me</button>
               </div>
             </section>

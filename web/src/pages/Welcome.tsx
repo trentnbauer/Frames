@@ -4,7 +4,7 @@ import { api } from '../api';
 import { Header } from '../components/bits';
 import { useStore } from '../store';
 
-/** A short tour for someone new: bringing photographs in, photoshoots and collections, how reviewing works, and sharing for others to review. */
+/** A short tour for someone new: bringing photographs in, photoshoots and compositions, how reviewing works, and sharing for others to review. */
 export function Welcome() {
   const nav = useNavigate();
   const { me } = useStore();
@@ -29,35 +29,35 @@ export function Welcome() {
       ),
     },
     {
-      title: 'Photoshoots and collections',
+      title: 'Photoshoots and compositions',
       body: (
         <>
           <p>A <b>photoshoot</b> is a day of photographs, or a roll of film. Each time photographs come in, they are gathered into one, with its date, so you can find a day again.</p>
-          <p>A <b>collection</b> is the idea or the artwork: the best photographs from a shoot, or from many, picked to belong together. Your “top 3 beaches” is a collection. A collection can have a print size, so Frames tells you whether each photograph has enough pixels, and you can download the originals of the ones you chose.</p>
+          <p>A <b>composition</b> is the idea or the artwork: the best photographs from a shoot, or from many, picked to belong together. Your “top 3 beaches” is a composition. A composition can have a print size, so Frames tells you whether each photograph has enough pixels, and you can download the originals of the ones you chose.</p>
         </>
       ),
-      actions: <Link to="/collections" className="pill">See collections</Link>,
+      actions: <Link to="/collections" className="pill">See compositions</Link>,
     },
     {
       title: 'How reviewing works',
       body: (
         <>
           <p>You rate each photograph from 1 to 5, in a few short sessions spread over weeks (by default four, a week apart). You never see your earlier ratings while you rate, so the opinion that settles is really yours, not what you remember saying before.</p>
-          <p>Reviewing is what feeds collections. The photographs that keep scoring well rise to the top, so building a collection is picking from your strongest, and Frames suggests photographs that belong with the ones you chose.</p>
+          <p>Reviewing is what feeds compositions. The photographs that keep scoring well rise to the top, so building a composition is picking from your strongest, and Frames suggests photographs that belong with the ones you chose.</p>
           <p>When nothing is due you can still begin: it shows the photographs you have not seen for longest.</p>
         </>
       ),
       actions: <Link to="/review" className="pill">Try a review</Link>,
     },
     {
-      title: 'Share a collection for others to review',
+      title: 'Share a composition for others to review',
       body: (
         <>
-          <p>Open a collection and press <b>Share</b> to make a link. Anyone with the link can look through the collection without signing in. You choose whether they can download the originals and whether they can rate the photographs.</p>
+          <p>Open a composition and press <b>Share</b> to make a link. Anyone with the link can look through the composition without signing in. You choose whether they can download the originals and whether they can rate the photographs.</p>
           <p>Their ratings are kept apart from yours and never change your own reviews. A link can expire or be turned off at any time.</p>
         </>
       ),
-      actions: <Link to="/collections" className="pill">Go to collections</Link>,
+      actions: <Link to="/collections" className="pill">Go to compositions</Link>,
     },
   ];
   const s = steps[i];

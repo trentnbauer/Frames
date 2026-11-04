@@ -20,19 +20,19 @@ export function YourData() {
     <>
       <div className="field">
         <h3>What is kept</h3>
-        <p>Your account details from your sign-in provider, one sign-in cookie, and your own library: photographs you uploaded or synced, previews, tags, reviews, collections, share links and settings. Nobody else who signs in can see it. <a href="/privacy" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Read the privacy page</a> for the full picture, including who can see what and where information is sent.</p>
+        <p>Your account details from your sign-in provider, one sign-in cookie, and your own library: photographs you uploaded or synced, previews, tags, reviews, compositions, share links and settings. Nobody else who signs in can see it. <a href="/privacy" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Read the privacy page</a> for the full picture, including who can see what and where information is sent.</p>
         {me?.user && <p className="muted">Signed in as {me.user.name || me.user.email}{me.user.folder ? `. Your library folder is ${me.user.folder}.` : '.'}</p>}
       </div>
       <div className="field">
         <h3>Back up my data</h3>
-        <p>Download a copy of your own library’s database: your reviews, tags, collections, share links and settings. Your photographs are not in it, and neither are keys, secrets or sign-in sessions.</p>
+        <p>Download a copy of your own library’s database: your reviews, tags, compositions, share links and settings. Your photographs are not in it, and neither are keys, secrets or sign-in sessions.</p>
         <a className="pill primary" href="/api/backup" download>Download my backup</a>
       </div>
       <Previews />
       <Removed />
       <div className="field">
         <h3>Delete my data</h3>
-        <p>This erases everything Frames holds for you: your {owner ? 'library, previews, collections, share links and settings (your account stays, because it is the first administrator)' : 'account, uploaded and synced photographs, previews, collections, share links, settings and saved connections, and signs you out'}. It cannot be undone. Photographs in a read-only library folder on the server are not Frames’ to delete: ask the person who runs this server. Backups made earlier disappear within a week.</p>
+        <p>This erases everything Frames holds for you: your {owner ? 'library, previews, compositions, share links and settings (your account stays, because it is the first administrator)' : 'account, uploaded and synced photographs, previews, compositions, share links, settings and saved connections, and signs you out'}. It cannot be undone. Photographs in a read-only library folder on the server are not Frames’ to delete: ask the person who runs this server. Backups made earlier disappear within a week.</p>
         <div className="form">
           <input aria-label="Type delete to confirm" placeholder="Type delete to confirm" value={word} onChange={(e) => setWord(e.target.value)} />
           <button className="pill" disabled={word !== 'delete' || busy} onClick={del}>{busy ? 'Deleting…' : 'Delete my data'}</button>

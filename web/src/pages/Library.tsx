@@ -4,6 +4,7 @@ import { useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Justified, Loading, Title } from '../components/bits';
 import { useStore } from '../store';
+import { AddToComposition } from '../components/AddToComposition';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const RATING_OPTS = [['4+', '4 or better on average'], ['3+', '3 or better on average'], ['under', 'Under 3 on average']];
@@ -17,6 +18,11 @@ export function Library() {
   const ai = !!settings && settings.ai !== 'off';
   const [open, setOpen] = useState<string | null>(null);
   const [text, setText] = useState(sp.get('q') ?? '');
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [note, setNote] = useState('');
+  const tick = (p: PhotoLite) => setPicked((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; });
+  const tiles = selecting ? { picked, onTick: tick } : {};
 
   const shoots = useApi<Shoot[]>('/shoots');
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
@@ -91,6 +97,7 @@ export function Library() {
             <Item on={!!sp.get('gps')} onClick={() => set('gps', sp.get('gps') ? null : '1')}>Only photos with GPS</Item>
           </Menu>
           <span className="sep" />
+          <button aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>
           <button onClick={() => set('order', sp.get('order') === 'oldest' ? null : 'oldest')}>{sp.get('order') === 'oldest' ? 'Oldest first' : 'Newest first'}</button>
         </div>
       </div>
@@ -111,14 +118,23 @@ export function Library() {
 
       {(list.loading || list.error) && <Loading error={list.error} />}
       {list.data && count === 0 && <div className="empty">{chips.length || sp.get('q') ? 'No photographs match.' : <>No photographs yet. Add some on the <Link to="/shoots" className="t2" style={{ textDecoration: 'underline' }}>Photoshoots</Link> page.</>}</div>}
-      {flat && list.data && count > 0 && <Justified photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : undefined} />}
+      {flat && list.data && count > 0 && <Justified {...tiles} photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : undefined} />}
       {groups.map(({ s, photos }) => (
         <section className="group" key={s.id}>
           <h2><Link to={`/shoots/${s.id}`}>{s.name}</Link></h2>
           <div className="meta">{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
-          <Justified photos={photos} />
+          <Justified {...tiles} photos={photos} />
         </section>
       ))}
+      {selecting && (
+        <div className="selbar" role="region" aria-label="Selected photographs">
+          <span>{picked.size} selected</span>
+          <button className="t2" onClick={() => setPicked(new Set((list.data?.photos ?? []).map((p) => p.id)))}>Select all {count.toLocaleString()} shown</button>
+          {picked.size > 0 && <button className="t2" onClick={() => setPicked(new Set())}>Clear</button>}
+          <AddToComposition up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); }} />
+          {note && <span className="muted" role="status">{note}</span>}
+        </div>
+      )}
     </div>
     </MenuState.Provider>
   );

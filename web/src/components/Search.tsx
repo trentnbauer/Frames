@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 import { Justified } from './bits';
+import { AddToComposition } from './AddToComposition';
 
 type Parsed = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
 type Chip = { key: string; label: string };
@@ -24,6 +25,9 @@ export function Search({ onClose }: { onClose: () => void }) {
   const [count, setCount] = useState(0);
   const [semantic, setSemantic] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [note, setNote] = useState('');
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
   useEffect(() => {
@@ -87,9 +91,18 @@ export function Search({ onClose }: { onClose: () => void }) {
         </div>
         <div className="spread" style={{ marginBottom: 12, fontSize: 12.5 }}>
           <span className="t2">{busy ? 'Searching…' : `${count} ${count === 1 ? 'photograph' : 'photographs'} · ${shoots} ${shoots === 1 ? 'shoot' : 'shoots'}`}</span>
+          {results.length > 0 && <button className="t2" aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>}
           <span className="faint">{ai ? (semantic ? 'Ranked by meaning' : 'AI on · text match') : 'AI off · filename, metadata, place and tag search'}</span>
         </div>
-        {results.length ? <Justified photos={results.slice(0, 10)} h={110} onPick={(p) => { onClose(); nav(`/photo/${p.id}`); }} /> : <div className="empty">{q.trim() && !busy ? 'Nothing matches.' : 'Type to search.'}</div>}
+        {results.length ? <Justified photos={results.slice(0, 10)} h={110} {...(selecting ? { picked, onTick: (p: PhotoLite) => setPicked((x) => { const n = new Set(x); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }) } : { onPick: (p: PhotoLite) => { onClose(); nav(`/photo/${p.id}`); } })} /> : <div className="empty">{q.trim() && !busy ? 'Nothing matches.' : 'Type to search.'}</div>}
+        {selecting && (
+          <div className="selbar" style={{ position: 'static' }}>
+            <span>{picked.size} selected</span>
+            <button className="t2" onClick={() => setPicked(new Set(results.slice(0, 10).map((p) => p.id)))}>Select the {Math.min(10, results.length)} shown</button>
+            <AddToComposition up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); }} />
+            {note && <span className="muted" role="status">{note}</span>}
+          </div>
+        )}
         <div className="foot"><span>↵ open all results in Library</span><span>Esc close</span></div>
       </div>
     </div>

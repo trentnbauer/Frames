@@ -203,7 +203,7 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
       </div>
       <Toggle on={s.adaptive} onChange={(v) => save({ adaptive: v })} label="Adapt to consistency" hint="Steady ratings come back less often. Mixed ratings come back sooner." />
       <DeleteSuggestions s={s} save={save} />
-      <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and collections." />
+      <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and compositions." />
     </>
   );
 }
@@ -216,7 +216,7 @@ function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Setting
   const [msg, setMsg] = useState('');
   const n = list.data?.photos.length ?? 0;
   const take = async () => {
-    if (!picked.length || !window.confirm(`Take ${picked.length} ${picked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and collection places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+    if (!picked.length || !window.confirm(`Take ${picked.length} ${picked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
     try {
       const r = await api<{ removed: number; filesDeleted: number }>('/photos/remove', { body: { ids: picked } });
       setMsg(`Took ${r.removed} out of Frames${r.filesDeleted ? ` and deleted ${r.filesDeleted} of Frames’ own copies` : ''}.`);
@@ -351,7 +351,7 @@ function Backup() {
     <>
       <div className="field">
         <h3>Back up the whole server</h3>
-        <p>One archive with the server’s own database (people, sign-in, the tunnel) and every person’s library database (reviews, tags, collections, settings). Photographs are not in it: back those up the way you already do. Keys, secrets and sign-in sessions are taken out of every copy, so it is safe to keep.</p>
+        <p>One archive with the server’s own database (people, sign-in, the tunnel) and every person’s library database (reviews, tags, compositions, settings). Photographs are not in it: back those up the way you already do. Keys, secrets and sign-in sessions are taken out of every copy, so it is safe to keep.</p>
         <a className="pill primary" href="/api/admin/backup" download>Download a server backup</a>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Each person can also download their own library under Settings, Your data.</p>
       </div>
@@ -374,7 +374,7 @@ function About() {
   return (
     <>
       <p className="empty">Frames {h.data ? (h.data.version === 'dev' ? '(development build)' : `version ${h.data.version}`) : ''}</p>
-      <div className="field"><h3>The welcome tour</h3><p>A short tour of bringing photographs in, photoshoots and collections, reviewing and sharing.</p><Link to="/welcome" className="pill">Show the welcome tour</Link></div>
+      <div className="field"><h3>The welcome tour</h3><p>A short tour of bringing photographs in, photoshoots and compositions, reviewing and sharing.</p><Link to="/welcome" className="pill">Show the welcome tour</Link></div>
     </>
   );
 }

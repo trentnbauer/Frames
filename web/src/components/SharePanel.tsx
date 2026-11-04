@@ -10,7 +10,7 @@ type GuestReviews = { photoId: number; title: string; n: number; avg: number; en
 
 const urlOf = (t: string) => `${window.location.origin}/s/${t}`;
 
-/** Make, copy, review and turn off the public links for one collection or photoshoot. */
+/** Make, copy, review and turn off the public links for one composition or photoshoot. */
 export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'; id: number; onClose: () => void }) {
   const links = useApi<ShareLink[]>(`/shares?kind=${kind}&id=${id}`);
   const [allowDownload, setDownload] = useState(true);
@@ -39,7 +39,7 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
 
   return (
     <section className="sharepanel" aria-label="Share">
-      <div className="spread"><h2 className="serif" style={{ fontSize: 26 }}>Share this {kind === 'shoot' ? 'photoshoot' : 'collection'}</h2><button className="t2" onClick={onClose}>Close</button></div>
+      <div className="spread"><h2 className="serif" style={{ fontSize: 26 }}>Share this {kind === 'shoot' ? 'photoshoot' : 'composition'}</h2><button className="t2" onClick={onClose}>Close</button></div>
       <p className="muted" style={{ fontSize: 13, margin: '4px 0 14px', maxWidth: 620 }}>
         Makes a private address that works without a login. Anyone with it sees only these photographs: no places, notes or anything else in your library. They can only do what you tick.
       </p>
