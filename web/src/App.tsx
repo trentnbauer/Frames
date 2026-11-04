@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav, useKey } from './components/bits';
 import { Changelog } from './components/Changelog';
 import { Search } from './components/Search';
@@ -55,8 +55,8 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
         <Route path="/stats" element={<Stats />} />
-        <Route path="/settings" element={<SettingsPage key="settings" />} />
-        <Route path="/admin" element={<SettingsPage key="admin" admin />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
       {!inReview && <BottomNav onSearch={() => setSearching(true)} />}

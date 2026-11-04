@@ -26,7 +26,7 @@ export type Provider = {
   id: string; type: ProviderType; name: string; clientId: string;
   issuer?: string; tenant?: string; // oidc / microsoft
   authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; // oauth2 (GitHub has these built in)
-  /** google, microsoft and dropbox: sign in with the app registered under Administration, Cloud services, so no second client ID and secret. */
+  /** google, microsoft and dropbox: sign in with the app registered under Settings, Cloud storage providers, so no second client ID and secret. */
   useCloudApp?: boolean;
   teamDomain?: string; aud?: string; // cloudflare: the Access team's domain, and the application's audience tag
 };
@@ -130,7 +130,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
   const isSecure = (req: FastifyRequest) => baseUrl(req).startsWith('https://');
   const issuerOf = (p: Provider) => (p.type === 'google' ? 'https://accounts.google.com' : p.type === 'microsoft' ? `https://login.microsoftonline.com/${p.tenant}/v2.0` : p.issuer!);
 
-  /** The client ID and secret to sign in with: the provider's own, or the cloud app's (Administration, Cloud services) when it uses that. */
+  /** The client ID and secret to sign in with: the provider's own, or the cloud app's (Settings, Cloud storage providers) when it uses that. */
   const creds = (p: Provider): { clientId: string; secret: string } => {
     if (p.useCloudApp) { const k = clientOf(cfg, db, p.type === 'microsoft' ? 'onedrive' : (p.type as 'google' | 'dropbox')); return { clientId: k.clientId, secret: k.secret }; }
     return { clientId: p.clientId, secret: getSecret(db, `oauth:${p.id}`) };
@@ -158,7 +158,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
       const email = String(payload.email ?? '').toLowerCase();
       if (!email) throw new Error('no email');
       return { provider: p.id, sub: String(payload.sub ?? email), email, emailVerified: true, name: String(payload.name ?? '') || email };
-    } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Administration, Access.'); }
+    } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Settings, Sign-in & access.'); }
   }
 
   const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };

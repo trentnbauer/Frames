@@ -13,10 +13,66 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 
-// Yours: everything about your own library, for every signed-in person. Administrator: the whole instance (sign-in, the tunnel, people, the env file).
-const YOURS = ['Reviews', 'Cloud sync', 'AI', 'Tags & subjects', 'Metadata & XMP', 'Portfolio', 'Your data'] as const;
-const ADMIN = ['Access', 'Cloudflare tunnel', 'Libraries & storage', 'Cloud services', 'Shared AI', 'People', 'Backup', 'Env file'] as const;
-const SECTIONS = [...YOURS, ...ADMIN, 'About'] as const;
+type Sec = 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Sign-in methods' | 'Your data'
+  | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
+
+// One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
+const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
+  { title: 'Your library', items: ['Reviews', 'Tags & subjects', 'Metadata & XMP'] },
+  { title: 'Connections', items: ['AI', 'Cloud sync', 'Portfolio'] },
+  { title: 'Your account', items: ['Sign-in methods', 'Your data'] },
+];
+const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
+  { title: 'People & sign-in', items: ['People', 'Access'] },
+  { title: 'Storage', items: ['Libraries & storage', 'Backup', 'Env file'] },
+  { title: 'Shared services', items: ['Shared AI', 'Cloud services', 'Cloudflare tunnel'] },
+];
+/** What each section is called on screen (the others are called what they are named here). */
+const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
+const DESC: Record<Sec, string> = {
+  Reviews: 'How often each photograph comes back for a rating.',
+  'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
+  'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
+  AI: 'The AI that describes and tags your own photographs.',
+  'Cloud sync': 'Folders from your cloud accounts that Frames keeps in your library.'.replace('Frames', 'Frames'),
+  Portfolio: 'Your public site: which photos, how it looks and its address.',
+  'Sign-in methods': 'The account you are signed in to Frames with.',
+  'Your data': 'What Frames keeps about your library, and how to back it up or delete it.',
+  People: 'Who has a library on this server, and the privacy page they see.',
+  Access: 'Whether sign-in is required, which providers are offered and who is allowed in.',
+  'Libraries & storage': 'The folders Frames reads photographs from.',
+  Backup: 'Download a server backup, see the automatic ones, and how to restore.',
+  'Env file': 'Keep the server’s settings in an env file so they survive a restart.',
+  'Shared AI': 'AIs everyone on this server can use without their own key.',
+  'Cloud services': 'The cloud accounts people can connect for Cloud sync.',
+  'Cloudflare tunnel': 'Reach Frames from outside your network without opening ports.',
+  About: 'Version and what’s new.',
+};
+/** The headings inside each section, so the finder can find a setting and not only a section. */
+const HEADINGS: Partial<Record<Sec, string[]>> = {
+  Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
+  'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
+  'Metadata & XMP': ['Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
+  AI: ['Your AIs', 'Add an AI', 'Analysis'],
+  'Cloud sync': ['Your connected folders', 'Connect an account', 'Dropbox', 'Google Drive', 'OneDrive'],
+  Portfolio: ['Publish the portfolio', 'Which photos', 'The site', 'Its own web address', 'What a visitor gets when they open a photo'],
+  'Sign-in methods': ['Signed in as'],
+  'Your data': ['What is kept', 'Back up my data', 'Previews', 'Delete my data'],
+  People: ['Add someone', 'Privacy page', 'Roles'],
+  Access: ['Require sign-in', 'Providers', 'Who is allowed in', 'Public address'],
+  'Libraries & storage': ['Photo libraries'],
+  Backup: ['Back up the whole server', 'Automatic backups', 'Restore'],
+  'Env file': ['Download', 'Using it', 'Status'],
+  'Shared AI': ['AIs for everyone on this server'],
+  'Cloud services': ['Client ID', 'Client secret', 'Redirect address'],
+  'Cloudflare tunnel': ['Run the tunnel', 'API token', 'Account ID', 'Addresses', 'App URL', 'Portfolios', 'Protect the App URL with Cloudflare Access', 'What Frames sets up', 'The tunnel log'],
+};
+const ALL: Sec[] = [...YOUR_GROUPS, ...ADMIN_GROUPS].flatMap((g) => g.items).concat('About');
+const ADMIN_SET = new Set<Sec>(ADMIN_GROUPS.flatMap((g) => g.items));
+const groupOf = (s: Sec) => [...YOUR_GROUPS, ...ADMIN_GROUPS].find((g) => g.items.includes(s))?.title;
+const nameOf = (s: Sec) => LABEL[s] ?? s;
+const slug = (s: Sec) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const fromSlug = (v: string | null): Sec | null => ALL.find((s) => slug(s) === v) ?? null;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
@@ -28,52 +84,93 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   );
 }
 
-/** Your own settings, or (admin) the administrator's: the server's sign-in, tunnel, libraries, shared AI, people, backup and env file. */
-export function SettingsPage({ admin = false }: { admin?: boolean }) {
-  // Coming back from a test sign-in lands here with ?access=…, so open the Access section.
-  const [sec, setSec] = useState<(typeof SECTIONS)[number]>(() => { const q = new URLSearchParams(window.location.search); return admin ? 'Access' : q.has('cloud') ? 'Cloud sync' : 'Reviews'; });
+export function SettingsPage() {
+  const q0 = new URLSearchParams(window.location.search);
+  // Coming back from a test sign-in or a cloud sign-in lands here with ?access=… or ?cloud=…, so open that section.
+  const [sec, setSec] = useState<Sec>(() => fromSlug(q0.get('section')) ?? (q0.has('access') ? 'Access' : q0.has('cloud') ? 'Cloud sync' : 'Reviews'));
+  const [find, setFind] = useState('');
   const { settings: s, setSettings, me } = useStore();
-  // Sign-in and the tunnel belong to the whole instance: only an administrator sees them.
-  const isAdmin = me?.role !== 'member';
-  if (admin && me && !isAdmin) return <div className="page"><Header /><p className="empty">Only an administrator can open this page.</p></div>;
-  const groups: { title: string; items: readonly (typeof SECTIONS)[number][] }[] = admin ? [{ title: 'Administrator', items: ADMIN }] : [{ title: 'Your settings', items: YOURS }, { title: 'Frames', items: ['About'] as const }];
+  const isAdmin = me?.role === 'admin';
   const [err, setErr] = useState('');
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
+  const go = (x: Sec) => { setSec(x); setErr(''); setFind(''); const u = new URL(window.location.href); u.searchParams.set('section', slug(x)); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); };
   if (!s) return <div className="page"><Header /><Loading /></div>;
+  const allowed = (x: Sec) => !ADMIN_SET.has(x) || isAdmin;
+  const shown = allowed(sec) ? sec : 'Reviews';
+  const needle = find.trim().toLowerCase();
+  const results = needle
+    ? ALL.filter(allowed).flatMap((x) => {
+        const hit = (HEADINGS[x] ?? []).find((h) => h.toLowerCase().includes(needle));
+        return nameOf(x).toLowerCase().includes(needle) || x.toLowerCase().includes(needle) || hit ? [{ x, sub: hit ?? (ADMIN_SET.has(x) ? `Administration · ${groupOf(x)}` : groupOf(x) ?? 'Frames') }] : [];
+      })
+    : [];
+  const item = (x: Sec) => <button key={x} className={shown === x ? 'on' : ''} onClick={() => go(x)}>{nameOf(x)}</button>;
+  const label = (t: string) => <div className="faint" style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 0 4px 12px' }}>{t}</div>;
+  const adminSec = ADMIN_SET.has(shown);
   return (
     <div className="page">
       <Header />
-      <div className="settings">
-        <nav className="snav" aria-label={admin ? 'Administration sections' : 'Settings sections'}>
-          {groups.map((g) => (
-            <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>
-              <div className="faint" style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 0 4px 12px' }}>{g.title}</div>
-              {g.items.map((x) => <button key={x} className={sec === x ? 'on' : ''} onClick={() => { setSec(x); setErr(''); }}>{x}</button>)}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 56, alignItems: 'flex-start' }}>
+        <aside style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', position: 'sticky', top: 24 }}>
+          <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ background: 'var(--surface)', border: 0, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', marginBottom: 6 }} />
+          {needle ? (
+            <div className="snav" role="list" aria-label="Matching settings" style={{ marginTop: 8 }}>
+              {results.map((r) => (
+                <button key={r.x} role="listitem" onClick={() => go(r.x)} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text)' }}>{nameOf(r.x)}</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{r.sub}</span>
+                </button>
+              ))}
+              {results.length === 0 && <div className="muted" style={{ padding: '8px 12px', fontSize: 13 }}>Nothing matches.</div>}
             </div>
-          ))}
-        </nav>
-        <div>
-          <h1 className="serif" style={{ fontSize: 44, marginBottom: 12 }}>{sec}</h1>
-          {me?.envConfig && sec !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
+          ) : (
+            <nav className="snav" aria-label="Settings sections">
+              {YOUR_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
+              {isAdmin && (
+                <div style={{ marginTop: 22, paddingTop: 6, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 12px 2px' }}>Administration</div>
+                  <div className="faint" style={{ fontSize: 12, margin: '0 12px 4px' }}>Applies to everyone on this server</div>
+                  {ADMIN_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
+                </div>
+              )}
+              <div style={{ marginTop: 22, paddingTop: 10, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column' }}>
+                <button className={shown === 'About' ? 'on' : ''} style={{ fontSize: 13, color: shown === 'About' ? undefined : 'var(--muted)' }} onClick={() => go('About')}>About Frames</button>
+              </div>
+            </nav>
+          )}
+        </aside>
+        <main style={{ flex: '1 1 480px', minWidth: 0 }}>
+          <div className="faint" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>{adminSec ? `Settings · Administration · ${groupOf(shown)}` : shown === 'About' ? 'Settings' : `Settings · ${groupOf(shown)}`}</div>
+          <h1 className="serif" style={{ fontSize: 44, lineHeight: 1, margin: '10px 0' }}>{nameOf(shown)}</h1>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text2)', maxWidth: 640 }}>{DESC[shown]}</p>
+          {adminSec && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text2)' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)' }} />
+              Administrator setting · changes affect every person
+            </div>
+          )}
+          <div style={{ height: 12 }} />
+          {me?.envConfig && shown !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
-          {sec === 'Reviews' && <Reviews s={s} save={save} />}
-          {sec === 'AI' && <AiSettings />}
-          {sec === 'Shared AI' && <AiSettings server />}
-          {sec === 'Libraries & storage' && <Libraries />}
-          {sec === 'Portfolio' && <PortfolioSettings />}
-          {sec === 'Cloud sync' && <CloudSettings />}
-          {sec === 'Cloud services' && <CloudServices />}
-          {sec === 'Cloudflare tunnel' && <TunnelSettings />}
-          {sec === 'People' && <People />}
-          {sec === 'Env file' && <EnvExport />}
-          {sec === 'Your data' && <YourData />}
-          {sec === 'Access' && <Access />}
-          {sec === 'Tags & subjects' && <Vocabulary />}
-          {sec === 'Metadata & XMP' && <Metadata s={s} save={save} />}
-          {sec === 'Backup' && <Backup />}
-          {sec === 'About' && <About />}
-        </div>
+          {shown === 'Reviews' && <Reviews s={s} save={save} />}
+          {shown === 'AI' && <AiSettings />}
+          {shown === 'Shared AI' && <AiSettings server />}
+          {shown === 'Libraries & storage' && <Libraries />}
+          {shown === 'Portfolio' && <PortfolioSettings />}
+          {shown === 'Cloud sync' && <CloudSettings />}
+          {shown === 'Cloud services' && <CloudServices />}
+          {shown === 'Cloudflare tunnel' && <TunnelSettings />}
+          {shown === 'People' && <People />}
+          {shown === 'Env file' && <EnvExport />}
+          {shown === 'Sign-in methods' && <SignInMethods />}
+          {shown === 'Your data' && <YourData />}
+          {shown === 'Access' && <Access />}
+          {shown === 'Tags & subjects' && <Vocabulary />}
+          {shown === 'Metadata & XMP' && <Metadata s={s} save={save} />}
+          {shown === 'Backup' && <Backup />}
+          {shown === 'About' && <About />}
+        </main>
       </div>
     </div>
   );
@@ -222,4 +319,20 @@ function Backup() {
 function About() {
   const h = useApi<{ version: string }>('/health');
   return <p className="empty">Frames {h.data ? (h.data.version === 'dev' ? '(development build)' : `version ${h.data.version}`) : ''}</p>;
+}
+
+/** Who you are signed in as, and with what. */
+function SignInMethods() {
+  const { me } = useStore();
+  return (
+    <div className="field">
+      <h3>Signed in as</h3>
+      {me?.user
+        ? <>
+            <div className="row"><span><b>{me.user.name || me.user.email}</b> <span className="muted">{me.user.email}</span></span><span className="faint">signed in with {me.user.provider} · {me.role === 'admin' ? 'administrator' : 'member'}</span></div>
+            <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Your library folder is <span className="mono">{me.user.folder || 'the main folder'}</span>. The administrator decides which ways of signing in are offered, under Sign-in &amp; access.</p>
+          </>
+        : <p className="muted">Sign-in is off on this server, so there is no account to show: everyone who can reach Frames uses it as its owner.</p>}
+    </div>
+  );
 }

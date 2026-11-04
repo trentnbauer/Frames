@@ -50,7 +50,6 @@ export function Header({ right }: { right?: ReactNode }) {
     <nav className="toplinks">
       <NavLink to="/stats" className={({ isActive }) => (isActive ? 'active' : '')}>Stats</NavLink>
       <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
-      {me?.role === 'admin' && <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>Administration</NavLink>}
     </nav>
   );
   return (

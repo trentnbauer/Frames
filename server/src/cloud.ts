@@ -85,7 +85,7 @@ const b64u = (b: Buffer) => b.toString('base64url');
 
 export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirectUri: string): string {
   const clientId = clientOf(cfg, db, provider).clientId;
-  if (!clientId) throw new CloudError(`${PROVIDERS.find((p) => p.id === provider)!.label} is not set up on this server yet. An administrator enters its client ID under Administration, Cloud services.`);
+  if (!clientId) throw new CloudError(`${PROVIDERS.find((p) => p.id === provider)!.label} is not set up on this server yet. An administrator enters its client ID under Settings, Cloud storage providers.`);
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   const state = b64u(crypto.randomBytes(24));
   const verifier = b64u(crypto.randomBytes(32));

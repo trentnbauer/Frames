@@ -1,10 +1,10 @@
 # The simplest way to run Frames: no variables, no .env. Start it, open it, set everything up in the app, then export your settings
-# (Administration, Env file) as frames.env and put that file next to this one. README, "Run with Docker", has the steps.
+# (Settings, Env file) as frames.env and put that file next to this one. README, "Run with Docker", has the steps.
 #
 #   docker compose -f docker-compose.minimal.yml up -d
 #
 # Your photographs go in ./photos (or change the left side of the /library line). It listens on this machine only (127.0.0.1) until you
-# decide otherwise: before reaching it from other devices, turn on sign-in in Administration, Access, or protect it another way.
+# decide otherwise: before reaching it from other devices, turn on sign-in in Settings, Sign-in & access, or protect it another way.
 services:
   frames:
     image: ghcr.io/trentnbauer/frames:latest
