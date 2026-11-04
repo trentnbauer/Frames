@@ -154,6 +154,23 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     version: x.cfg.version ?? 'dev',
   });
   app.get('/api/admin/env', async () => envStatus());
+  // What the saved settings would write to the file, against what this container was actually started with. Names and verdicts only:
+  // a value, a secret above all, is never sent.
+  app.get('/api/admin/env/compare', async () => {
+    const pairs: [string, string][] = [];
+    buildEnvFile(sys, x.tenants.owner().db, { pairs });
+    const env = process.env;
+    const secret = (k: string) => /KEY|SECRET|TOKEN|PASSWORD|AUD/.test(k);
+    const rows = pairs.filter(([k]) => k !== 'ALLOW_ENV_EXPORT').map(([name, text]) => ({
+      name, secret: secret(name),
+      status: env[name] === undefined ? 'app only' : env[name] === text ? 'same' : 'differs',
+    }));
+    const known = new Set(pairs.map(([k]) => k));
+    for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k)).sort()) {
+      rows.push({ name, secret: secret(name), status: 'env only' });
+    }
+    return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };
+  });
   app.get('/api/admin/env/export', async (req, rep) => {
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });
     console.warn(`env file exported by administrator ${me(req).id}`);

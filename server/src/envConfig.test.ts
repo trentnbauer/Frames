@@ -163,6 +163,28 @@ describe('readable names', () => {
   });
 });
 
+describe('comparing what is saved with what the container was started with', () => {
+  it('says same, different, app only and env only for each variable, and never sends a value', async () => {
+    const a = mk(); const A = api(a);
+    await A.put('/api/admin/privacy', { operator: 'Studio', contact: 'hi@example.test' });
+    await A.post('/api/admin/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm1', embedModel: 'e1', ack: true, key: SECRET });
+    const pairs: [string, string][] = [];
+    buildEnvFile(sysOf(a), a.db, { pairs });
+    const operator = pairs.find(([, v]) => v === 'Studio')![0];
+    const key = pairs.find(([, v]) => v === SECRET)![0];
+    useVars({ [operator]: 'Studio', [key]: 'a-different-key', AI_9_URL: 'https://elsewhere.test' });
+    const r = (await A.get('/api/admin/env/compare')).body;
+    const by = (n: string) => r.rows.find((x: any) => x.name === n);
+    expect(by(operator).status).toBe('same');
+    expect(by(key)).toMatchObject({ status: 'differs', secret: true });
+    expect(by('AI_9_URL').status).toBe('env only');
+    expect(r.rows.some((x: any) => x.status === 'app only')).toBe(true); // the rest are saved in the app and not in the environment
+    expect(JSON.stringify(r)).not.toContain(SECRET);
+    expect(JSON.stringify(r)).not.toContain('a-different-key');
+    expect(r.counts.same).toBe(1);
+  });
+});
+
 describe('export, import, and the block', () => {
   it('moves a configured server (shared AIs, keys, the tunnel token, the privacy page) to a fresh one, and then refuses a second export', async () => {
     // 1. Set up with no variables at all, through the app.
