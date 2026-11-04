@@ -3,7 +3,6 @@ import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import sharp from 'sharp';
 import type { Ctx, Row } from './ctx.js';
-import { linkTunnelHost } from './tunnel.js';
 import type { Tenant, Tenants } from './tenants.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath } from './ingest.js';
@@ -212,14 +211,11 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (typeof b.captions === 'boolean') n.captions = b.captions;
     if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
     if (n.enabled && !n.collectionId) return bad('Choose the collection the portfolio shows first.');
-    const tunnelChanged = x.tenant().user.id === 1 && linkTunnelHost(x.sys, 'portfolio', cur.host, n.host);
     save(db, n);
     // The system database maps each hostname to its owner, so a visitor reaches the right library without signing in.
     x.sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(x.tenant().user.id);
     if (n.host) x.sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(n.host.toLowerCase(), x.tenant().user.id);
-    // The tunnel's portfolio hostname follows this address, and Cloudflare is brought into line if the tunnel is Frames' own.
-    const tunnel = tunnelChanged ? (await x.tunnelSync?.()) ?? { applied: false } : null;
-    return { ...dto(n), tunnel: tunnelChanged ? { updated: true, ...tunnel } : null };
+    return dto(n);
   });
 
   /** Puts a photograph in or out of the portfolio. Makes a "Portfolio" collection the first time. */

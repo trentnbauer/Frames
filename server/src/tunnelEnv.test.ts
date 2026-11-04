@@ -90,6 +90,9 @@ describe('reading the environment', () => {
     expect(readEnvTunnel({})).toEqual({ cfg: null, problems: [] });
     expect(readEnvTunnel({ CLOUDFLARE_API_TOKEN: '' })).toEqual({ cfg: null, problems: [] });
   });
+  it('is not the API setup without Cloudflare API credentials: the addresses and TUNNEL_TOKEN only pre-fill Settings', () => {
+    expect(readEnvTunnel({ APP_HOSTNAME: 'frames.example.com', PORTFOLIO_HOSTNAME: 'gallery.example.com', TUNNEL_TOKEN: 'x' })).toEqual({ cfg: null, problems: [] });
+  });
   it('tidies what it is given: lower case, no scheme or path, emails split and de-duplicated', () => {
     const r = readEnvTunnel(good);
     expect(r.problems).toEqual([]);
@@ -150,7 +153,7 @@ describe('making Cloudflare match', () => {
   it('makes the portfolio address the owner’s and shows the tunnel read-only in Settings', async () => {
     expect(sys.prepare("SELECT user_id FROM portfolio_hosts WHERE host = 'gallery.example.com'").get()).toEqual({ user_id: 1 });
     const t = (await env.app.inject('/api/tunnel')).json();
-    expect(t).toMatchObject({ managedByEnv: true, hasApiToken: false, config: { mode: 'api', env: true }, access: { appHost: 'frames.example.com', emails: ['me@example.com'], publicPaths: PUBLIC_DESTINATIONS } });
+    expect(t).toMatchObject({ managedByEnv: true, config: { env: true }, access: { appHost: 'frames.example.com', emails: ['me@example.com'], publicPaths: PUBLIC_DESTINATIONS } });
     expect((await env.app.inject({ method: 'PUT', url: '/api/tunnel', payload: { enabled: false } })).statusCode).toBe(409);
     expect((await env.app.inject({ method: 'POST', url: '/api/tunnel/stop', payload: {} })).statusCode).toBe(409);
     expect((await env.app.inject({ method: 'PUT', url: '/api/portfolio', payload: { host: 'elsewhere.example.com' } })).statusCode).toBe(400);

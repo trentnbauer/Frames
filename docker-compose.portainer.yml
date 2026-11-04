@@ -12,6 +12,7 @@ services:
       ## Cloudflare tunnel, set up by Frames itself (no separate tunnel container). Leave these empty to run without it.
       ## Make the API token at https://dash.cloudflare.com/profile/api-tokens (Create Custom Token) with: Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read
       ## Step by step, with the account ID and the one-time-PIN login: README, Cloudflare tunnel
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-} ##A tunnel you made in the Cloudflare dashboard (Settings, Cloudflare tunnel explains how). Used instead of the API setup below
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID}
       TUNNEL_NAME: ${TUNNEL_NAME:-Frames}
