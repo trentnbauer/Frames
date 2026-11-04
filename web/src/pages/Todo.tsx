@@ -37,7 +37,7 @@ export function Todo() {
             {i.link && <Link to={i.link} className="pill primary">Open</Link>}
             {(i.key === 'ai-tags' || i.key === 'ai-description') && <button className="pill" style={{ marginBottom: 12 }} onClick={() => acceptAll(i.key === 'ai-tags' ? 'tags' : 'description', i.count)}>Accept all {i.count.toLocaleString()}</button>}
             {(i.key === 'subjects' || i.key === 'tags') && <Link to={`/library?missing=${i.key === 'subjects' ? 'subject' : 'tag'}`} className="pill" style={{ marginBottom: 12 }}>See all {i.count.toLocaleString()} in the Library</Link>}
-            {photos.length > 0 && <Justified photos={photos} h={110} />}
+            {photos.length > 0 && <Justified photos={photos} h={110} hrefOf={(p) => `/photo/${p.id}?todo=${i.key}`} />}
             {i.count > photos.length && photos.length > 0 && <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>Showing the newest {photos.length}. The rest appear here as you finish these.</p>}
           </section>
         );

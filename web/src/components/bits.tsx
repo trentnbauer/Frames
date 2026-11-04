@@ -109,7 +109,7 @@ export function BottomNav({ onSearch, onNew }: { onSearch: () => void; onNew: ()
 }
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
-export function Justified({ photos, h = 190, onPick, captions, badges, picked, onTick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; badges?: (p: PhotoLite) => string | undefined; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
+export function Justified({ photos, h = 190, onPick, captions, badges, picked, onTick, hrefOf }: { hrefOf?: (p: PhotoLite) => string; photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; badges?: (p: PhotoLite) => string | undefined; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
   return (
     <div className="just">
       {photos.map((p) => {
@@ -123,7 +123,7 @@ export function Justified({ photos, h = 190, onPick, captions, badges, picked, o
         return onPick ? (
           <button key={p.id} style={{ ...st, position: 'relative' }} onClick={() => onPick(p)} aria-label={p.title}>{inner}</button>
         ) : (
-          <Link key={p.id} to={`/photo/${p.id}`} style={{ ...st, position: 'relative' }} aria-label={p.title}>{inner}</Link>
+          <Link key={p.id} to={hrefOf ? hrefOf(p) : `/photo/${p.id}`} style={{ ...st, position: 'relative' }} aria-label={p.title}>{inner}</Link>
         );
       })}
       <i />
