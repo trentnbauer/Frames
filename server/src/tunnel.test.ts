@@ -132,17 +132,17 @@ describe('what may be exposed, and what is checked', () => {
     expect((await A.put('/api/tunnel', { hostnames: [{ hostname: 'a.example.com', kind: 'app' }, { hostname: 'A.example.com', kind: 'app' }] })).body.error).toMatch(/twice|sign-in/);
     expect((await A.put('/api/tunnel', { accountId: 'short' })).status).toBe(400);
   });
-  it('lets a hostname show the portfolio only if it is the portfolio’s own address', async () => {
+  it('makes a new portfolio hostname the portfolio’s own address (the link goes both ways)', async () => {
     const r = await A.put('/api/tunnel', { hostnames: [{ hostname: 'photography.example.com', kind: 'portfolio' }] });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/portfolio’s own address/);
-    await A.put('/api/portfolio', { host: 'photography.example.com' });
-    expect((await A.put('/api/tunnel', { hostnames: [{ hostname: 'photography.example.com', kind: 'portfolio' }] })).status).toBe(200);
+    expect(r.status).toBe(200);
+    expect((await A.get('/api/portfolio')).body.config.host).toBe('photography.example.com');
+    expect((await A.put('/api/tunnel', { hostnames: [{ hostname: 'new1.example.com', kind: 'portfolio' }, { hostname: 'new2.example.com', kind: 'portfolio' }] })).status).toBe(400); // only one new address at a time
   });
-  it('refuses to expose the whole app unless sign-in is on', async () => {
+  it('lets the whole app be exposed with sign-in off, and says so, because it may be locked down in Cloudflare', async () => {
     const r = await A.put('/api/tunnel', { hostnames: [{ hostname: 'frames.example.com', kind: 'app' }] });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Turn on sign-in/);
+    expect(r.status).toBe(200);
+    expect(r.body.appOpen).toBe(true);
+    expect((await A.put('/api/tunnel', { hostnames: [{ hostname: 'photography.example.com', kind: 'portfolio' }] })).body.appOpen).toBe(false);
     const e = makeEnv({ authUser: 'me', authPassword: 'pw' });
     try {
       const h = { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') };
@@ -272,5 +272,72 @@ describe('shutting down', () => {
       await e.app.close();
       expect(await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } })).toBe(true);
     } finally { delete process.env.CLOUDFLARED_BIN; cleanup(e); }
+  });
+});
+
+describe('the app and portfolio addresses are linked to the tunnel', () => {
+  let env: Env, A: ReturnType<typeof api>;
+  const hosts = async () => (await A.get('/api/tunnel')).body.config.hostnames.map((h: any) => `${h.kind}:${h.hostname}`);
+  const publicUrl = async () => (await A.get('/api/auth/config')).body.publicUrl;
+  beforeAll(() => { env = makeEnv({ cloudflareApi: cfBase }); A = api(env); });
+  afterAll(() => cleanup(env));
+
+  it('setting the portfolio address adds it to the tunnel, changing it replaces it, and clearing it removes it', async () => {
+    const r = await A.put('/api/portfolio', { host: 'first.example.com' });
+    expect(r.body.tunnel).toMatchObject({ updated: true, applied: false }); // nothing set up in Cloudflare yet
+    expect(await hosts()).toEqual(['portfolio:first.example.com']);
+    await A.put('/api/portfolio', { host: 'second.example.com' });
+    expect(await hosts()).toEqual(['portfolio:second.example.com']);
+    await A.put('/api/portfolio', { host: '' });
+    expect(await hosts()).toEqual([]);
+    expect((await A.put('/api/portfolio', { photographerName: 'No address change' })).body.tunnel).toBeNull();
+  });
+  it('setting the public address adds the app hostname, and changing or clearing it follows', async () => {
+    const r = await A.put('/api/auth/config', { publicUrl: 'https://frames.example.com' });
+    expect(r.body.tunnel).toMatchObject({ updated: true });
+    expect(await hosts()).toEqual(['app:frames.example.com']);
+    await A.put('/api/auth/config', { publicUrl: 'https://app2.example.com/' });
+    expect(await hosts()).toEqual(['app:app2.example.com']);
+    await A.put('/api/auth/config', { publicUrl: '' });
+    expect(await hosts()).toEqual([]);
+  });
+  it('naming an app hostname in the tunnel sets the public address, and removing it clears it', async () => {
+    await A.put('/api/tunnel', { hostnames: [{ hostname: 'frames.example.com', kind: 'app' }] });
+    expect(await publicUrl()).toBe('https://frames.example.com');
+    await A.put('/api/tunnel', { hostnames: [{ hostname: 'frames.example.com', kind: 'app' }, { hostname: 'photography.example.com', kind: 'portfolio' }] });
+    expect((await A.get('/api/portfolio')).body.config.host).toBe('photography.example.com');
+    await A.put('/api/tunnel', { hostnames: [{ hostname: 'photography.example.com', kind: 'portfolio' }] });
+    expect(await publicUrl()).toBe('');
+  });
+  it('brings Cloudflare into line too when the tunnel is Frames’ own and already made', async () => {
+    cf.dns.length = 0; cf.calls.length = 0;
+    await A.put('/api/tunnel', { mode: 'api', accountId: 'a'.repeat(32), apiToken: 'good-api-token', tunnelName: 'Linked', hostnames: [{ hostname: 'photography.example.com', kind: 'portfolio' }] });
+    expect((await A.post('/api/tunnel/apply')).body.ok).toBe(true);
+    expect(cf.dns.map((d) => d.name)).toEqual(['photography.example.com']);
+    const r = await A.put('/api/portfolio', { host: 'gallery.example.com' });
+    expect(r.body.tunnel).toMatchObject({ updated: true, applied: true });
+    expect(cf.dns.map((d) => d.name)).toEqual(['gallery.example.com']); // the old record went, the new one is there
+    expect(cf.routes.map((x: any) => x.hostname).filter(Boolean)).toEqual(['gallery.example.com']);
+    const t = (await A.get('/api/tunnel')).body.config;
+    expect(t.hostnames).toEqual([{ hostname: 'gallery.example.com', kind: 'portfolio' }]);
+  });
+  it('says so, rather than failing the change, if Cloudflare will not take the update', async () => {
+    await A.put('/api/tunnel', { apiToken: 'wrong-token' });
+    const r = await A.put('/api/portfolio', { host: 'again.example.com' });
+    expect(r.status).toBe(200);
+    expect(r.body.config.host).toBe('again.example.com'); // the address itself did change
+    expect(r.body.tunnel).toMatchObject({ updated: true, applied: false });
+    expect(r.body.tunnel.error).toMatch(/Cloudflare said/);
+  });
+  it('leaves a tunnel that is set up from environment variables alone', async () => {
+    const e = makeEnv();
+    try {
+      const sys = (e.app as any).frames.sys;
+      sys.prepare('INSERT OR REPLACE INTO portfolio_hosts(host, user_id) VALUES(?, 1)').run('env.example.com');
+      sys.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)').run('tunnel', JSON.stringify({ enabled: true, mode: 'api', env: true, accountId: '', tunnelName: 'x', tunnelId: 't', dns: {}, hostnames: [{ hostname: 'env.example.com', kind: 'portfolio' }] }));
+      const r = await api(e).put('/api/portfolio', { host: 'changed.example.com' });
+      expect(r.status).toBe(400); // the environment owns the portfolio address
+      expect(JSON.parse((sys.prepare("SELECT value FROM settings WHERE key = 'tunnel'").get() as any).value).hostnames).toEqual([{ hostname: 'env.example.com', kind: 'portfolio' }]);
+    } finally { cleanup(e); }
   });
 });

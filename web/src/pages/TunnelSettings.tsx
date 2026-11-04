@@ -4,7 +4,7 @@ import { api, useApi } from '../api';
 type Host = { hostname: string; kind: 'portfolio' | 'app' };
 type Data = {
   config: { enabled: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string; hostnames: Host[] };
-  hasToken: boolean; hasApiToken: boolean; portfolioHost: string; signInOn: boolean; service: string;
+  hasToken: boolean; hasApiToken: boolean; portfolioHost: string; signInOn: boolean; appOpen: boolean; service: string;
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
 };
@@ -94,22 +94,22 @@ export function TunnelSettings() {
 
       <div className="field">
         <h3>What is reachable from outside</h3>
-        <p>Everything goes to this Frames server, nothing else. A <b>portfolio</b> address shows only the public portfolio: no app, no share links, nothing private. Exposing the <b>whole app</b> is only allowed once sign-in is on.</p>
+        <p>Everything goes to this Frames server, nothing else. A <b>portfolio</b> address shows only the public portfolio: no app, no share links, nothing private. The <b>whole app</b> address gives access to everything, so lock it down in Cloudflare (for example Cloudflare Access) or turn on sign-in. These addresses are shared with Settings: the whole-app address is the public address under Access, and the portfolio address is the one under Portfolio, so changing one changes the other.</p>
         {hosts.map((h, i) => (
           <div className="form" key={i} style={{ marginBottom: 8 }}>
             <input aria-label={`Hostname ${i + 1}`} style={{ minWidth: 280 }} value={h.hostname} placeholder={h.kind === 'portfolio' ? 'photography.example.com' : 'frames.example.com'} onChange={(e) => setHosts(hosts.map((x, j) => (j === i ? { ...x, hostname: e.target.value } : x)))} />
             <select aria-label={`Hostname ${i + 1} shows`} value={h.kind} onChange={(e) => setHosts(hosts.map((x, j) => (j === i ? { ...x, kind: e.target.value as Host['kind'] } : x)))}>
-              <option value="portfolio">Only the portfolio</option><option value="app">The whole app (needs sign-in)</option>
+              <option value="portfolio">Only the portfolio</option><option value="app">The whole app</option>
             </select>
             <button className="t2" onClick={() => setHosts(hosts.filter((_, j) => j !== i))}>Remove</button>
           </div>
         ))}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
           <button className="pill" onClick={() => addHost('portfolio')}>Add the portfolio address</button>
-          <button className="pill" onClick={() => addHost('app')} disabled={!d.data.signInOn} title={d.data.signInOn ? '' : 'Turn on sign-in first'}>Add the whole app</button>
+          <button className="pill" onClick={() => addHost('app')}>Add the whole app</button>
         </div>
         {!d.data.portfolioHost && <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Set the portfolio’s own address first (Settings, Portfolio), then add it here.</p>}
-        {!d.data.signInOn && <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>Sign-in is off, so the whole app cannot be added.</p>}
+        {d.data.appOpen && <p className="banner" role="status" style={{ marginTop: 10 }}><span>Frames’ own sign-in is off, so anyone who can reach the whole-app address can use Frames. That is fine if you protect it in Cloudflare (Access, an IP rule); if not, turn on sign-in under Access.</span></p>}
       </div>
 
       <div className="field">

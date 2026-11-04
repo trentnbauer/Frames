@@ -32,6 +32,8 @@ export type Ctx = {
   bag: <T>(key: string, init: () => T) => T;
   /** Is anything protecting this instance right now (a password or OAuth sign-in)? */
   isProtected: () => boolean;
+  /** Set by the tunnel: re-applies it to Cloudflare after an address changed elsewhere (the app or portfolio address). Null when there is nothing to apply. */
+  tunnelSync?: () => Promise<{ applied: boolean; error?: string } | null>;
   /** This server's public address as the visitor sees it (used for OAuth return addresses). */
   baseUrl: (req: any) => string;
 };

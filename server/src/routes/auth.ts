@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
+import { hostOfUrl, linkTunnelHost } from '../tunnel.js';
 import { bindOwner, resolveUser, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -112,6 +113,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const bad = (error: string) => rep.code(400).send({ error });
     const secrets: Record<string, string> = {};
     let changedProviders = false;
+    let tunnelChanged = false;
 
     if (Array.isArray(b.providers)) {
       const seen = new Set<string>();
@@ -140,6 +142,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       const v = String(b.publicUrl).trim().replace(/\/+$/, '');
       if (v) { try { const u = new URL(v); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(); } catch { return bad('The public address must start with http:// or https://'); } }
       next.publicUrl = v.slice(0, 300);
+      tunnelChanged = linkTunnelHost(db, 'app', hostOfUrl(cur.publicUrl), hostOfUrl(next.publicUrl));
     }
     if (typeof b.enabled === 'boolean') next.enabled = b.enabled;
 
@@ -162,7 +165,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     for (const p of cur.providers) if (!next.providers.some((n) => n.id === p.id)) setSecret(db, `oauth:${p.id}`, ''); // a removed provider's secret goes with it
     saveAuth(db, next);
     if (!next.enabled && cur.enabled) endAllSessions(db); // switching off ends every sign-in
-    return dto(req, next);
+    // The tunnel's app hostname follows the public address, and Cloudflare is brought into line if the tunnel is Frames' own.
+    const tunnel = tunnelChanged ? { updated: true, ...((await x.tunnelSync?.()) ?? { applied: false }) } : null;
+    return { ...dto(req, next), tunnel };
   });
 
   app.post('/api/auth/sessions/clear', async (req, rep) => {

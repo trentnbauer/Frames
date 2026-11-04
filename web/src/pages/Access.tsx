@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
+import { tunnelNote } from '../tunnelNote';
 import { useStore } from '../store';
 
 type Provider = {
@@ -43,7 +44,7 @@ export function Access() {
   const locked = c.enabled; // providers cannot change while sign-in is on
   const save = async (body: Record<string, unknown>, ok = 'Saved.') => {
     setMsg(null);
-    try { await api('/auth/config', { method: 'PUT', body }); cfg.reload(); refreshMe(); setMsg({ ok: true, text: ok }); }
+    try { const r = await api<{ tunnel?: { updated?: boolean; applied?: boolean; error?: string } | null }>('/auth/config', { method: 'PUT', body }); cfg.reload(); refreshMe(); setMsg({ ok: true, text: ok + tunnelNote(r.tunnel) }); }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
   const edit = (i: number, patch: Partial<Provider>) => { setProviders(providers.map((p, j) => (j === i ? { ...p, ...patch } : p))); setDirty(true); };
