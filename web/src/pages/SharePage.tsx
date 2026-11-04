@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
+import { printRatio, type Target } from '../target';
+import { imgUrl } from '../api';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { kind: 'collection' | 'shoot'; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[] };
+type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[] };
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -15,6 +17,9 @@ export function SharePage() {
   const [look, setLook] = useState<number | null>(null);
   const [reviewer, setReviewer] = useState('');
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
+  const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
+  const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
+  const [sugErr, setSugErr] = useState('');
   const cancelled = useRef(false);
 
   useEffect(() => {
@@ -50,6 +55,19 @@ export function SharePage() {
     setDl({ done: photos.length, total: photos.length, ready: true });
   };
 
+  const prints = (d.chosenIds ?? []).map((id) => photos.find((p) => p.id === id)).filter((p): p is (typeof photos)[number] => !!p);
+  const others = photos.filter((p) => !(d.chosenIds ?? []).includes(p.id));
+  const showPrints = d.kind === 'collection' && prints.length > 0;
+  const suggest = async (forId: number, photoId: number | null) => {
+    setSugErr('');
+    const r = await fetch(`/api/s/${token}/suggest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forId, photoId, reviewer }) });
+    if (!r.ok) { setSugErr((await r.json().catch(() => ({}))).error ?? 'Could not save that'); return; }
+    setMine((m) => { const c = { ...m }; if (photoId === null) delete c[forId]; else c[forId] = photoId; return c; });
+    setPicking(null);
+  };
+  const count = prints.length;
+  const tall = !!d.target && (d.target.orientation === 'portrait' || (d.target.orientation === 'any' && prints.some((p) => p.ar < 1)));
+
   if (view === 'review') return <GuestReview token={token} photos={photos} reviewer={reviewer} onDone={() => setView('grid')} />;
 
   return (
@@ -67,12 +85,51 @@ export function SharePage() {
         {d.allowDownload && <button className={'pill' + (d.allowReview ? '' : ' primary')} onClick={download} disabled={!!dl && !dl.ready}>Download files</button>}
         {dl && <span className="muted" role="status" style={{ fontSize: 13 }}>{dl.ready ? `${dl.total} files sent to your downloads.` : `Downloading ${dl.done} of ${dl.total}…`} {!dl.ready && <button className="t2" onClick={() => { cancelled.current = true; }}>Cancel</button>}</span>}
       </div>
+      {showPrints && (
+        <>
+          <div className="label" style={{ marginBottom: 12 }}>The {count === 1 ? 'print' : `${count} prints`}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count},minmax(0,1fr))`, gap: 16, marginBottom: 32, maxWidth: `min(100%, ${count * (tall ? 300 : 420) + (count - 1) * 16}px)` }}>
+            {prints.map((p, n) => {
+              const sug = mine[p.id] !== undefined ? photos.find((x) => x.id === mine[p.id]) : null;
+              return (
+                <div key={p.id}>
+                  <button onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`} style={{ display: 'flex', width: '100%', aspectRatio: String(d.target ? printRatio(d.target, p.ar ? { w: p.ar, h: 1 } : null) : p.ar), borderRadius: 8, background: '#161615', position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 0 0 1px #efede8', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src={imgUrl(p.id, 'preview', token)} alt={p.title} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain' }} />
+                    <span style={{ position: 'absolute', top: 8, left: 10, font: "italic 400 20px 'Instrument Serif',serif", textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>{n + 1}</span>
+                  </button>
+                  {d.allowReview && others.length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 12.5 }}>
+                      {sug ? (
+                        <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">You suggested this instead</span><button className="t2" onClick={() => suggest(p.id, null)}>Undo</button></span>
+                      ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => setPicking(p.id)}>Suggest another</button>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {sugErr && <p className="reason" role="alert">{sugErr}</p>}
+          {others.length > 0 && <div className="label" style={{ marginBottom: 12 }}>Other candidates</div>}
+        </>
+      )}
       <div className="just">
-        {photos.map((p, i) => (
-          <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(i)} aria-label={`Open ${p.title}`}><Img p={p} /></button>
+        {(showPrints ? others : photos).map((p) => (
+          <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`}><Img p={p} /></button>
         ))}
         <i />
       </div>
+      {picking !== null && (
+        <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div role="dialog" aria-label="Suggest another" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+            <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>Suggest another</h2>
+            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
+            <div className="just">
+              {others.map((p) => <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 140}px`, aspectRatio: String(p.ar) }} onClick={() => suggest(picking, p.id)} aria-label={`Suggest ${p.title}`}><Img p={p} /></button>)}
+              <i />
+            </div>
+          </div>
+        </div>
+      )}
       {look !== null && (
         <div className="review-screen" role="dialog" aria-label="Photograph">
           <div className="counter">{look + 1} <span>/ {photos.length}</span></div>

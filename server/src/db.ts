@@ -186,6 +186,17 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'collections', 'printed_at', 'TEXT');
   },
+  // 11: a guest of a composition's share link can suggest another candidate in place of one of the chosen prints.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS share_suggestions (
+        id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+        reviewer TEXT NOT NULL DEFAULT '', for_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+        photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE, note TEXT, ts TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS share_suggestions_share ON share_suggestions(share_id);
+    `);
+  },
 ];
 
 export function migrate(db: DB) {
