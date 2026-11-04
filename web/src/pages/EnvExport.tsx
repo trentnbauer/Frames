@@ -1,5 +1,8 @@
 import { useApi } from '../api';
 
+type Row = { name: string; secret: boolean; status: 'same' | 'differs' | 'app only' | 'env only' };
+type Compare = { rows: Row[]; counts: { same: number; differs: number; appOnly: number; envOnly: number } };
+
 type Info = { allowed: boolean; loaded: { system: boolean; owner: boolean }; settings: { system: number; owner: number }; version: string };
 
 /**
@@ -9,6 +12,7 @@ type Info = { allowed: boolean; loaded: { system: boolean; owner: boolean }; set
  */
 export function EnvExport() {
   const d = useApi<Info>('/admin/env');
+  const cmp = useApi<Compare>('/admin/env/compare');
   if (!d.data) return <p className="empty">Loading…</p>;
   const i = d.data;
   const loaded = i.loaded.system || i.loaded.owner;
@@ -36,6 +40,30 @@ export function EnvExport() {
           <li>Restart Frames. The file now <b>wins over the app</b>: its values are written over what was saved every time Frames starts.</li>
         </ol>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Only the server’s settings are in the file. Everyone’s own library, the owner’s included (their AIs, cloud folders, portfolio, review settings), and the photographs, previews and compositions stay in the data volume: keep using the same volume. Sign-in sessions are not in the file, so everyone signs in again after a move.</p>
+      </div>
+
+      <div className="field">
+        <h3>Saved in the app against set in the environment</h3>
+        <p className="muted" style={{ fontSize: 13 }}>For each variable the file would hold: whether this container was started with it, and with the same value. Values are never shown here.</p>
+        {cmp.data && (
+          <>
+            <p style={{ fontSize: 13 }}>{cmp.data.counts.same} the same · {cmp.data.counts.differs} different · {cmp.data.counts.appOnly} saved in the app only · {cmp.data.counts.envOnly} set in the environment only</p>
+            {cmp.data.rows.length === 0 && <p className="muted">Nothing is saved yet.</p>}
+            {cmp.data.rows.length > 0 && (
+              <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
+                <thead><tr style={{ textAlign: 'left', color: 'var(--muted)' }}><th style={{ padding: '4px 0' }}>Variable</th><th>Status</th></tr></thead>
+                <tbody>
+                  {cmp.data.rows.map((r) => (
+                    <tr key={r.name} style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
+                      <td className="mono" style={{ padding: '5px 0' }}>{r.name}{r.secret && <span className="faint"> · secret</span>}</td>
+                      <td className={r.status === 'differs' ? 'reason' : r.status === 'same' ? '' : 'muted'}>{r.status === 'same' ? 'Same' : r.status === 'differs' ? 'Different from the app' : r.status === 'app only' ? 'Saved in the app only' : 'Set in the environment only'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
       </div>
 
       <div className="field">

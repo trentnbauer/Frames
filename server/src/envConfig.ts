@@ -103,8 +103,10 @@ const PASS_THROUGH = ['AUTH_DISABLE', 'AUTH_USER', 'AUTH_PASSWORD', 'ALLOW_SIGNU
 
 const TUNNEL_VARS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TUNNEL_NAME', 'APP_HOSTNAME', 'ACCESS_EMAILS', 'PORTFOLIO_HOSTNAME'];
 
-export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; date?: Date; env?: EnvSource } = {}): string {
+/** `pairs`, if given, is filled with every variable the file would hold and its value as plain text (for comparing with what is set). */
+export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; date?: Date; env?: EnvSource; pairs?: [string, string][] } = {}): string {
   const env = opts.env ?? process.env;
+  const note = (k: string, t: string) => { opts.pairs?.push([k, t]); return envLine(k, t); };
   const lines = [
     `# Frames${opts.version && opts.version !== 'dev' ? ` ${opts.version}` : ''} settings${opts.date ? `, exported ${opts.date.toISOString().slice(0, 10)}` : ''}.`,
     '# Add this file to your stack (docker compose --env-file frames.env up -d, or save it as .env next to the compose file, or in Portainer:',
@@ -112,16 +114,16 @@ export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; dat
     '# It holds every secret: keep it private and never commit it.',
     '',
     '# Export is switched off once this file is in use, so the secrets cannot be downloaded again. Set it to true and restart to export again.',
-    envLine('ALLOW_ENV_EXPORT', 'false'),
+    note('ALLOW_ENV_EXPORT', 'false'),
   ];
   // The Cloudflare API variables belong to the environment-variable setup of the tunnel. When the tunnel is managed from Settings they are
   // left-overs, and carrying them into the file would put them back in charge (a revoked token would then keep the tunnel down).
   const envTunnel = !!getSetting<{ env?: boolean }>(sys, 'tunnel', {}).env;
   const plain = PASS_THROUGH.filter((k) => (env[k] ?? '').trim() && (envTunnel || !TUNNEL_VARS.includes(k)));
-  if (plain.length) lines.push('', '# Variables this Frames was started with', ...plain.map((k) => envLine(k, (env[k] ?? '').trim())));
+  if (plain.length) lines.push('', '# Variables this Frames was started with', ...plain.map((k) => note(k, (env[k] ?? '').trim())));
   const section = (title: string, prefix: string, scope: 'system' | 'owner', settings: Record<string, unknown>) => {
     const { entries, rest } = friendlyEntries(scope, settings);
-    lines.push('', `# ${title}`, ...entries.map(([k, t]) => envLine(k, t)), ...pathEntries(prefix, rest).map(([k, t]) => envLine(k, t)));
+    lines.push('', `# ${title}`, ...entries.map(([k, t]) => note(k, t)), ...pathEntries(prefix, rest).map(([k, t]) => note(k, t)));
   };
   section('The server’s settings: sign-in, the tunnel, the privacy page, cloud storage providers and the AIs for everyone', SYSTEM_PREFIX, 'system', snapshot(sys));
   return lines.join('\n') + '\n';
