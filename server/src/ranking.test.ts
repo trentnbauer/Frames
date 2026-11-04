@@ -42,6 +42,12 @@ describe('ranking a composition', () => {
     expect(r.items.find((i: any) => i.id === ids[2])).toMatchObject({ mine: null, guest: 4, score: 4 }); // only guests rated it
   });
 
+  it('reports what guests thought of one photograph', async () => {
+    expect((await A.get(`/api/photos/${ids[1]}/guests`)).body).toEqual({ avg: 5, n: 2 });
+    expect((await A.get(`/api/photos/${ids[0]}/guests`)).body).toEqual({ avg: null, n: 0 });
+    expect((await A.get('/api/photos/9999/guests')).status).toBe(404);
+  });
+
   it('lets the weight be changed (0 to 60), and refuses anything else', async () => {
     expect((await A.put('/api/collections/guest-weight', { weight: 0 })).body.weight).toBe(0);
     expect(((await A.get(`/api/collections/${compId}/ranking`)).body.items as any[]).find((i) => i.id === ids[1]).score).toBe(3);
