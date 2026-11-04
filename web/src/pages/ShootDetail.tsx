@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Img, Loading, useField } from '../components/bits';
@@ -23,7 +23,8 @@ export function ShootDetail() {
   const f = { name, place, description, dateFrom, dateTo };
   const setF = (n: typeof f) => { setName(n.name); setPlace(n.place); setDescription(n.description); setDateFrom(n.dateFrom); setDateTo(n.dateTo); };
   const [select, setSelect] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [qs] = useSearchParams();
+  const [sharing, setSharing] = useState(qs.get('share') === '1');
   const [picked, setPicked] = useState<number[]>([]);
   const [msg, setMsg] = useState('');
   const s = shoot.data;
