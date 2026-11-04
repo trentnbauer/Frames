@@ -69,10 +69,22 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     const c = all.connections.find((k) => k.id === (req.params as Row).id);
     if (!c) return x.notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if (b.folders !== undefined) {
+      // Several folders: each with its subfolders. "Everything in this account" is the root folder, on its own.
+      if (!Array.isArray(b.folders) || b.folders.length > 50) return rep.code(400).send({ error: 'Choose up to 50 folders.' });
+      const list: { id: string; name: string }[] = [];
+      for (const f of b.folders as Row[]) {
+        if (!f || typeof f.id !== 'string' || !validFolderId(c.provider, f.id)) return rep.code(400).send({ error: 'Not a folder.' });
+        if (!list.some((x) => x.id === f.id)) list.push({ id: f.id, name: typeof f.name === 'string' ? f.name.slice(0, 300) : '' });
+      }
+      c.folders = list; c.folderId = list[0]?.id ?? null; c.folderName = list[0]?.name ?? '';
+      if (list.length === 0) c.enabled = false; // nothing to keep up to date
+    }
     if (b.folderId !== undefined) {
       if (typeof b.folderId !== 'string' || !validFolderId(c.provider, b.folderId)) return rep.code(400).send({ error: 'Not a folder.' });
       c.folderId = b.folderId;
       c.folderName = typeof b.folderName === 'string' ? b.folderName.slice(0, 200) : '';
+      c.folders = [{ id: c.folderId, name: c.folderName }]; // the older way of choosing one folder
     }
     if (b.intervalMin !== undefined) {
       const n = Number(b.intervalMin);
@@ -80,7 +92,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
       c.intervalMin = n;
     }
     if (b.enabled !== undefined) {
-      if (b.enabled === true && (c.folderId === null || c.needsReconnect)) return rep.code(400).send({ error: c.needsReconnect ? 'Reconnect the account first.' : 'Choose a folder first.' });
+      if (b.enabled === true && (!(c.folders ?? []).length || c.needsReconnect)) return rep.code(400).send({ error: c.needsReconnect ? 'Reconnect the account first.' : 'Choose a folder first.' });
       c.enabled = !!b.enabled;
     }
     if (b.shrink !== undefined) c.shrink = b.shrink === true;

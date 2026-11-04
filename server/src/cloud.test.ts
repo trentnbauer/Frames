@@ -228,6 +228,21 @@ describe.each(['google', 'dropbox', 'onedrive'] as const)('cloud sync: %s', (pro
     expect(fs.existsSync(path.join(dest, 'huge.xmp'))).toBe(false);
     nodes.pop();
   });
+  it('syncs only the chosen folders (several allowed), and an empty choice turns syncing off', async () => {
+    const root = provider === 'dropbox' ? '' : 'root';
+    const trip = fid(provider, 'd1');
+    expect((await A.put(`/api/cloud/${id}`, { folders: [{ id: trip, name: 'Trip' }, { id: trip, name: 'again' }, { id: root, name: 'All' }] })).status).toBe(200);
+    expect((await A.get('/api/cloud')).body.connections[0]).toMatchObject({ folderId: trip, folderName: 'Trip', folders: [{ id: trip, name: 'Trip' }, { id: root, name: 'All' }] });
+    expect((await A.put(`/api/cloud/${id}`, { folders: [{ id: '../etc' }] })).status).toBe(400);
+    expect((await A.put(`/api/cloud/${id}`, { folders: 'x' })).status).toBe(400);
+    expect((await A.put(`/api/cloud/${id}`, { folders: [{ id: trip, name: 'Trip' }] })).status).toBe(200);
+    expect((await A.post(`/api/cloud/${id}/sync?wait=1`)).body).toMatchObject({ downloaded: 0, skipped: 2, error: null }); // only Trip's two photographs are looked at
+    expect((await A.put(`/api/cloud/${id}`, { folders: [] })).status).toBe(200);
+    expect((await A.get('/api/cloud')).body.connections[0]).toMatchObject({ folderId: null, enabled: false, folders: [] });
+    expect((await A.post(`/api/cloud/${id}/sync?wait=1`)).status).toBe(400);
+    await A.put(`/api/cloud/${id}`, { folders: [{ id: root, name: 'Everything' }] });
+  });
+
   it('is scanned like any library, and the files stay when the connection is removed', async () => {
     // The sync already started a scan in the background; wait for it, then run one more to be sure.
     for (let i = 0; i < 100 && (await A.get('/api/library/scan/status')).body.running; i++) await new Promise((r) => setTimeout(r, 100));
