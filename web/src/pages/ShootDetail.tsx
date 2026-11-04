@@ -4,10 +4,12 @@ import { api, useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Img, Loading, useField } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
+import { useUi } from '../ui';
 
 export function ShootDetail() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { openNew } = useUi();
   const shoot = useApi<Shoot>(`/shoots/${id}`);
   const all = useApi<Shoot[]>('/shoots');
   const photos = useApi<{ photos: PhotoLite[] }>(`/photos?shoot=${id}&order=oldest`);
@@ -36,12 +38,32 @@ export function ShootDetail() {
   return (
     <div className="page">
       <Header />
-      <div className="spread" style={{ fontSize: 13, marginBottom: 14 }}>
-        <Link to="/shoots" className="t2">← Photoshoots</Link>
-        <span className="muted" style={{ display: 'flex', gap: 18 }}>{s.source} · imported {new Date(s.importedAt).toLocaleDateString('en-AU')}<button className="t2" onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share</button></span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
+        <Link to="/shoots" style={{ color: '#a8a59f' }}>← Photoshoots</Link>
+        <span style={{ color: '#8f8c86', display: 'flex', gap: 18 }}>
+          {s.source} · imported {new Date(s.importedAt).toLocaleDateString('en-AU')}
+          <button style={{ color: '#a8a59f' }} onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share for review</button>
+          <button style={{ color: '#a8a59f' }} onClick={async () => {
+            if (!window.confirm(`Take this photoshoot and all ${photos.data?.photos.length ?? 'its'} photographs out of Frames?\n\nTheir reviews, tags and composition places go with them, and its share links stop working. Files in a library folder are not touched. A scan will not bring them back.`)) return;
+            await api(`/shoots/${id}`, { method: 'DELETE' });
+            nav('/shoots');
+          }}>Delete photoshoot</button>
+        </span>
       </div>
       {sharing && <SharePanel kind="shoot" id={s.id} onClose={() => setSharing(false)} />}
-      <input className="serif inline" aria-label="Photoshoot name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onBlur={() => f.name.trim() && f.name !== s.name && save({ name: f.name })} style={{ fontSize: 52, lineHeight: 1 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <input className="serif inline" aria-label="Photoshoot name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onBlur={() => f.name.trim() && f.name !== s.name && save({ name: f.name })} style={{ fontSize: 52, lineHeight: 1, marginBottom: 10 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#8f8c86' }}>
+            <div style={{ width: 140, height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${s.reviewPct}%` }} /></div>
+            {s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={() => { setSelect(!select); setPicked([]); setMsg(''); }} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{select ? 'Done selecting' : 'Select photographs'}</button>
+          <button onClick={() => openNew({ name: s.name, photoIds: list.map((p) => p.id) })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Compose from this shoot</button>
+        </div>
+      </div>
       <div className="form" style={{ margin: '14px 0 6px' }}>
         <label>Place <input aria-label="Place" value={f.place} onChange={(e) => setF({ ...f, place: e.target.value })} onBlur={() => f.place !== s.place && save({ place: f.place })} /></label>
         <label>From <input type="date" aria-label="From date" value={f.dateFrom} onChange={(e) => { setF({ ...f, dateFrom: e.target.value }); save({ dateFrom: e.target.value || null }); }} /></label>
@@ -49,34 +71,32 @@ export function ShootDetail() {
         <span className="muted">{s.dates} · {s.count} {s.count === 1 ? 'photograph' : 'photographs'}</span>
       </div>
       <textarea className="area" aria-label="Description" rows={2} placeholder="Describe this photoshoot" value={f.description} style={{ maxWidth: 640, marginBottom: 20 }} onChange={(e) => setF({ ...f, description: e.target.value })} onBlur={() => f.description !== s.description && save({ description: f.description })} />
-      <div className="spread" style={{ marginBottom: 14 }}>
-        <span className="muted" role="status" style={{ fontSize: 13 }}>{msg || (select ? `${picked.length} selected` : 'Dates come from the photographs unless you set them here.')}</span>
-        <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {select && picked.length > 0 && (
+      {msg && <div className="muted" role="status" style={{ fontSize: 13, marginBottom: 14 }}>{msg}</div>}
+      <div className="just">
+        {list.map((p) => {
+          const on = picked.includes(p.id);
+          const st = { flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1, position: 'relative' as const, outline: on ? '2px solid #efede8' : 'none', outlineOffset: -2 };
+          const inner = <><Img p={p} /><em className="cap">{p.reviewCount ? p.avgRating.toFixed(1) : '–'} · {p.title}</em>{select && <b className="tick" style={{ background: on ? '#efede8' : undefined }}>{on ? '✓' : ''}</b>}</>;
+          return select
+            ? <button key={p.id} style={st} aria-pressed={on} aria-label={`${on ? 'Deselect' : 'Select'} ${p.title}`} onClick={() => setPicked(on ? picked.filter((x) => x !== p.id) : [...picked, p.id])}>{inner}</button>
+            : <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}>{inner}</Link>;
+        })}
+        <i />
+      </div>
+      {list.length === 0 && <div className="empty">This photoshoot is empty.</div>}
+      {select && (
+        <div className="selbar float" role="region" aria-label="Selected photographs">
+          <b style={{ fontWeight: 500 }}>{picked.length} selected</b>
+          <button style={{ color: '#a8a59f' }} onClick={() => setPicked([])}>Clear</button>
+          {picked.length > 0 && (
             <select aria-label="Move selected photographs to" value="" onChange={(e) => e.target.value && move(Number(e.target.value))}>
               <option value="">Move to…</option>
               {(all.data ?? []).filter((x) => x.id !== s.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
           )}
-          <button className="pill" onClick={() => { setSelect(!select); setPicked([]); setMsg(''); }}>{select ? 'Done' : 'Select photographs'}</button>
-          <button className="pill" onClick={async () => {
-            if (!window.confirm(`Take this photoshoot and all ${photos.data?.photos.length ?? 'its'} photographs out of Frames?\n\nTheir reviews, tags and composition places go with them, and its share links stop working. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
-            await api(`/shoots/${id}`, { method: 'DELETE' });
-            nav('/shoots');
-          }}>Delete photoshoot</button>
-        </span>
-      </div>
-      <div className="just">
-        {list.map((p) => {
-          const on = picked.includes(p.id);
-          const st = { flex: `${p.ar} ${p.ar} ${p.ar * 170}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1, position: 'relative' as const, outline: on ? '2px solid var(--text)' : 'none' };
-          return select
-            ? <button key={p.id} style={st} aria-pressed={on} aria-label={`${on ? 'Deselect' : 'Select'} ${p.title}`} onClick={() => setPicked(on ? picked.filter((x) => x !== p.id) : [...picked, p.id])}><Img p={p} /></button>
-            : <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}><Img p={p} /></Link>;
-        })}
-        <i />
-      </div>
-      {list.length === 0 && <div className="empty">This photoshoot is empty.</div>}
+          <button disabled={picked.length === 0} onClick={() => openNew({ name: s.name, photoIds: picked })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.length ? 1 : 0.5 }}>New composition from {picked.length}</button>
+        </div>
+      )}
     </div>
   );
 }
