@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
-import { checkTarget, parseTarget, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
+import { checkTarget, parseTarget, printRatio, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
 import { Header, Img, Justified, Loading } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
@@ -245,7 +245,10 @@ export function CollectionDetail() {
   const candidates = ((fSub.length || fTag.length ? found.data?.photos : lib.data?.photos) ?? []).filter((p) => !c.photoIds.includes(p.id));
   const addPicked = async () => { let last = c; for (const pid of pick) last = await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' }); coll.set(last); setPick(new Set()); reload(); };
   const ins = insights.data;
-  const slotsMax = count === 1 ? 420 : count === 2 ? 760 : undefined;
+  // Each slot is drawn in the shape of the print: portrait when the target is, and capped so a tall slot does not fill the screen.
+  const slotRatio = (pid?: number) => printRatio(target ?? parseTarget({ size: 'none', orientation: 'any', ppi: 300, count: 1 })!, pid ? byId.get(pid) : null);
+  const tall = !!target && (target.orientation === 'portrait' || (target.orientation === 'any' && chosen.some((p) => p.h > p.w)));
+  const slotsMax = count * (tall ? 300 : 420) + (count - 1) * 16;
   const exportLabel = printed ? 'Printed' : full ? `Export ${count} for print` : target ? `Choose ${count - c.chosenIds.length} more to export` : 'Add a target to export';
   const canExport = full && !printed;
   const w = rk?.weight ?? 35;
@@ -318,7 +321,7 @@ export function CollectionDetail() {
       )}
 
       {target && (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count},minmax(0,1fr))`, gap: 16, marginBottom: 32, maxWidth: slotsMax ?? '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count},minmax(0,1fr))`, gap: 16, marginBottom: 32, maxWidth: `min(100%, ${slotsMax}px)` }}>
           {Array.from({ length: count }, (_, i) => {
             const p = byId.get(c.chosenIds[i]);
             return (
@@ -326,7 +329,7 @@ export function CollectionDetail() {
                 <div data-slot={i + 1}
                   onDragOver={(e) => { if (!printed) { e.preventDefault(); setOver(i); } }} onDragLeave={() => setOver((o) => (o === i ? null : o))}
                   onDrop={(e) => { e.preventDefault(); const pid = Number(e.dataTransfer.getData('text/plain')); if (pid) dropOn(i, pid); }}
-                  style={{ aspectRatio: '1.414', borderRadius: 8, background: over === i ? '#1e1e1d' : '#161615', position: 'relative', overflow: 'hidden', boxShadow: over === i ? 'inset 0 0 0 2px #efede8' : p ? 'inset 0 0 0 1px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  style={{ aspectRatio: String(slotRatio(c.chosenIds[i])), borderRadius: 8, background: over === i ? '#1e1e1d' : '#161615', position: 'relative', overflow: 'hidden', boxShadow: over === i ? 'inset 0 0 0 2px #efede8' : p ? 'inset 0 0 0 1px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {p ? <img src={imgUrl(p.id, 'preview')} alt={p.title} draggable={!printed} onDragStart={(e) => e.dataTransfer.setData('text/plain', String(p.id))} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain', cursor: printed ? 'default' : 'grab' }} />
                     : <span style={{ fontSize: 12.5, color: '#6f6c67', textAlign: 'center', padding: '0 16px' }}>Print {i + 1}<br />Drag one here, or choose from the ranking below</span>}
                   <span style={{ position: 'absolute', top: 8, left: 10, font: `italic 400 20px ${serif}`, color: '#efede8', textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>{i + 1}</span>

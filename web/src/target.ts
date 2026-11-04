@@ -84,3 +84,17 @@ export function checkTarget(p: { w: number; h: number }, t: Target | null): { pr
 }
 
 export const targetProblem = (p: { w: number; h: number }, t: Target | null) => checkTarget(p, t).problem;
+
+/**
+ * The shape of one print as width / height, for drawing its slot: the paper (or custom size), else the target's aspect ratio,
+ * else 3:2. Portrait is taller than wide, landscape wider. With no orientation set it follows the photograph in the slot, if any.
+ */
+export function printRatio(t: Target, photo?: { w: number; h: number } | null): number {
+  let long = 1.5;
+  if (t.size === 'custom' && t.widthMm && t.heightMm) long = Math.max(t.widthMm, t.heightMm) / Math.min(t.widthMm, t.heightMm);
+  else if (PAPER_MM[t.size]) long = PAPER_MM[t.size][1] / PAPER_MM[t.size][0];
+  else if (t.aspect) { const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(t.aspect); if (m && +m[1] > 0 && +m[2] > 0) long = Math.max(+m[1], +m[2]) / Math.min(+m[1], +m[2]); }
+  else if (t.minWidth && t.minHeight) long = Math.max(t.minWidth, t.minHeight) / Math.min(t.minWidth, t.minHeight);
+  const portrait = t.orientation === 'portrait' || (t.orientation === 'any' && !!photo && photo.h > photo.w);
+  return portrait ? 1 / long : long;
+}
