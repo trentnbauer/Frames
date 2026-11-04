@@ -109,13 +109,17 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
 
   // Scheduled syncs: once a minute, for each person, whichever of their connections are due.
   setInterval(() => {
-    for (const t of x.tenants.all()) {
-      x.tenants.run(t, () => {
-        if (progressOf(cfg).running) return;
-        const now = Date.now();
-        const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= c.intervalMin * 60_000));
-        if (due) run(due.id).catch(() => {});
-      });
+    let people: ReturnType<typeof x.tenants.all> = [];
+    try { people = x.tenants.all(); } catch (e) { console.error('Scheduled cloud sync could not list people', e); }
+    for (const t of people) {
+      try {
+        x.tenants.run(t, () => {
+          if (progressOf(cfg).running) return;
+          const now = Date.now();
+          const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= c.intervalMin * 60_000));
+          if (due) run(due.id).catch(() => {});
+        });
+      } catch (e) { console.error(`Scheduled cloud sync could not run for person ${t.user.id}`, e); } // one person's problem never stops the others
     }
   }, 60_000).unref();
 }

@@ -99,6 +99,18 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       if (!sameHost || req.headers['sec-fetch-site'] === 'cross-site') return rep.code(403).send({ error: 'Cross-site request blocked' });
     }
   });
+  // A request body is a JSON object of plain values. Routes read it as one, so anything else (a number, a list, a deeply nested one, or an
+  // object that carries its own toString or valueOf, which breaks turning it into text) is refused here instead of failing deep inside a route.
+  app.addHook('preValidation', async (req, rep) => {
+    const b = req.body as unknown;
+    if (b === undefined || b === null) return;
+    const bad = (v: unknown, depth = 0): boolean => {
+      if (!v || typeof v !== 'object') return false;
+      if (depth > 8) return true;
+      return Object.keys(v).some((k) => k === 'toString' || k === 'valueOf' || k === 'toJSON' || k === 'constructor' || bad((v as Record<string, unknown>)[k], depth + 1));
+    };
+    if (typeof b !== 'object' || Array.isArray(b) || bad(b)) return rep.code(400).send({ error: 'The request must be a JSON object.' });
+  });
   // Everything after this runs as the person the request is for.
   app.addHook('onRequest', (req, _rep, done) => { const t = (req as any).tenant as Tenant | null; if (t) tenants.enter(t, done); else done(); });
   app.addHook('onSend', async (req, rep) => {
@@ -353,8 +365,9 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) VALUES(?, ?, ?)').run(num(id), num(photoId), pos);
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', num(id))!);
   });
-  app.delete('/api/collections/:id/photos/:photoId', async (req) => {
+  app.delete('/api/collections/:id/photos/:photoId', async (req, rep) => {
     const { id, photoId } = req.params as Row;
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', num(id))) return notFound(rep);
     db.prepare('DELETE FROM collection_photos WHERE collection_id = ? AND photo_id = ?').run(num(id), num(photoId));
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', num(id))!);
   });

@@ -25,7 +25,7 @@ export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k);
 export function snapshot(db: DB): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const r of db.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[]) {
-    if (!isConfigKey(r.key)) continue;
+    if (!isConfigKey(r.key) || (r.key.startsWith('secret:') && r.value === '""')) continue; // nothing to carry for an emptied secret
     try { out[r.key] = JSON.parse(r.value); } catch { /* not ours to export */ }
   }
   return out;

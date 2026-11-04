@@ -89,7 +89,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
     const limit = Math.min(20000, Math.max(1, Math.round(num(q.limit, 5000))));
-    const offset = Math.max(0, Math.round(num(q.offset, 0)));
+    const offset = Math.min(1_000_000_000, Math.max(0, Math.round(num(q.offset, 0)))); // SQLite takes a whole number here, so a huge value must not reach it as a float
     const needsRank = !!q.similarTo || semantic;
     let rows = all(`SELECT p.* FROM photos p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(p.captured_at, p.added_at) ${order}, p.id ${order}${needsRank ? '' : ' LIMIT ? OFFSET ?'}`, ...args, ...(needsRank ? [] : [limit, offset]));
     if (near) rows = rows.filter((r) => r.lon !== null && haversineKm(near!.lat, near!.lon, r.lat, r.lon) <= near!.km);

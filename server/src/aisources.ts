@@ -40,6 +40,8 @@ export const getSource = (db: DB, id: string) => loadSources(db).find((s) => s.i
 
 export const sourceKey = (db: DB, id: string) => getSetting<string>(db, `secret:ai:${id}:key`, '');
 export const setSourceKey = (db: DB, id: string, key: string) => setSetting(db, `secret:ai:${id}:key`, key);
+/** A removed AI leaves nothing behind, not even an empty key. */
+export const removeSourceKey = (db: DB, id: string) => { db.prepare('DELETE FROM settings WHERE key = ?').run(`secret:ai:${id}:key`); };
 
 /** Ready to analyse photos: an address and a model, and, if it is outside your network, the acknowledgement. */
 export function isReady(s: AiSource): boolean {

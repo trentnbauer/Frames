@@ -39,7 +39,9 @@ export async function dailyBackup(db: DB, dataDir: string, now = new Date()): Pr
 
 /** Daily backups for every library that exists, and for the system database (people and sign-in settings). */
 export function startAutoBackup(targets: () => { db: DB; dataDir: string }[]) {
-  const run = () => { for (const t of targets()) dailyBackup(t.db, t.dataDir).catch((e) => console.error('Backup failed', e)); };
+  const run = () => {
+    try { for (const t of targets()) dailyBackup(t.db, t.dataDir).catch((e) => console.error('Backup failed', e)); } catch (e) { console.error('Backup could not start', e); }
+  };
   setTimeout(run, 10_000).unref();
   setInterval(run, 6 * 3600_000).unref(); // checks every six hours, writes at most one per day
 }
