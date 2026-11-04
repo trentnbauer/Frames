@@ -120,7 +120,7 @@ export function sessionCookie(token: string | null, secure: boolean): string {
 }
 
 // ---------- talking to providers ----------
-type Flow = { providerId: string; verifier: string; nonce: string; test: boolean; created: number; returnTo: string; redirectUri: string };
+type Flow = { providerId: string; verifier: string; nonce: string; test: boolean; created: number; returnTo: string; redirectUri: string; /** Set when a signed-in person is adding this account to themselves, not signing in. */ linkUser?: number };
 
 export function createAuth(db: DB, cfg: AppCfg) {
   const flows = new Map<string, Flow>(); // state -> flow, kept for ten minutes
@@ -166,12 +166,12 @@ export function createAuth(db: DB, cfg: AppCfg) {
   const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };
 
   /** Where to send the browser to start signing in. */
-  async function begin(p: Provider, req: FastifyRequest, opts: { test: boolean; returnTo: string }): Promise<string> {
+  async function begin(p: Provider, req: FastifyRequest, opts: { test: boolean; returnTo: string; linkUser?: number }): Promise<string> {
     prune();
     const state = rand(24), verifier = oidc.randomPKCECodeVerifier(), nonce = rand(16);
     const challenge = await oidc.calculatePKCECodeChallenge(verifier);
     const redirectUri = `${baseUrl(req)}/auth/callback/${p.id}`;
-    flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri });
+    flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri, linkUser: opts.linkUser });
     if (p.type === 'cloudflare') return `${baseUrl(req)}/auth/callback/${p.id}?state=${state}`; // nothing to ask a provider: Access already signed the person in
     if (p.type === 'github' || p.type === 'oauth2' || p.type === 'dropbox') {
       const a = p.type === 'github' ? PRESETS.github : p.type === 'dropbox' ? PRESETS.dropbox : p;
