@@ -56,6 +56,14 @@ describe('library', () => {
   });
 });
 
+describe('rate limit', () => {
+  it('puts a ceiling per visitor on every route, but never on the health check', async () => {
+    const r = await app.inject({ url: '/api/me' });
+    expect(Number(r.headers['x-ratelimit-limit'])).toBeGreaterThan(1000);
+    expect((await app.inject({ url: '/api/health' })).headers['x-ratelimit-limit']).toBeUndefined();
+  });
+});
+
 describe('reviews', () => {
   it('runs a session, hides nothing it should keep, and schedules the next review', async () => {
     expect((await j('GET', '/api/review/summary')).body.due).toBe(2);
