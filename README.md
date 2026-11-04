@@ -185,6 +185,9 @@ Settings, Portfolio turns one collection into a public website (your name, tagli
 - **Its own address.** At `/portfolio/` on this server, or give it a hostname (for example `photography.example.com`). Point a tunnel or reverse proxy at Frames and that hostname shows **only** the portfolio: every other address, including the app, share links and the API, returns "not found" on it. That is what makes it safe to expose.
 - It stays public even when sign-in is required for the rest of Frames.
 
+- **Buttons on the site.** Under Settings, Portfolio, *Buttons on the site*: up to 8 links shown in the portfolio's header, each with a short name (an emoji or up to 4 letters, used where space is tight), a full name and a link (`https://` or `mailto:`), in the order you set. A portfolio that had the old Instagram, X and Behance links gets them as buttons.
+- **Original files need the server's say-so.** *The original file* is only an option when an administrator has switched on *Let portfolios offer original files* under Settings, Photo folders (off by default). Switching it off again stops every portfolio offering originals.
+
 ## Cloud sync (Google Drive, Dropbox, OneDrive)
 
 Settings, Cloud sync copies the photographs from a cloud folder into Frames, then adds them like any other photo (the folder is `cloud/` in the data volume). It is one way and careful:
