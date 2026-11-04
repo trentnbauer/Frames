@@ -227,7 +227,7 @@ describe('pre-filling from the environment', () => {
 
 describe('Frames sets up the tunnel through the Cloudflare API', () => {
   const ACCOUNT = 'b'.repeat(32), TUNNEL_TOKEN = Buffer.from(JSON.stringify({ a: 'acct', t: 'tunnel', s: 'secret' })).toString('base64');
-  const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0, apps: [] as any[], policies: [] as any[] };
+  const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0, apps: [] as any[], policies: [] as any[], orgDenied: false };
   let srv: http.Server, base = '', e: Env, A: ReturnType<typeof api>;
   const runs = () => (fs.existsSync(path.join(e.tmp, 'runs.log')) ? fs.readFileSync(path.join(e.tmp, 'runs.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const settle = () => new Promise((r) => setTimeout(r, 400));
@@ -249,7 +249,7 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
           const a = { id: id === 'apps' ? `a${++cf.seq}` : id, aud: 'aud', ...j };
           cf.apps = [...cf.apps.filter((x) => x.id !== a.id), a]; return ok(a);
         }
-        if (/\/access\/organizations$/.test(url.pathname)) return ok({ auth_domain: 'team.example.test' });
+        if (/\/access\/organizations$/.test(url.pathname)) { if (cf.orgDenied) { res.statusCode = 403; return res.end(JSON.stringify({ success: false, errors: [{ message: 'Authentication error' }] })); } return ok({ auth_domain: 'team.example.test' }); }
         if (url.pathname === '/zones') return ok([{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'example.org' }]);
         if (/\/cfd_tunnel$/.test(url.pathname) && req.method === 'GET') return ok([...cf.tunnels].filter(([, n]) => n === url.searchParams.get('name')).map(([id, name]) => ({ id, name })));
         if (/\/cfd_tunnel$/.test(url.pathname)) { const id = `tun-${++cf.seq}`; cf.tunnels.set(id, j.name); return ok({ id }); }
@@ -337,6 +337,20 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     expect(shown[1].addresses).toEqual(expect.arrayContaining(['app.example.org/s/*', 'app.example.org/portfolio/*']));
     await A.put('/api/tunnel', { protect: false });
     expect(cf.apps.find((a) => a.name === 'Frames (app.example.org)')).toBeUndefined(); // un-ticking removes what it made
+  });
+  it('still puts the Access login in place when the team domain cannot be read, and says which permission is missing', async () => {
+    cf.orgDenied = true;
+    await A.put('/api/auth/config', { providers: [] });
+    await A.put('/api/tunnel', { protect: true });
+    await settle();
+    const t = (await A.get('/api/tunnel')).body;
+    expect(t.error).toBe(null);
+    expect(t.protectApplied).toBe(true);
+    expect(t.orgNote).toMatch(/Organizations, Identity Providers, and Groups, Read/);
+    expect(cf.apps.some((a) => a.name === 'Frames (app.example.org)')).toBe(true); // the login is there
+    expect((await A.get('/api/auth/config')).body.providers.some((p: any) => p.type === 'cloudflare')).toBe(false); // the sign-in method waits
+    cf.orgDenied = false;
+    await A.put('/api/tunnel', { protect: false });
   });
   it('switches itself on once set up, and stays off after the person switches it off', async () => {
     expect((await A.get('/api/tunnel')).body.config.enabled).toBe(true); // nobody pressed Run

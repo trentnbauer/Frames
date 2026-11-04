@@ -33,12 +33,14 @@ export type TunnelCfg = {
   error: string | null; appliedAt: string | null;
   /** Set when the tunnel is fine but Cloudflare Access could not be told which addresses are public (the token may lack that permission). */
   accessNote: string | null;
+  /** The Access login is in place but the team domain could not be read, so the sign-in method waits (a token permission is missing). */
+  orgNote: string | null;
   hostnames: { hostname: string; kind: HostKind }[];
   dns: Record<string, { zoneId: string; recordId: string }>; // records Frames made, so it only ever removes its own
   /** Set up from environment variables (tunnelEnv.ts): shown read-only, changed by editing the variables. */
   env?: boolean;
 };
-const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, protect: false, protectApplied: false, stopped: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {}, error: null, appliedAt: null, accessNote: null };
+const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, protect: false, protectApplied: false, stopped: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {}, error: null, appliedAt: null, accessNote: null, orgNote: null };
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
 const saveTunnel = (db: DB, c: TunnelCfg) => setSetting(db, 'tunnel', c);
 
@@ -179,11 +181,16 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       const appHost = hostOfUrl(loadAuth(sys).publicUrl);
       // The login first: nothing new is published until the App URL is behind it (the same order as the environment setup).
       let protectApplied = c.protectApplied;
+      let orgNote: string | null = null;
       if (c.protect) {
         if (!appHost) throw new Error('Enter the App URL first: it is the address Cloudflare Access protects.');
         const people = accessPeople(sys);
         if (!people.emails.length && !people.domains.length) throw new Error('Add the people allowed in (an email or a whole domain) under Settings, Access first: with nobody on the list, Cloudflare Access would let no one in.');
-        const authDomain = await cf.accessDomain();
+        // The team domain needs a separate permission (Access: Organizations, Identity Providers, and Groups, Read). Without it the login is
+        // still put in place; only the automatic sign-in method has to wait.
+        let authDomain = '';
+        try { authDomain = await cf.accessDomain(); }
+        catch (e) { orgNote = `The Access login is in place, but Frames cannot read your team domain (${e instanceof CloudflareError ? e.message : (e as Error).message}), so it cannot add Cloudflare Access as a sign-in method yet. Add the token permission Account, Access: Organizations, Identity Providers, and Groups, Read.`; }
         const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost));
         const main = await cf.saveAccessApp(found?.id ?? null, { name: accessAppName(appHost), destinations: [appHost], session: '24h' });
         await cf.saveAccessPolicy(main.id, { name: 'Frames: allowed people', decision: 'allow', ...people });
@@ -191,7 +198,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
         const a = loadAuth(sys);
         const want: Provider = { id: ACCESS_PROVIDER_ID, type: 'cloudflare', name: 'Cloudflare Access', clientId: '', teamDomain: authDomain, aud: main.aud };
         const have = a.providers.find((p) => p.id === ACCESS_PROVIDER_ID);
-        if (JSON.stringify(have) !== JSON.stringify(want)) saveAuth(sys, { ...a, providers: [...a.providers.filter((p) => p.id !== ACCESS_PROVIDER_ID), want] });
+        if (authDomain && JSON.stringify(have) !== JSON.stringify(want)) saveAuth(sys, { ...a, providers: [...a.providers.filter((p) => p.id !== ACCESS_PROVIDER_ID), want] });
         protectApplied = true;
       } else if (c.protectApplied) {
         if (appHost) { const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost)); if (found) await cf.removeAccessApp(found.id); }
@@ -210,7 +217,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       catch (e) { accessNote = `The tunnel is set up, but Cloudflare Access could not be told which addresses are public (${e instanceof CloudflareError ? e.message : (e as Error).message}). If you protect these addresses with Access, add the permission Access: Apps and Policies, Edit to the API token.`; }
       // A tunnel that is set up runs by itself, unless the person switched it off.
       const turnOn = !loadTunnel(sys).enabled && !loadTunnel(sys).stopped;
-      saveTunnel(sys, { ...loadTunnel(sys), dns, protectApplied, error: null, accessNote, appliedAt: new Date().toISOString(), ...(turnOn ? { enabled: true } : {}) });
+      saveTunnel(sys, { ...loadTunnel(sys), dns, protectApplied, error: null, accessNote, orgNote, appliedAt: new Date().toISOString(), ...(turnOn ? { enabled: true } : {}) });
       if (turnOn) runner.start();
       else if (changed && loadTunnel(sys).enabled) runner.restart(); // routes changed in Cloudflare need no restart; a new tunnel does
     } catch (e) {
@@ -242,7 +249,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       accessApps: accessApps(c, hostnames),
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
-      allow: loadAuth(db).allow, protect: c.protect, protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
+      allow: loadAuth(db).allow, protect: c.protect, protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, orgNote: c.orgNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
