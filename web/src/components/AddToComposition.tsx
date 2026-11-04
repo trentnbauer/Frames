@@ -20,8 +20,8 @@ export function AddToComposition({ ids, onDone, up = false, label }: { ids: numb
       <button className={label ? 'pill' : 'pill primary'} disabled={ids.length === 0} aria-haspopup="menu" aria-expanded={open} onClick={() => { if (!open) colls.reload(); setOpen(!open); }}>{label ?? `Add ${ids.length || ''} to a composition`}</button>
       {open && (
         <div className="menu" role="menu" style={up ? { bottom: '110%', top: 'auto', minWidth: 240 } : { minWidth: 240 }}>
-          {(colls.data ?? []).length === 0 && <span className="faint menu-note">No compositions yet</span>}
-          {(colls.data ?? []).map((c) => <button key={c.id} role="menuitem" onClick={() => add(c)}>{c.name}</button>)}
+          {(colls.data ?? []).filter((c) => !c.printedAt).length === 0 && <span className="faint menu-note">No compositions yet</span>}
+          {(colls.data ?? []).filter((c) => !c.printedAt).map((c) => <button key={c.id} role="menuitem" onClick={() => add(c)}>{c.name}</button>)}
           <form onSubmit={(e) => { e.preventDefault(); create(); }} style={{ display: 'flex', gap: 6, padding: 6 }}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New composition name" aria-label="New composition name" />
             <button className="pill">Create</button>

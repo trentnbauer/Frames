@@ -5,6 +5,8 @@ import type { PhotoLite, Shoot } from '../data';
 import { Header, Img, Loading, useField } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
+import { AddToComposition } from '../components/AddToComposition';
+import { MoveToShoot } from '../components/MoveToShoot';
 
 export function ShootDetail() {
   const { id } = useParams();
@@ -89,12 +91,8 @@ export function ShootDetail() {
         <div className="selbar float" role="region" aria-label="Selected photographs">
           <b style={{ fontWeight: 500 }}>{picked.length} selected</b>
           <button style={{ color: '#a8a59f' }} onClick={() => setPicked([])}>Clear</button>
-          {picked.length > 0 && (
-            <select aria-label="Move selected photographs to" value="" onChange={(e) => e.target.value && move(Number(e.target.value))}>
-              <option value="">Move to…</option>
-              {(all.data ?? []).filter((x) => x.id !== s.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-          )}
+          <MoveToShoot up ids={picked} except={s.id} onDone={(m) => { setMsg(m); setPicked([]); setSelect(false); shoot.reload(); photos.reload(); all.reload(); }} />
+          <AddToComposition up label="Add to a composition…" ids={picked} onDone={(m) => { setMsg(m); setPicked([]); }} />
           <button disabled={picked.length === 0} onClick={() => openNew({ name: s.name, photoIds: picked })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.length ? 1 : 0.5 }}>New composition from {picked.length}</button>
         </div>
       )}
