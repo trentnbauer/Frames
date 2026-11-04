@@ -7,6 +7,7 @@ type Data = {
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
   protect: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
+  accessApps: { name: string; decision: 'allow' | 'bypass'; addresses: string[]; who: string[] }[];
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
 };
 
@@ -99,6 +100,17 @@ export function TunnelSettings() {
             <>
               <p>Each address gets a route to this server (<span className="mono">{t.service}</span>) and a proxied DNS record, made and updated by Frames. There is nothing to add in Cloudflare yourself.</p>
               {t.hostnames.map((h) => <div className="row" key={h.hostname}><span className="mono">{h.hostname}</span><span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`}</span></div>)}
+              <h4 style={{ margin: '16px 0 4px' }}>Cloudflare Access</h4>
+              {t.accessApps.length === 0
+                ? <p className="muted" style={{ fontSize: 13 }}>{t.hasApiToken ? 'No Access applications yet. Tick “Protect the App URL with Cloudflare Access” above to put a login in front of the app.' : 'Frames sets these up once the API token is saved.'}</p>
+                : t.accessApps.map((a) => (
+                  <div className="row" key={a.name} style={{ display: 'block' }}>
+                    <div><b>{a.name}</b> <span className="faint">{a.decision === 'allow' ? 'login required' : 'public, no login'}</span></div>
+                    <div className="mono" style={{ fontSize: 12, userSelect: 'all', wordBreak: 'break-all' }}>{a.addresses.join('  ')}</div>
+                    {a.decision === 'allow' && <div className="muted" style={{ fontSize: 12.5 }}>Policy: allow {a.who.length ? a.who.join(', ') : 'no one'}</div>}
+                    {a.decision === 'bypass' && <div className="muted" style={{ fontSize: 12.5 }}>Policy: bypass (everyone), so share links and portfolios work without a login. A more specific path wins over a login covering the whole address.</div>}
+                  </div>
+                ))}
             </>
           )}
       </div>
