@@ -77,7 +77,7 @@ export function ShootDetail() {
         {list.map((p) => {
           const on = picked.includes(p.id);
           const st = { flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1, position: 'relative' as const, outline: on ? '2px solid #efede8' : 'none', outlineOffset: -2 };
-          const inner = <><Img p={p} /><em className="cap">{p.reviewCount ? p.avgRating.toFixed(1) : '–'} · {p.title}</em>{select && <b className="tick" style={{ background: on ? '#efede8' : undefined }}>{on ? '✓' : ''}</b>}</>;
+          const inner = <><Img p={p} />{select && <b className="tick" style={{ background: on ? '#efede8' : undefined }}>{on ? '✓' : ''}</b>}</>;
           return select
             ? <button key={p.id} style={st} aria-pressed={on} aria-label={`${on ? 'Deselect' : 'Select'} ${p.title}`} onClick={() => setPicked(on ? picked.filter((x) => x !== p.id) : [...picked, p.id])}>{inner}</button>
             : <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}>{inner}</Link>;
