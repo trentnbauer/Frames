@@ -29,7 +29,8 @@ export type PortfolioCfg = {
   photographerName: string;
   tagline: string;
   accentColor: string;
-  social: { instagram: string; twitter: string; behance: string };
+  /** Links in the site's header, in this order: a short name (an emoji or up to 4 letters, used where space is tight), a full name and a link. */
+  buttons: { short: string; name: string; url: string }[];
   gear: string;
   footer: string;
   /** What a visitor gets when they open a photo full size. */
@@ -40,11 +41,15 @@ export type PortfolioCfg = {
 
 export const DEFAULT_PORTFOLIO: PortfolioCfg = {
   enabled: false, host: '', collectionId: null, photographerName: '', tagline: '', accentColor: 'oklch(0.58 0.13 35)',
-  social: { instagram: '', twitter: '', behance: '' }, gear: '', footer: '', fullSize: 'resized', captions: true, order: 'collection',
+  buttons: [], gear: '', footer: '', fullSize: 'resized', captions: true, order: 'collection',
 };
+export const MAX_BUTTONS = 8;
+/** The three fixed links an earlier version had (Instagram, X, Behance) become buttons the first time the settings are read. */
+const LEGACY_SOCIAL: [string, string, string][] = [['instagram', 'IG', 'Instagram'], ['twitter', 'X', 'X'], ['behance', 'Bē', 'Behance']];
 export const loadPortfolio = (db: DB): PortfolioCfg => {
-  const s = getSetting<Partial<PortfolioCfg>>(db, 'portfolio', {});
-  return { ...DEFAULT_PORTFOLIO, ...s, social: { ...DEFAULT_PORTFOLIO.social, ...(s.social ?? {}) } };
+  const { social, ...s } = getSetting<Partial<PortfolioCfg> & { social?: Record<string, string> }>(db, 'portfolio', {});
+  const buttons = Array.isArray(s.buttons) ? s.buttons : LEGACY_SOCIAL.filter(([k]) => social?.[k]).map(([k, short, name]) => ({ short, name, url: social![k] }));
+  return { ...DEFAULT_PORTFOLIO, ...s, buttons };
 };
 const save = (db: DB, c: PortfolioCfg) => setSetting(db, 'portfolio', c);
 
@@ -117,6 +122,9 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   const live = (rep: any) => { const c = loadPortfolio(db); if (!c.enabled) { notFound(rep); return null; } return c; };
   const open = (rep: any) => rep.header('Cache-Control', 'no-cache');
 
+  /** Whether this server lets portfolios offer the original files at all (an administrator's choice, off by default). */
+  const originalsAllowed = () => !!getSetting<{ allowOriginals?: boolean }>(x.sys, 'instance', {}).allowOriginals;
+
   // ---------- the public site ----------
   app.get('/portfolio', async (_req, rep) => rep.redirect('/portfolio/'));
   app.get('/portfolio/', async (_req, rep) => {
@@ -125,7 +133,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   });
   app.get('/portfolio/config.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
-    return open(rep).send({ photographerName: c.photographerName, tagline: c.tagline, accentColor: c.accentColor, social: c.social, gearUrl: 'gear.md', footer: c.footer });
+    return open(rep).send({ photographerName: c.photographerName, tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
   });
   app.get('/portfolio/gear.md', async (_req, rep) => {
     const c = live(rep); if (!c) return;
@@ -139,7 +147,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       const meta = c.captions ? { ...parseFilenameMeta(p.file), ...(parseFilenameMeta(p.file).camera ? {} : p.camera ? { camera: String(p.camera) } : {}) } : {};
       return {
         file: `images/${p.id}.jpg`,
-        ...(c.fullSize === 'original' ? { original: `images/${p.id}-full` } : {}),
+        ...(c.fullSize === 'original' && originalsAllowed() ? { original: `images/${p.id}-full` } : {}),
         alt: p.title, date: p.captured_at ?? p.added_at,
         width: p.w ? Math.round(p.w * scale) : undefined, height: p.h ? Math.round(p.h * scale) : undefined, ...meta,
       };
@@ -152,7 +160,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     const id = Number(m[1]);
     const cache = 'public, max-age=3600';
     if (m[2] === '-full') {
-      if (c.fullSize !== 'original') return notFound(rep);
+      if (c.fullSize !== 'original' || !originalsAllowed()) return notFound(rep);
       const p = one('SELECT path, file FROM photos WHERE id = ?', id)!;
       const type = BROWSER_TYPES[path.extname(p.file).toLowerCase()];
       // A browser can show JPEG and PNG. A RAW or TIFF original cannot be shown, so those get the resized picture.
@@ -168,14 +176,14 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     const col = c.collectionId ? one('SELECT id, name FROM collections WHERE id = ?', c.collectionId) : null;
     return { photoCount: photos(c).length, collection: col ? { id: col.id, name: col.name } : null };
   };
-  const dto = (c: PortfolioCfg) => ({ config: c, status: status(c), collections: all('SELECT c.id, c.name, COUNT(cp.photo_id) n FROM collections c LEFT JOIN collection_photos cp ON cp.collection_id = c.id GROUP BY c.id ORDER BY c.name') });
+  const dto = (c: PortfolioCfg) => ({ originalsAllowed: originalsAllowed(), config: c, status: status(c), collections: all('SELECT c.id, c.name, COUNT(cp.photo_id) n FROM collections c LEFT JOIN collection_photos cp ON cp.collection_id = c.id GROUP BY c.id ORDER BY c.name') });
 
   app.get('/api/portfolio', async () => ({ ...dto(loadPortfolio(db)), dnsTarget: hostOfUrl(loadAuth(x.sys).publicUrl) }));
 
   app.put('/api/portfolio', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const cur = loadPortfolio(db);
-    const n: PortfolioCfg = { ...cur, social: { ...cur.social } };
+    const n: PortfolioCfg = { ...cur, buttons: [...cur.buttons] };
     const bad = (error: string) => rep.code(400).send({ error });
     const text = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
     if (b.photographerName !== undefined) n.photographerName = text(b.photographerName, 80);
@@ -188,13 +196,18 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       if (v && !/^(#[0-9a-f]{3,8}|(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch)\(\s*[0-9a-z.%\s,/-]+\)|[a-z]{3,20})$/i.test(v)) return bad('That colour is not valid. Use a name (coral), a hex code (#d2691e) or oklch(...)/rgb(...)');
       n.accentColor = v || DEFAULT_PORTFOLIO.accentColor;
     }
-    if (b.social && typeof b.social === 'object') {
-      for (const k of ['instagram', 'twitter', 'behance'] as const) {
-        if (b.social[k] === undefined) continue;
-        const v = text(b.social[k], 300);
-        if (v) { try { const u = new URL(v); if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(); } catch { return bad(`The ${k} link must be a web address starting with https://`); } }
-        n.social[k] = v;
+    if (b.buttons !== undefined) {
+      if (!Array.isArray(b.buttons) || b.buttons.length > MAX_BUTTONS) return bad(`Up to ${MAX_BUTTONS} buttons.`);
+      const list: PortfolioCfg['buttons'] = [];
+      for (const raw of b.buttons) {
+        const r = (raw && typeof raw === 'object' ? raw : {}) as Row;
+        const short = text(r.short, 40), name = text(r.name, 40), url = text(r.url, 300);
+        if (!short || Array.from(short).length > 4) return bad('A short name is an emoji or up to 4 letters.');
+        if (!name) return bad('Give each button a full name.');
+        try { const u = new URL(url); if (!['https:', 'http:', 'mailto:'].includes(u.protocol)) throw new Error(); } catch { return bad(`The link for “${name}” must be a web address starting with https:// (or an email link starting with mailto:).`); }
+        list.push({ short, name, url });
       }
+      n.buttons = list;
     }
     if (b.host !== undefined) {
       const h = text(b.host, 253).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
@@ -209,6 +222,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       else if (!one('SELECT 1 x FROM collections WHERE id = ?', num(b.collectionId))) return bad('That collection does not exist');
       else n.collectionId = num(b.collectionId);
     }
+    if (b.fullSize === 'original' && !originalsAllowed()) return bad('Switched off on this server. An administrator can allow it under Settings, Photo folders.');
     for (const [k, vals] of [['fullSize', ['resized', 'original', 'none']], ['order', ['collection', 'newest', 'oldest', 'captured']]] as const) if (b[k] !== undefined) { if (!(vals as readonly string[]).includes(b[k])) return bad(`Unknown ${k}`); (n as any)[k] = b[k]; }
     if (typeof b.captions === 'boolean') n.captions = b.captions;
     if (typeof b.enabled === 'boolean') n.enabled = b.enabled;

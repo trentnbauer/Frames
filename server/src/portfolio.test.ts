@@ -52,7 +52,16 @@ describe('while it is off', () => {
 describe('settings are checked', () => {
   it('refuses colours that could do more than colour a page, bad links and bad hostnames', async () => {
     for (const [k, v] of [['accentColor', 'red;background:url(http://evil)'], ['accentColor', 'url(x)'], ['accentColor', '</style><script>']] as const) expect((await A.put('/api/portfolio', { [k]: v })).status, `${k}=${v}`).toBe(400);
-    expect((await A.put('/api/portfolio', { social: { instagram: 'javascript:alert(1)' } })).status).toBe(400);
+    const btn = (o: object) => ({ short: 'IG', name: 'Instagram', url: 'https://instagram.com/me', ...o });
+    expect((await A.put('/api/portfolio', { buttons: [btn({ url: 'javascript:alert(1)' })] })).status).toBe(400);
+    expect((await A.put('/api/portfolio', { buttons: [btn({ short: 'ABCDE' })] })).status).toBe(400); // an emoji or up to 4 letters
+    expect((await A.put('/api/portfolio', { buttons: [btn({ short: '' })] })).status).toBe(400);
+    expect((await A.put('/api/portfolio', { buttons: [btn({ name: '' })] })).status).toBe(400);
+    expect((await A.put('/api/portfolio', { buttons: Array.from({ length: 9 }, () => btn({})) })).status).toBe(400);
+    expect((await A.put('/api/portfolio', { buttons: 'nope' })).status).toBe(400);
+    expect((await A.put('/api/portfolio', { buttons: [btn({ short: '📷' }), btn({ short: '✉️', name: 'Email me', url: 'mailto:me@example.com' })] })).status).toBe(200); // emoji and mailto: links are fine
+    expect((await A.get('/api/portfolio')).body.config.buttons.map((b: any) => b.short)).toEqual(['📷', '✉️']);
+    await A.put('/api/portfolio', { buttons: [] });
     expect((await A.put('/api/portfolio', { host: 'not a host!' })).status).toBe(400);
     expect((await A.put('/api/portfolio', { host: 'photography.example.com/admin' })).status).toBe(200); // a path is dropped, not kept
     expect((await A.get('/api/portfolio')).body.config.host).toBe('photography.example.com');
@@ -62,12 +71,12 @@ describe('settings are checked', () => {
 });
 
 describe('the public site', () => {
-  beforeAll(async () => { await on({ accentColor: 'coral', footer: 'Made by me', gear: '# Gear\n- Leica', social: { instagram: 'https://instagram.com/me', twitter: '', behance: '' } }); });
+  beforeAll(async () => { await on({ accentColor: 'coral', footer: 'Made by me', gear: '# Gear\n- Leica', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }] }); });
 
   it('serves the page and its config', async () => {
     expect((await get('/portfolio/')).body).toContain('Portfolio page');
     expect((await get('/portfolio')).statusCode).toBe(302);
-    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', tagline: 'Film photographer', accentColor: 'coral', social: { instagram: 'https://instagram.com/me', twitter: '', behance: '' }, gearUrl: 'gear.md', footer: 'Made by me' });
+    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
     expect((await get('/portfolio/gear.md')).body).toBe('# Gear\n- Leica');
     expect((await get('/portfolio/css/style.css')).statusCode).toBe(200);
   });
@@ -104,12 +113,22 @@ describe('the public site', () => {
   });
   it('does not hand out originals unless that is chosen, then gives them untouched (and a JPEG for what a browser cannot show)', async () => {
     expect((await get(`/portfolio/images/${ids['plain.jpg']}-full`)).statusCode).toBe(404);
+    // Off on this server unless an administrator allows it: the choice is refused, with the reason.
+    const refused = await A.put('/api/portfolio', { fullSize: 'original' });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatch(/Switched off on this server/);
+    expect((await A.get('/api/portfolio')).body.originalsAllowed).toBe(false);
+    expect((await A.put('/api/admin/instance', { allowOriginals: true })).body.allowOriginals).toBe(true);
     await A.put('/api/portfolio', { fullSize: 'original' });
     const m = (await get('/portfolio/images/manifest.json')).json() as any[];
     expect(m[0].original).toBe(`images/${ids['plain.jpg']}-full`);
     const full = await get(`/portfolio/images/${ids['plain.jpg']}-full`);
     expect(full.rawPayload.equals(originals['plain.jpg'])).toBe(true);
     expect((await get(`/portfolio/images/${ids['third.png']}-full`)).headers['content-type']).toBe('image/png');
+    // Switching it off on the server takes the originals away again, even for a portfolio that had chosen them.
+    await A.put('/api/admin/instance', { allowOriginals: false });
+    expect(((await get('/portfolio/images/manifest.json')).json() as any[])[0].original).toBeUndefined();
+    expect((await get(`/portfolio/images/${ids['plain.jpg']}-full`)).statusCode).toBe(404);
     await A.put('/api/portfolio', { fullSize: 'resized' });
   });
   it('can be ordered newest, oldest or as collected', async () => {
@@ -188,5 +207,15 @@ describe('with a login on', () => {
       expect((await e.app.inject('/api/portfolio')).statusCode).toBe(401); // the settings are not public
       expect((await e.app.inject({ method: 'PUT', url: '/api/portfolio', payload: { enabled: false } })).statusCode).toBe(401);
     } finally { cleanup(e); }
+  });
+});
+
+describe('the three fixed links of an earlier version', () => {
+  it('become buttons the first time the settings are read', async () => {
+    const db = env.db;
+    db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('portfolio', ?)").run(JSON.stringify({ enabled: false, social: { instagram: 'https://instagram.com/me', twitter: '', behance: 'https://behance.net/me' } }));
+    const c = (await A.get('/api/portfolio')).body.config;
+    expect(c.buttons).toEqual([{ short: 'IG', name: 'Instagram', url: 'https://instagram.com/me' }, { short: 'Bē', name: 'Behance', url: 'https://behance.net/me' }]);
+    expect(c.social).toBeUndefined();
   });
 });

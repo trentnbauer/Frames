@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
-import type { DB } from '../db.js';
+import { getSetting, setSetting, type DB } from '../db.js';
 import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
@@ -105,6 +105,15 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     if (!src.endpoint || !src.model) return rep.code(400).send({ ok: false, detail: whyNotReady(src) });
     const t = aiType(src.type)!;
     return ping({ protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(sys, src.id) });
+  });
+
+  // ---------- choices that apply to the whole server ----------
+  app.get('/api/admin/instance', async () => ({ allowOriginals: !!getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {}).allowOriginals }));
+  app.put('/api/admin/instance', async (req) => {
+    const b = (req.body ?? {}) as Row;
+    const cur = getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {});
+    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}) });
+    return { allowOriginals: !!getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {}).allowOriginals };
   });
 
   // ---------- the whole server's backup ----------

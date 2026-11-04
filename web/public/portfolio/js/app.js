@@ -1,8 +1,6 @@
 (function () {
   const root = document.documentElement;
   const THEME_KEY = 'photo-portfolio-theme';
-  const SOCIAL_LABELS = { instagram: 'IG', twitter: 'X', behance: 'Bē' };
-  const INSTAGRAM_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><circle cx="17.5" cy="6.5" r="1"></circle></svg>';
 
   function applyTheme(theme) {
     if (theme === 'dark') root.setAttribute('data-theme', 'dark');
@@ -122,20 +120,18 @@
     footer.textContent = config.footer || '';
     footer.hidden = !config.footer;
 
-    const social = config.social || {};
+    // The header buttons the photographer chose: a short name (an emoji or up to 4 letters) on the button, the full name for screen readers and as a tooltip.
     const row = document.getElementById('social-row');
     row.innerHTML = '';
-    Object.entries(SOCIAL_LABELS).forEach(([key, label]) => {
-      const url = social[key];
-      if (!url) return;
+    (config.buttons || []).forEach((btn) => {
+      if (!btn || !btn.url) return;
       const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      a.href = btn.url;
+      if (!/^mailto:/i.test(btn.url)) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
       a.className = 'social-link';
-      a.setAttribute('aria-label', key);
-      if (key === 'instagram') a.innerHTML = INSTAGRAM_ICON;
-      else a.textContent = label;
+      a.setAttribute('aria-label', btn.name || btn.short);
+      a.title = btn.name || '';
+      a.textContent = btn.short;
       row.appendChild(a);
     });
   }

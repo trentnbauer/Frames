@@ -209,8 +209,10 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
 
 function Libraries() {
   const info = useApi<{ internalDir: string; libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
+  const inst = useApi<{ allowOriginals: boolean }>('/admin/instance');
   return (
     <>
+      <Toggle on={!!inst.data?.allowOriginals} onChange={async (v) => { await api('/admin/instance', { method: 'PUT', body: { allowOriginals: v } }); inst.reload(); }} label="Let portfolios offer original files" hint="Off by default. When on, a person can choose to let visitors of their portfolio download the original file, which can hold camera data and the place a photo was taken. When off, portfolios only serve resized copies." />
       <div className="field">
         <h3>Photo libraries</h3>
         <p>Folders Frames reads photographs from. External libraries are read-only: originals are never changed. They are set with LIBRARY_DIRS (see the README), and can be a cloud drive mounted as a folder.</p>
