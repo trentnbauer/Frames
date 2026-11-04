@@ -118,7 +118,7 @@ Pin an exact version to choose when you upgrade. The running version is shown in
 | `release: major` | a breaking change (something users must act on, such as a changed setting or a removed feature) | `1.2.3` to `2.0.0` |
 | `release: none` | documentation, CI and other changes that need no new image | no release |
 
-When the pull request is merged into `main`, the **Version** workflow works out the next number from the latest `vX.Y.Z` tag (starting from `0.0.0`, so the first release is `0.0.1`, `0.1.0` or `1.0.0`), tags that commit, creates a GitHub release with generated notes, and the **Release** workflow runs the tests and publishes the image (amd64 and arm64) with the tags `1.2.3`, `1.2`, `1` and `latest`. The rules are in `.github/scripts/next-version.sh` and are tested in CI.
+When the pull request is merged into `main`, the **Create Version and Docker Container** workflow works out the next number from the latest `vX.Y.Z` tag (starting from `0.0.0`, so the first release is `0.0.1`, `0.1.0` or `1.0.0`), tags that commit, creates a GitHub release with generated notes, and its **Create Docker Container** part runs the tests and publishes the image (amd64 and arm64) with the tags `1.2.3`, `1.2`, `1` and `latest`. The rules are in `.github/scripts/next-version.sh` and are tested in CI.
 
 The release also writes the "What's new" list from the merged pull requests (`.github/scripts/generate-changelog.sh`), so a clear pull request title is the changelog line.
 
