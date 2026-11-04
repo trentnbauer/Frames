@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildIngress, createTunnelRunner, tunnelIdOf } from './tunnel.js';
+import http from 'node:http';
+import { createTunnelRunner } from './tunnel.js';
 import { seedTunnelFromEnv } from './tunnelEnv.js';
 import { resolveUser } from './users.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
+// Nothing here may reach the real Cloudflare (a made-up token is saved); the API suite below points this at a stand-in.
+process.env.CLOUDFLARE_API_BASE = 'http://127.0.0.1:9';
 
 // Built at run time, in the shape of a real tunnel token (base64 JSON), so no token-like literal sits in the repo.
 const TOKEN = Buffer.from(JSON.stringify({ a: '1234567890', t: 'abcdefghijklmnopqrstuvwxyz', s: 'secret' })).toString('base64');
@@ -92,7 +95,7 @@ describe('shutting down', () => {
     try {
       process.env.CLOUDFLARED_BIN = fakeBin(e.tmp, 'ok');
       const A = api(e);
-      await A.put('/api/tunnel', { tunnelToken: TOKEN });
+      (e.app as any).frames.sys.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('secret:cloudflare:tunnelToken', ?)").run(JSON.stringify(TOKEN));
       await A.post('/api/tunnel/start');
       expect(await until(() => ((A as any) && true) && fs.existsSync(path.join(e.tmp, 'runs.log')))).toBe(true);
       const pid = JSON.parse(fs.readFileSync(path.join(e.tmp, 'runs.log'), 'utf8').trim().split('\n').at(-1)!).pid;
@@ -104,7 +107,9 @@ describe('shutting down', () => {
 });
 
 
-describe('the tunnel page: App URL, Portfolios and the token', () => {
+const API = 'cf-api-' + Buffer.from('tunnel-test').toString('hex');
+
+describe('the tunnel page: App URL, Portfolios and the credentials', () => {
   let env: Env, A: ReturnType<typeof api>, sys: any;
   const list = async () => (await A.get('/api/tunnel')).body.hostnames.map((h: any) => `${h.kind}:${h.hostname}${h.who ? ` (${h.who})` : ''}`);
   beforeAll(() => { env = makeEnv(); A = api(env); sys = (env.app as any).frames.sys; });
@@ -150,15 +155,16 @@ describe('the tunnel page: App URL, Portfolios and the token', () => {
       expect(r.json().appOpen).toBe(false);
     } finally { e.app.close(); cleanup(e); }
   });
-  it('will not switch on without a token, keeps tokens write-only, and leaves them out of backups', async () => {
+  it('will not switch on without Cloudflare credentials, keeps them write-only, and leaves them out of backups', async () => {
     expect((await A.put('/api/tunnel', { enabled: true })).status).toBe(400);
-    const r = await A.put('/api/tunnel', { tunnelToken: TOKEN });
-    expect(r.body).toMatchObject({ hasToken: true });
-    expect(JSON.stringify(r.body)).not.toContain(TOKEN);
-    expect(JSON.stringify((await A.get('/api/tunnel')).body)).not.toContain(TOKEN);
-    expect(Buffer.from((await A.get('/api/backup')).body as Buffer).includes(Buffer.from(TOKEN))).toBe(false);
-    await A.put('/api/tunnel', { clearTunnelToken: true });
-    expect((await A.get('/api/tunnel')).body.hasToken).toBe(false);
+    expect((await A.put('/api/tunnel', { accountId: 'not an id' })).status).toBe(400);
+    const r = await A.put('/api/tunnel', { accountId: 'A'.repeat(32), apiToken: API });
+    expect(r.body).toMatchObject({ hasApiToken: true, apiReady: true, accountId: 'a'.repeat(32) });
+    expect(JSON.stringify(r.body)).not.toContain(API);
+    expect(JSON.stringify((await A.get('/api/tunnel')).body)).not.toContain(API);
+    expect(Buffer.from((await A.get('/api/backup')).body as Buffer).includes(Buffer.from(API))).toBe(false);
+    await A.put('/api/tunnel', { clearApiToken: true });
+    expect((await A.get('/api/tunnel')).body).toMatchObject({ hasApiToken: false, apiReady: false });
   });
   it('always sends traffic to this server, whatever is typed', async () => {
     const t = (await A.get('/api/tunnel')).body;
@@ -208,53 +214,81 @@ describe('pre-filling from the environment', () => {
   });
 });
 
-describe('the routes are written by Frames', () => {
-  // A token in the real shape: base64 JSON holding the account, the tunnel's id and a secret. Built here, not written out in full.
-  const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0';
-  const REAL = Buffer.from(JSON.stringify({ a: 'acct', t: ID, s: 'secret' })).toString('base64');
-  let e: Env, A: ReturnType<typeof api>;
+describe('Frames sets up the tunnel through the Cloudflare API', () => {
+  const ACCOUNT = 'b'.repeat(32), TUNNEL_TOKEN = Buffer.from(JSON.stringify({ a: 'acct', t: 'tunnel', s: 'secret' })).toString('base64');
+  const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0 };
+  let srv: http.Server, base = '', e: Env, A: ReturnType<typeof api>;
   const runs = () => (fs.existsSync(path.join(e.tmp, 'runs.log')) ? fs.readFileSync(path.join(e.tmp, 'runs.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
-  beforeAll(() => { e = makeEnv(); A = api(e); process.env.CLOUDFLARED_BIN = fakeBin(e.tmp, 'ok'); });
-  afterAll(async () => { await e.app.close(); delete process.env.CLOUDFLARED_BIN; cleanup(e); });
+  const settle = () => new Promise((r) => setTimeout(r, 400));
+  beforeAll(async () => {
+    srv = http.createServer((req, res) => {
+      let body = ''; req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const url = new URL(req.url!, 'http://x'); const j = body ? JSON.parse(body) : {}; let m: RegExpExecArray | null;
+        cf.calls.push(`${req.method} ${url.pathname}`);
+        const ok = (result: unknown) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ success: true, result })); };
+        if (url.pathname === '/zones') return ok([{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'example.org' }]);
+        if (/\/cfd_tunnel$/.test(url.pathname) && req.method === 'GET') return ok([...cf.tunnels].filter(([, n]) => n === url.searchParams.get('name')).map(([id, name]) => ({ id, name })));
+        if (/\/cfd_tunnel$/.test(url.pathname)) { const id = `tun-${++cf.seq}`; cf.tunnels.set(id, j.name); return ok({ id }); }
+        if (/\/configurations$/.test(url.pathname)) { cf.routes = j.config.ingress; return ok({}); }
+        if (/\/token$/.test(url.pathname)) return ok(TUNNEL_TOKEN);
+        if ((m = /\/zones\/([^/]+)\/dns_records(?:\/([^/]+))?$/.exec(url.pathname))) {
+          if (req.method === 'GET') return ok(cf.dns.filter((d) => d.zone === m![1] && d.name === url.searchParams.get('name')));
+          if (req.method === 'POST') { const d = { id: `r${++cf.seq}`, zone: m[1], name: j.name, content: j.content, type: j.type }; cf.dns.push(d); return ok(d); }
+          if (req.method === 'PUT') { const d = cf.dns.find((x) => x.id === m![2])!; d.content = j.content; return ok(d); }
+          if (req.method === 'DELETE') { cf.dns = cf.dns.filter((x) => x.id !== m![2]); return ok({}); }
+        }
+        res.statusCode = 404; res.end(JSON.stringify({ success: false, errors: [{ message: 'not found' }] }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    base = `http://127.0.0.1:${(srv.address() as any).port}`;
+    process.env.CLOUDFLARE_API_BASE = base;
+    e = makeEnv(); A = api(e); process.env.CLOUDFLARED_BIN = fakeBin(e.tmp, 'ok');
+  });
+  afterAll(async () => { await e.app.close(); srv.close(); delete process.env.CLOUDFLARED_BIN; delete process.env.CLOUDFLARE_API_BASE; cleanup(e); });
 
-  it('hands cloudflared a config with one route per address, all to this server, and a 404 for the rest', async () => {
-    await A.put('/api/tunnel', { appUrl: 'https://frames.example.com', portfolios: true, tunnelToken: REAL });
-    await A.put('/api/portfolio', { host: 'gallery.example.com' });
-    await A.post('/api/tunnel/start');
+  it('makes the tunnel, its routes and a DNS record per address, then runs it with the token Cloudflare gave', async () => {
+    await A.put('/api/tunnel', { appUrl: 'https://frames.example.com', portfolios: true, accountId: ACCOUNT, apiToken: API });
+    await A.put('/api/portfolio', { host: 'gallery.example.org' });
+    await settle();
+    const r = await A.put('/api/tunnel', { enabled: true });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ error: null, hasToken: true });
+    expect([...cf.tunnels.values()]).toEqual(['Frames']);
+    expect(cf.routes).toEqual([{ hostname: 'frames.example.com', service: 'http://localhost:3000' }, { hostname: 'gallery.example.org', service: 'http://localhost:3000' }, { service: 'http_status:404' }]);
+    expect(cf.dns.map((d) => `${d.name} -> ${d.content}`).sort()).toEqual(['frames.example.com -> tun-1.cfargotunnel.com', 'gallery.example.org -> tun-1.cfargotunnel.com']);
     expect(await until(() => runs().length > 0)).toBe(true);
-    const last = runs().at(-1);
-    expect(last.argv).toEqual(expect.arrayContaining(['--config']));
-    expect(last.config).toBe('ingress:\n  - hostname: frames.example.com\n    service: http://localhost:3000\n  - hostname: gallery.example.com\n    service: http://localhost:3000\n  - service: http_status:404\n');
-    expect(last.config).not.toContain(REAL); // the token is only ever in the environment
-    expect(JSON.stringify(last.argv)).not.toContain(REAL);
-    expect(last.tokenEnv).toBe(REAL);
+    const run = runs().at(-1);
+    expect(run.tokenEnv).toBe(TUNNEL_TOKEN);
+    expect(run.argv).not.toContain('--config'); // no local routes file: the routes live in Cloudflare
+    expect(JSON.stringify(r.body)).not.toContain('tun-1'); // no tunnel id is kept or shown
+    expect(JSON.stringify(e.db.prepare("SELECT value FROM settings WHERE key = 'tunnel'").all())).not.toContain('tun-1');
   });
-  it('restarts with the new routes when an address changes anywhere in Settings, and not when nothing changed', async () => {
-    const before = runs().length;
-    await A.put('/api/portfolio', { photographerName: 'Not an address' }); // nothing about the routes changed
-    await new Promise((r) => setTimeout(r, 600));
-    expect(runs().length).toBe(before);
-    await A.put('/api/portfolio', { host: 'gallery2.example.com' });
-    expect(await until(() => runs().length === before + 1)).toBe(true);
-    expect(runs().at(-1).config).toContain('hostname: gallery2.example.com');
-    expect(runs().at(-1).config).not.toContain('hostname: gallery.example.com');
-    await A.put('/api/auth/config', { publicUrl: 'https://app.example.org' }); // the public address, set under Access
-    expect(await until(() => runs().length === before + 2)).toBe(true);
-    expect(runs().at(-1).config).toContain('hostname: app.example.org');
+  it('finds its tunnel by name next time instead of making another, and follows an address change with no restart', async () => {
+    const n = runs().length;
+    await A.put('/api/auth/config', { publicUrl: 'https://app.example.org' });
+    await settle();
+    expect(cf.tunnels.size).toBe(1);
+    expect(cf.routes.map((x) => x.hostname)).toEqual(['app.example.org', 'gallery.example.org', undefined]);
+    expect(cf.dns.map((d) => d.name).sort()).toEqual(['app.example.org', 'gallery.example.org']); // frames.example.com's record, made by Frames, is gone
+    expect(runs().length).toBe(n); // a route change in Cloudflare needs no restart
+  });
+  it('follows a portfolio address and un-ticking Portfolios too', async () => {
+    await A.put('/api/portfolio', { host: 'gallery2.example.org' });
+    await settle();
+    expect(cf.dns.map((d) => d.name).sort()).toEqual(['app.example.org', 'gallery2.example.org']);
     await A.put('/api/tunnel', { portfolios: false });
-    expect(await until(() => runs().length === before + 3)).toBe(true);
-    expect(runs().at(-1).config).not.toContain('gallery2.example.com');
+    expect(cf.dns.map((d) => d.name)).toEqual(['app.example.org']);
+    expect(cf.routes.map((x) => x.hostname)).toEqual(['app.example.org', undefined]);
   });
-  it('with nothing to serve, the config is only the final 404 rule', () => {
-    expect(buildIngress((makeEnvSys()))).toBe('ingress:\n  - service: http_status:404\n');
-  });
-  it('tells the page the DNS record each address needs, from the tunnel id inside the token', async () => {
-    const t = (await A.get('/api/tunnel')).body;
-    expect(t.dns).toEqual([{ name: 'app.example.org', target: `${ID}.cfargotunnel.com` }]);
-    expect(tunnelIdOf(REAL)).toBe(ID);
-    for (const bad of ['', 'not base64 json', Buffer.from('{"t":"nope"}').toString('base64'), Buffer.from('{"t":"../../etc"}').toString('base64')]) expect(tunnelIdOf(bad), bad).toBe('');
-    await A.put('/api/tunnel', { clearTunnelToken: true });
-    expect((await A.get('/api/tunnel')).body.dns).toEqual([]);
+  it('never touches a DNS record it did not make, and shows Cloudflare’s reason when it cannot', async () => {
+    cf.dns.push({ id: 'mine', zone: 'z1', name: 'other.example.com', content: 'x', type: 'CNAME' });
+    await A.put('/api/auth/config', { publicUrl: 'https://another.example.org' });
+    await settle();
+    expect(cf.dns.some((d) => d.id === 'mine')).toBe(true);
+    await A.put('/api/auth/config', { publicUrl: 'https://nowhere.invalid-domain.test' });
+    await settle();
+    expect((await A.get('/api/tunnel')).body.error).toMatch(/No domain on this Cloudflare account matches/);
   });
 });
-function makeEnvSys() { const x = makeEnv(); const sys = (x.app as any).frames.sys; setImmediate(() => { x.app.close(); cleanup(x); }); return sys; }
