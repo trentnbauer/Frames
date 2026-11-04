@@ -224,10 +224,23 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
   const port = () => Number(process.env.PORT ?? 3000);
   const service = () => `http://localhost:${port()}`; // always this server, never a typed-in address
 
+  /** The Access applications Frames keeps in Cloudflare for these settings, so the page can say what protects what and what is public. */
+  const accessApps = (c: TunnelCfg, hostnames: Wanted[]) => {
+    if (c.env || !hasApi(db) || !c.appliedAt) return [];
+    const appHost = hostOfUrl(loadAuth(db).publicUrl), people = accessPeople(db);
+    const portfolioHosts = hostnames.filter((h) => h.kind === 'portfolio').map((h) => h.hostname);
+    return [
+      ...(c.protectApplied && appHost ? [{ name: accessAppName(appHost), decision: 'allow' as const, addresses: [appHost], who: [...people.emails, ...people.domains.map((d) => `@${d}`)] }] : []),
+      ...(!c.accessNote && appHost ? [{ name: 'Frames public paths', decision: 'bypass' as const, addresses: PUBLIC_DESTINATIONS.map((d) => appHost + d), who: [] as string[] }] : []),
+      ...(!c.accessNote && portfolioHosts.length ? [{ name: 'Frames portfolio addresses', decision: 'bypass' as const, addresses: portfolioHosts, who: [] as string[] }] : []),
+    ];
+  };
+
   const dto = (c: TunnelCfg) => {
     const hostnames = wantedHostnames(db);
     return {
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
+      accessApps: accessApps(c, hostnames),
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
       protect: c.protect, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),

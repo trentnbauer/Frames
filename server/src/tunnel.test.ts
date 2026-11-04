@@ -320,6 +320,10 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     const provider = (await A.get('/api/auth/config')).body.providers.find((p: any) => p.type === 'cloudflare');
     expect(provider).toMatchObject({ teamDomain: 'team.example.test', aud: 'aud' });
     expect((await A.get('/api/tunnel')).body.appOpen).toBe(false);
+    const shown = (await A.get('/api/tunnel')).body.accessApps;
+    expect(shown.map((a: any) => `${a.decision}:${a.name}`)).toEqual(['allow:Frames (app.example.org)', 'bypass:Frames public paths']);
+    expect(shown[0]).toMatchObject({ addresses: ['app.example.org'], who: ['alice@x.test', '@family.test'] });
+    expect(shown[1].addresses).toEqual(expect.arrayContaining(['app.example.org/s/*', 'app.example.org/portfolio/*']));
     await A.put('/api/tunnel', { protect: false });
     expect(cf.apps.find((a) => a.name === 'Frames (app.example.org)')).toBeUndefined(); // un-ticking removes what it made
   });
