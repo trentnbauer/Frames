@@ -85,6 +85,7 @@ const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
 /** Optional sign-in through OAuth providers. Off until it has been tested, so it can never lock you out. */
 export function Access() {
   const cfg = useApi<Cfg>('/auth/config');
+  const one = useOne(); // before the early return below: hooks always run in the same order
   const tunnel = useApi<{ protect: boolean; protectForced: boolean; config: { enabled: boolean }; hostnames: { kind: string }[] }>('/tunnel');
   const { refreshMe, me } = useStore();
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -109,7 +110,6 @@ export function Access() {
     try { await api('/auth/config', { method: 'PUT', body }); cfg.reload(); refreshMe(); setMsg({ ok: true, text: ok }); }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
-  const one = useOne();
   const edit = (i: number, patch: Partial<Provider>) => { setProviders(providers.map((p, j) => (j === i ? { ...p, ...patch } : p))); setDirty(true); };
   const add = (type: Provider['type']) => {
     let id: string = type, n = 2;
