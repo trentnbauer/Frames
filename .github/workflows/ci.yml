@@ -46,6 +46,8 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - run: docker build -t frames:ci .
       - name: Starts and reports healthy
         run: |
@@ -57,11 +59,26 @@ jobs:
           done
           docker logs frames
           exit 1
-      # The release workflow publishes arm64 too, so prove it builds on every change.
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/build-push-action@v7
+      # The release publishes arm64 too. Building it under emulation takes two minutes, and it can only break when the Dockerfile or
+      # the dependencies change, so a pull request does it only then. Every push to main, and every release, always does.
+      - name: Does this change affect the arm64 build?
+        id: arm
+        run: |
+          run=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            git fetch -q --depth=1 origin "${{ github.base_ref }}"
+            git diff --name-only FETCH_HEAD... | grep -qE '^(Dockerfile|\.dockerignore|(server|web)/package(-lock)?\.json)$' || run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - if: steps.arm.outputs.run == 'true'
+        uses: docker/setup-qemu-action@v4
+      - if: steps.arm.outputs.run == 'true'
+        uses: docker/setup-buildx-action@v4
+      - if: steps.arm.outputs.run == 'true'
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/arm64
           push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

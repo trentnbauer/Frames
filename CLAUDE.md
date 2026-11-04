@@ -35,7 +35,7 @@ All of these, not a subset:
 2. `npx vitest run` in `server/` and `web/`. New behaviour gets tests; a bug fix gets a test that fails without the fix.
 3. `npm run build` in `web/` (and `server/`).
 4. Run the real app and try the change in a browser (Playwright is fine). Several real bugs here only showed up in a browser.
-5. A change to the Dockerfile must build (CI builds it for amd64 and arm64).
+5. A change to the Dockerfile must build. CI builds the image on every pull request and starts it; it also builds arm64 (slow, under emulation) when the Dockerfile or a package.json or lock file changes, and on every push to main and release.
 
 ## Conventions
 
