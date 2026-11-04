@@ -266,6 +266,19 @@ describe('with sign-in on', () => {
       const me = (await call('GET', '/api/me', undefined, sessionHeader(r))).json();
       expect(me).toMatchObject({ role: 'member', user: { email: 'kid@family.test', folder: 'kid' } });
     });
+    it('“Anyone who signs in” lets any verified account in with a library of its own, and the list is kept for switching back', async () => {
+      const outsider = { sub: 'open1', email: 'stranger@elsewhere.test', verified: true };
+      expect((await signIn('fake', outsider)).statusCode).toBe(403); // list mode: not on the list
+      expect((await call('PUT', '/api/auth/config', { open: true }, sess)).json().open).toBe(true);
+      const r = await signIn('fake', outsider);
+      expect(r.statusCode).toBe(302);
+      expect(cookieOf(r)).toContain('frames_session=');
+      const me = (await call('GET', '/api/me', undefined, sessionHeader(r))).json();
+      expect(me).toMatchObject({ role: 'member', user: { email: 'stranger@elsewhere.test' } });
+      expect((await call('GET', '/api/auth/config', undefined, sess)).json().allow).toContain('@family.test'); // kept
+      await call('PUT', '/api/auth/config', { open: false }, sess);
+      expect((await signIn('fake', { sub: 'open2', email: 'another@elsewhere.test', verified: true })).statusCode).toBe(403);
+    });
     it('with ALLOW_SIGNUPS off, an allowed newcomer gets no account, but people who already have one still sign in', async () => {
       env.cfg.allowSignups = false;
       try {

@@ -8,7 +8,7 @@ type Provider = {
   hasSecret?: boolean; redirectUrl?: string; clientSecret?: string;
 };
 type Cfg = {
-  enabled: boolean; allow: string[]; publicUrl: string; providers: Provider[]; testedBy: { email: string; name: string; provider: string } | null;
+  enabled: boolean; allow: string[]; open: boolean; publicUrl: string; providers: Provider[]; testedBy: { email: string; name: string; provider: string } | null;
   passwordOption: boolean; disabledByEnv: boolean; callbackBase: string; sessions: number;
 };
 
@@ -84,7 +84,8 @@ const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
 /** Optional sign-in through OAuth providers. Off until it has been tested, so it can never lock you out. */
 export function Access() {
   const cfg = useApi<Cfg>('/auth/config');
-  const { refreshMe } = useStore();
+  const tunnel = useApi<{ protect: boolean; protectForced: boolean; config: { enabled: boolean }; hostnames: { kind: string }[] }>('/tunnel');
+  const { refreshMe, me } = useStore();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [allow, setAllow] = useState('');
   const [publicUrl, setPublicUrl] = useState('');
@@ -188,9 +189,44 @@ export function Access() {
 
       <div className="field">
         <h3>Who is allowed in</h3>
-        <p>One entry per line: an email address (<span className="mono">sam@example.com</span>), a whole domain (<span className="mono">@example.com</span>), or an account id (<span className="mono">github:12345</span>). Email entries only count if the provider has verified the address. Everyone on the list has the same access.</p>
-        <textarea className="area" rows={4} aria-label="Allowed people" style={{ maxWidth: 520 }} value={allow} onChange={(e) => { setAllow(e.target.value); setDirty(true); }} />
-        <div style={{ marginTop: 8 }}><button className="pill" onClick={() => save({ allow: allow.split('\n') }, 'List saved.')}>Save list</button></div>
+        <div role="radiogroup" aria-label="Who is allowed in" style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', marginBottom: 14 }}>
+          {([[false, 'Only people on the list'], [true, 'Anyone who signs in']] as const).map(([open, label]) => (
+            <button key={label} role="radio" aria-checked={c.open === open} onClick={() => c.open !== open && save({ open }, open ? 'Anyone who signs in with a provider can now use Frames. The list is kept.' : 'Only people on the list can sign in again.')}
+              style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, background: c.open === open ? 'var(--text)' : 'transparent', color: c.open === open ? 'var(--bg)' : 'var(--text2)' }}>{label}</button>
+          ))}
+        </div>
+        {c.open && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 560, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, color: 'var(--text2)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)', flex: 'none', marginTop: 7 }} />
+            <span>Open to the public: anyone with an account at one of the providers above can sign in, and gets their own empty library. The list is kept, so switching back restores it.{!me?.signups && ' New accounts are switched off on this server (ALLOW_SIGNUPS=false), so only people who already have one can get in.'}</span>
+          </div>
+        )}
+        {c.open && tunnel.data?.protect && (
+          <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560, marginTop: 10, padding: '14px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px oklch(0.78 0.11 35 / .6)', background: 'oklch(0.78 0.11 35 / .06)', fontSize: 13 }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <b style={{ fontWeight: 600, color: 'var(--warn)' }}>Cloudflare Access is still limiting who gets in</b>
+              <span style={{ color: 'var(--text2)' }}>The App URL is protected by a Cloudflare Access policy that only lets in the people on the allowed list. Anyone else is stopped by Cloudflare before they reach Frames, so “Anyone who signs in” has no effect until the policy is turned off.</span>
+            </span>
+            <span style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="pill primary" onClick={async () => { try { await api('/tunnel', { method: 'PUT', body: { protect: false } }); tunnel.reload(); setMsg({ ok: true, text: 'Cloudflare Access protection is off. Frames’ own sign-in now decides who gets in. Share links and portfolios stay public.' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } }}>Turn off the Cloudflare Access policy</button>
+              <a className="t2" href="/settings?section=cloudflare-tunnel" style={{ fontSize: 13 }}>Open Cloudflare tunnel settings</a>
+            </span>
+          </div>
+        )}
+        {!c.open && c.enabled && tunnel.data && !tunnel.data.protect && tunnel.data.config.enabled && tunnel.data.hostnames.some((h) => h.kind === 'app') && (
+          <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560, marginBottom: 14, padding: '14px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px oklch(0.78 0.11 35 / .6)', background: 'oklch(0.78 0.11 35 / .06)', fontSize: 13 }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <b style={{ fontWeight: 600, color: 'var(--warn)' }}>No Cloudflare Access policy is in front of Frames</b>
+              <span style={{ color: 'var(--text2)' }}>Only Frames’ own sign-in checks this list. Anyone who finds the App URL can still reach the sign-in page. A Cloudflare Access policy stops people who are not on the list before they reach Frames at all: add a Cloudflare API token under Cloudflare tunnel and Frames sets it up.</span>
+            </span>
+            <a className="t2" href="/settings?section=cloudflare-tunnel" style={{ fontSize: 13 }}>Open Cloudflare tunnel settings</a>
+          </div>
+        )}
+        {!c.open && <>
+          <p>One entry per line: an email address (<span className="mono">sam@example.com</span>), a whole domain (<span className="mono">@example.com</span>), or an account id (<span className="mono">github:12345</span>). Email entries only count when the provider says the address is verified.</p>
+          <textarea className="area" rows={4} aria-label="Allowed people" style={{ maxWidth: 520 }} value={allow} onChange={(e) => { setAllow(e.target.value); setDirty(true); }} />
+          <div style={{ marginTop: 8 }}><button className="pill" onClick={() => save({ allow: allow.split('\n') }, 'List saved.')}>Save list</button></div>
+        </>}
       </div>
 
       <div className="field">
