@@ -1,20 +1,32 @@
 import { bindOwner, OWNER_ID } from './users.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import type { AuthConfig } from './auth.js';
+import { friendlyEntries, pathEntries, readFriendly, readPathVars } from './envFlat.js';
 
 /**
  * Settings as an env file. Set Frames up in the app with next to no variables, export everything (secrets included) as one file for
  * the stack, and from then on that file wins: at every start its values are written over what the app had saved.
  *
- * The settings travel in two variables, FRAMES_CONFIG_SYSTEM (sign-in providers, the allow-list, the tunnel, the privacy page) and
- * FRAMES_CONFIG_OWNER (the owner's library: AI sources and their keys, cloud accounts, the portfolio, review settings), each a JSON
- * object of setting name to value. Other people's libraries are not in the file: their data lives in the data volume.
+ * Every setting is its own plain variable (see envFlat.ts for the names: AI_1_ENDPOINT, AI_1_KEY, AUTH_1_CLIENT_ID, AUTH_1_KEY,
+ * AUTH_ALLOW, and FRAMES_SYSTEM__ / FRAMES_OWNER__ names by path for the rest). The server's settings (sign-in, the tunnel, the privacy
+ * page) and the owner's library (AI sources and their keys, cloud accounts, the portfolio, review settings) are both in it. The older
+ * form, FRAMES_CONFIG_SYSTEM and FRAMES_CONFIG_OWNER (a JSON object each), is still read; the plain variables win over it.
+ * Other people's libraries are not in the file: their data lives in the data volume.
  *
  * ALLOW_ENV_EXPORT (default true) says whether the file may be downloaded. The file always carries ALLOW_ENV_EXPORT=false, so using
  * it as the stack's env switches the export off again: the secrets cannot be downloaded a second time unless you edit it back.
  */
 export const SYSTEM_VAR = 'FRAMES_CONFIG_SYSTEM';
 export const OWNER_VAR = 'FRAMES_CONFIG_OWNER';
+export const SYSTEM_PREFIX = 'FRAMES_SYSTEM__';
+export const OWNER_PREFIX = 'FRAMES_OWNER__';
+
+/** Is any setting of this kind loaded from the environment? (Used to tell people that the env file is in charge.) */
+export function envConfigLoaded(env: Record<string, string | undefined> = process.env): { system: boolean; owner: boolean } {
+  const any = (legacy: string, prefix: string, scope: 'system' | 'owner') =>
+    !!(env[legacy] ?? '').trim() || Object.keys(env).some((k) => k.startsWith(prefix)) || Object.keys(readFriendly(scope, env).values).length + Object.keys(readFriendly(scope, env).patches).length > 0;
+  return { system: any(SYSTEM_VAR, SYSTEM_PREFIX, 'system'), owner: any(OWNER_VAR, OWNER_PREFIX, 'owner') };
+}
 
 /** Settings that are about what is happening now, not about how Frames is set up. */
 const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState)$/;
@@ -48,10 +60,20 @@ export function readConfigVar(name: string, env: EnvSource = process.env): { val
 export function applyEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.env): { applied: number; problems: string[] } {
   const problems: string[] = [];
   let applied = 0;
-  for (const [name, db] of [[SYSTEM_VAR, sys], [OWNER_VAR, ownerDb]] as const) {
-    const r = readConfigVar(name, env);
-    if (r.problem) problems.push(r.problem);
-    for (const [k, v] of Object.entries(r.values ?? {})) { if (isConfigKey(k)) { setSetting(db, k, v); applied++; } }
+  for (const [name, prefix, scope, db] of [[SYSTEM_VAR, SYSTEM_PREFIX, 'system', sys], [OWNER_VAR, OWNER_PREFIX, 'owner', ownerDb]] as const) {
+    const legacy = readConfigVar(name, env); // the older single JSON variable, if there is one
+    if (legacy.problem) problems.push(legacy.problem);
+    const byPath = readPathVars(prefix, env, isConfigKey);
+    problems.push(...byPath.problems);
+    const friendly = readFriendly(scope, env);
+    const all: Record<string, unknown> = { ...(legacy.values ?? {}), ...byPath.values, ...friendly.values }; // the later ones win
+    // A setting that is partly written as readable variables (the sign-in methods inside auth, the connections inside cloud) is merged
+    // onto the rest of it: what the by-path variables say, else what was saved.
+    for (const [key, patch] of Object.entries(friendly.patches)) {
+      const base = all[key] && typeof all[key] === 'object' && !Array.isArray(all[key]) ? (all[key] as Record<string, unknown>) : getSetting<Record<string, unknown>>(db, key, {});
+      all[key] = { ...base, ...patch };
+    }
+    for (const [k, v] of Object.entries(all)) { if (isConfigKey(k)) { setSetting(db, k, v); applied++; } }
   }
   if (applied) {
     // What other parts keep in step with these settings: who the owner is, and which hostname is whose.
@@ -78,6 +100,8 @@ export function envLine(key: string, value: string): string {
 const PASS_THROUGH = ['AUTH_DISABLE', 'AUTH_USER', 'AUTH_PASSWORD', 'ALLOW_SIGNUPS', 'SESSION_DAYS', 'OIDC_ALLOW_HTTP', 'MAX_UPLOAD_MB', 'TRUST_PROXY', 'ALLOWED_HOSTS',
   'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TUNNEL_NAME', 'APP_HOSTNAME', 'ACCESS_EMAILS', 'PORTFOLIO_HOSTNAME'];
 
+const TUNNEL_VARS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TUNNEL_NAME', 'APP_HOSTNAME', 'ACCESS_EMAILS', 'PORTFOLIO_HOSTNAME'];
+
 export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; date?: Date; env?: EnvSource } = {}): string {
   const env = opts.env ?? process.env;
   const lines = [
@@ -89,9 +113,16 @@ export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; dat
     '# Export is switched off once this file is in use, so the secrets cannot be downloaded again. Set it to true and restart to export again.',
     envLine('ALLOW_ENV_EXPORT', 'false'),
   ];
-  const plain = PASS_THROUGH.filter((k) => (env[k] ?? '').trim());
+  // The Cloudflare API variables belong to the environment-variable setup of the tunnel. When the tunnel is managed from Settings they are
+  // left-overs, and carrying them into the file would put them back in charge (a revoked token would then keep the tunnel down).
+  const envTunnel = !!getSetting<{ env?: boolean }>(sys, 'tunnel', {}).env;
+  const plain = PASS_THROUGH.filter((k) => (env[k] ?? '').trim() && (envTunnel || !TUNNEL_VARS.includes(k)));
   if (plain.length) lines.push('', '# Variables this Frames was started with', ...plain.map((k) => envLine(k, (env[k] ?? '').trim())));
-  lines.push('', '# The settings saved in the app (JSON): sign-in, the tunnel and the privacy page', envLine(SYSTEM_VAR, JSON.stringify(snapshot(sys))));
-  lines.push('', '# The owner’s library settings (JSON): AI sources and keys, cloud accounts, the portfolio and review settings', envLine(OWNER_VAR, JSON.stringify(snapshot(ownerDb))));
+  const section = (title: string, prefix: string, scope: 'system' | 'owner', settings: Record<string, unknown>) => {
+    const { entries, rest } = friendlyEntries(scope, settings);
+    lines.push('', `# ${title}`, ...entries.map(([k, t]) => envLine(k, t)), ...pathEntries(prefix, rest).map(([k, t]) => envLine(k, t)));
+  };
+  section('The settings saved in the app: sign-in, the tunnel and the privacy page', SYSTEM_PREFIX, 'system', snapshot(sys));
+  section('The owner’s library settings: AI sources and keys, cloud accounts, the portfolio and review settings', OWNER_PREFIX, 'owner', snapshot(ownerDb));
   return lines.join('\n') + '\n';
 }

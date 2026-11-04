@@ -5,13 +5,15 @@ services:
     restart: unless-stopped
     ports:
       - ${PORT:-3000}:3000
+    ## The exported env file (Settings, Env file): in Portainer, Stack, Environment variables, Load variables from .env file. Every setting is its own variable.
+    env_file:
+      - path: stack.env
+        required: false
     environment:
       AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
       ## Settings, Env file exports every setting and secret as one file for this stack. It sets ALLOW_ENV_EXPORT=false so it cannot be downloaded twice.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
-      FRAMES_CONFIG_SYSTEM: ${FRAMES_CONFIG_SYSTEM:-}
-      FRAMES_CONFIG_OWNER: ${FRAMES_CONFIG_OWNER:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
       ## Cloudflare tunnel, run by Frames itself (no separate tunnel container). Leave these empty to run without it.
       ## Easiest: make a tunnel at https://dash.cloudflare.com/?to=/:account/tunnels and set TUNNEL_TOKEN (README, Cloudflare tunnel has the steps)

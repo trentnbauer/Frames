@@ -32,7 +32,7 @@ export function EnvExport() {
         <h3>Using it</h3>
         <ol className="muted" style={{ fontSize: 13.5, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
           <li>Add the file to your stack: <span className="mono">docker compose --env-file frames.env up -d</span>, or save it as <span className="mono">.env</span> next to your compose file, or in Portainer use <i>Stack, Environment variables, Load variables from .env file</i>.</li>
-          <li>Make sure the compose file passes <span className="mono">ALLOW_ENV_EXPORT</span>, <span className="mono">FRAMES_CONFIG_SYSTEM</span> and <span className="mono">FRAMES_CONFIG_OWNER</span> to Frames (the ones in this repository’s compose files do), or lists the file under <span className="mono">env_file:</span>.</li>
+          <li>Make sure the compose file reads the file with <span className="mono">env_file:</span>, so every setting reaches Frames as its own variable (like <span className="mono">AI_1_KEY</span> or <span className="mono">AUTH_ALLOW</span>). The compose files in this repository already do.</li>
           <li>Restart Frames. The file now <b>wins over the app</b>: its values are written over what was saved every time Frames starts.</li>
         </ol>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>People other than the owner, and your photographs, previews and collections, stay in the data volume: keep using the same volume. Sign-in sessions are not in the file, so everyone signs in again after a move.</p>
