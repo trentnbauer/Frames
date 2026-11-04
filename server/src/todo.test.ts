@@ -54,3 +54,27 @@ describe('the To do list', () => {
     expect(((await A.get('/api/todo')).body.items as any[]).flatMap((i) => i.photoIds)).not.toContain(id);
   });
 });
+
+describe('accepting the AI’s suggestions in one go, and finding what has nothing set', () => {
+  it('accepts every waiting AI tag and description, only those, and refuses any other kind', async () => {
+    const id = await idOf('a.jpg');
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'mist', 'ai', 0, 'tag')").run(id);
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'noise', 'ai', -1, 'tag')").run(id); // rejected before: stays rejected
+    env.db.prepare("UPDATE photos SET ai_status = 'done', ai_json = ?, description = '' WHERE id = ?").run(JSON.stringify({ description: 'Mist over water' }), id);
+    expect((await A.post('/api/todo/accept-ai', { kind: 'tags' })).body.accepted).toBe(1);
+    expect((await A.post('/api/todo/accept-ai', { kind: 'description' })).body.accepted).toBe(1);
+    expect(env.db.prepare("SELECT accepted FROM tags WHERE photo_id = ? AND name = 'noise'").get(id)).toEqual({ accepted: -1 });
+    expect(env.db.prepare('SELECT description FROM photos WHERE id = ?').get(id)).toEqual({ description: 'Mist over water' });
+    expect((await A.post('/api/todo/accept-ai', { kind: 'everything' })).status).toBe(400);
+  });
+
+  it('filters the Library to photographs with no subject or no tag', async () => {
+    const id = await idOf('a.jpg');
+    const ids = async (q: string) => ((await A.get(`/api/photos?${q}`)).body.photos as any[]).map((p) => p.id);
+    expect(await ids('missing=subject')).not.toContain(id); // it has the subject added earlier
+    expect(await ids('missing=tag')).not.toContain(id);
+    env.db.prepare('DELETE FROM tags WHERE photo_id = ?').run(id);
+    expect(await ids('missing=subject')).toContain(id);
+    expect(await ids('missing=tag')).toContain(id);
+  });
+});

@@ -324,7 +324,7 @@ export function CollectionDetail() {
               <button onClick={() => setTab('ranked')} style={{ padding: '6px 14px', borderRadius: 999, fontSize: 13, background: tab === 'ranked' ? 'rgba(255,255,255,.08)' : 'transparent' }}>Ranked · {c.photoIds.length}</button>
               <button onClick={() => { setTab('face'); setFo(null); }} style={{ padding: '6px 14px', borderRadius: 999, fontSize: 13, background: tab === 'face' ? 'rgba(255,255,255,.08)' : 'transparent' }}>Help me decide</button>
             </div>
-            {order.length > 0 && <Link to="/review" style={{ fontSize: 13, color: '#a8a59f' }}>Rate these candidates ({unrated} not yet rated by you)</Link>}
+            {order.length > 0 && <Link to={`/review?ids=${(unrated > 0 ? order.filter((pid) => !rankOf.get(pid)?.mineN) : order).join(',')}`} style={{ fontSize: 13, color: '#a8a59f' }}>Rate these candidates ({unrated} not yet rated by you)</Link>}
           </div>
 
           {tab === 'ranked' && (

@@ -56,6 +56,7 @@ export function Library() {
   // What is currently filtering, as removable chips.
   const chips: { label: string; remove: () => void }[] = [];
   if (sp.get('shoot')) chips.push({ label: `Photoshoot: ${shoots.data?.find((s) => String(s.id) === sp.get('shoot'))?.name ?? '…'}`, remove: () => set('shoot', null) });
+  for (const k of multi(sp.get('missing'))) chips.push({ label: `No ${k}`, remove: () => toggle('missing', k) });
   for (const s of multi(sp.get('subject'))) chips.push({ label: `Subject: ${s}`, remove: () => toggle('subject', s) });
   for (const s of multi(sp.get('tag'))) chips.push({ label: `Tag: ${s}`, remove: () => toggle('tag', s) });
   for (const s of multi(sp.get('colour'))) chips.push({ label: `Colour: ${s}`, remove: () => toggle('colour', s) });

@@ -17,7 +17,11 @@ export function Review() {
   const [noting, setNoting] = useState(false);
 
   useEffect(() => {
-    api<Session>('/review/start', { method: 'POST', body: { early: new URLSearchParams(window.location.search).has('early') } }).then(setS).catch((e: Error) => setError(e.message));
+    (() => {
+      const q = new URLSearchParams(window.location.search);
+      const photoIds = q.get('ids')?.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0);
+      return api<Session>('/review/start', { method: 'POST', body: photoIds?.length ? { photoIds } : { early: q.has('early') } });
+    })().then(setS).catch((e: Error) => setError(e.message));
   }, []);
 
   const done = !!s && s.index >= s.queue.length;

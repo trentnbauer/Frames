@@ -298,10 +298,13 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     return { due: count, resumable, nextId: nextId ?? early[0] ?? null, early: early.length, shootNames, total: (one('SELECT COUNT(*) n FROM photos') as Row).n, minutes: Math.max(1, Math.round(count * 0.19)), sessions: loadSettings(db).sessions };
   });
   app.post('/api/review/start', async (req) => {
-    const existing = getSession();
+    const body = (req.body ?? {}) as Row;
+    // Rating particular photographs (a composition's candidates): a session of just those, replacing any unfinished one.
+    const chosen = Array.isArray(body.photoIds) ? [...new Set((body.photoIds as unknown[]).map((v) => num(v)))].slice(0, 500).filter((id) => one('SELECT 1 x FROM photos WHERE id = ? AND missing = 0', id)) : null;
+    const existing = chosen ? undefined : getSession();
     if (existing && existing.index < existing.queue.length) return existing;
-    let ids = dueIds(); // oldest review first
-    if (ids.length === 0 && ((req.body ?? {}) as Row).early === true) ids = oldestIds(); // nothing due, and the person asked to begin anyway
+    let ids = chosen ?? dueIds(); // oldest review first
+    if (!chosen && ids.length === 0 && body.early === true) ids = oldestIds(); // nothing due, and the person asked to begin anyway
     const s: Session = {
       runId: crypto.randomUUID(), index: 0, ratings: {}, notes: {},
       queue: ids.map((id) => { const p = one('SELECT w, h FROM photos WHERE id = ?', id)!; return { id, ar: p.w && p.h ? p.w / p.h : 1.5 }; }),
