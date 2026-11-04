@@ -32,13 +32,19 @@ export function Today() {
             <p className="t2" style={{ fontSize: 14, lineHeight: 1.55, maxWidth: 400, margin: '0 0 24px' }}>
               {s && s.due > 0
                 ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}. ` : ''}About ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'} at your usual pace.`
-                : 'Come back when the next ones are due.'}
+                : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.'}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <button className="pill primary" onClick={() => nav('/review')} disabled={!s || s.due === 0}>
-                {s?.resumable ? 'Resume review' : 'Begin review'}
-              </button>
-              <span className="muted" style={{ fontSize: 13 }}>or press R</span>
+              {s && s.due === 0 && !s.resumable && s.early > 0
+                ? <button className="pill primary" onClick={() => nav('/review?early')}>Review anyway: the {s.early === 1 ? 'one' : s.early} seen longest ago</button>
+                : (
+                  <>
+                    <button className="pill primary" onClick={() => nav('/review')} disabled={!s || s.due === 0}>
+                      {s?.resumable ? 'Resume review' : 'Begin review'}
+                    </button>
+                    <span className="muted" style={{ fontSize: 13 }}>or press R</span>
+                  </>
+                )}
             </div>
           </div>
           <div style={{ aspectRatio: '3 / 2', overflow: 'hidden', borderRadius: 8, background: 'var(--surface)' }}>

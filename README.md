@@ -172,6 +172,7 @@ Every photograph is reviewed in a few sessions, spaced out, so your real opinion
 
 - **The default**: four sessions, a week apart (so a photograph is reviewed four times in about a month). Change the number of sessions and the interval after each under Settings, Reviews. With *Adapt to consistency* on, steady ratings come back a little later and mixed ones sooner.
 - **A new photograph is not reviewed straight away.** One that has never been reviewed counts as reviewed on the day it was added, so its first review is one interval (the first one you set) after that. Libraries from before this are moved once, the same way; photographs you asked to review again keep the date you gave.
+- **Nothing due? Begin anyway.** When nothing is waiting, Today offers **Review anyway**: a session of the 20 photographs you saw longest ago (again, never reviewed counts from when it was added). It is an ordinary session: the ratings are kept and each photograph's next date is worked out from today.
 - **The oldest review comes first.** A session shows the photographs that are due in the order of when each was last reviewed, longest ago first (a photograph never reviewed counts from when it was added). The photo page shows when it was last reviewed and when it is next due.
 
 ## Public portfolio

@@ -67,6 +67,21 @@ describe('review order', () => {
     // Photograph 3 was reviewed most recently (2023): it goes to the back. Photograph 1 was reviewed in 2019, but it was added later, so only the review counts.
     db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (3, 1, 'x', '2023-01-01T00:00:00.000Z', 3), (1, 1, 'y', '2019-06-01T00:00:00.000Z', 3)").run();
     expect(await order()).toEqual([1, 2, 3]);
+    // Nothing due: starting does nothing unless asked to begin anyway, and then it is the photographs seen longest ago, oldest first.
+    db.prepare("UPDATE photos SET next_review_at = '2999-01-01T00:00:00Z'").run();
+    await send('DELETE', '/api/review/session');
+    expect((await send('POST', '/api/review/start', {})).queue).toHaveLength(0);
+    const summary = await get('/api/review/summary');
+    expect(summary.due).toBe(0);
+    expect(summary.early).toBeGreaterThanOrEqual(3);
+    await send('DELETE', '/api/review/session');
+    const early = (await send('POST', '/api/review/start', { early: true })).queue.map((q: any) => q.id).filter((id: number) => [1, 2, 3].includes(id));
+    expect(early).toEqual([1, 2, 3]);
+    await send('DELETE', '/api/review/session');
+    db.prepare("UPDATE photos SET next_review_at = '2000-01-01T00:00:00Z' WHERE id IN (1,2,3)").run();
+    // With something due, "early" changes nothing: the due ones come as usual.
+    expect((await send('POST', '/api/review/start', { early: true })).queue.length).toBeLessThanOrEqual(3);
+    await send('DELETE', '/api/review/session');
     expect((await get('/api/photos/3')).lastReviewedAt).toBe('2023-01-01T00:00:00.000Z');
     expect((await get('/api/photos/2')).lastReviewedAt).toBe('2022-01-01T00:00:00.000Z'); // never reviewed: counted from when it was added
     db.prepare('DELETE FROM reviews').run();

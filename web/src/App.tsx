@@ -20,7 +20,7 @@ import { useStore } from './store';
 
 function Shell() {
   const [searching, setSearching] = useState(false);
-  const { refreshSummary } = useStore();
+  const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
   const inReview = loc.pathname === '/review';
@@ -36,8 +36,8 @@ function Shell() {
     return () => window.removeEventListener('keydown', f);
   }, []);
   useKey((e) => {
-    if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav('/review');
-  }, [inReview, searching]);
+    if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav(summary && summary.due === 0 && !summary.resumable && summary.early > 0 ? '/review?early' : '/review'); // nothing due: begin anyway
+  }, [inReview, searching, summary]);
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
