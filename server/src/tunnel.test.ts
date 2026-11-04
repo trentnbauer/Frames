@@ -238,6 +238,7 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
           const a = { id: id === 'apps' ? `a${++cf.seq}` : id, aud: 'aud', ...j };
           cf.apps = [...cf.apps.filter((x) => x.id !== a.id), a]; return ok(a);
         }
+        if (/\/access\/organizations$/.test(url.pathname)) return ok({ auth_domain: 'team.example.test' });
         if (url.pathname === '/zones') return ok([{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'example.org' }]);
         if (/\/cfd_tunnel$/.test(url.pathname) && req.method === 'GET') return ok([...cf.tunnels].filter(([, n]) => n === url.searchParams.get('name')).map(([id, name]) => ({ id, name })));
         if (/\/cfd_tunnel$/.test(url.pathname)) { const id = `tun-${++cf.seq}`; cf.tunnels.set(id, j.name); return ok({ id }); }
@@ -305,6 +306,31 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     expect((await A.get('/api/portfolio')).body.dnsTarget).toBe('app.example.org'); // what a portfolio address's DNS points at
     await A.put('/api/tunnel', { portfolios: false });
     expect(cf.apps.find((a) => a.name === 'Frames portfolio addresses')).toBeUndefined(); // nothing left to list: removed
+  });
+  it('protects the App URL with Cloudflare Access when asked, for the people on the allow-list, and signs them in from it', async () => {
+    const r1 = await A.put('/api/tunnel', { protect: true });
+    expect(r1.body.error).toMatch(/Add the people allowed in/); // nobody on the list: Access would let no one in, so nothing is made
+    expect(cf.apps.find((a) => a.name === 'Frames (app.example.org)')).toBeUndefined();
+    await A.put('/api/auth/config', { allow: 'alice@x.test, @family.test, github:123' });
+    await settle();
+    expect((await A.get('/api/tunnel')).body.error).toBe(null);
+    const main = cf.apps.find((a) => a.name === 'Frames (app.example.org)');
+    expect(main.destinations.map((d: any) => d.uri)).toEqual(['app.example.org']);
+    expect(cf.policies.find((p) => p.app === main.id)).toMatchObject({ decision: 'allow', include: [{ email: { email: 'alice@x.test' } }, { email_domain: { domain: 'family.test' } }] });
+    const provider = (await A.get('/api/auth/config')).body.providers.find((p: any) => p.type === 'cloudflare');
+    expect(provider).toMatchObject({ teamDomain: 'team.example.test', aud: 'aud' });
+    expect((await A.get('/api/tunnel')).body.appOpen).toBe(false);
+    await A.put('/api/tunnel', { protect: false });
+    expect(cf.apps.find((a) => a.name === 'Frames (app.example.org)')).toBeUndefined(); // un-ticking removes what it made
+  });
+  it('switches itself on once set up, and stays off after the person switches it off', async () => {
+    expect((await A.get('/api/tunnel')).body.config.enabled).toBe(true); // nobody pressed Run
+    await A.post('/api/tunnel/stop');
+    await A.put('/api/auth/config', { publicUrl: 'https://app.example.org' });
+    await settle();
+    expect((await A.get('/api/tunnel')).body.config.enabled).toBe(false); // their choice is kept
+    await A.post('/api/tunnel/start');
+    expect((await A.get('/api/tunnel')).body.config.enabled).toBe(true);
   });
   it('never touches a DNS record it did not make, and shows Cloudflare’s reason when it cannot', async () => {
     cf.dns.push({ id: 'mine', zone: 'z1', name: 'other.example.com', content: 'x', type: 'CNAME' });
