@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
 import { Header, Img, Loading, useField } from '../components/bits';
@@ -7,6 +7,7 @@ import { SharePanel } from '../components/SharePanel';
 
 export function ShootDetail() {
   const { id } = useParams();
+  const nav = useNavigate();
   const shoot = useApi<Shoot>(`/shoots/${id}`);
   const all = useApi<Shoot[]>('/shoots');
   const photos = useApi<{ photos: PhotoLite[] }>(`/photos?shoot=${id}&order=oldest`);
@@ -58,6 +59,11 @@ export function ShootDetail() {
             </select>
           )}
           <button className="pill" onClick={() => { setSelect(!select); setPicked([]); setMsg(''); }}>{select ? 'Done' : 'Select photographs'}</button>
+          <button className="pill" onClick={async () => {
+            if (!window.confirm(`Take this photoshoot and all ${photos.data?.photos.length ?? 'its'} photographs out of Frames?\n\nTheir reviews, tags and collection places go with them, and its share links stop working. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+            await api(`/shoots/${id}`, { method: 'DELETE' });
+            nav('/shoots');
+          }}>Delete photoshoot</button>
         </span>
       </div>
       <div className="just">

@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
+import { removeShoot } from '../remove.js';
 import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
@@ -51,6 +52,12 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.get('/api/shoots/:id', async (req, rep) => {
     const s = one('SELECT * FROM shoots WHERE id = ?', num((req.params as Row).id));
     return s ? x.shootDto(s) : notFound(rep);
+  });
+  // Take a photoshoot, and every photograph in it, out of Frames. Files in library folders are never touched (see remove.ts).
+  app.delete('/api/shoots/:id', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    return removeShoot(db, cfg, id);
   });
   app.patch('/api/shoots/:id', async (req, rep) => {
     const id = num((req.params as Row).id);

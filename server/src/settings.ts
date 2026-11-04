@@ -9,6 +9,8 @@ export type Settings = {
   intervals: string[];
   adaptive: boolean;
   archiveSuggest: boolean;
+  /** Suggest taking out photographs whose average rating, after all their sessions, is below this (0 = never suggest). */
+  deleteBelow: number;
   /** The id of the AI source in use (Settings, AI), or '' for AI off. */
   aiActive: string;
   /** Worked out from the active source, never stored: 'off', or whether analysis stays on your network. */
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   intervals: ['1 week', '1 week', '1 week', '1 week'],
   adaptive: true,
   archiveSuggest: false,
+  deleteBelow: 0,
   aiActive: '',
   ai: 'off',
   xmpWriteBack: false,
@@ -48,6 +51,7 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   }
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
+  if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
   if (typeof patch.aiActive === 'string') {
     if (patch.aiActive === '') next.aiActive = '';
     else {

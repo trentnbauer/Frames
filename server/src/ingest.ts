@@ -213,6 +213,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
     for (const f of files) {
       try {
         const hash = await hashFile(f);
+        if (db.prepare('SELECT 1 FROM removed WHERE hash = ?').get(hash)) continue; // taken out of Frames on purpose: not imported again
         const same = db.prepare('SELECT id, path FROM photos WHERE hash = ?').get(hash) as { id: number; path: string } | undefined;
         if (same) {
           if (!fs.existsSync(same.path)) {

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api } from './api';
 
 export type Settings = {
-  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean;
+  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; deleteBelow: number;
   ai: 'off' | 'local' | 'external'; aiActive: string;
   xmpWriteBack: boolean;
 };

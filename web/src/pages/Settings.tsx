@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
-import { Header, Loading } from '../components/bits';
+import { Header, Img, Loading } from '../components/bits';
 import { useStore, type Settings } from '../store';
 import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
@@ -202,8 +202,58 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
         </div>
       </div>
       <Toggle on={s.adaptive} onChange={(v) => save({ adaptive: v })} label="Adapt to consistency" hint="Steady ratings come back less often. Mixed ratings come back sooner." />
+      <DeleteSuggestions s={s} save={save} />
       <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and collections." />
     </>
+  );
+}
+
+/** Suggest taking out photographs whose average rating, after every session, is below a line you choose. Nothing is removed until you tick and confirm. */
+function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const list = useApi<{ below: number; sessions: number; photos: { id: number; title: string; avg: number; reviews: number }[] }>(`/photos/delete-suggestions?b=${s.deleteBelow}`);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [msg, setMsg] = useState('');
+  const n = list.data?.photos.length ?? 0;
+  const take = async () => {
+    if (!picked.length || !window.confirm(`Take ${picked.length} ${picked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and collection places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+    try {
+      const r = await api<{ removed: number; filesDeleted: number }>('/photos/remove', { body: { ids: picked } });
+      setMsg(`Took ${r.removed} out of Frames${r.filesDeleted ? ` and deleted ${r.filesDeleted} of Frames’ own copies` : ''}.`);
+      setPicked([]); list.reload();
+    } catch (e) { setMsg((e as Error).message); }
+  };
+  return (
+    <div className="field">
+      <h3>Suggest taking out low-rated photos</h3>
+      <p>After a photograph has had all {s.sessions} of its sessions, suggest taking it out of Frames if its average is below a score you choose. Nothing is removed without you ticking it and confirming.</p>
+      <div className="form">
+        <label>Suggest when the average is below{' '}
+          <select aria-label="Suggest taking out below" value={s.deleteBelow} onChange={(e) => { setOpen(false); save({ deleteBelow: Number(e.target.value) }); }}>
+            <option value={0}>Never</option>
+            {[1.5, 2, 2.5, 3, 3.5, 4].map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </label>
+        {s.deleteBelow > 0 && <button className="pill" disabled={n === 0} onClick={() => { setOpen(!open); setMsg(''); }}>{n === 0 ? 'Nothing suggested' : open ? 'Hide the suggestions' : `See ${n} suggested`}</button>}
+      </div>
+      {msg && <p role="status" className="muted" style={{ fontSize: 13 }}>{msg}</p>}
+      {open && n > 0 && (
+        <div style={{ marginTop: 12, maxWidth: 720 }}>
+          <div className="row" style={{ gap: 12 }}>
+            <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" aria-label="Tick all suggestions" checked={picked.length === n} onChange={(e) => setPicked(e.target.checked ? list.data!.photos.map((p) => p.id) : [])} /> Tick all</label>
+            <button className="pill primary" disabled={!picked.length} onClick={take}>Take {picked.length || ''} out of Frames</button>
+          </div>
+          {list.data!.photos.map((p) => (
+            <label className="row" key={p.id} style={{ gap: 12, alignItems: 'center' }}>
+              <input type="checkbox" aria-label={`Take out ${p.title}`} checked={picked.includes(p.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, p.id] : picked.filter((x) => x !== p.id))} />
+              <span style={{ width: 64, height: 44, overflow: 'hidden', borderRadius: 6, background: 'var(--surface)', flex: 'none' }}><Img p={{ id: p.id, ar: 1.5 }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}><b>{p.title}</b> <Link to={`/photo/${p.id}`} className="t2" style={{ fontSize: 12, textDecoration: 'underline' }}>open</Link></span>
+              <span className="faint">average {p.avg} over {p.reviews} sessions</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

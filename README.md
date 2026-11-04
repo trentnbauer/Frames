@@ -176,6 +176,8 @@ Every photograph is reviewed in a few sessions, spaced out, so your real opinion
 - **Nothing due? Begin anyway.** When nothing is waiting, Today offers **Review anyway**: a session of the 20 photographs you saw longest ago (again, never reviewed counts from when it was added). It is an ordinary session: the ratings are kept and each photograph's next date is worked out from today.
 - **The oldest review comes first.** A session shows the photographs that are due in the order of when each was last reviewed, longest ago first (a photograph never reviewed counts from when it was added). The photo page shows when it was last reviewed and when it is next due.
 
+- **Taking photographs out.** A photograph's page has **Delete from Frames** and a photoshoot's page **Delete photoshoot**. That removes the record, reviews, tags, collection places and previews. **A file in a library folder is never touched** (Frames only reads those); only copies Frames holds itself, an upload or a cloud-sync copy, are deleted. The fingerprint is remembered so a scan does not import it again; Settings, Your data lists how many and can bring them back.
+- **Suggest deleting by score.** Settings, Reviews, *Suggest taking out below*: after a photograph's last session, if its average is below the score you picked (1.5 to 4, or never), it is listed for you to tick and take out. Nothing is removed without your confirmation.
 ## Public portfolio
 
 Settings, Portfolio turns one collection into a public website (your name, tagline, social links, theme toggle, masonry gallery, full-size viewer and a "My Gear" page). It is the same site that used to be built by GitHub Actions, now served by Frames, so you add photos from a photo's page (**Add to portfolio**) instead of pushing to git.
