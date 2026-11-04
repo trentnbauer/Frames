@@ -1,4 +1,4 @@
-name: Release
+name: Create Docker Container
 
 # Publishes a Docker image to GitHub's container registry. It runs two ways:
 #  - automatically, called by version.yml after a pull request with a "release: fix/minor/major"
