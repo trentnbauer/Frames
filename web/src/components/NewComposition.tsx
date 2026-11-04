@@ -1,33 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, useApi } from '../api';
-import type { Collection, PhotoLite, Shoot } from '../data';
+import { api } from '../api';
+import type { Collection } from '../data';
 import type { NewCompositionStart } from '../ui';
 
 const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 } as const;
 const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
 const opt = (on: boolean) => ({ background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: ring });
 
-/** "+ Composition": a name, how many prints, what size, and which shoots to draw candidates from. */
+/** "+ Composition": a name, how many prints and what size. Photographs are added afterwards (or come with it, from a search, a shoot or a selection). */
 export function NewComposition({ start, onClose }: { start: NewCompositionStart; onClose: () => void }) {
   const nav = useNavigate();
-  const shoots = useApi<Shoot[]>('/shoots');
-  const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const [name, setName] = useState(start.name ?? '');
   const [count, setCount] = useState(3);
   const [size, setSize] = useState<'A4' | 'A3' | 'A2'>('A3');
-  const [picked, setPicked] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const fromShoots = (lib.data?.photos ?? []).filter((p) => picked.includes(p.shootId)).map((p) => p.id);
-  const ids = [...new Set([...(start.photoIds ?? []), ...fromShoots])];
+  const ids = [...new Set(start.photoIds ?? [])];
   const create = async () => {
-    if (!ids.length || busy) return;
+    if (busy) return;
     setBusy(true); setErr('');
     try {
       const c = await api<Collection>('/collections', { body: { name: name.trim() || 'Untitled composition', photoIds: ids } });
       await api(`/collections/${c.id}`, { method: 'PATCH', body: { target: { count, size, orientation: 'any', ppi: 300 } } });
-      onClose(); nav(`/collections/${c.id}`);
+      onClose(); nav(`/collections/${c.id}${ids.length ? '' : '?add=1'}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   return (
@@ -44,17 +40,10 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
           {(['A4', 'A3', 'A2'] as const).map((v) => <button key={v} aria-pressed={size === v} onClick={() => setSize(v)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, ...opt(size === v) }}>{v}</button>)}
         </div>
-        <div style={label}>Candidates from</div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap' }}>
-          {(shoots.data ?? []).filter((s) => s.count > 0).map((s) => {
-            const on = picked.includes(s.id);
-            return <button key={s.id} aria-pressed={on} onClick={() => setPicked(on ? picked.filter((x) => x !== s.id) : [...picked, s.id])} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, ...opt(on) }}>{s.name} · {s.count}</button>;
-          })}
-        </div>
         {err && <p className="reason" role="alert">{err}</p>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{ids.length ? `${ids.length} candidates → best ${count} at ${size}` : 'Choose at least one shoot'}</span>
-          <button onClick={create} disabled={!ids.length || busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: ids.length ? 1 : 0.5 }}>Create and rank</button>
+          <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{ids.length ? `${ids.length} candidates → best ${count} at ${size}` : `${count} × ${size}. You add the photographs next.`}</span>
+          <button onClick={create} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Create and rank</button>
         </div>
       </div>
     </div>

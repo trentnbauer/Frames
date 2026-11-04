@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { checkTarget, parseTarget, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
 import { Header, Img, Justified, Loading } from '../components/bits';
@@ -141,7 +141,8 @@ export function CollectionDetail() {
   const insights = useApi<Insights>(`/collections/${id}/insights`);
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
   const [editing, setEditing] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [qs] = useSearchParams();
+  const [adding, setAdding] = useState(qs.get('add') === '1'); // a new, empty composition opens with the photographs to choose from
   const [tab, setTab] = useState<'ranked' | 'face'>('ranked');
   const [fo, setFo] = useState<Fo | null>(null);
   const [dl, setDl] = useState<Dl | null>(null);
