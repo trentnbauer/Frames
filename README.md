@@ -166,6 +166,14 @@ With sign-in on (Administration, Access), **every person has their own library**
 - **Upgrading a shared setup.** If several people used one Frames before, the existing library now belongs to the owner. Everyone else signs in once more and gets a library of their own (the old sessions end).
 - **Share links and portfolios.** A share link opens its owner's library, with no sign-in. The owner's portfolio is at `/portfolio/` on the main address. Every other person's portfolio is served only on a hostname of their own (Settings, Portfolio): that hostname shows their portfolio and nothing else, and two people cannot use the same one.
 
+## Reviews
+
+Every photograph is reviewed in a few sessions, spaced out, so your real opinion settles.
+
+- **The default**: four sessions, a week apart (so a photograph is reviewed four times in about a month). Change the number of sessions and the interval after each under Settings, Reviews. With *Adapt to consistency* on, steady ratings come back a little later and mixed ones sooner.
+- **A new photograph is not reviewed straight away.** One that has never been reviewed counts as reviewed on the day it was added, so its first review is one interval (the first one you set) after that. Libraries from before this are moved once, the same way; photographs you asked to review again keep the date you gave.
+- **The oldest review comes first.** A session shows the photographs that are due in the order of when each was last reviewed, longest ago first (a photograph never reviewed counts from when it was added). The photo page shows when it was last reviewed and when it is next due.
+
 ## Public portfolio
 
 Settings, Portfolio turns one collection into a public website (your name, tagline, social links, theme toggle, masonry gallery, full-size viewer and a "My Gear" page). It is the same site that used to be built by GitHub Actions, now served by Frames, so you add photos from a photo's page (**Add to portfolio**) instead of pushing to git.

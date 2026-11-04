@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS duplicates (path TEXT PRIMARY KEY, hash TEXT NOT NULL
 const hasColumn = (db: DB, table: string, col: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
 const addColumn = (db: DB, table: string, col: string, ddl: string) => { if (!hasColumn(db, table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`); };
 
+/** Days in each interval label (the same as schedule.ts, which cannot be imported here: it would be circular through settings). */
+const INTERVAL_DAYS: Record<string, number> = { '1 day': 1, '1 week': 7, '1 month': 30, '3 months': 90, '6 months': 182, '1 year': 365 };
+
 /** Each step runs once, in order, and is safe to re-run. The database version is stored in PRAGMA user_version. */
 const MIGRATIONS: ((db: DB) => void)[] = [
   // 2: location, analysis, variants, metadata, AI, richer organisation
@@ -159,6 +162,12 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     for (const k of ['ai', 'aiEndpoint', 'aiModel', 'aiEmbedModel', 'aiExternalAck']) delete st[k];
     db.prepare("UPDATE settings SET value = ? WHERE key = 'settings'").run(JSON.stringify(st));
     db.prepare("DELETE FROM settings WHERE key = 'secret:aiKey'").run();
+  },
+  // 7: a photograph that has never been reviewed is counted as reviewed when it was added, and first comes up one interval later (not straight away).
+  (db) => {
+    const saved = getSetting<{ intervals?: string[] }>(db, 'settings', {});
+    const days = INTERVAL_DAYS[saved.intervals?.[0] ?? '1 week'] ?? 7;
+    db.prepare("UPDATE photos SET next_review_at = strftime('%Y-%m-%dT%H:%M:%fZ', added_at, ?) WHERE next_review_at = added_at AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.photo_id = photos.id)").run(`+${days} days`);
   },
 ];
 

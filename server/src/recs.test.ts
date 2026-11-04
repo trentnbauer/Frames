@@ -118,6 +118,7 @@ describe('collection insights', () => {
 
 describe('statistics', () => {
   it('reports distributions and trends', async () => {
+    await A.put('/api/settings', { sessions: 6 }); // these photos have up to four sessions: with six to do, none is complete
     await A.put(`/api/photos/${id.red1}/tags`, { name: 'harbour', kind: 'subject' });
     await A.put(`/api/photos/${id.red1}/tags`, { name: 'sand' });
     const s = (await A.get('/api/stats')).body;

@@ -2,6 +2,8 @@ export type ReviewSettings = { sessions: number; intervals: string[]; adaptive: 
 
 const DAYS: Record<string, number> = { '1 day': 1, '1 week': 7, '1 month': 30, '3 months': 90, '6 months': 182, '1 year': 365 };
 export const INTERVAL_OPTIONS = Object.keys(DAYS);
+/** The length of an interval label, in days. */
+export const intervalDays = (label: string | undefined, fallback = 7) => DAYS[label ?? ''] ?? fallback;
 
 /**
  * Days until the next review after `ratings.length` sessions are done, or null when all sessions are complete.

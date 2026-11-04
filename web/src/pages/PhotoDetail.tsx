@@ -75,7 +75,7 @@ export function PhotoDetail() {
           </div>
 
           <div>
-            {rs.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>Not reviewed yet.</div> : (
+            {rs.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>Not reviewed yet. Counted from when it was added ({fmtDate(p.lastReviewedAt, { day: 'numeric', month: 'short', year: 'numeric' })}){p.nextReviewAt && <>, so its first review is {fmtDate(p.nextReviewAt, { day: 'numeric', month: 'short', year: 'numeric' })}</>}.</div> : (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                   <span className="serif" style={{ fontSize: 52, lineHeight: 1 }}>{avg.toFixed(1)}</span>
@@ -83,6 +83,7 @@ export function PhotoDetail() {
                 </div>
                 <div className="spark" style={{ margin: '12px 0 6px' }} aria-label="Ratings by session">{rs.map((r) => <i key={r.session} title={`${emoji(r.rating)} ${r.rating}`} style={{ height: `${(r.rating / 5) * 100}%` }} />)}</div>
                 {rs.length > 1 && <div className="muted" style={{ fontSize: 12.5 }}>{trend > 0 ? 'Improving ↗' : trend < 0 ? 'Declining ↘' : 'Steady →'}</div>}
+                <div className="muted" style={{ fontSize: 12.5 }}>Last reviewed {fmtDate(p.lastReviewedAt, { day: 'numeric', month: 'short', year: 'numeric' })}{p.nextReviewAt && <> · next {fmtDate(p.nextReviewAt, { day: 'numeric', month: 'short', year: 'numeric' })}</>}</div>
               </>
             )}
             {p.xmpRating && <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>Rated {p.xmpRating}/5 in another app (not counted as a review).</div>}

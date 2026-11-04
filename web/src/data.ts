@@ -8,7 +8,7 @@ export type Swatch = { hex: string; pct: number; name: string };
 export type PhotoLite = {
   id: number; title: string; file: string; shootId: number; w: number; h: number; ar: number; hasImage: boolean;
   capturedAt: string | null; camera: string; lens: string; exposure: string; fileType: string; sizeMb: number;
-  archived: boolean; missing: boolean; nextReviewAt: string | null; reviewCount: number; avgRating: number;
+  archived: boolean; missing: boolean; lastReviewedAt: string; nextReviewAt: string | null; reviewCount: number; avgRating: number;
   lat: number | null; lon: number | null; place: string; parentId: number | null;
   palette: Swatch[]; brightness: number | null; contrast: number | null; saturation: number | null;
   xmpRating: number | null; aiStatus: string | null; similarity?: number;
