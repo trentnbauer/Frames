@@ -256,6 +256,12 @@ export function safeName(n: string): string {
 }
 
 // ---------- smaller copies ----------
+/** The administrator can require smaller copies for everyone (Settings, Photo folders); otherwise it is each connection's own choice. */
+export const shrinkEnforced = (db: DB): boolean => {
+  const sys = (db as unknown as { sys?: DB }).sys;
+  return !!sys && getSetting<{ shrinkCopies?: string }>(sys, 'instance', {}).shrinkCopies === 'always';
+};
+
 const SHRINKABLE = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff']);
 export const SHRINK_QUALITY = 80;
 
@@ -333,6 +339,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const a = adapters[c0.provider];
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
+  const shrinkOn = !!c0.shrink || shrinkEnforced(db);
   const known = db.prepare('SELECT version, rel, shrunk FROM cloud_files WHERE conn_id = ? AND remote_id = ?');
   const taken = db.prepare('SELECT remote_id FROM cloud_files WHERE conn_id = ? AND rel = ?');
   const add = db.prepare('INSERT INTO cloud_files (conn_id, remote_id, rel, version, size, synced, shrunk, orig_size, orig_w, orig_h, remote_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -355,7 +362,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         if (prior) {
           if (prior.version !== e.version) { res.changedRemotely++; continue; }
           // Still the same in the cloud, so this is the moment it is safe to keep only a smaller copy here.
-          if (c0.shrink && !prior.shrunk) {
+          if (shrinkOn && !prior.shrunk) {
             const local = path.join(dest, ...prior.rel.split('/'));
             if (fs.existsSync(local) && path.resolve(local).startsWith(dest + path.sep)) {
               try {
@@ -391,7 +398,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
           fs.renameSync(part, target);
           // Asked to keep only smaller copies: make it now, before Frames ever sees the full-size file, and remember what the original was.
           let finalRel = rel, shrunk = 0, ow = 0, oh = 0, keptSize = got;
-          if (c0.shrink) {
+          if (shrinkOn) {
             const meta = await sharp(target, { failOn: 'none' }).metadata().catch(() => null);
             const sh = await shrinkFile(target);
             if (sh) { finalRel = path.relative(dest, sh.file).split(path.sep).join('/'); shrunk = 1; ow = meta?.width ?? sh.w; oh = meta?.height ?? sh.h; keptSize = sh.after; res.shrunk = (res.shrunk ?? 0) + 1; res.freed = (res.freed ?? 0) + (sh.before - sh.after); }
