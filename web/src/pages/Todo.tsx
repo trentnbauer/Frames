@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useApi } from '../api';
+import { api, useApi } from '../api';
+import { useStore } from '../store';
 import type { PhotoLite } from '../data';
 import { Header, Justified, Loading, Title } from '../components/bits';
 
@@ -9,6 +10,12 @@ type Todo = { total: number; kinds: number; items: Item[] };
 /** Everything waiting on you: approvals, photographs with nothing set yet, an account to reconnect. */
 export function Todo() {
   const todo = useApi<Todo>('/todo');
+  const { refreshSummary } = useStore();
+  const acceptAll = async (kind: 'tags' | 'description', n: number) => {
+    if (!window.confirm(`Accept all ${n.toLocaleString()} ${n === 1 ? 'photograph’s' : 'photographs’'} AI suggestions?\n\nThe suggested ${kind === 'tags' ? 'tags and subjects' : 'descriptions'} become yours. You can still remove or edit any of them on the photograph’s page.`)) return;
+    await api('/todo/accept-ai', { body: { kind } });
+    todo.reload(); refreshSummary();
+  };
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const byId = new Map((lib.data?.photos ?? []).map((p) => [p.id, p]));
   const d = todo.data;
@@ -28,6 +35,8 @@ export function Todo() {
             </div>
             <p className="muted" style={{ fontSize: 13, margin: '6px 0 14px', maxWidth: 640 }}>{i.detail}</p>
             {i.link && <Link to={i.link} className="pill primary">Open</Link>}
+            {(i.key === 'ai-tags' || i.key === 'ai-description') && <button className="pill" style={{ marginBottom: 12 }} onClick={() => acceptAll(i.key === 'ai-tags' ? 'tags' : 'description', i.count)}>Accept all {i.count.toLocaleString()}</button>}
+            {(i.key === 'subjects' || i.key === 'tags') && <Link to={`/library?missing=${i.key === 'subjects' ? 'subject' : 'tag'}`} className="pill" style={{ marginBottom: 12 }}>See all {i.count.toLocaleString()} in the Library</Link>}
             {photos.length > 0 && <Justified photos={photos} h={110} />}
             {i.count > photos.length && photos.length > 0 && <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>Showing the newest {photos.length}. The rest appear here as you finish these.</p>}
           </section>

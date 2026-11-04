@@ -55,6 +55,15 @@ describe('ranking a composition', () => {
     await A.put('/api/collections/guest-weight', { weight: 35 });
   });
 
+  it('starts a review session of just chosen photographs, replacing an unfinished one, and ignores ones that do not exist', async () => {
+    const s = (await A.post('/api/review/start', { photoIds: [ids[2], ids[0], 9999, ids[2]] })).body;
+    expect(s.queue.map((q: any) => q.id)).toEqual([ids[2], ids[0]]);
+    const t = (await A.post('/api/review/start', { photoIds: [ids[1]] })).body;
+    expect(t.queue.map((q: any) => q.id)).toEqual([ids[1]]);
+    expect(t.runId).not.toBe(s.runId);
+    expect((await A.post('/api/review/rate', { photoId: ids[1], rating: 4 })).status).toBe(200);
+  });
+
   it('marks a composition printed, and reopening clears it', async () => {
     expect((await A.get(`/api/collections/${compId}`)).body.printedAt).toBeNull();
     expect((await A.patch(`/api/collections/${compId}`, { printed: true })).body.printedAt).toMatch(/^\d{4}-/);

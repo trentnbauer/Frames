@@ -42,6 +42,26 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     return items;
   };
 
+  // Accepts every AI suggestion of one kind. Only what the AI suggested and is still waiting: nothing a person added or rejected.
+  app.post('/api/todo/accept-ai', async (req, rep) => {
+    const kind = ((req.body ?? {}) as Row).kind;
+    if (kind === 'tags') {
+      const r = db.prepare("UPDATE tags SET accepted = 1 WHERE source = 'ai' AND accepted = 0 AND photo_id IN (SELECT id FROM photos WHERE missing = 0)").run();
+      return { accepted: r.changes };
+    }
+    if (kind === 'description') {
+      let n = 0;
+      for (const r of all("SELECT id, ai_json FROM photos WHERE missing = 0 AND ai_status = 'done' AND description = '' AND ai_json LIKE '%description%'") as Row[]) {
+        try {
+          const a = JSON.parse(r.ai_json as string);
+          if (a.description && !a.descriptionRejected) { db.prepare("UPDATE photos SET description = ?, desc_source = 'user' WHERE id = ?").run(String(a.description).slice(0, 2000), r.id); n++; }
+        } catch { /* an unreadable suggestion is left alone */ }
+      }
+      return { accepted: n };
+    }
+    return rep.code(400).send({ error: 'kind must be tags or description' });
+  });
+
   app.get('/api/todo', async () => {
     const items = todo();
     return { total: items.reduce((n, i) => n + i.count, 0), kinds: items.length, items };
