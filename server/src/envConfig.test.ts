@@ -172,16 +172,26 @@ describe('comparing what is saved with what the container was started with', () 
     buildEnvFile(sysOf(a), a.db, { pairs });
     const operator = pairs.find(([, v]) => v === 'Studio')![0];
     const key = pairs.find(([, v]) => v === SECRET)![0];
-    useVars({ [operator]: 'Studio', [key]: 'a-different-key', AI_9_URL: 'https://elsewhere.test' });
+    const contact = pairs.find(([, v]) => v === 'hi@example.test')![0];
+    useVars({ [operator]: 'Studio', [contact]: 'other@example.test', [key]: 'a-different-key', AI_9_URL: 'https://elsewhere.test' });
     const r = (await A.get('/api/admin/env/compare')).body;
     const by = (n: string) => r.rows.find((x: any) => x.name === n);
     expect(by(operator).status).toBe('same');
     expect(by(key)).toMatchObject({ status: 'differs', secret: true });
     expect(by('AI_9_URL').status).toBe('env only');
+    // Values are shown for what is not secret: the environment's, and the app's where it differs.
+    expect(by(operator)).toMatchObject({ env: 'Studio' });
+    expect(by(operator).app).toBeUndefined(); // the same, so no second value
+    expect(by(contact)).toMatchObject({ status: 'differs', env: 'other@example.test', app: 'hi@example.test' });
+    expect(by('AI_9_URL')).toMatchObject({ env: 'https://elsewhere.test' });
+    // A secret has no value in either column, only whether it is set.
+    expect(by(key).env).toBeUndefined(); expect(by(key).app).toBeUndefined();
+    expect(r.rows.filter((x: any) => x.secret).every((x: any) => x.env === undefined && x.app === undefined)).toBe(true);
     expect(r.rows.some((x: any) => x.status === 'app only')).toBe(true); // the rest are saved in the app and not in the environment
     expect(JSON.stringify(r)).not.toContain(SECRET);
     expect(JSON.stringify(r)).not.toContain('a-different-key');
     expect(r.counts.same).toBe(1);
+    expect(r.counts.differs).toBe(2);
   });
 });
 

@@ -1,6 +1,6 @@
 import { useApi } from '../api';
 
-type Row = { name: string; secret: boolean; status: 'same' | 'differs' | 'app only' | 'env only' };
+type Row = { name: string; secret: boolean; status: 'same' | 'differs' | 'app only' | 'env only'; env?: string; app?: string };
 type Compare = { rows: Row[]; counts: { same: number; differs: number; appOnly: number; envOnly: number } };
 
 type Info = { allowed: boolean; loaded: { system: boolean; owner: boolean }; settings: { system: number; owner: number }; version: string };
@@ -44,21 +44,27 @@ export function EnvExport() {
 
       <div className="field">
         <h3>Saved in the app against set in the environment</h3>
-        <p className="muted" style={{ fontSize: 13 }}>For each variable the file would hold: whether this container was started with it, and with the same value. Values are never shown here.</p>
+        <p className="muted" style={{ fontSize: 13 }}>For each variable the file would hold: what this container was started with, and, where the app has something different saved, what that is. Secrets (keys, tokens, passwords) are never shown, only whether they are set.</p>
         {cmp.data && (
           <>
             <p style={{ fontSize: 13 }}>{cmp.data.counts.same} the same · {cmp.data.counts.differs} different · {cmp.data.counts.appOnly} saved in the app only · {cmp.data.counts.envOnly} set in the environment only</p>
             {cmp.data.rows.length === 0 && <p className="muted">Nothing is saved yet.</p>}
             {cmp.data.rows.length > 0 && (
               <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
-                <thead><tr style={{ textAlign: 'left', color: 'var(--muted)' }}><th style={{ padding: '4px 0' }}>Variable</th><th>Status</th></tr></thead>
+                <thead><tr style={{ textAlign: 'left', color: 'var(--muted)' }}><th style={{ padding: '4px 8px 4px 0' }}>Variable</th><th style={{ padding: '4px 8px' }}>Set in the environment</th><th style={{ padding: '4px 8px' }}>Saved in the app</th><th>Status</th></tr></thead>
                 <tbody>
-                  {cmp.data.rows.map((r) => (
-                    <tr key={r.name} style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
-                      <td className="mono" style={{ padding: '5px 0' }}>{r.name}{r.secret && <span className="faint"> · secret</span>}</td>
-                      <td className={r.status === 'differs' ? 'reason' : r.status === 'same' ? '' : 'muted'}>{r.status === 'same' ? 'Same' : r.status === 'differs' ? 'Different from the app' : r.status === 'app only' ? 'Saved in the app only' : 'Set in the environment only'}</td>
-                    </tr>
-                  ))}
+                  {cmp.data.rows.map((r) => {
+                    const secretCell = (set: boolean) => <span className="faint">{set ? '•••• secret, set' : '–'}</span>;
+                    const val = (v: string | undefined) => (v === undefined ? <span className="faint">–</span> : <span className="mono" style={{ wordBreak: 'break-all' }}>{v === '' ? <span className="faint">(empty)</span> : v}</span>);
+                    return (
+                      <tr key={r.name} style={{ borderTop: '1px solid rgba(255,255,255,.08)', verticalAlign: 'top' }}>
+                        <td className="mono" style={{ padding: '6px 8px 6px 0', wordBreak: 'break-all' }}>{r.name}</td>
+                        <td style={{ padding: '6px 8px' }}>{r.secret ? secretCell(r.status !== 'app only') : r.status === 'app only' ? <span className="faint">not set</span> : val(r.env)}</td>
+                        <td style={{ padding: '6px 8px' }}>{r.secret ? secretCell(r.status !== 'env only') : r.status === 'same' ? <span className="faint">same</span> : r.status === 'env only' ? <span className="faint">not saved</span> : val(r.app)}</td>
+                        <td className={r.status === 'differs' ? 'reason' : r.status === 'same' ? '' : 'muted'} style={{ padding: '6px 0' }}>{r.status === 'same' ? 'Same' : r.status === 'differs' ? 'Different' : r.status === 'app only' ? 'App only' : 'Environment only'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

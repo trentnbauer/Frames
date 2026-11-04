@@ -160,14 +160,17 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const pairs: [string, string][] = [];
     buildEnvFile(sys, x.tenants.owner().db, { pairs });
     const env = process.env;
-    const secret = (k: string) => /KEY|SECRET|TOKEN|PASSWORD|AUD/.test(k);
-    const rows = pairs.filter(([k]) => k !== 'ALLOW_ENV_EXPORT').map(([name, text]) => ({
-      name, secret: secret(name),
-      status: env[name] === undefined ? 'app only' : env[name] === text ? 'same' : 'differs',
-    }));
+    // A secret is never sent, in either column: only whether it is set. Anything that might hold one is treated as one (and the whole-config variables, which hold every secret).
+    const secret = (k: string) => /KEY|SECRET|TOKEN|PASSWORD|AUD|CREDENTIAL|PRIVATE/i.test(k) || /^FRAMES_CONFIG_/.test(k);
+    const show = (name: string, v: string | undefined) => (v === undefined || secret(name) ? undefined : v.length > 160 ? `${v.slice(0, 157)}…` : v);
+    type Row = { name: string; secret: boolean; status: 'same' | 'differs' | 'app only' | 'env only'; env?: string; app?: string };
+    const rows: Row[] = pairs.filter(([k]) => k !== 'ALLOW_ENV_EXPORT').map(([name, text]) => {
+      const status = env[name] === undefined ? 'app only' as const : env[name] === text ? 'same' as const : 'differs' as const;
+      return { name, secret: secret(name), status, env: show(name, env[name]), app: status === 'same' ? undefined : show(name, text) }; // the app's value is shown only where it is not the same
+    });
     const known = new Set(pairs.map(([k]) => k));
     for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k)).sort()) {
-      rows.push({ name, secret: secret(name), status: 'env only' });
+      rows.push({ name, secret: secret(name), status: 'env only', env: show(name, env[name]) });
     }
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };
   });
