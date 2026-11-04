@@ -196,6 +196,18 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
 
   // ---------- health / settings ----------
   app.get('/api/health', async () => ({ ok: true, version: cfg.version ?? 'dev' }));
+  // The welcome tour: shown once to someone with a new, empty library. A library that already has photographs is counted as welcomed.
+  app.get('/api/welcome', async () => {
+    let done = getSetting<boolean | null>(db, 'welcomed', null);
+    if (done === null) { done = ((one('SELECT COUNT(*) n FROM photos') as Row).n as number) > 0; setSetting(db, 'welcomed', done); }
+    return { done };
+  });
+  app.put('/api/welcome', async (req) => {
+    const done = ((req.body ?? {}) as Row).done !== false; // `done: false` shows it again
+    setSetting(db, 'welcomed', done);
+    return { done };
+  });
+
   app.get('/api/settings', async () => ({
     settings: loadSettings(db),
     hasKey: !!getSecret(db, 'aiKey'), // the key itself is never sent to the browser

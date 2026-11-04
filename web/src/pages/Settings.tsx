@@ -370,7 +370,12 @@ function Backup() {
 
 function About() {
   const h = useApi<{ version: string }>('/health');
-  return <p className="empty">Frames {h.data ? (h.data.version === 'dev' ? '(development build)' : `version ${h.data.version}`) : ''}</p>;
+  return (
+    <>
+      <p className="empty">Frames {h.data ? (h.data.version === 'dev' ? '(development build)' : `version ${h.data.version}`) : ''}</p>
+      <div className="field"><h3>The welcome tour</h3><p>A short tour of bringing photographs in, photoshoots and collections, reviewing and sharing.</p><Link to="/welcome" className="pill">Show the welcome tour</Link></div>
+    </>
+  );
 }
 
 /** Who you are signed in as, and with what. */

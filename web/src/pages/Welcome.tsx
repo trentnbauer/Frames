@@ -1,0 +1,84 @@
+import { useState, type ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../api';
+import { Header } from '../components/bits';
+import { useStore } from '../store';
+
+/** A short tour for someone new: bringing photographs in, photoshoots and collections, how reviewing works, and sharing for others to review. */
+export function Welcome() {
+  const nav = useNavigate();
+  const { me } = useStore();
+  const [i, setI] = useState(0);
+  const finish = async () => { await api('/welcome', { method: 'PUT', body: { done: true } }).catch(() => undefined); nav('/', { replace: true }); };
+  const folder = me?.user?.folder;
+  const steps: { title: string; body: ReactNode; actions?: ReactNode }[] = [
+    {
+      title: 'Bring your photographs in',
+      body: (
+        <>
+          <p>There are two ways. Either way, Frames only reads your originals: it never changes or deletes them.</p>
+          <p><b>From cloud storage.</b> Connect Google Drive, Dropbox or OneDrive (as many accounts as you like), choose a folder, and Frames copies the photographs from it, and keeps checking for new ones.</p>
+          <p><b>From files you have.</b> Upload them on the Photoshoots page{folder ? <>, or put them in your library folder on the server, <span className="mono">{folder}</span>, and press Sync</> : ''}.</p>
+        </>
+      ),
+      actions: (
+        <>
+          <Link to="/settings?section=cloud-sync" className="pill">Connect cloud storage</Link>
+          <Link to="/shoots" className="pill">Upload photographs</Link>
+        </>
+      ),
+    },
+    {
+      title: 'Photoshoots and collections',
+      body: (
+        <>
+          <p>A <b>photoshoot</b> is a day of photographs, or a roll of film. Each time photographs come in, they are gathered into one, with its date, so you can find a day again.</p>
+          <p>A <b>collection</b> is the idea or the artwork: the best photographs from a shoot, or from many, picked to belong together. Your “top 3 beaches” is a collection. A collection can have a print size, so Frames tells you whether each photograph has enough pixels, and you can download the originals of the ones you chose.</p>
+        </>
+      ),
+      actions: <Link to="/collections" className="pill">See collections</Link>,
+    },
+    {
+      title: 'How reviewing works',
+      body: (
+        <>
+          <p>You rate each photograph from 1 to 5, in a few short sessions spread over weeks (by default four, a week apart). You never see your earlier ratings while you rate, so the opinion that settles is really yours, not what you remember saying before.</p>
+          <p>Reviewing is what feeds collections. The photographs that keep scoring well rise to the top, so building a collection is picking from your strongest, and Frames suggests photographs that belong with the ones you chose.</p>
+          <p>When nothing is due you can still begin: it shows the photographs you have not seen for longest.</p>
+        </>
+      ),
+      actions: <Link to="/review" className="pill">Try a review</Link>,
+    },
+    {
+      title: 'Share a collection for others to review',
+      body: (
+        <>
+          <p>Open a collection and press <b>Share</b> to make a link. Anyone with the link can look through the collection without signing in. You choose whether they can download the originals and whether they can rate the photographs.</p>
+          <p>Their ratings are kept apart from yours and never change your own reviews. A link can expire or be turned off at any time.</p>
+        </>
+      ),
+      actions: <Link to="/collections" className="pill">Go to collections</Link>,
+    },
+  ];
+  const s = steps[i];
+  const last = i === steps.length - 1;
+  return (
+    <div className="page">
+      <Header />
+      <div style={{ maxWidth: 640, marginTop: 24 }}>
+        <div className="faint" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Welcome to Frames · {i + 1} of {steps.length}</div>
+        <h1 className="serif" style={{ fontSize: 52, lineHeight: 1.05, margin: '10px 0 18px' }}>{s.title}</h1>
+        <div className="t2" style={{ fontSize: 14.5, lineHeight: 1.6 }}>{s.body}</div>
+        {s.actions && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0 6px' }} onClick={() => { void api('/welcome', { method: 'PUT', body: { done: true } }).catch(() => undefined); }}>{s.actions}</div>}
+        <div style={{ display: 'flex', gap: 8, margin: '26px 0 18px' }} role="tablist" aria-label="Steps">
+          {steps.map((_, k) => <button key={k} role="tab" aria-selected={k === i} aria-label={`Step ${k + 1}`} onClick={() => setI(k)} style={{ width: 8, height: 8, borderRadius: '50%', background: k === i ? 'var(--text)' : 'var(--outline)' }} />)}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {i > 0 && <button className="pill" onClick={() => setI(i - 1)}>Back</button>}
+          {last ? <button className="pill primary" onClick={finish}>Start using Frames</button> : <button className="pill primary" onClick={() => setI(i + 1)}>Next</button>}
+          {!last && <button className="t2" onClick={finish}>Skip the tour</button>}
+        </div>
+      </div>
+    </div>
+  );
+}

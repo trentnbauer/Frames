@@ -16,6 +16,8 @@ import { ShootDetail } from './pages/ShootDetail';
 import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
+import { Welcome } from './pages/Welcome';
+import { api } from './api';
 import { useStore } from './store';
 
 function Shell() {
@@ -24,6 +26,11 @@ function Shell() {
   const loc = useLocation();
   const nav = useNavigate();
   const inReview = loc.pathname === '/review';
+  // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
+  useEffect(() => {
+    if (loc.pathname !== '/') return;
+    api<{ done: boolean }>('/welcome').then((w) => { if (!w.done) nav('/welcome', { replace: true }); }).catch(() => undefined);
+  }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -55,6 +62,7 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/welcome" element={<Welcome />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />

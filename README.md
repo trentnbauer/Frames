@@ -167,6 +167,10 @@ With sign-in on (Settings, Sign-in & access), **every person has their own libra
 - **Upgrading a shared setup.** If several people used one Frames before, the existing library now belongs to the owner. Everyone else signs in once more and gets a library of their own (the old sessions end).
 - **Share links and portfolios.** A share link opens its owner's library, with no sign-in. The owner's portfolio is at `/portfolio/` on the main address. Every other person's portfolio is served only on a hostname of their own (Settings, Portfolio): that hostname shows their portfolio and nothing else, and two people cannot use the same one.
 
+## Welcome tour
+
+Someone whose library is new and empty is taken to a short tour the first time they reach the front page: bringing photographs in (cloud storage or files), photoshoots versus collections, how reviewing works and feeds collections, and sharing a collection for others to review. **Skip the tour** or **Start using Frames** ends it for good; a library that already has photographs is counted as welcomed, so existing users are not interrupted. It can be shown again from Settings, About Frames.
+
 ## Reviews
 
 Every photograph is reviewed in a few sessions, spaced out, so your real opinion settles.
