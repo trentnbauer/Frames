@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
 import { createAuth, isAuthPath } from './auth.js';
+import { applyEnvConfig } from './envConfig.js';
 import { createTenants, migrateLegacy, tenantProxy, type Tenant } from './tenants.js';
 import { openSystemDb } from './users.js';
 import type { AppCfg, Ctx, Row } from './ctx.js';
@@ -46,6 +47,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const sys = openSystemDb(baseCfg.dataDir);
   migrateLegacy(sys, ownerDb);
   const tenants = createTenants(sys, baseCfg, ownerDb);
+  // An env file (FRAMES_CONFIG_SYSTEM / FRAMES_CONFIG_OWNER) wins over what was saved in the app, every start.
+  for (const p of applyEnvConfig(sys, ownerDb).problems) console.error(p);
   const db = tenantProxy<DB>(() => tenants.current().db);
   const cfg = tenantProxy<AppCfg>(() => tenants.currentOrNull()?.cfg ?? baseCfg);
   const portfolioGate = createPortfolioGate(sys, tenants, baseCfg.webDir);
