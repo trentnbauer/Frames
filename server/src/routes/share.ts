@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
+import { remoteOriginal } from '../cloud.js';
 
 /**
  * Share links: a public address (/s/<token>) for one collection or one photoshoot, so someone without a login
@@ -145,10 +146,21 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const id = num((req.params as Row).id);
     if (!r.photoIds.includes(id)) return notFound(rep);
     const p = one('SELECT path, file FROM photos WHERE id = ?', id);
-    if (!p || !fs.existsSync(p.path)) return notFound(rep, 'The original file is missing');
+    if (!p) return notFound(rep, 'The original file is missing');
     const q = req.query as Row;
     const n = Math.round(num(q.n, 0));
     const pad = Math.min(4, Math.max(0, Math.round(num(q.pad, 0))));
+    // Kept here as a smaller copy: the full-size original comes from the owner's cloud account.
+    let remote = null;
+    try { remote = await remoteOriginal(db, x.cfg, p.path); } catch { return rep.code(502).send({ error: 'The original is not available right now. Try again later.' }); }
+    if (remote) {
+      const rn = (n > 0 ? `${String(n).padStart(pad, '0')}_` : '') + remote.name;
+      db.prepare('UPDATE shares SET downloads = downloads + 1 WHERE id = ?').run(r.share.id);
+      return rep.header('Content-Type', 'application/octet-stream').header('Cache-Control', 'no-store')
+        .header('Content-Disposition', `attachment; filename="${rn.replace(/[^\x20-\x7e]|["\\;]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(rn)}`)
+        .send(remote.stream);
+    }
+    if (!fs.existsSync(p.path)) return notFound(rep, 'The original file is missing');
     const name = (n > 0 ? `${String(n).padStart(pad, '0')}_` : '') + p.file;
     db.prepare('UPDATE shares SET downloads = downloads + 1 WHERE id = ?').run(r.share.id);
     return rep

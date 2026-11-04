@@ -82,6 +82,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
       if (b.enabled === true && (c.folderId === null || c.needsReconnect)) return rep.code(400).send({ error: c.needsReconnect ? 'Reconnect the account first.' : 'Choose a folder first.' });
       c.enabled = !!b.enabled;
     }
+    if (b.shrink !== undefined) c.shrink = b.shrink === true;
     saveCloud(db, all);
     return dto();
   });
