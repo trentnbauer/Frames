@@ -267,7 +267,18 @@ export function safeName(n: string): string {
 /** The administrator can require smaller copies for everyone (Settings, Photo folders); otherwise it is each connection's own choice. */
 export const shrinkEnforced = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys;
-  return !!sys && getSetting<{ shrinkCopies?: string }>(sys, 'instance', {}).shrinkCopies === 'always';
+  if (!sys) return false;
+  const i = getSetting<{ shrinkCopies?: string; cloudOnly?: boolean }>(sys, 'instance', {});
+  return i.shrinkCopies === 'always' || !!i.cloudOnly; // keeping originals in the cloud means only smaller copies are kept here
+};
+
+/**
+ * The administrator can require originals to live in cloud storage (Settings, Storage, Photo folders): nothing can be uploaded to
+ * Frames, and cloud photographs are kept only as smaller copies. Photographs already here are not touched.
+ */
+export const cloudOnlyOriginals = (db: DB): boolean => {
+  const sys = (db as unknown as { sys?: DB }).sys;
+  return !!sys && !!getSetting<{ cloudOnly?: boolean }>(sys, 'instance', {}).cloudOnly;
 };
 
 const SHRINKABLE = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff']);

@@ -14,7 +14,8 @@ export function Shoots() {
   const shoots = useApi<Shoot[]>('/shoots');
   const pending = useApi<Pending>('/library/pending');
   const suggestions = useApi<Suggestion[]>('/shoots/suggestions');
-  const { refreshSummary } = useStore();
+  const { refreshSummary, me } = useStore();
+  const cloudOnly = !!me?.cloudOnly; // the administrator requires originals to be kept in cloud storage
   const { openNew } = useUi();
   const nav = useNavigate();
   const [box, setBox] = useState<'drop' | 'busy' | 'done' | null>(null);
@@ -79,7 +80,7 @@ export function Shoots() {
         style={{ width: '100%', borderRadius: 12, padding: '30px 32px', marginBottom: 36, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', textAlign: 'left', background: 'rgba(255,255,255,.03)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>
         <div>
           <div style={{ font: "400 30px/1.1 'Instrument Serif',Georgia,serif" }}>Bring in a new shoot</div>
-          <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.</div>
+          <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>{cloudOnly ? <>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings, Cloud sync</Link>, or sync the library folder.</> : 'Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.'}</div>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: '#6f6c67' }}>
@@ -87,7 +88,9 @@ export function Shoots() {
             <button onClick={sync} disabled={busy} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
           </span>
           <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>New photoshoot</button>
-          <button onClick={() => setBox('drop')} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>
+          {cloudOnly
+            ? <Link to="/settings?section=cloud-sync" style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Connect cloud storage</Link>
+            : <button onClick={() => setBox('drop')} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>}
         </div>
       </div>
       {naming && (

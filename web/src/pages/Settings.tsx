@@ -60,7 +60,7 @@ const HEADINGS: Partial<Record<Sec, string[]>> = {
   'Your data': ['What is kept', 'Back up my data', 'Previews', 'Delete my data'],
   People: ['Add someone', 'Privacy page', 'Roles'],
   Access: ['Require sign-in', 'Providers', 'Who is allowed in', 'Public address'],
-  'Libraries & storage': ['Photo libraries'],
+  'Libraries & storage': ['Photo libraries', 'Keep originals in cloud storage only', 'Always keep only a smaller copy of cloud photos'],
   Backup: ['Back up the whole server', 'Automatic backups', 'Restore'],
   'Env file': ['Download', 'Using it', 'Status'],
   'Shared AI': ['AIs for everyone on this server'],
@@ -75,11 +75,11 @@ const slug = (s: Sec) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-
 const fromSlug = (v: string | null): Sec | null => ALL.find((s) => slug(s) === v) ?? null;
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
-function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+function Toggle({ on, onChange, label, hint, locked }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string; locked?: string }) {
   return (
     <div className="field toggle">
-      <div><h3 style={{ fontSize: 19 }}>{label}</h3>{hint && <p style={{ margin: 0 }}>{hint}</p>}</div>
-      <button className={'sw' + (on ? ' on' : '')} role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} />
+      <div><h3 style={{ fontSize: 19 }}>{label}</h3>{hint && <p style={{ margin: 0 }}>{hint}</p>}{locked && <p className="reason" style={{ margin: '4px 0 0' }}>{locked}</p>}</div>
+      <button className={'sw' + (on ? ' on' : '')} role="switch" aria-checked={on} aria-label={label} disabled={!!locked} onClick={() => onChange(!on)} />
     </div>
   );
 }
@@ -259,10 +259,14 @@ function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Setting
 
 function Libraries() {
   const info = useApi<{ internalDir: string; libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
-  const inst = useApi<{ allowOriginals: boolean; shrinkCopies: 'choice' | 'always' }>('/admin/instance');
+  const inst = useApi<{ allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always' }>('/admin/instance');
   return (
     <>
-      <Toggle on={inst.data?.shrinkCopies === 'always'} onChange={async (v) => { if (v && !window.confirm('Require a smaller copy of every cloud photo, for everyone?\n\nFrames will keep only a JPEG at quality 80 of each photograph from every connected cloud folder, and leave the full-size originals in the cloud. Copies already held are made smaller on the next sync.\n\nIMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return; await api('/admin/instance', { method: 'PUT', body: { shrinkCopies: v ? 'always' : 'choice' } }); inst.reload(); }} label="Always keep only a smaller copy of cloud photos" hint="Off: each person chooses, per connected folder. On: required for everyone. Every cloud photo is kept as a JPEG at quality 80 and the full-size original stays in the cloud, fetched when it is exported. Deleting a photo from cloud storage deletes its only full-size original." />
+      <Toggle on={!!inst.data?.cloudOnly} onChange={async (v) => {
+        if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload photographs to Frames, and every cloud photograph will be kept only as a smaller copy here, with the full-size original left in the cloud.\n\nPhotographs already in Frames are not touched. IMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return;
+        await api('/admin/instance', { method: 'PUT', body: { cloudOnly: v } }); inst.reload();
+      }} label="Keep originals in cloud storage only" hint="Off by default. On: nobody can upload photographs to Frames, and every cloud photograph is kept only as a smaller copy (this includes “Always keep only a smaller copy of cloud photos” below). The full-size original stays in the person's cloud storage and is fetched when it is exported. Photographs already here, and library folders you mount, are not changed. Deleting a photo from cloud storage deletes its only full-size original." />
+      <Toggle on={inst.data?.shrinkCopies === 'always' || !!inst.data?.cloudOnly} locked={inst.data?.cloudOnly ? 'Required while originals are kept in cloud storage only (above).' : undefined} onChange={async (v) => { if (v && !window.confirm('Require a smaller copy of every cloud photo, for everyone?\n\nFrames will keep only a JPEG at quality 80 of each photograph from every connected cloud folder, and leave the full-size originals in the cloud. Copies already held are made smaller on the next sync.\n\nIMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return; await api('/admin/instance', { method: 'PUT', body: { shrinkCopies: v ? 'always' : 'choice' } }); inst.reload(); }} label="Always keep only a smaller copy of cloud photos" hint="Off: each person chooses, per connected folder. On: required for everyone. Every cloud photo is kept as a JPEG at quality 80 and the full-size original stays in the cloud, fetched when it is exported. Deleting a photo from cloud storage deletes its only full-size original." />
       <Toggle on={!!inst.data?.allowOriginals} onChange={async (v) => { await api('/admin/instance', { method: 'PUT', body: { allowOriginals: v } }); inst.reload(); }} label="Let portfolios offer original files" hint="Off by default. When on, a person can choose to let visitors of their portfolio download the original file, which can hold camera data and the place a photo was taken. When off, portfolios only serve resized copies." />
       <div className="field">
         <h3>Photo libraries</h3>
