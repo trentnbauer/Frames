@@ -3,8 +3,8 @@ import { api, useApi } from '../api';
 import { useStore } from '../store';
 
 type Provider = {
-  id: string; type: 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2'; name: string; clientId: string;
-  issuer?: string; tenant?: string; authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string;
+  id: string; type: 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2' | 'cloudflare'; name: string; clientId: string;
+  issuer?: string; tenant?: string; authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; teamDomain?: string; aud?: string;
   hasSecret?: boolean; redirectUrl?: string; clientSecret?: string;
 };
 type Cfg = {
@@ -17,6 +17,7 @@ const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
   { type: 'github', label: 'GitHub', hint: 'Sign in with a GitHub account.' },
   { type: 'microsoft', label: 'Microsoft', hint: 'Work or school (Entra ID). Needs your tenant ID.' },
   { type: 'oidc', label: 'OpenID Connect server', hint: 'Authentik, Keycloak, Authelia, or any standard OIDC provider.' },
+  { type: 'cloudflare', label: 'Cloudflare Access', hint: 'No sign-in screen: people who got through Cloudflare Access are signed in by the email Access vouches for.' },
   { type: 'oauth2', label: 'Other OAuth 2 service', hint: 'Anything that gives out OAuth 2 tokens and a user-info address.' },
 ];
 
@@ -87,8 +88,13 @@ export function Access() {
             </div>
             <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 520, marginTop: 10 }}>
               <label>Button label <input disabled={locked} value={p.name} aria-label={`${p.id} label`} onChange={(e) => edit(i, { name: e.target.value })} /></label>
-              <label>Client ID <input disabled={locked} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>
-              <label>Client secret <input disabled={locked} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>
+              {p.type === 'cloudflare' && <>
+                <label>Team domain <input disabled={locked} value={p.teamDomain ?? ''} placeholder="myteam.cloudflareaccess.com" aria-label={`${p.id} team domain`} onChange={(e) => edit(i, { teamDomain: e.target.value })} /></label>
+                <label>Application Audience (AUD) tag <input disabled={locked} value={p.aud ?? ''} placeholder="64 letters and numbers" aria-label={`${p.id} audience`} onChange={(e) => edit(i, { aud: e.target.value })} /></label>
+                <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>In Cloudflare Zero Trust: <b>Settings, Custom Pages</b> shows the team domain; <b>Access, Applications</b>, your Frames application, <b>Overview</b> shows the AUD tag. Open Frames through that application’s address to use <b>Test sign-in</b>.</p>
+              </>}
+              {p.type !== 'cloudflare' && <label>Client ID <input disabled={locked} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
+              {p.type !== 'cloudflare' && <label>Client secret <input disabled={locked} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>}
               {p.type === 'oidc' && <label>Issuer address <input disabled={locked} value={p.issuer ?? ''} placeholder="https://auth.example.com/application/o/frames/" aria-label={`${p.id} issuer`} onChange={(e) => edit(i, { issuer: e.target.value })} /></label>}
               {p.type === 'microsoft' && <label>Tenant ID <input disabled={locked} value={p.tenant ?? ''} placeholder="00000000-0000-0000-0000-000000000000" aria-label={`${p.id} tenant`} onChange={(e) => edit(i, { tenant: e.target.value })} /></label>}
               {p.type === 'oauth2' && (['authUrl', 'tokenUrl', 'userUrl', 'emailsUrl'] as const).map((k) => (

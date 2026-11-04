@@ -20,11 +20,12 @@ import { getUser, OWNER_ID, type User } from './users.js';
  *    AUTH_DISABLE=true switches it off from outside.
  */
 
-export type ProviderType = 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2';
+export type ProviderType = 'google' | 'github' | 'microsoft' | 'oidc' | 'oauth2' | 'cloudflare';
 export type Provider = {
   id: string; type: ProviderType; name: string; clientId: string;
   issuer?: string; tenant?: string; // oidc / microsoft
   authUrl?: string; tokenUrl?: string; userUrl?: string; emailsUrl?: string; // oauth2 (GitHub has these built in)
+  teamDomain?: string; aud?: string; // cloudflare: the Access team's domain, and the application's audience tag
 };
 export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
 export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null };
@@ -61,7 +62,12 @@ export const cleanAllow = (v: unknown): string[] => [...new Set((Array.isArray(v
 
 export function validateProvider(p: Partial<Provider>): string | null {
   if (!/^[a-z0-9-]{1,30}$/.test(p.id ?? '')) return 'The provider needs a short id (letters, numbers, dashes)';
-  if (!['google', 'github', 'microsoft', 'oidc', 'oauth2'].includes(p.type as string)) return 'Unknown provider type';
+  if (!['google', 'github', 'microsoft', 'oidc', 'oauth2', 'cloudflare'].includes(p.type as string)) return 'Unknown provider type';
+  if (p.type === 'cloudflare') {
+    if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(p.teamDomain ?? '')) return 'Enter your Cloudflare Zero Trust team domain (for example myteam.cloudflareaccess.com)';
+    if (!/^[0-9a-f]{32,64}$/i.test(p.aud ?? '')) return 'Enter the Application Audience (AUD) tag of the Access application that protects Frames';
+    return null; // no client ID or secret: Cloudflare Access signs the person in and passes a signed token
+  }
   if (!p.clientId?.trim()) return 'Enter the client ID';
   const url = (v?: string) => { try { const u = new URL(v ?? ''); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } };
   if (p.type === 'oidc' && !url(p.issuer)) return 'Enter the issuer address of your OpenID Connect server';
@@ -129,6 +135,21 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return config;
   }
 
+  /** The person Cloudflare Access signed in, from the signed token it adds to each request. The signature, issuer, audience and expiry are all checked. */
+  async function cloudflareIdentity(p: Provider, req: FastifyRequest): Promise<Identity> {
+    const token = String(req.headers['cf-access-jwt-assertion'] ?? '');
+    if (!token) throw new Error('Cloudflare Access did not pass a login to Frames. Open Frames through the address that Cloudflare Access protects.');
+    try {
+      const base = cfg.accessCertsBase ?? `https://${p.teamDomain}`;
+      let jwks = jwksSets.get(base);
+      if (!jwks) { jwks = createRemoteJWKSet(new URL(`${base}/cdn-cgi/access/certs`)); jwksSets.set(base, jwks); }
+      const { payload } = await jwtVerify(token, jwks, { issuer: `https://${p.teamDomain}`, audience: p.aud });
+      const email = String(payload.email ?? '').toLowerCase();
+      if (!email) throw new Error('no email');
+      return { provider: p.id, sub: String(payload.sub ?? email), email, emailVerified: true, name: String(payload.name ?? '') || email };
+    } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Settings, Access.'); }
+  }
+
   const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };
 
   /** Where to send the browser to start signing in. */
@@ -138,6 +159,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const challenge = await oidc.calculatePKCECodeChallenge(verifier);
     const redirectUri = `${baseUrl(req)}/auth/callback/${p.id}`;
     flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri });
+    if (p.type === 'cloudflare') return `${baseUrl(req)}/auth/callback/${p.id}?state=${state}`; // nothing to ask a provider: Access already signed the person in
     if (p.type === 'github' || p.type === 'oauth2') {
       const a = p.type === 'github' ? PRESETS.github : p;
       const u = new URL(a.authUrl!);
@@ -165,6 +187,8 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const p = loadAuth(db).providers.find((x) => x.id === id);
     if (!p) throw new Error('That provider is no longer set up.');
     const secret = getSecret(db, `oauth:${p.id}`);
+
+    if (p.type === 'cloudflare') return { who: await cloudflareIdentity(p, req), flow };
 
     if (p.type === 'github' || p.type === 'oauth2') {
       const a = p.type === 'github' ? PRESETS.github : (p as Required<Provider>);
@@ -266,6 +290,9 @@ export function createAuth(db: DB, cfg: AppCfg) {
   function deny(req: FastifyRequest, rep: FastifyReply, limited = false) {
     if (limited) return rep.code(429).header('Retry-After', '60').send({ error: 'Too many wrong passwords. Try again in a minute.' });
     if (oauthOn()) {
+      // Behind Cloudflare Access there is no screen to show: the signed token in the request is the sign-in.
+      const cf = loadAuth(db).providers.find((p) => p.type === 'cloudflare');
+      if (cf && req.headers['cf-access-jwt-assertion'] && wantsHtml(req)) return rep.redirect(`/auth/login/${cf.id}?returnTo=${encodeURIComponent(req.url)}`);
       if (wantsHtml(req)) return rep.code(401).type('text/html').send(signinPage());
       return rep.code(401).send({ error: 'Sign in required', signIn: true });
     }
