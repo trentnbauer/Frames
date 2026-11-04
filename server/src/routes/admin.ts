@@ -108,12 +108,14 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- choices that apply to the whole server ----------
-  app.get('/api/admin/instance', async () => ({ allowOriginals: !!getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {}).allowOriginals }));
+  type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always' };
+  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const }; };
+  app.get('/api/admin/instance', async () => instance());
   app.put('/api/admin/instance', async (req) => {
     const b = (req.body ?? {}) as Row;
-    const cur = getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {});
-    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}) });
-    return { allowOriginals: !!getSetting<{ allowOriginals?: boolean }>(sys, 'instance', {}).allowOriginals };
+    const cur = getSetting<Instance>(sys, 'instance', {});
+    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}) });
+    return instance();
   });
 
   // ---------- the whole server's backup ----------

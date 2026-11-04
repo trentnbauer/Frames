@@ -6,7 +6,7 @@ import { CardFooter, Destructive, EditRow, useOne, type One } from '../component
 type Result = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number; shrunk?: number; freed?: number };
 type Conn = { id: string; provider: string; account: string; folderId: string | null; folderName: string; intervalMin: number; enabled: boolean; lastSync: string | null; lastResult: Result | null; needsReconnect: boolean; shrink?: boolean };
 type Prov = { id: string; label: string; console: string; configured: boolean; clientId?: string; hasSecret?: boolean };
-type Data = { redirectUri: string; providers: Prov[]; connections: Conn[]; progress: { running: boolean; connId: string | null; downloaded: number; current: string } };
+type Data = { shrinkEnforced: boolean; redirectUri: string; providers: Prov[]; connections: Conn[]; progress: { running: boolean; connId: string | null; downloaded: number; current: string } };
 
 const ROOT: Record<string, string> = { google: 'root', dropbox: '', onedrive: 'root' };
 const EVERY = [[0, 'Only when I press Sync'], [15, 'Every 15 minutes'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day']] as const;
@@ -38,7 +38,7 @@ export function CloudSettings() {
       <div className="field">
         <h3>Your connected folders</h3>
         {connections.length === 0 && <p className="muted">Nothing connected yet. Connect an account below.</p>}
-        {connections.map((c) => <Connection key={c.id} one={one} c={c} p={providers.find((p) => p.id === c.provider)!} progress={progress} act={act} />)}
+        {connections.map((c) => <Connection key={c.id} enforced={d.data!.shrinkEnforced} one={one} c={c} p={providers.find((p) => p.id === c.provider)!} progress={progress} act={act} />)}
       </div>
 
       <div className="field">
@@ -118,7 +118,7 @@ function Service({ one, p, act }: { one: One; p: Prov; act: (fn: () => Promise<u
   );
 }
 
-function Connection({ one, c, p, progress, act }: { one: One; c: Conn; p: Prov; progress: Data['progress']; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean; one: One; c: Conn; p: Prov; progress: Data['progress']; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [picking, setPicking] = useState(false);
   const busy = progress.running && progress.connId === c.id;
   const r = c.lastResult;
@@ -146,14 +146,14 @@ function Connection({ one, c, p, progress, act }: { one: One; c: Conn; p: Prov; 
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={c.enabled} disabled={c.folderId === null || c.needsReconnect} onChange={(e) => put({ enabled: e.target.checked })} /> Keep this folder up to date automatically</label>
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink} onChange={(e) => {
+            <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink || enforced} disabled={enforced} onChange={(e) => {
               if (e.target.checked && !window.confirm(`Keep only a smaller copy of each photo in Frames?\n\nThe full-size original stays in ${p.label}, and is fetched from there when you export it.\n\nIMPORTANT: if you delete a photo from ${p.label}, its full-size original is gone for good. Frames will only have the smaller copy.\n\nThis also replaces the full-size copies Frames already holds from this account, the next time it syncs.`)) return;
               put({ shrink: e.target.checked });
             }} />
-            <span><b>Keep only a smaller copy of each photo here</b>, and leave the full-size original in {p.label}. The copy is a JPEG at quality 80 with the same pixels and camera data, which uses about a third to a half of the space. When you export a collection, Frames fetches each original from {p.label}, one photo at a time, so exports are always full size.</span>
+            <span><b>Keep only a smaller copy of each photo here</b>{enforced && <span className="muted"> (required by your administrator for everyone)</span>}, and leave the full-size original in {p.label}. The copy is a JPEG at quality 80 with the same pixels and camera data, which uses about a third to a half of the space. When you export a collection, Frames fetches each original from {p.label}, one photo at a time, so exports are always full size.</span>
           </label>
           <span role="alert" style={{ color: 'var(--warn)' }}><b>Do not delete these photos from {p.label}.</b> Deleting a photo there deletes its only full-size original: Frames would be left with just the smaller copy. Disconnecting this account also stops originals being fetched until you connect it again.</span>
-          {c.shrink && r?.shrunk ? <span className="muted">Last sync: {r.shrunk} {r.shrunk === 1 ? 'photo' : 'photos'} made smaller, {mb(r.freed ?? 0)} freed.</span> : null}
+          {(c.shrink || enforced) && r?.shrunk ? <span className="muted">Last sync: {r.shrunk} {r.shrunk === 1 ? 'photo' : 'photos'} made smaller, {mb(r.freed ?? 0)} freed.</span> : null}
         </div>
         {r && (
           <p className="muted" style={{ margin: 0, fontSize: 13 }} role="status">

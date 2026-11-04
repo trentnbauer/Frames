@@ -29,7 +29,7 @@ export type Tenants = ReturnType<typeof createTenants>;
 export const userDir = (base: AppCfg, id: number) => (id === OWNER_ID ? base.dataDir : path.join(base.dataDir, 'users', String(id)));
 
 /** Lets code that only has a library's database reach the server's own (the shared AI sources live there). */
-const linkSys = (db: DB, sys: DB) => { if (!Object.getOwnPropertyDescriptor(db, 'sys')) Object.defineProperty(db, 'sys', { value: sys, enumerable: false }); return db; };
+const linkSys = (db: DB, sys: DB) => { Object.defineProperty(db, 'sys', { value: sys, enumerable: false, configurable: true }); return db; }; // each app (a restart, or a test) links its own
 
 export function createTenants(sys: DB, base: AppCfg, ownerDb: DB) {
   linkSys(ownerDb, sys);

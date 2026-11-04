@@ -259,9 +259,10 @@ function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Setting
 
 function Libraries() {
   const info = useApi<{ internalDir: string; libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
-  const inst = useApi<{ allowOriginals: boolean }>('/admin/instance');
+  const inst = useApi<{ allowOriginals: boolean; shrinkCopies: 'choice' | 'always' }>('/admin/instance');
   return (
     <>
+      <Toggle on={inst.data?.shrinkCopies === 'always'} onChange={async (v) => { if (v && !window.confirm('Require a smaller copy of every cloud photo, for everyone?\n\nFrames will keep only a JPEG at quality 80 of each photograph from every connected cloud folder, and leave the full-size originals in the cloud. Copies already held are made smaller on the next sync.\n\nIMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return; await api('/admin/instance', { method: 'PUT', body: { shrinkCopies: v ? 'always' : 'choice' } }); inst.reload(); }} label="Always keep only a smaller copy of cloud photos" hint="Off: each person chooses, per connected folder. On: required for everyone. Every cloud photo is kept as a JPEG at quality 80 and the full-size original stays in the cloud, fetched when it is exported. Deleting a photo from cloud storage deletes its only full-size original." />
       <Toggle on={!!inst.data?.allowOriginals} onChange={async (v) => { await api('/admin/instance', { method: 'PUT', body: { allowOriginals: v } }); inst.reload(); }} label="Let portfolios offer original files" hint="Off by default. When on, a person can choose to let visitors of their portfolio download the original file, which can hold camera data and the place a photo was taken. When off, portfolios only serve resized copies." />
       <div className="field">
         <h3>Photo libraries</h3>

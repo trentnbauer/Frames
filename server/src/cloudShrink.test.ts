@@ -115,10 +115,26 @@ describe('keeping a smaller copy of cloud photographs', () => {
     expect(env.db.prepare('SELECT shrunk FROM cloud_files WHERE remote_id = ?').get('f2')).toEqual({ shrunk: 0 });
   });
 
+  it('an administrator can require smaller copies for everyone: then a connection that did not ask still keeps only a smaller copy', async () => {
+    expect((await A.get('/api/admin/instance')).body.shrinkCopies).toBe('choice'); // each person's own choice, by default
+    await A.put(`/api/cloud/${id}`, { shrink: false });
+    nodes.push({ id: 'f4', name: 'Chosen By Nobody.jpg', data: await noisy(1600, 900), version: 'v1' });
+    let r = await sync(id);
+    expect(r.shrunk ?? 0).toBe(0); // not asked, not required: whole
+    expect((await A.put('/api/admin/instance', { shrinkCopies: 'always' })).body.shrinkCopies).toBe('always');
+    expect((await A.get('/api/cloud')).body.shrinkEnforced).toBe(true);
+    nodes.push({ id: 'f5', name: 'Required.jpg', data: await noisy(1600, 900), version: 'v1' });
+    r = await sync(id);
+    expect(r.shrunk).toBe(2); // the one already here, and the new one
+    expect(env.db.prepare('SELECT shrunk FROM cloud_files WHERE remote_id IN (?, ?)').all('f4', 'f5')).toEqual([{ shrunk: 1 }, { shrunk: 1 }]);
+    expect((await A.put('/api/admin/instance', { shrinkCopies: 'nonsense' })).body.shrinkCopies).toBe('always'); // only the two values
+    await A.put('/api/admin/instance', { shrinkCopies: 'choice' });
+    await A.put(`/api/cloud/${id}`, { shrink: true });
+  });
   it('says plainly when the original cannot be fetched, and disconnecting does not lose the way back to it', async () => {
     const p = await photoByFile('Beach At Dawn.jpg');
     await A.del(`/api/cloud/${id}`);
-    expect(env.db.prepare('SELECT COUNT(*) n FROM cloud_files WHERE conn_id = ? AND shrunk = 1').get(id)).toEqual({ n: 2 }); // kept: it is how the original is found again
+    expect(env.db.prepare('SELECT COUNT(*) n FROM cloud_files WHERE conn_id = ? AND shrunk = 1').get(id)).toEqual({ n: 4 }); // kept: it is how the original is found again
     const r = await A.get(`/api/photos/${p.id}/original`);
     expect(r.status).toBe(502);
     expect(r.body.error).toMatch(/disconnected/);

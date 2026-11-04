@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { beginConnect, CloudError, clientOf, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
+import { beginConnect, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
 import { setSecret } from '../ai.js';
 import type { Ctx, Row } from '../ctx.js';
 
@@ -15,6 +15,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
       // Everyone sees which services can be connected; only an administrator sees (and edits) the app registration behind them.
       providers: PROVIDERS.map((p) => { const k = clientOf(cfg, db, p.id); return { ...p, configured: !!k.clientId, ...(x.tenant().user.role === 'admin' ? { clientId: k.clientId, hasSecret: !!k.secret } : {}) }; }),
       connections: c.connections, // holds no tokens: those are kept apart as secrets
+      shrinkEnforced: shrinkEnforced(db), // an administrator requires smaller copies for everyone
       progress: { ...progressOf(cfg) },
     };
   };
