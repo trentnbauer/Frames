@@ -103,6 +103,9 @@ export async function applyEnvTunnel(env: EnvTunnel, d: ApplyDeps): Promise<EnvS
       setSetting(d.ownerDb, 'portfolio', { ...getSetting<Record<string, unknown>>(d.ownerDb, 'portfolio', {}), host: env.portfolioHost });
     }
 
+    // The sign-in return addresses use the public address, which is the app address.
+    if (env.appHost) { const a = getSetting<Record<string, unknown>>(sys, 'auth', {}); if (a.publicUrl !== `https://${env.appHost}`) setSetting(sys, 'auth', { ...a, publicUrl: `https://${env.appHost}` }); }
+
     // What the Settings screen shows, so the tunnel looks like any other, but read-only (see tunnel.ts).
     const cfg: TunnelCfg = { ...loadTunnel(sys), enabled: true, mode: 'api', accountId: env.accountId, tunnelName: env.name, tunnelId: id, env: true, dns,
       hostnames: [...(env.appHost ? [{ hostname: env.appHost, kind: 'app' as const }] : []), ...(env.portfolioHost ? [{ hostname: env.portfolioHost, kind: 'portfolio' as const }] : [])] };

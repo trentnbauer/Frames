@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
+import { tunnelNote } from '../tunnelNote';
 
 type Cfg = {
   enabled: boolean; host: string; collectionId: number | null; photographerName: string; tagline: string; accentColor: string;
@@ -18,7 +19,7 @@ export function PortfolioSettings() {
   const set = (p: Partial<Cfg>) => setF({ ...f, ...p });
   const save = async (body: Partial<Cfg>, ok = 'Saved.') => {
     setMsg(null);
-    try { await api('/portfolio', { method: 'PUT', body }); d.reload(); setMsg({ ok: true, text: ok }); }
+    try { const r = await api<{ tunnel?: { updated?: boolean; applied?: boolean; error?: string } | null }>('/portfolio', { method: 'PUT', body }); d.reload(); setMsg({ ok: true, text: ok + tunnelNote(r.tunnel) }); }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
   const makeCollection = async () => {
