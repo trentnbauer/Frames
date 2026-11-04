@@ -182,6 +182,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'cloud_files', 'orig_h', 'INTEGER NOT NULL DEFAULT 0');
     addColumn(db, 'cloud_files', 'remote_name', "TEXT NOT NULL DEFAULT ''");
   },
+  // 10: a composition can be marked printed (done and archived), with the day it was.
+  (db) => {
+    addColumn(db, 'collections', 'printed_at', 'TEXT');
+  },
 ];
 
 export function migrate(db: DB) {
