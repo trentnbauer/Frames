@@ -25,7 +25,7 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 |---|---|---|
 | `PHOTOS_DIR` | `./photos` | Folder of photographs on the Docker host, mounted **read-only** at `/library`. A cloud drive mounted as a folder (for example with rclone) works too. Required in the Portainer file. |
 | `BIND_ADDRESS` | `127.0.0.1` | Which address the published port listens on. `127.0.0.1` is this machine only; `0.0.0.0` is every interface (turn on sign-in first). |
-| `PORT` | `3000` | The port published on the host. (Inside the container Frames always listens on 3000.) |
+| `HOST_PORT` | `3000` | The port published on the host. (Inside the container Frames listens on 3000. An older `PORT` here still works for the published port in the compose files, but `HOST_PORT` is the name to use: `PORT` is also the variable Frames itself reads for the port it listens on, so passing it into the container breaks it.) |
 | `FRAMES_IMAGE` | `frames:local` (built from source) | Run a published release instead of building, for example `ghcr.io/trentnbauer/frames:1.2.3` (see *Versions*). |
 | `FRAMES_VERSION` | `latest` | Portainer file only: the image tag to pull. |
 
@@ -62,6 +62,8 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 | `NODE_ENV` | `production` | Standard Node setting. |
 
 Everything else (AI, sign-in providers, portfolio, sync) is set in the app, under Settings, and kept in the database.
+
+**Two kinds of variable.** A value written inside the compose file as `${NAME}` (the published port, the image tag) is filled in by Docker Compose from the variables Portainer or `--env-file` gives it. A file listed under `env_file:` is different: it only sets variables *inside the container*, and never feeds a `${NAME}`. So if you load `stack.env` with `env_file:`, put the host port in the compose file itself (`"3101:3000"`) and keep `PORT` out of that file entirely.
 
 **Portainer**: use `docker-compose.portainer.yml` (Stacks, Add stack, Web editor). It pulls the published image, reads no files, and takes every stack and container variable above from the stack's *Environment variables* section; only `PHOTOS_DIR` is required.
 

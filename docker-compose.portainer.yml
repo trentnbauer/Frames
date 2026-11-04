@@ -4,7 +4,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - ${PORT:-3000}:3000
+      - ${HOST_PORT:-${PORT:-3000}}:3000 ##The port on the host. Not PORT: Frames reads PORT as the port it listens on inside the container
     environment:
       AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}

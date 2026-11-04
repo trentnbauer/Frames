@@ -9,7 +9,7 @@ services:
     ports:
       # Listens on this machine only by default. Before using 0.0.0.0 (all interfaces) turn on
       # sign-in: AUTH_PASSWORD here, or an OAuth provider in Settings, Access.
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-${PORT:-3000}}:3000"
     environment:
       AUTH_USER: ${AUTH_USER:-frames}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
