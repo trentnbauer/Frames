@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
+import { CardFooter, Destructive, EditRow, useOne, type One } from '../components/editcard';
 
 type Result = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number };
 type Conn = { id: string; provider: string; account: string; folderId: string | null; folderName: string; intervalMin: number; enabled: boolean; lastSync: string | null; lastResult: Result | null; needsReconnect: boolean };
@@ -19,6 +20,10 @@ export function CloudSettings() {
     const m = new URLSearchParams(window.location.search).get('cloud');
     if (m) setMsg(m === 'connected' ? { ok: true, text: 'Connected. Choose a folder to sync.' } : { ok: false, text: m });
   }, []);
+  const one = useOne();
+  // A connection with no folder yet opens its card, so the next step is in front of you.
+  const fresh = d.data?.connections.find((c) => c.folderId === null && !c.needsReconnect)?.id;
+  useEffect(() => { if (fresh) one.set(fresh); }, [fresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const running = d.data?.progress.running;
   useEffect(() => { if (!running) return; const t = setInterval(d.reload, 1500); return () => clearInterval(t); }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data) return <p className="empty">Loading…</p>;
@@ -33,7 +38,7 @@ export function CloudSettings() {
       <div className="field">
         <h3>Your connected folders</h3>
         {connections.length === 0 && <p className="muted">Nothing connected yet. Connect an account below.</p>}
-        {connections.map((c) => <Connection key={c.id} c={c} p={providers.find((p) => p.id === c.provider)!} progress={progress} act={act} />)}
+        {connections.map((c) => <Connection key={c.id} one={one} c={c} p={providers.find((p) => p.id === c.provider)!} progress={progress} act={act} />)}
       </div>
 
       <div className="field">
@@ -81,6 +86,7 @@ function Steps({ p }: { p: Prov }) {
 /** Administrators: the app registration for each service, once for the whole server. People then only connect their own account. */
 export function CloudServices() {
   const d = useApi<Data>('/cloud');
+  const one = useOne();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   if (!d.data) return <p className="empty">Loading…</p>;
   const act = async (fn: () => Promise<unknown>, ok?: string) => { setMsg(null); try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } d.reload(); };
@@ -89,42 +95,44 @@ export function CloudServices() {
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
       <p>Frames has no shared account with these services, so you register a small app of your own with each one (free). It is set up here once for the whole server; every person then signs in to their own account under Settings, Cloud sync. Use this return address when asked:</p>
       <p><span className="mono" style={{ userSelect: 'all' }}>{d.data.redirectUri}</span></p>
-      {d.data.providers.map((p) => <Service key={p.id} p={p} act={act} />)}
+      {d.data.providers.map((p) => <Service key={p.id} one={one} p={p} act={act} />)}
     </>
   );
 }
 
-function Service({ p, act }: { p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+function Service({ one, p, act }: { one: One; p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [id, setId] = useState(p.clientId ?? '');
   const [secret, setSecret] = useState('');
   return (
-    <details className="row" style={{ display: 'block', padding: '10px 0' }}>
-      <summary style={{ cursor: 'pointer' }}><b>{p.label}</b> <span className="faint">{p.configured ? 'ready: people can connect' : 'not set up'}</span></summary>
-      <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520, marginTop: 10 }}>
+    <EditRow id={p.id} one={one} title={p.label} note="The app you registered with this service, for the whole server." summary={<><b>{p.label}</b> <span className="faint">{p.configured ? 'ready: people can connect' : 'not set up'}</span></>}>
+      <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
         <label>Client ID <input aria-label={`${p.label} client ID`} value={id} onChange={(e) => setId(e.target.value)} /></label>
         <label>Client secret <input type="password" autoComplete="off" aria-label={`${p.label} client secret`} value={secret} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} onChange={(e) => setSecret(e.target.value)} /></label>
         <Steps p={p} />
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The secret is kept on this server only, never shown again and left out of backups.</p>
-        <div><button className="pill" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save</button></div>
       </div>
-    </details>
+      <CardFooter>
+        <button className="pill primary" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save changes</button>
+      </CardFooter>
+    </EditRow>
   );
 }
 
-function Connection({ c, p, progress, act }: { c: Conn; p: Prov; progress: Data['progress']; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+function Connection({ one, c, p, progress, act }: { one: One; c: Conn; p: Prov; progress: Data['progress']; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [picking, setPicking] = useState(false);
   const busy = progress.running && progress.connId === c.id;
   const r = c.lastResult;
   const put = (body: Record<string, unknown>) => act(() => api(`/cloud/${c.id}`, { method: 'PUT', body }));
   return (
-    <details className="row" style={{ display: 'block', padding: '10px 0' }} open={c.folderId === null || undefined}>
-      <summary style={{ cursor: 'pointer' }}>
+    <EditRow id={c.id} one={one} title={`${p.label}${c.account ? ` (${c.account})` : ''}`} note="Frames only ever reads from this account." summary={(
+      <>
         <b>{p.label}</b> {c.account && <span className="muted">{c.account}</span>}{' '}
         <span className={c.needsReconnect ? 'reason' : 'faint'}>
           {c.needsReconnect ? 'needs to be reconnected' : busy ? `copying… ${progress.downloaded} so far` : c.folderId === null ? 'choose a folder' : c.folderName || 'whole account'}
         </span>
-      </summary>
-      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 560 }}>
+      </>
+    )}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
           <b>Folder</b>: {c.folderId === null ? 'none yet' : c.folderName || 'Everything in the account'}{' '}
           <button className="t2" onClick={() => setPicking(!picking)}>{picking ? 'Close' : 'Choose a folder'}</button>
@@ -144,14 +152,14 @@ function Connection({ c, p, progress, act }: { c: Conn; p: Prov; progress: Data[
             {r.errors.length > 0 && <span className="reason"> · {r.errors.length} could not be copied: {r.errors[0]}</span>}
           </p>
         )}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {c.needsReconnect
-            ? <button className="pill primary" onClick={() => act(async () => { const x = await api<{ url: string }>(`/cloud/connect/${c.provider}`, { body: {} }); window.location.assign(x.url); })}>Reconnect</button>
-            : <button className="pill primary" disabled={c.folderId === null || progress.running} onClick={() => act(() => api(`/cloud/${c.id}/sync`, { body: {} }))}>{busy ? 'Copying…' : 'Sync now'}</button>}
-          <button className="t2" onClick={() => { if (window.confirm('Disconnect this account? Photos already copied stay in Frames.')) act(() => api(`/cloud/${c.id}`, { method: 'DELETE' }), 'Disconnected. The photos already copied stay.'); }}>Disconnect</button>
-        </div>
       </div>
-    </details>
+      <CardFooter>
+        {c.needsReconnect
+          ? <button className="pill primary" onClick={() => act(async () => { const x = await api<{ url: string }>(`/cloud/connect/${c.provider}`, { body: {} }); window.location.assign(x.url); })}>Reconnect</button>
+          : <button className="pill primary" disabled={c.folderId === null || progress.running} onClick={() => act(() => api(`/cloud/${c.id}/sync`, { body: {} }))}>{busy ? 'Copying…' : 'Sync now'}</button>}
+        <Destructive onClick={() => { if (window.confirm('Disconnect this account? Photos already copied stay in Frames.')) act(() => api(`/cloud/${c.id}`, { method: 'DELETE' }), 'Disconnected. The photos already copied stay.'); }}>Disconnect</Destructive>
+      </CardFooter>
+    </EditRow>
   );
 }
 

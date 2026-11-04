@@ -25,7 +25,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .title { font: 400 48px/1 var(--serif); margin: 0; }
 .count { font-size: 13px; color: var(--muted); }
 .serif { font-family: var(--serif); font-weight: 400; margin: 0; }
-.muted { color: var(--muted); } .faint { color: var(--faint); } .t2 { color: var(--text2); }
+.muted { color: var(--muted); } .faint { color: var(--faint); } .t2 { color: var(--text2); } .t2.danger:hover { color: var(--warn); }
 .mono { font-family: var(--mono); }
 .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .spread { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }

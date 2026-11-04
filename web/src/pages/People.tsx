@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
 import { useStore } from '../store';
+import { CardFooter, Destructive, EditRow, MeTag, useOne, type One } from '../components/editcard';
 
 type Person = { id: number; name: string; email: string; provider: string; role: 'admin' | 'member'; folder: string; disabled: boolean; invited: boolean; created: string; photos: number; bytes: number };
 type Data = { users: Person[]; signups: boolean; libraryRoots: string[] };
@@ -10,6 +11,7 @@ const size = (n: number) => (n > 1073741824 ? `${(n / 1073741824).toFixed(1)} GB
 /** Administrators: who is here, what each person uses, and the people-related requests (add, switch off, delete data). */
 export function People() {
   const d = useApi<Data>('/admin/users');
+  const one = useOne();
   const { me } = useStore();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [email, setEmail] = useState('');
@@ -25,16 +27,16 @@ export function People() {
 
       <div className="field">
         <h3>People</h3>
-        {d.data.users.map((u) => <Row key={u.id} u={u} self={u.id === me?.id} root={root} act={act} />)}
+        {d.data.users.map((u) => <Row key={u.id} one={one} u={u} self={u.id === me?.id} root={root} act={act} />)}
       </div>
 
       <div className="field">
         <h3>Add someone</h3>
-        <p>They are put on the allow-list, and their first sign-in with this verified email address claims the account.</p>
+        <p>They are also put on the allowed list under Sign-in & access, and their first sign-in with this verified email address claims the account.</p>
         <div className="form">
           <input aria-label="Email address" type="email" style={{ minWidth: 260 }} placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')}><option value="member">Member</option><option value="admin">Administrator</option></select>
-          <button className="pill primary" disabled={!email.includes('@')} onClick={() => act(async () => { await api('/admin/users', { body: { email, role } }); setEmail(''); }, 'Added.')}>Add</button>
+          <button className="pill primary" disabled={!email.includes('@')} onClick={() => act(async () => { const r = await api<{ allowedList: 'added' | 'already' }>('/admin/users', { body: { email, role } }); const mail = email.trim().toLowerCase(); setEmail(''); setMsg({ ok: true, text: r.allowedList === 'added' ? `Added ${mail}, and put them on the allowed list under Sign-in & access.` : `Added ${mail}. They were already on the allowed list under Sign-in & access.` }); })}>Add</button>
         </div>
       </div>
 
@@ -43,19 +45,20 @@ export function People() {
   );
 }
 
-function Row({ u, self, root, act }: { u: Person; self: boolean; root: string; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+function Row({ one, u, self, root, act }: { one: One; u: Person; self: boolean; root: string; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [folder, setFolder] = useState(u.folder);
   useEffect(() => setFolder(u.folder), [u.folder]);
   const patch = (body: Record<string, unknown>, ok?: string) => act(() => api(`/admin/users/${u.id}`, { method: 'PATCH', body }), ok);
   return (
-    <details className="row" style={{ display: 'block', padding: '10px 0' }}>
-      <summary style={{ cursor: 'pointer' }}>
-        <b>{u.name || u.email}</b> {u.email && u.name !== u.email && <span className="muted">{u.email}</span>}{' '}
+    <EditRow id={String(u.id)} one={one} title={u.name || u.email} note={`Added ${fmtDate(u.created, { day: 'numeric', month: 'short', year: 'numeric' })}${u.provider ? ` · signs in with ${u.provider}` : ''}.`} summary={(
+      <>
+        <b>{u.name || u.email}</b>{self && <MeTag />} {u.email && u.name !== u.email && <span className="muted">{u.email}</span>}{' '}
         <span className="faint">{u.role === 'admin' ? 'administrator' : 'member'}{u.invited ? ' · not signed in yet' : ''}{u.disabled ? ' · switched off' : ''}</span>{' '}
         <span className="faint">· {u.photos} photos · {size(u.bytes)}</span>
-      </summary>
+      </>
+    )}>
       <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520, marginTop: 10 }}>
-        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>Added {fmtDate(u.created, { day: 'numeric', month: 'short', year: 'numeric' })}{u.provider ? ` · signs in with ${u.provider}` : ''}. The size is what Frames holds for them (uploads, previews, database, backups), not the read-only library folder.</p>
+        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The size counts what Frames holds for them, not the photographs in their read-only folder.</p>
         <label>Role{' '}
           <select aria-label={`${u.email || u.name} role`} value={u.role} onChange={(e) => patch({ role: e.target.value }, 'Saved.')}><option value="member">Member</option><option value="admin">Administrator</option></select>
         </label>
@@ -65,15 +68,15 @@ function Row({ u, self, root, act }: { u: Person; self: boolean; root: string; a
             <input aria-label={`${u.email || u.name} folder`} value={folder} onChange={(e) => setFolder(e.target.value)} onBlur={() => folder !== u.folder && patch({ folder }, 'Saved. Press Sync in their library to read from the new folder.')} />
           </label>
         )}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      </div>
+      <CardFooter>
           {!self && <button className="pill" onClick={() => patch({ disabled: !u.disabled }, u.disabled ? 'Switched on.' : 'Switched off and signed out.')}>{u.disabled ? 'Switch on' : 'Switch off'}</button>}
-          <button className="t2" onClick={() => {
+          <Destructive onClick={() => {
             if (window.prompt(`Delete everything Frames holds for ${u.name || u.email}${u.id === 1 ? ' (the library is emptied, the account stays)' : ' and remove the account'}?\n\nType “delete” to confirm. This cannot be undone.`) === 'delete')
               act(() => api(`/admin/users/${u.id}/data`, { method: 'DELETE', body: { confirm: 'delete' } }), 'Deleted.');
-          }}>Delete their data</button>
-        </div>
-      </div>
-    </details>
+          }}>Delete their data</Destructive>
+      </CardFooter>
+    </EditRow>
   );
 }
 

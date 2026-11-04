@@ -158,8 +158,9 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     if (listUsers(sys).some((u) => u.email.toLowerCase() === email)) return rep.code(409).send({ error: 'That person already has an account.' });
     const u = invite(sys, email, b.role === 'admin' ? 'admin' : 'member');
     const conf = loadAuth(sys);
-    if (!isAllowed({ provider: '', sub: '', email, emailVerified: true }, conf.allow)) saveAuth(sys, { ...conf, allow: cleanAllow([...conf.allow, email]) });
-    return rep.code(201).send(dto(u));
+    const already = isAllowed({ provider: '', sub: '', email, emailVerified: true }, conf.allow);
+    if (!already) saveAuth(sys, { ...conf, allow: cleanAllow([...conf.allow, email]) });
+    return rep.code(201).send({ ...dto(u), allowedList: already ? 'already' : 'added' }); // whether they had to be put on the allowed list
   });
 
   app.patch('/api/admin/users/:id', async (req, rep) => {
