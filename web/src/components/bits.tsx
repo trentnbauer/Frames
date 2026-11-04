@@ -96,7 +96,7 @@ export function BottomNav({ onSearch }: { onSearch: () => void }) {
       {item('/', 'Today')}
       {item('/library', 'Library')}
       {item('/shoots', 'Shoots')}
-      {item('/collections', 'Collections')}
+      {item('/collections', 'Compositions')}
       {item('/for-you', 'For you')}
       <span className="div" />
       <button className="search" onClick={onSearch}>Search or ask… <span>⌘K</span></button>
@@ -106,14 +106,16 @@ export function BottomNav({ onSearch }: { onSearch: () => void }) {
 }
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
-export function Justified({ photos, h = 190, onPick, captions }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string }) {
+export function Justified({ photos, h = 190, onPick, captions, picked, onTick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
   return (
     <div className="just">
       {photos.map((p) => {
         // Archived photos stay in the grid, just dimmed: they are only left out of review.
         const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1 };
         const cap = captions?.(p);
-        const inner = <><Img p={p} />{cap && <em className="cap">{cap}</em>}</>;
+        const on = !!picked?.has(p.id);
+        const inner = <><Img p={p} />{cap && <em className="cap">{cap}</em>}{onTick && <b className="tick">{on ? '✓' : ''}</b>}</>;
+        if (onTick) return <button key={p.id} className={on ? 'picked' : ''} aria-pressed={on} style={{ ...st, position: 'relative' }} onClick={() => onTick(p)} aria-label={`Select ${p.title}`}>{inner}</button>;
         return onPick ? (
           <button key={p.id} style={{ ...st, position: 'relative' }} onClick={() => onPick(p)} aria-label={p.title}>{inner}</button>
         ) : (

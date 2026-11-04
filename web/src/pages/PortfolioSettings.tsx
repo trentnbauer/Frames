@@ -25,7 +25,7 @@ export function PortfolioSettings() {
   };
   const makeCollection = async () => {
     const c = await api<{ id: number }>('/collections', { body: { name: 'Portfolio', description: 'Shown on the public portfolio website' } });
-    await save({ collectionId: c.id }, 'Created a “Portfolio” collection. Add photos to it from any photo’s page.');
+    await save({ collectionId: c.id }, 'Created a “Portfolio” composition. Add photos to it from any photo’s page.');
   };
   const { status } = d.data;
   return (
@@ -35,22 +35,22 @@ export function PortfolioSettings() {
       <div className="field toggle">
         <div>
           <h3 style={{ fontSize: 19 }}>Publish the portfolio</h3>
-          <p style={{ margin: 0 }}>A public website of the photos in one collection. {f.enabled ? <>It is live at <a className="t2" style={{ textDecoration: 'underline' }} href="/portfolio/" target="_blank" rel="noreferrer">/portfolio/</a>, with {status.photoCount} {status.photoCount === 1 ? 'photo' : 'photos'}.</> : 'Off: nothing is public.'}</p>
+          <p style={{ margin: 0 }}>A public website of the photos in one composition. {f.enabled ? <>It is live at <a className="t2" style={{ textDecoration: 'underline' }} href="/portfolio/" target="_blank" rel="noreferrer">/portfolio/</a>, with {status.photoCount} {status.photoCount === 1 ? 'photo' : 'photos'}.</> : 'Off: nothing is public.'}</p>
         </div>
         <button className={'sw' + (f.enabled ? ' on' : '')} role="switch" aria-checked={f.enabled} aria-label="Publish the portfolio" onClick={() => save({ enabled: !f.enabled }, f.enabled ? 'The portfolio is off.' : 'The portfolio is live.')} />
       </div>
 
       <div className="field">
         <h3>Which photos</h3>
-        <p>The portfolio shows the photos in this collection, and only those. Add or remove photos from a photo’s own page, or edit the collection.</p>
+        <p>The portfolio shows the photos in this composition, and only those. Add or remove photos from a photo’s own page, or edit the composition.</p>
         <div className="form">
-          <select aria-label="Portfolio collection" value={f.collectionId ?? ''} onChange={(e) => save({ collectionId: e.target.value ? Number(e.target.value) : null }, 'Collection chosen.')}>
-            <option value="">Choose a collection…</option>
+          <select aria-label="Portfolio composition" value={f.collectionId ?? ''} onChange={(e) => save({ collectionId: e.target.value ? Number(e.target.value) : null }, 'Composition chosen.')}>
+            <option value="">Choose a composition…</option>
             {d.data.collections.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.n})</option>)}
           </select>
-          {!f.collectionId && <button className="pill" onClick={makeCollection}>Create a “Portfolio” collection</button>}
+          {!f.collectionId && <button className="pill" onClick={makeCollection}>Create a “Portfolio” composition</button>}
           <select aria-label="Order" value={f.order} onChange={(e) => save({ order: e.target.value as Cfg['order'] }, 'Order saved.')}>
-            <option value="collection">In the collection’s order</option><option value="newest">Newest added first</option><option value="oldest">Oldest added first</option><option value="captured">Newest taken first</option>
+            <option value="collection">In the composition’s order</option><option value="newest">Newest added first</option><option value="oldest">Oldest added first</option><option value="captured">Newest taken first</option>
           </select>
         </div>
       </div>

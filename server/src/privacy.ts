@@ -65,7 +65,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
 
   <h2>Your choices</h2>
   <ul>
-    <li><strong>Delete everything</strong>: in Settings, Your data, press Delete my data. Your account, photographs held by Frames, previews, collections, share links, settings and saved connections are erased and you are signed out. An administrator can do the same for an account on request. Folders that the server provides as read-only libraries are not Frames' to delete: ask the person who runs the server to remove them.</li>
+    <li><strong>Delete everything</strong>: in Settings, Your data, press Delete my data. Your account, photographs held by Frames, previews, compositions, share links, settings and saved connections are erased and you are signed out. An administrator can do the same for an account on request. Folders that the server provides as read-only libraries are not Frames' to delete: ask the person who runs the server to remove them.</li>
     <li><strong>Turn off</strong> sharing at any time by deleting a share link or switching off a portfolio.</li>
     <li>${opts.signups ? 'Anyone the sign-in list allows can create an account on their first sign-in.' : 'New accounts are switched off: only people added by an administrator can sign in.'}</li>
   </ul>
