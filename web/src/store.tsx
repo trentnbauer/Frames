@@ -6,7 +6,7 @@ export type Settings = {
   ai: 'off' | 'local' | 'external'; aiActive: string;
   xmpWriteBack: boolean;
 };
-export type Summary = { due: number; resumable: boolean; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
+export type Summary = { due: number; resumable: boolean; early: number; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 
 export type Me = { mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member'; canSignOut: boolean; signups: boolean; envConfig: boolean };
 

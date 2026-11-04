@@ -17,7 +17,7 @@ export function Review() {
   const [noting, setNoting] = useState(false);
 
   useEffect(() => {
-    api<Session>('/review/start', { method: 'POST', body: {} }).then(setS).catch((e: Error) => setError(e.message));
+    api<Session>('/review/start', { method: 'POST', body: { early: new URLSearchParams(window.location.search).has('early') } }).then(setS).catch((e: Error) => setError(e.message));
   }, []);
 
   const done = !!s && s.index >= s.queue.length;

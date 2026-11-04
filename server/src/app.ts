@@ -87,7 +87,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (pg.mode === 'index') return rep.type('text/html').header('Cache-Control', 'no-cache').send(portfolioGate.indexHtml());
     if (pg.mode === 'allow') r.tenant = pg.tenant;
     else if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
-      // Optional sign-in: OAuth providers (Administration, Access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
+      // Optional sign-in: OAuth providers (Settings, Sign-in & access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
       const v = auth.verify(req);
       if (!v.ok) return auth.deny(req, rep, v.limited);
       r.authUser = v.user;
@@ -265,6 +265,9 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // Due photographs, the one reviewed longest ago first. One never reviewed counts as reviewed when it was added.
   const dueIds = () => (db.prepare("SELECT id FROM photos p WHERE archived = 0 AND missing = 0 AND next_review_at IS NOT NULL AND next_review_at <= ? ORDER BY COALESCE((SELECT MAX(date) FROM reviews r WHERE r.photo_id = p.id), p.added_at), p.id").all(new Date().toISOString()) as Row[]).map((r) => r.id as number);
   const getSession = () => getSetting<Session | null>(db, 'reviewSession', null);
+  // When nothing is due, a person can still begin: the photographs reviewed longest ago (never reviewed counts from when it was added).
+  const EARLY = 20;
+  const oldestIds = (n = EARLY) => (db.prepare("SELECT id FROM photos p WHERE archived = 0 AND missing = 0 ORDER BY COALESCE((SELECT MAX(date) FROM reviews r WHERE r.photo_id = p.id), p.added_at), p.id LIMIT ?").all(n) as Row[]).map((r) => r.id as number);
 
   app.get('/api/review/summary', async () => {
     const s = getSession();
@@ -277,12 +280,14 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const shootNames = ids.length
       ? (db.prepare(`SELECT DISTINCT sh.name FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id IN (${ids.slice(0, 500).join(',')}) LIMIT 2`).all() as Row[]).map((r) => r.name as string)
       : [];
-    return { due: count, resumable, nextId, shootNames, total: (one('SELECT COUNT(*) n FROM photos') as Row).n, minutes: Math.max(1, Math.round(count * 0.19)), sessions: loadSettings(db).sessions };
+    const early = due === 0 && !resumable ? oldestIds() : [];
+    return { due: count, resumable, nextId: nextId ?? early[0] ?? null, early: early.length, shootNames, total: (one('SELECT COUNT(*) n FROM photos') as Row).n, minutes: Math.max(1, Math.round(count * 0.19)), sessions: loadSettings(db).sessions };
   });
-  app.post('/api/review/start', async () => {
+  app.post('/api/review/start', async (req) => {
     const existing = getSession();
     if (existing && existing.index < existing.queue.length) return existing;
-    const ids = dueIds(); // oldest review first
+    let ids = dueIds(); // oldest review first
+    if (ids.length === 0 && ((req.body ?? {}) as Row).early === true) ids = oldestIds(); // nothing due, and the person asked to begin anyway
     const s: Session = {
       runId: crypto.randomUUID(), index: 0, ratings: {}, notes: {},
       queue: ids.map((id) => { const p = one('SELECT w, h FROM photos WHERE id = ?', id)!; return { id, ar: p.w && p.h ? p.w / p.h : 1.5 }; }),
