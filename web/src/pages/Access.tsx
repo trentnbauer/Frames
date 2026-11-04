@@ -104,7 +104,9 @@ export function Access() {
   }, []);
 
   if (!c) return <p className="empty">Loading…</p>;
-  const locked = c.enabled; // providers cannot change while sign-in is on
+  const locked = c.enabled; // the providers already saved cannot change while sign-in is on (adding a new one is allowed)
+  const savedIds = new Set(c.providers.map((p) => p.id));
+  const lockedFor = (p: Provider) => locked && savedIds.has(p.id);
   const save = async (body: Record<string, unknown>, ok = 'Saved.') => {
     setMsg(null);
     try { await api('/auth/config', { method: 'PUT', body }); cfg.reload(); refreshMe(); setMsg({ ok: true, text: ok }); }
@@ -138,31 +140,31 @@ export function Access() {
       <div className="field">
         <h3>Providers</h3>
         <p>Add the ways people can sign in. Each one needs a client ID and secret from the provider. Register the address shown under it with the provider.</p>
-        {locked && <p className="reason">Sign-in is on, so providers are locked. Turn sign-in off to change one, then test it and turn it on again.</p>}
+        {locked && <p className="reason">Sign-in is on, so the providers below are locked. You can still add another with “Add a provider”; to change or remove one, turn sign-in off, then test it and turn sign-in on again.</p>}
         {providers.length === 0 && <p className="muted">No providers yet.</p>}
         {providers.map((p, i) => (
           <EditRow key={p.id} id={p.id} one={one} title={p.name || p.id} note={`How people sign in with ${p.name || 'this provider'}.`}
             summary={<><b>{p.name}</b> <span className="faint mono" style={{ fontSize: 11 }}>{p.id}</span> <span className="muted">{KINDS.find((k) => k.type === p.type)?.label}</span></>}
             right={p.hasSecret !== undefined && ((!dirty && !locked) || locked) ? <a className="t2" style={{ fontSize: 12.5 }} href={`/auth/login/${p.id}?test=1`}>Test sign-in</a> : undefined}>
             <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 520, marginTop: 10 }}>
-              <label>Button label <input disabled={locked} value={p.name} aria-label={`${p.id} label`} onChange={(e) => edit(i, { name: e.target.value })} /></label>
+              <label>Button label <input disabled={lockedFor(p)} value={p.name} aria-label={`${p.id} label`} onChange={(e) => edit(i, { name: e.target.value })} /></label>
               {p.type === 'cloudflare' && <>
-                <label>Team domain <input disabled={locked} value={p.teamDomain ?? ''} placeholder="myteam.cloudflareaccess.com" aria-label={`${p.id} team domain`} onChange={(e) => edit(i, { teamDomain: e.target.value })} /></label>
-                <label>Application Audience (AUD) tag <input disabled={locked} value={p.aud ?? ''} placeholder="64 letters and numbers" aria-label={`${p.id} audience`} onChange={(e) => edit(i, { aud: e.target.value })} /></label>
+                <label>Team domain <input disabled={lockedFor(p)} value={p.teamDomain ?? ''} placeholder="myteam.cloudflareaccess.com" aria-label={`${p.id} team domain`} onChange={(e) => edit(i, { teamDomain: e.target.value })} /></label>
+                <label>Application Audience (AUD) tag <input disabled={lockedFor(p)} value={p.aud ?? ''} placeholder="64 letters and numbers" aria-label={`${p.id} audience`} onChange={(e) => edit(i, { aud: e.target.value })} /></label>
                 <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>In Cloudflare Zero Trust: <b>Settings, Custom Pages</b> shows the team domain; <b>Access, Applications</b>, your Frames application, <b>Overview</b> shows the AUD tag. Open Frames through that application’s address to use <b>Test sign-in</b>.</p>
               </>}
               {['google', 'microsoft', 'dropbox'].includes(p.type) && (
                 <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <input type="checkbox" disabled={locked} aria-label={`${p.id}: use the app from Cloud services`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
+                  <input type="checkbox" disabled={lockedFor(p)} aria-label={`${p.id}: use the app from Cloud services`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
                   <span>Use the app already set up under <b>Settings, Cloud storage providers</b> ({p.type === 'google' ? 'Google Drive' : p.type === 'microsoft' ? 'OneDrive' : 'Dropbox'}): the same client ID and secret, so there is nothing to enter here. Add the redirect address below to that app too.</span>
                 </label>
               )}
-              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client ID <input disabled={locked} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
-              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client secret <input disabled={locked} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>}
-              {p.type === 'oidc' && <label>Issuer address <input disabled={locked} value={p.issuer ?? ''} placeholder="https://auth.example.com/application/o/frames/" aria-label={`${p.id} issuer`} onChange={(e) => edit(i, { issuer: e.target.value })} /></label>}
-              {p.type === 'microsoft' && <label>Tenant ID <input disabled={locked} value={p.tenant ?? ''} placeholder="00000000-0000-0000-0000-000000000000" aria-label={`${p.id} tenant`} onChange={(e) => edit(i, { tenant: e.target.value })} /></label>}
+              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client ID <input disabled={lockedFor(p)} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
+              {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client secret <input disabled={lockedFor(p)} type="password" autoComplete="off" value={p.clientSecret ?? ''} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} aria-label={`${p.id} client secret`} onChange={(e) => edit(i, { clientSecret: e.target.value })} /></label>}
+              {p.type === 'oidc' && <label>Issuer address <input disabled={lockedFor(p)} value={p.issuer ?? ''} placeholder="https://auth.example.com/application/o/frames/" aria-label={`${p.id} issuer`} onChange={(e) => edit(i, { issuer: e.target.value })} /></label>}
+              {p.type === 'microsoft' && <label>Tenant ID <input disabled={lockedFor(p)} value={p.tenant ?? ''} placeholder="00000000-0000-0000-0000-000000000000" aria-label={`${p.id} tenant`} onChange={(e) => edit(i, { tenant: e.target.value })} /></label>}
               {p.type === 'oauth2' && (['authUrl', 'tokenUrl', 'userUrl', 'emailsUrl'] as const).map((k) => (
-                <label key={k}>{{ authUrl: 'Authorize address', tokenUrl: 'Token address', userUrl: 'User-info address', emailsUrl: 'Emails address (optional)' }[k]} <input disabled={locked} value={p[k] ?? ''} aria-label={`${p.id} ${k}`} onChange={(e) => edit(i, { [k]: e.target.value })} /></label>
+                <label key={k}>{{ authUrl: 'Authorize address', tokenUrl: 'Token address', userUrl: 'User-info address', emailsUrl: 'Emails address (optional)' }[k]} <input disabled={lockedFor(p)} value={p[k] ?? ''} aria-label={`${p.id} ${k}`} onChange={(e) => edit(i, { [k]: e.target.value })} /></label>
               ))}
             </div>
             {p.type !== 'cloudflare' && (
@@ -172,12 +174,12 @@ export function Access() {
             )}
             <SetupSteps p={p} redirect={p.redirectUrl ?? `${c.callbackBase}/auth/callback/${p.id}`} appUrl={publicUrl || c.callbackBase} />
             <CardFooter>
-              <span className="muted" style={{ fontSize: 12.5 }}>{locked ? 'Turn sign-in off to change a provider.' : 'Press Save providers below to keep your changes.'}</span>
-              <Destructive disabled={locked} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</Destructive>
+              <span className="muted" style={{ fontSize: 12.5 }}>{lockedFor(p) ? 'Turn sign-in off to change a provider.' : 'Press Save providers below to keep your changes.'}</span>
+              <Destructive disabled={lockedFor(p)} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</Destructive>
             </CardFooter>
           </EditRow>
         ))}
-        {!locked && (
+        {(
           <div style={{ marginTop: 12 }}>
             <select aria-label="Add a provider" value="" onChange={(e) => e.target.value && add(e.target.value as Provider['type'])}>
               <option value="">Add a provider…</option>

@@ -113,7 +113,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const next: AuthConfig = { ...cur };
     const bad = (error: string) => rep.code(400).send({ error });
     const secrets: Record<string, string> = {};
-    let changedProviders = false;
+    let changedProviders = false, onlyAdded = false;
 
     if (Array.isArray(b.providers)) {
       const seen = new Set<string>();
@@ -138,6 +138,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       }
       const strip = (ps: Provider[]) => JSON.stringify(ps.map((p) => Object.fromEntries(Object.entries(p).sort())));
       changedProviders = strip(list) !== strip(cur.providers) || Object.keys(secrets).length > 0;
+      // Adding a way to sign in cannot lock anyone out: every provider that was there is still there, unchanged, and none has a new secret.
+      const same = (a: Provider, b: Provider) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+      onlyAdded = cur.providers.every((p) => list.some((n) => same(n, p)) && !(p.id in secrets && secrets[p.id] !== getSecret(db, `oauth:${p.id}`))); // sending the same secret again is not a change
       next.providers = list;
     }
     if (b.allow !== undefined) next.allow = cleanAllow(b.allow);
@@ -150,7 +153,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (typeof b.open === 'boolean') next.open = b.open;
 
     // --- the lock-out protections ---
-    if (changedProviders) {
+    if (changedProviders && !(cur.enabled && onlyAdded)) { // adding one while sign-in is on is allowed: nothing that already works is touched
       if (cur.enabled && next.enabled) return bad('Turn sign-in off before changing a provider, then test it and turn sign-in back on.');
       next.testedBy = null; // a changed provider has to be tested again
     }
