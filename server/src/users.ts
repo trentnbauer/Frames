@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import type { DB } from './db.js';
+import { attachKey, type DB } from './db.js';
 
 /**
  * The system database: who the people are, their sign-in sessions, and instance-wide settings (sign-in providers, the
@@ -37,7 +37,7 @@ export function openSystemDb(dataDir: string): DB {
   db.pragma('foreign_keys = ON');
   db.exec(SYSTEM_SCHEMA);
   ensureOwner(db);
-  return db;
+  return attachKey(db, dataDir);
 }
 
 type Row = Record<string, any>;

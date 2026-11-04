@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyEnvConfig, buildEnvFile, envLine, isConfigKey, OWNER_VAR, snapshot, SYSTEM_VAR } from './envConfig.js';
-import { setSetting } from './db.js';
+import { getSetting, setSetting } from './db.js';
 import { getUser } from './users.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
 // Nothing in these tests may reach the real Cloudflare: a made-up token is saved, and Frames would try it.
@@ -242,7 +242,7 @@ describe('several AIs in the export', () => {
     expect(by.ollama).toMatchObject({ id: local.id, endpoint: 'http://192.168.1.20:11434', model: 'llava', hasKey: false, ready: true });
     expect(JSON.stringify(got)).not.toMatch(/sk-ant-|g-[0-9a-f]{6}/); // still write-only through the API
     // Each key belongs to its own AI, in the server's database; nobody else's.
-    expect(sysOf(b).prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${gemini.id}:key`)).toEqual({ value: JSON.stringify(KEYS.gemini) });
+    expect(getSetting(sysOf(b), `secret:ai:${gemini.id}:key`, '')).toBe(KEYS.gemini);
     expect(sysOf(b).prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${openai.id}:key`)).toBeUndefined();
   });
   it('the file wins over AIs added in the app since, at the next start', async () => {

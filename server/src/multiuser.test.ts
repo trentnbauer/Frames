@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSession, SESSION_COOKIE } from './auth.js';
-import { setSetting, type DB } from './db.js';
+import { getSetting, setSetting, type DB } from './db.js';
 import { migrateLegacy } from './tenants.js';
 import { getUser, invite, resolveUser, updateUser, validFolder, type User, type Who } from './users.js';
 import { cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
@@ -210,7 +210,7 @@ describe('upgrading from one library', () => {
       migrateLegacy(s2, e.db);
       expect(getUser(s2, 1)).toMatchObject({ provider: 'g', sub: 'owner-sub', email: 'me@x.test', role: 'admin' });
       expect(JSON.parse((s2.prepare("SELECT value FROM settings WHERE key = 'auth'").get() as any).value).providers).toHaveLength(1);
-      expect(JSON.parse((s2.prepare("SELECT value FROM settings WHERE key = 'secret:oauth:g'").get() as any).value)).toBe('client-secret-value');
+      expect(getSetting(s2, 'secret:oauth:g', '')).toBe('client-secret-value'); // the same key reads it in the server's database as in the library's
       expect((s2.prepare("SELECT user_id FROM portfolio_hosts WHERE host = 'photos.example.com'").get() as any).user_id).toBe(1);
     } finally { e.app.close(); cleanup(e); }
   });

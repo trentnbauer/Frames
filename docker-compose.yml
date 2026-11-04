@@ -25,6 +25,8 @@ services:
       # An env file exported from Settings, Env file holds the server's settings and secrets as plain variables (SHARED_AI_1_ENDPOINT, AUTH_1_KEY and so on) and
       # the switch that stops a second export. It reaches Frames through env_file below.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
+      # Encrypts the API keys, secrets and tokens Frames stores. Keep it outside the data volume. Empty: a random key is kept in the data folder.
+      FRAMES_SECRET_KEY: ${FRAMES_SECRET_KEY:-}
       # Optional Cloudflare tunnel, set up by Frames itself (see README, Cloudflare tunnel). Leave empty to run without it.
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}

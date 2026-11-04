@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { isSealed, keyFor, seal, unseal } from './crypt.js';
 
 export type DB = Database.Database;
 
@@ -185,19 +186,54 @@ export function migrate(db: DB) {
   }
 }
 
-export function openDb(dataDir: string): DB {
+/**
+ * Every library and the server's own database use one key, kept with the data folder (or FRAMES_SECRET_KEY): `keyRoot` is that folder.
+ * The key is attached to the database object, so code that only holds a person's database (or the proxy for it) can still read secrets.
+ */
+export function attachKey(db: DB, keyRoot: string): DB {
+  Object.defineProperty(db, 'frameKey', { value: keyFor(keyRoot), enumerable: false });
+  encryptAll(db);
+  return db;
+}
+const keyOf = (db: DB): Buffer | undefined => (db as unknown as { frameKey?: Buffer }).frameKey;
+
+/** Secrets saved before encryption existed are encrypted the next time the database is opened. */
+function encryptAll(db: DB) {
+  const key = keyOf(db);
+  if (!key) return;
+  const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'secret:%'").all() as { key: string; value: string }[];
+  const upd = db.prepare('UPDATE settings SET value = ? WHERE key = ?');
+  db.transaction(() => {
+    for (const r of rows) {
+      let v: unknown;
+      try { v = JSON.parse(r.value); } catch { continue; }
+      if (typeof v === 'string' && v && !isSealed(v)) upd.run(JSON.stringify(seal(key, v)), r.key);
+    }
+  })();
+}
+
+export function openDb(dataDir: string, keyRoot = dataDir): DB {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new Database(path.join(dataDir, 'frames.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   migrate(db);
-  return db;
+  return attachKey(db, keyRoot);
 }
 
 export function getSetting<T>(db: DB, key: string, fallback: T): T {
   const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
-  return r ? (JSON.parse(r.value) as T) : fallback;
+  if (!r) return fallback;
+  const v = JSON.parse(r.value);
+  return (key.startsWith('secret:') ? openSecret(db, v) : v) as T; // a secret is stored encrypted
+}
+/** A stored secret as the text it is (decrypted); anything else as it is. */
+export function openSecret(db: DB, v: unknown): unknown {
+  const key = keyOf(db);
+  return key && typeof v === 'string' ? unseal(key, v) : v;
 }
 export function setSetting(db: DB, key: string, value: unknown) {
+  const k = keyOf(db);
+  if (k && key.startsWith('secret:') && typeof value === 'string' && value && !isSealed(value)) value = seal(k, value);
   db.prepare('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(value));
 }
