@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
+import { cloudOnlyOriginals } from '../cloud.js';
 import { removeShoot } from '../remove.js';
 import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
@@ -172,6 +173,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   // Files land in the data folder's "originals" library and are imported like any other library file.
   void app.register(multipart, { limits: { fileSize: (cfg.maxUploadMb ?? 2048) * 1024 * 1024, files: 500 } }).after(() => {
     app.post('/api/upload', async (req, rep) => {
+      if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
       const saved: string[] = [], rejected: { file: string; reason: string }[] = [];
