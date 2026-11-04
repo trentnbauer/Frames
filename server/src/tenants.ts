@@ -28,7 +28,11 @@ export type Tenants = ReturnType<typeof createTenants>;
 
 export const userDir = (base: AppCfg, id: number) => (id === OWNER_ID ? base.dataDir : path.join(base.dataDir, 'users', String(id)));
 
+/** Lets code that only has a library's database reach the server's own (the shared AI sources live there). */
+const linkSys = (db: DB, sys: DB) => { if (!Object.getOwnPropertyDescriptor(db, 'sys')) Object.defineProperty(db, 'sys', { value: sys, enumerable: false }); return db; };
+
 export function createTenants(sys: DB, base: AppCfg, ownerDb: DB) {
+  linkSys(ownerDb, sys);
   const als = new AsyncLocalStorage<Tenant>();
   const open = new Map<number, Tenant>();
   const roots = () => base.libraryRoots ?? [];
@@ -55,7 +59,7 @@ export function createTenants(sys: DB, base: AppCfg, ownerDb: DB) {
     const user = getUser(sys, id);
     if (!user || user.disabled || user.invited) return null;
     const cfg = cfgFor(user);
-    const db = id === OWNER_ID ? ownerDb : openDb(userDir(base, id));
+    const db = id === OWNER_ID ? ownerDb : linkSys(openDb(userDir(base, id)), sys);
     const t: Tenant = { user, db, cfg, ai: createAiWorker(db, cfg), scan: { running: false, done: 0, total: 0, startedAt: null, finishedAt: null, result: null, error: null }, bag: new Map() };
     open.set(id, t);
     return t;

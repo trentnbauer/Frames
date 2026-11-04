@@ -27,6 +27,7 @@ beforeAll(async () => {
   env.app = buildApp(env.db, env.cfg);
   sys = (env.app as any).frames.sys;
   setSetting(sys, 'auth', { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['@x.test'], publicUrl: '', testedBy: null });
+  resolveUser(sys, who('o0', 'owner@x.test', 'Owner'), true); // the first person to sign in is the administrator
   alice = resolveUser(sys, who('a1', 'alice@x.test', 'Alice'), true)!;
   bob = resolveUser(sys, who('b1', 'bob@x.test', 'Bob'), true)!;
   carol = resolveUser(sys, who('c1', 'carol@x.test', 'Carol'), true)!;

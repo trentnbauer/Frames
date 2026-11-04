@@ -119,7 +119,7 @@ describe('the tunnel page: App URL, Portfolios and the credentials', () => {
     const t = (await A.get('/api/tunnel')).body;
     expect(t).toMatchObject({ appUrl: '', hostnames: [], hasToken: false, managedByEnv: false, config: { enabled: false, portfolios: false } });
   });
-  it('the App URL is the public address under Settings, Access: setting either one shows in both', async () => {
+  it('the App URL is the public address under Administration, Access: setting either one shows in both', async () => {
     const r = await A.put('/api/tunnel', { appUrl: 'https://frames.example.com/' });
     expect(r.status).toBe(200);
     expect(r.body.appUrl).toBe('https://frames.example.com');
@@ -147,6 +147,7 @@ describe('the tunnel page: App URL, Portfolios and the credentials', () => {
   });
   it('lists each person’s portfolio address once Portfolios is ticked, and not before', async () => {
     await A.put('/api/portfolio', { host: 'owner.example.com' });
+    resolveUser(sys, { provider: 'g', sub: 'o0', email: 'owner@x.test', emailVerified: true, name: 'Owner' }, true);
     const alice = resolveUser(sys, { provider: 'g', sub: 'a', email: 'alice@x.test', emailVerified: true, name: 'Alice' }, true)!;
     sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run('alice.example.com', alice.id);
     expect(await list()).toEqual([]);
@@ -218,6 +219,7 @@ describe('pre-filling from the environment', () => {
   it('ignores a hostname that is not valid, and one that is another person’s portfolio address', async () => {
     seedTunnelFromEnv(sys, env.db, { APP_HOSTNAME: 'not a host', PORTFOLIO_HOSTNAME: 'also bad' });
     expect((await A.get('/api/tunnel')).body.appUrl).toBe('https://frames.example.com');
+    resolveUser(sys, { provider: 'g', sub: 'o0', email: 'owner@x.test', emailVerified: true, name: 'Owner' }, true);
     const bob = resolveUser(sys, { provider: 'g', sub: 'b', email: 'bob@x.test', emailVerified: true, name: 'Bob' }, true)!;
     sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run('bobs.example.com', bob.id);
     seedTunnelFromEnv(sys, env.db, { PORTFOLIO_HOSTNAME: 'bobs.example.com' });

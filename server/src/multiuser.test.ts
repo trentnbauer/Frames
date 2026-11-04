@@ -31,6 +31,7 @@ beforeAll(async () => {
   // Sign-in on, so every request needs a session.
   setSetting(sys, 'auth', { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['@x.test'], publicUrl: '', testedBy: null });
   updateUser(sys, 1, { name: 'Owner' });
+  resolveUser(sys, who('o0', 'owner@x.test', 'Owner'), true); // the first person to sign in is the administrator
   alice = resolveUser(sys, who('a1', 'alice@x.test', 'Alice'), true)!;
   bob = resolveUser(sys, who('b1', 'bob@x.test', 'Bob'), true)!;
   await put(path.join(env.lib, 'own.jpg'), 'own.jpg', '#c0392b');

@@ -36,9 +36,12 @@ export type AiSource = { id: string; type: string; name: string; endpoint: strin
 
 export const loadSources = (db: DB): AiSource[] => getSetting<AiSource[]>(db, 'aiSources', []);
 export const saveSources = (db: DB, list: AiSource[]) => setSetting(db, 'aiSources', list);
-export const getSource = (db: DB, id: string) => loadSources(db).find((s) => s.id === id);
+/** The AIs the administrator set up for everyone (kept in the server's own database). A person's own come first. */
+const serverDb = (db: DB): DB | undefined => (db as unknown as { sys?: DB }).sys;
+export const loadShared = (db: DB): AiSource[] => { const s = serverDb(db); return s ? getSetting<AiSource[]>(s, 'aiSources', []) : []; };
+export const getSource = (db: DB, id: string) => loadSources(db).find((s) => s.id === id) ?? loadShared(db).find((s) => s.id === id);
 
-export const sourceKey = (db: DB, id: string) => getSetting<string>(db, `secret:ai:${id}:key`, '');
+export const sourceKey = (db: DB, id: string) => getSetting<string>(db, `secret:ai:${id}:key`, '') || (loadShared(db).some((s) => s.id === id) ? getSetting<string>(serverDb(db)!, `secret:ai:${id}:key`, '') : '');
 export const setSourceKey = (db: DB, id: string, key: string) => setSetting(db, `secret:ai:${id}:key`, key);
 /** A removed AI leaves nothing behind, not even an empty key. */
 export const removeSourceKey = (db: DB, id: string) => { db.prepare('DELETE FROM settings WHERE key = ?').run(`secret:ai:${id}:key`); };

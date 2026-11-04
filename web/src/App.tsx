@@ -55,7 +55,8 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/for-you" element={<ForYou />} />
         <Route path="/stats" element={<Stats />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={<SettingsPage key="settings" />} />
+        <Route path="/admin" element={<SettingsPage key="admin" admin />} />
         <Route path="*" element={<Today />} />
       </Routes>
       {!inReview && <BottomNav onSearch={() => setSearching(true)} />}

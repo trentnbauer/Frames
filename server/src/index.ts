@@ -48,7 +48,7 @@ startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: 
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authDisabled ? 'DISABLED' : [authPassword && 'password', oauthEnabled(frames.sys) && 'oauth'].filter(Boolean).join('+') || 'OFF'})`);
   if (authDisabled) console.warn('AUTH_DISABLE=true: ALL sign-in is switched off inside Frames. Anyone who can reach this port can use Frames, so something else must protect it (Cloudflare Access, a VPN, a firewall).');
-  else if (!authPassword && !oauthEnabled(frames.sys)) console.warn('No sign-in is set up: anyone who can reach this port can use Frames. Set AUTH_PASSWORD or add an OAuth provider in Settings, Access.');
+  else if (!authPassword && !oauthEnabled(frames.sys)) console.warn('No sign-in is set up: anyone who can reach this port can use Frames. Set AUTH_PASSWORD or add an OAuth provider in Administration, Access.');
 }).catch((e) => {
   console.error(`Could not start on port ${port}: ${e instanceof Error ? e.message : e}`);
   process.exit(1);

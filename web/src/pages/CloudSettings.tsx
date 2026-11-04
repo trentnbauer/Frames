@@ -38,7 +38,7 @@ export function CloudSettings() {
 
       <div className="field">
         <h3>Connect an account</h3>
-        <p>Sign in to your own cloud account. The services are set up once for the whole server by an administrator, under Settings, Cloud services.</p>
+        <p>Sign in to your own cloud account. The services are set up once for the whole server by an administrator, under Administration, Cloud services.</p>
         {providers.map((p) => (
           <div className="row" key={p.id}>
             <span><b>{p.label}</b> <span className="faint">{p.configured ? '' : 'not set up on this server yet: ask an administrator'}</span></span>

@@ -51,7 +51,7 @@ export function readEnvTunnel(env: Record<string, string | undefined> = process.
 }
 
 /**
- * The simple setup: you made the tunnel in the Cloudflare dashboard. The variables pre-fill Settings, Cloudflare tunnel, and win over
+ * The simple setup: you made the tunnel in the Cloudflare dashboard. The variables pre-fill Administration, Cloudflare tunnel, and win over
  * what was saved there: TUNNEL_TOKEN (the name cloudflared itself reads) turns the tunnel on, APP_HOSTNAME is the App URL (the public
  * address under Access too), PORTFOLIO_HOSTNAME is the owner's portfolio address and ticks Portfolios.
  */

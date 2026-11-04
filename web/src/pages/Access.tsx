@@ -50,7 +50,7 @@ function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; ap
       <>Paste the client ID and secret into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
     ],
     cloudflare: [
-      <>Easiest: tick <b>Protect the App URL with Cloudflare Access</b> under Settings, Cloudflare tunnel. Frames then creates the Access application and adds this method for you, with the team domain and audience tag filled in.</>,
+      <>Easiest: tick <b>Protect the App URL with Cloudflare Access</b> under Administration, Cloudflare tunnel. Frames then creates the Access application and adds this method for you, with the team domain and audience tag filled in.</>,
       <>By hand: in {ext('https://one.dash.cloudflare.com/', 'Cloudflare Zero Trust')} open <b>Access, Applications</b>, <b>Add an application</b>, <b>Self-hosted</b>, with {appUrl ? <span className="mono">{appUrl}</span> : 'the address you open Frames at'} as its address, and a policy that allows the people on the list below.</>,
       <>The <b>team domain</b> is under <b>Settings, Custom Pages</b> (it looks like <span className="mono">myteam.cloudflareaccess.com</span>). The <b>Application Audience (AUD) tag</b> is on the application’s <b>Overview</b> tab.</>,
       <>There is no redirect address, client ID or secret: Access signs people in before Frames sees them. Save, then open Frames through the Access-protected address and press <b>Test sign-in</b>.</>,
@@ -87,7 +87,7 @@ export function Access() {
   const c = cfg.data;
 
   useEffect(() => { if (c) { setProviders(c.providers); setAllow(c.allow.join('\n')); setPublicUrl(c.publicUrl); setDirty(false); } }, [c]);
-  // Coming back from "Test sign-in" lands on /settings?access=tested or =notallowed.
+  // Coming back from "Test sign-in" lands on /admin?access=tested or =notallowed.
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('access');
     if (a === 'tested') setMsg({ ok: true, text: 'The test sign-in worked. You can turn sign-in on now.' });
