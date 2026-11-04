@@ -131,6 +131,17 @@ describe('the tunnel page: App URL, Portfolios and the credentials', () => {
     expect((await A.put('/api/tunnel', { appUrl: '' })).body.appUrl).toBe('');
     expect(await list()).toEqual([]);
   });
+  it('the allowed list is one list, edited from the tunnel page or from Access, and cannot lock out the tester', async () => {
+    const r = await A.put('/api/tunnel', { allow: 'alice@x.test\n@family.test, alice@x.test' });
+    expect(r.body.allow).toEqual(['alice@x.test', '@family.test']);
+    expect((await A.get('/api/auth/config')).body.allow).toEqual(['alice@x.test', '@family.test']);
+    await A.put('/api/auth/config', { allow: 'bob@x.test' });
+    expect((await A.get('/api/tunnel')).body.allow).toEqual(['bob@x.test']);
+    sys.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('auth', ?)").run(JSON.stringify({ enabled: true, providers: [], allow: ['bob@x.test'], publicUrl: '', testedBy: { provider: 'g', sub: 'b', email: 'bob@x.test', emailVerified: true, name: 'Bob' } }));
+    expect((await A.put('/api/tunnel', { allow: 'carol@x.test' })).status).toBe(400); // would lock the tester out
+    expect((await A.get('/api/auth/config')).body.allow).toEqual(['bob@x.test']);
+    sys.prepare("DELETE FROM settings WHERE key = 'auth'").run();
+  });
   it('refuses an App URL that is not a web address', async () => {
     for (const v of ['ftp://x.example.com', 'frames', 'javascript:alert(1)']) expect((await A.put('/api/tunnel', { appUrl: v })).status, v).toBe(400);
   });

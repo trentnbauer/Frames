@@ -3,7 +3,7 @@ import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
 import { loadAccess, PUBLIC_DESTINATIONS } from './access.js';
-import { loadAuth, saveAuth, type Provider } from './auth.js';
+import { cleanAllow, isAllowed, loadAuth, saveAuth, type Provider } from './auth.js';
 import { CloudflareError, cloudflare, type Cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
@@ -242,7 +242,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       accessApps: accessApps(c, hostnames),
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
-      protect: c.protect, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
+      allow: loadAuth(db).allow, protect: c.protect, protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
@@ -269,6 +269,12 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     const cur = loadTunnel(db);
     const n: TunnelCfg = { ...cur };
     const bad = (error: string) => rep.code(400).send({ error });
+    if (b.allow !== undefined) {
+      // The same list as Settings, Access (one list, edited in either place), with the same protection against locking yourself out.
+      const list = cleanAllow(b.allow), a = loadAuth(db);
+      if (a.enabled && a.testedBy && !isAllowed(a.testedBy, list)) return bad('That list would lock you out: the account that tested sign-in is not on it.');
+      saveAuth(db, { ...a, allow: list });
+    }
     if (b.appUrl !== undefined) {
       const v = String(b.appUrl).trim().replace(/\/+$/, '');
       if (v) { try { const u = new URL(v); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(); } catch { return bad('The App URL must start with https:// (for example https://frames.example.com)'); } }

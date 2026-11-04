@@ -5,7 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
-  protect: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
+  allow: string[]; protect: boolean; protectApplied: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
   accessApps: { name: string; decision: 'allow' | 'bypass'; addresses: string[]; who: string[] }[];
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
@@ -19,11 +19,12 @@ export function TunnelSettings() {
   const d = useApi<Data>('/tunnel');
   const logs = useApi<{ lines: string[] }>('/tunnel/logs');
   const [appUrl, setAppUrl] = useState('');
+  const [allow, setAllow] = useState('');
   const [account, setAccount] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
-  useEffect(() => { if (d.data) { setAppUrl(d.data.appUrl); setAccount(d.data.accountId); } }, [d.data?.appUrl, d.data?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d.data) { setAllow(d.data.allow.join('\n')); setAppUrl(d.data.appUrl); setAccount(d.data.accountId); } }, [d.data?.appUrl, d.data?.accountId, d.data?.allow.join('\n')]); // eslint-disable-line react-hooks/exhaustive-deps
   // Keep the status fresh while this page is open.
   useEffect(() => { const t = setInterval(() => { d.reload(); if (showLogs) logs.reload(); }, 3000); return () => clearInterval(t); }, [showLogs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data) return <p className="empty">Loading…</p>;
@@ -36,6 +37,8 @@ export function TunnelSettings() {
     try { await api('/tunnel', { method: 'PUT', body }); d.reload(); setMsg({ ok: true, text: ok }); return true; }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); return false; }
   };
+  // Why Access protection is ticked but not in place, in plain words.
+  const protectProblem = t.protect && !t.protectApplied ? (t.accessPeople === 0 ? 'Nobody is on the allowed list, so Cloudflare Access would let no one in. Add an email or a whole domain under Settings, Access, and Frames sets it up.' : t.error || t.accessNote || 'Not set up yet: Frames applies it when you save, and again a few minutes after a problem.') : null;
   const run = () => (t.config.enabled ? api('/tunnel/stop', { body: {} }) : api('/tunnel/start', { body: {} })).then(() => d.reload()).catch((e: Error) => setMsg({ ok: false, text: e.message }));
 
   return (
@@ -89,6 +92,14 @@ export function TunnelSettings() {
           <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} onChange={(e) => save({ protect: e.target.checked })} />
           <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i>. After it is set up, use <b>Test sign-in</b> under Settings, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
         </label>
+        <div style={{ marginTop: 14 }}>
+          <label>Who is allowed in (one per line: an email, or a whole domain like @family.com)
+            <textarea className="area" rows={3} aria-label="Allowed people" style={{ maxWidth: 520, display: 'block', marginTop: 4 }} value={allow} onChange={(e) => setAllow(e.target.value)} />
+          </label>
+          <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 8px' }}>The same list as under Settings, Access: it is who Cloudflare Access lets in, and who may sign in to Frames.</p>
+          <button className="pill" disabled={allow.trim() === t.allow.join('\n')} onClick={() => save({ allow }, 'Allowed list saved.')}>Save the list</button>
+        </div>
+        {protectProblem && <p className="reason" role="alert" style={{ margin: '8px 0 0 26px', fontSize: 13 }}>{protectProblem}</p>}
         {t.appOpen && <div className="banner" role="status" style={{ marginTop: 14 }}><span>Frames’ own sign-in is off, so anyone who can reach the App URL can use Frames. That is fine if you protect it in Cloudflare (Access, an IP rule); if not, turn on sign-in under Access.</span></div>}
       </div>
 
@@ -115,8 +126,10 @@ export function TunnelSettings() {
                 );
               })}
               <h4 style={{ margin: '16px 0 4px' }}>Cloudflare Access</h4>
+              {protectProblem && <p className="reason" style={{ fontSize: 13, margin: '0 0 6px' }}>Protection is switched on but not in place: {protectProblem}</p>}
+              {t.accessNote && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 6px' }}>{t.accessNote}</p>}
               {t.accessApps.length === 0
-                ? <p className="muted" style={{ fontSize: 13 }}>{t.hasApiToken ? 'No Access applications yet. Tick “Protect the App URL with Cloudflare Access” above to put a login in front of the app.' : 'Frames sets these up once the API token is saved.'}</p>
+                ? <p className="muted" style={{ fontSize: 13 }}>{t.protect ? 'No Access applications are set up yet.' : t.hasApiToken ? 'No Access applications yet. Tick “Protect the App URL with Cloudflare Access” above to put a login in front of the app.' : 'Frames sets these up once the API token is saved.'}</p>
                 : t.accessApps.map((a) => (
                   <div className="row" key={a.name} style={{ display: 'block' }}>
                     <div><b>{a.name}</b> <span className="faint">{a.decision === 'allow' ? 'login required' : 'public, no login'}</span></div>
