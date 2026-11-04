@@ -173,6 +173,12 @@ export function PhotoDetail() {
             <button className="pill" onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
             <button className="pill" onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
             <a className="pill" href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
+            <button className="pill" onClick={async () => {
+              if (!window.confirm(`Take “${p.title}” out of Frames?\n\nIts reviews, tags and collection places go with it. The file in your library folder is not touched (a copy Frames holds itself, such as an upload, is deleted). A scan will not bring it back.`)) return;
+              await api(`/photos/${p.id}`, { method: 'DELETE' });
+              refreshSummary();
+              nav(-1);
+            }}>Delete from Frames</button>
             {picker && (
               <div className="menu" style={{ top: -8, transform: 'translateY(-100%)' }}>
                 {(colls.data ?? []).length === 0 && <span className="faint menu-note">No collections yet</span>}

@@ -3,6 +3,8 @@ import { COLOR_NAMES, hammingInts, hashInts, similarity, type Feat, type Swatch 
 import { aiConfig, embedText, fromBlob, parseQuery } from '../ai.js';
 import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
+import { deleteSuggestions, removePhotos } from '../remove.js';
+import { loadSettings } from '../settings.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
 
@@ -21,7 +23,7 @@ const haversineKm = (a: number, b: number, c: number, d: number) => {
 };
 
 export function registerPhotos(app: FastifyInstance, x: Ctx) {
-  const { db, num, one, all, notFound } = x;
+  const { db, cfg, num, one, all, notFound } = x;
 
   // ---------- list, search and filter ----------
   app.get('/api/photos', async (req) => {
@@ -145,6 +147,26 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const p = one('SELECT * FROM photos WHERE id = ?', num((req.params as Row).id));
     return p ? x.photoDto(p, true) : notFound(rep);
   });
+
+  // ---------- taking photographs out of Frames ----------
+  // Files in library folders are never touched; only Frames' own copies (uploads, cloud copies) go. A scan does not bring them back.
+  app.get('/api/photos/delete-suggestions', async () => {
+    const st = loadSettings(db);
+    return { below: st.deleteBelow, sessions: st.sessions, photos: deleteSuggestions(db, st.sessions, st.deleteBelow) };
+  });
+  app.post('/api/photos/remove', async (req, rep) => {
+    const ids = ((req.body ?? {}) as Row).ids;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every((n) => Number.isInteger(n))) return rep.code(400).send({ error: 'Send up to 500 photograph ids.' });
+    return removePhotos(db, cfg, ids as number[]);
+  });
+  app.delete('/api/photos/:id', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
+    return removePhotos(db, cfg, [id]);
+  });
+  app.get('/api/removed', async () => ({ count: (one('SELECT COUNT(*) n FROM removed') as Row).n as number }));
+  // Forget what was taken out: the next scan imports again whatever files are still in the library folders.
+  app.post('/api/removed/restore', async () => { const n = db.prepare('DELETE FROM removed').run().changes; return { cleared: n }; });
 
   app.patch('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);

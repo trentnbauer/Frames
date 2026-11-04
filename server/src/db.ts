@@ -169,6 +169,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     const days = INTERVAL_DAYS[saved.intervals?.[0] ?? '1 week'] ?? 7;
     db.prepare("UPDATE photos SET next_review_at = strftime('%Y-%m-%dT%H:%M:%fZ', added_at, ?) WHERE next_review_at = added_at AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.photo_id = photos.id)").run(`+${days} days`);
   },
+  // 8: photographs taken out of Frames are remembered by their fingerprint, so a scan of the library does not import them again.
+  (db) => {
+    db.exec('CREATE TABLE IF NOT EXISTS removed (hash TEXT PRIMARY KEY, path TEXT NOT NULL, file TEXT NOT NULL, removed_at TEXT NOT NULL)');
+  },
 ];
 
 export function migrate(db: DB) {
