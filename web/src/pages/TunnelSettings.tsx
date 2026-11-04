@@ -5,7 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
-  allow: string[]; protect: boolean; protectApplied: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
+  allow: string[]; protect: boolean; protectApplied: boolean; accessPeople: number; accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; orgNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
   accessApps: { name: string; decision: 'allow' | 'bypass'; addresses: string[]; who: string[] }[];
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
@@ -62,9 +62,10 @@ export function TunnelSettings() {
         <h3>1. Let Frames use your Cloudflare account</h3>
         <p>Frames makes the tunnel, its routes and the DNS records itself, and keeps them right when an address changes. It needs your account ID and an API token.</p>
         <ol className="muted" style={{ fontSize: 13.5, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
-          <li>{link('https://dash.cloudflare.com/profile/api-tokens', 'Create an API token')} with two permissions: <b>Account, Cloudflare Tunnel, Edit</b> and <b>Zone, DNS, Edit</b> (for your domain). Copy it.</li>
+          <li>{link('https://dash.cloudflare.com/profile/api-tokens', 'Create an API token')} (Custom token) with the permissions below, then copy it.</li>
           <li>Your <b>account ID</b> is on the right of the {link('https://dash.cloudflare.com/', 'dashboard')}’s home page for your domain, and in its address after <span className="mono">dash.cloudflare.com/</span>.</li>
         </ol>
+        <TokenSheet />
         <div className="form" style={{ marginTop: 12, maxWidth: 560 }}>
           <input aria-label="Account ID" value={account} placeholder="Account ID (32 letters and numbers)" onChange={(e) => setAccount(e.target.value)} />
           <input type="password" autoComplete="off" aria-label="API token" value={apiToken} placeholder={t.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token'} onChange={(e) => setApiToken(e.target.value)} />
@@ -73,6 +74,7 @@ export function TunnelSettings() {
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>The token is kept on this server only, never shown again, and left out of backups.</p>
         {t.error && <p className="reason" role="alert" style={{ marginTop: 10 }}>{t.error}</p>}
+        {t.orgNote && <p className="muted" role="status" style={{ marginTop: 10, fontSize: 12.5 }}>{t.orgNote}</p>}
         {t.accessNote && <p className="muted" role="status" style={{ marginTop: 10, fontSize: 12.5 }}>{t.accessNote}</p>}
         {!t.error && t.appliedAt && <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Cloudflare is set up and matches the addresses below ({new Date(t.appliedAt).toLocaleString()}).</p>}
       </div>
@@ -90,7 +92,7 @@ export function TunnelSettings() {
         </label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
           <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} onChange={(e) => save({ protect: e.target.checked })} />
-          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i>. After it is set up, use <b>Test sign-in</b> under Settings, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
+          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After it is set up, use <b>Test sign-in</b> under Settings, Access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
         </label>
         <div style={{ marginTop: 14 }}>
           <label>Who is allowed in (one per line: an email, or a whole domain like @family.com)
@@ -128,6 +130,7 @@ export function TunnelSettings() {
               <h4 style={{ margin: '16px 0 4px' }}>Cloudflare Access</h4>
               {protectProblem && <p className="reason" style={{ fontSize: 13, margin: '0 0 6px' }}>Protection is switched on but not in place: {protectProblem}</p>}
               {t.accessNote && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 6px' }}>{t.accessNote}</p>}
+              {t.orgNote && <p className="reason" style={{ fontSize: 12.5, margin: '0 0 6px' }}>{t.orgNote}</p>}
               {t.accessApps.length === 0
                 ? <p className="muted" style={{ fontSize: 13 }}>{t.protect ? 'No Access applications are set up yet.' : t.hasApiToken ? 'No Access applications yet. Tick “Protect the App URL with Cloudflare Access” above to put a login in front of the app.' : 'Frames sets these up once the API token is saved.'}</p>
                 : t.accessApps.map((a) => (
@@ -147,6 +150,41 @@ export function TunnelSettings() {
         {showLogs && <pre className="mono" style={{ fontSize: 11.5, background: 'var(--surface)', borderRadius: 8, padding: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{logs.data?.lines.length ? logs.data.lines.join('\n') : 'Nothing logged yet.'}</pre>}
       </div>
     </>
+  );
+}
+
+/** What to pick on Cloudflare's "Create token" screen, laid out the way that screen shows it. */
+function TokenSheet() {
+  const box = { border: '1px solid var(--line, #3a3a3a)', borderRadius: 10, overflow: 'hidden', marginTop: 12, maxWidth: 560 } as const;
+  const head = { padding: '8px 12px', fontWeight: 600, fontSize: 13, background: 'var(--surface, #1a1a1a)' } as const;
+  const row = { display: 'grid', gridTemplateColumns: '90px 1fr 70px', gap: 8, padding: '8px 12px', borderTop: '1px solid var(--line, #3a3a3a)', fontSize: 13 } as const;
+  const cell = { border: '1px solid var(--line, #3a3a3a)', borderRadius: 8, padding: '4px 10px' } as const;
+  const perms: [string, string, string, string][] = [
+    ['Account', 'Cloudflare Tunnel', 'Edit', 'always'],
+    ['Zone', 'DNS', 'Edit', 'always'],
+    ['Account', 'Access: Apps and Policies', 'Edit', 'for Cloudflare Access (the protection box and the public share links)'],
+    ['Account', 'Access: Organizations, Identity Providers, and Groups', 'Read', 'for Cloudflare Access sign-in (it finds your team domain)'],
+  ];
+  return (
+    <div role="group" aria-label="API token settings" style={{ maxWidth: 560 }}>
+      <div style={box}>
+        <div style={head}>Permissions</div>
+        {perms.map(([scope, what, level, why]) => (
+          <div key={what} style={{ borderTop: '1px solid var(--line, #3a3a3a)' }}>
+            <div style={{ ...row, borderTop: 0 }}><span style={cell}>{scope}</span><span style={cell}>{what}</span><span style={cell}>{level}</span></div>
+            <div className="muted" style={{ fontSize: 12, padding: '0 12px 8px' }}>{why}</div>
+          </div>
+        ))}
+      </div>
+      <div style={box}>
+        <div style={head}>Account Resources</div>
+        <div style={{ ...row, gridTemplateColumns: '90px 1fr', borderTop: 0 }}><span style={cell}>Include</span><span style={cell}>All accounts (or just yours)</span></div>
+      </div>
+      <div style={box}>
+        <div style={head}>Zone Resources</div>
+        <div style={{ ...row, gridTemplateColumns: '90px 130px 1fr', borderTop: 0 }}><span style={cell}>Include</span><span style={cell}>Specific zone</span><span style={cell}>each domain you use: the App URL’s and any portfolio address’s</span></div>
+      </div>
+    </div>
   );
 }
 
