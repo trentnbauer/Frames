@@ -148,6 +148,13 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     setSetting(db, GUEST_WEIGHT_KEY, Math.round(w));
     return { weight: guestWeight() };
   });
+  // What guests thought of one photograph, across every share link it was in.
+  app.get('/api/photos/:id/guests', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return rep.code(404).send({ error: 'Not found' });
+    const r = one('SELECT AVG(rating) a, COUNT(DISTINCT reviewer) n FROM share_reviews WHERE photo_id = ?', id) as Row;
+    return { avg: r.n ? (r.a as number) : null, n: r.n as number };
+  });
   app.get('/api/collections/:id/ranking', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return rep.code(404).send({ error: 'Not found' });

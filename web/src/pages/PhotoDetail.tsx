@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, useApi } from '../api';
-import { AddToComposition } from '../components/AddToComposition';
-import { RATINGS, fmtCoord, fmtDate, type Collection, type PhotoFull, type PhotoLite, type Shoot } from '../data';
-import { Fit, Header, Img, Loading, Swatches, useField, useKey } from '../components/bits';
+import { api, imgUrl, useApi } from '../api';
+import { RATINGS, fmtCoord, fmtDate, requiredPx, type Collection, type PhotoFull, type PhotoLite, type Shoot } from '../data';
+import { PAPER_MM } from '../target';
+import { Header, Img, Loading, Swatches, useField, useKey } from '../components/bits';
 import { useStore } from '../store';
+import { useUi } from '../ui';
+
+const serif = "'Instrument Serif',Georgia,serif";
+const mono = "'IBM Plex Mono',monospace";
+const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 10 } as const;
+const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
+const fmt = (n: number | null) => (n === null ? '–' : n.toFixed(1));
+const day = (iso: string | null) => (iso ? fmtDate(iso, { day: 'numeric', month: 'short', year: 'numeric' }) : '–');
 
 export function PhotoDetail() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { openNew } = useUi();
   const { settings, refreshSummary } = useStore();
   const photo = useApi<PhotoFull>(`/photos/${id}`);
   const shoots = useApi<Shoot[]>('/shoots');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
   const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
+  const colls = useApi<Collection[]>('/collections');
+  const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
   const [msg, setMsg] = useState('');
   const p = photo.data;
   // Each field follows the server only when its own value changes, so a refresh never wipes text being typed elsewhere.
@@ -26,83 +37,146 @@ export function PhotoDetail() {
   const list = all.data?.photos ?? [];
   const idx = list.findIndex((x) => x.id === Number(id));
   const go = (d: number) => list.length && nav(`/photo/${list[(idx + d + list.length) % list.length].id}`);
-  useKey((e) => { if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, list.length]);
+  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, list.length]);
 
   if (!p) return <div className="page"><Header /><Loading error={photo.error} /></div>;
   const ai = !!settings && settings.ai !== 'off';
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
+  const mates = list.filter((x) => x.shootId === p.shootId);
   const rs = p.reviews;
-  const avg = rs.length ? rs.reduce((a, r) => a + r.rating, 0) / rs.length : 0;
-  const trend = rs.length > 1 ? rs[rs.length - 1].rating - rs[0].rating : 0;
-  const lastNote = [...rs].reverse().find((r) => r.note)?.note;
+  const avg = rs.length ? rs.reduce((a, r) => a + r.rating, 0) / rs.length : null;
+  const g = guests.data;
+  // Combined score: yours, blended with guests' if there are any (the same weight as in a composition).
+  const score = avg !== null && g?.avg != null ? avg * 0.65 + g.avg * 0.35 : avg ?? g?.avg ?? null;
+  const rankInShoot = avg === null ? null : 1 + mates.filter((x) => x.reviewCount > 0 && x.avgRating > avg).length;
   const emoji = (n: number) => RATINGS[n - 1].emoji;
   const patch = async (body: Record<string, unknown>, ok?: string) => { await api(`/photos/${p.id}`, { method: 'PATCH', body }); photo.reload(); if (ok) setMsg(ok); };
-  const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-
+  const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); refreshSummary(); };
   const sug = p.aiSuggestion;
   const showAiDescription = ai && sug && sug.description && p.descSource !== 'user';
+  const inComp = (c: Collection) => c.photoIds.includes(p.id);
+  const toggleComp = async (c: Collection) => { await api(`/collections/${c.id}/photos/${p.id}`, { method: inComp(c) ? 'DELETE' : 'PUT' }); colls.reload(); };
+  const fits = (['A4', 'A3', 'A2'] as const).map((size) => {
+    const r = requiredPx({ size, ppi: 300, count: 1, orientation: 'any' }) ?? [0, 0];
+    const portrait = p.h > p.w;
+    const [nw, nh] = portrait ? [r[0], r[1]] : [r[1], r[0]];
+    const ok = p.w >= nw && p.h >= nh;
+    const [a, b] = PAPER_MM[size];
+    const maxPpi = Math.floor(Math.min(p.w / (portrait ? a : b), p.h / (portrait ? b : a)) * 25.4);
+    return { size, ok, note: ok ? 'Sharp' : `${maxPpi} PPI max` };
+  });
+  const tagsOf = (kind: 'tag' | 'subject') => p.tags.filter((t) => t.kind === kind && t.accepted);
+  const suggested = ai ? p.tags.filter((t) => !t.accepted && t.source === 'ai') : [];
+  const stateOf = (c: Collection) => {
+    if (c.printedAt) return `Printed ${day(c.printedAt)}`;
+    const slot = c.chosenIds.indexOf(p.id);
+    if (slot >= 0) return `Chosen for print ${slot + 1} of ${c.target?.count ?? c.chosenIds.length}`;
+    if (inComp(c)) return `Candidate · ${c.photoIds.length} candidates`;
+    return c.target ? `${c.target.count} × ${c.target.size} · ${c.photoIds.length} candidates` : `${c.photoIds.length} photographs`;
+  };
 
   return (
     <div className="page">
       <Header />
-      <div className="detail">
-        <div className="main">
-          <div className="spread" style={{ fontSize: 13, color: 'var(--muted)' }}>
-            <Link to={shoot ? `/shoots/${shoot.id}` : '/library'} className="t2">← {shoot?.name ?? 'Library'}</Link>
-            <span style={{ display: 'flex', gap: 18, alignItems: 'baseline' }}>
-              <Link to={`/library?similarTo=${p.id}`} className="t2">Find similar</Link>
-              {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`} className="t2">Compare</Link>}
-              {idx >= 0 && <span>{idx + 1} of {list.length}</span>}
-              <button aria-label="Previous photo" onClick={() => go(-1)}>‹</button>
-              <button aria-label="Next photo" onClick={() => go(1)}>›</button>
-            </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
+        <Link to={shoot ? `/shoots/${shoot.id}` : '/library'} style={{ color: '#a8a59f' }}>← {shoot?.name ?? 'Library'}</Link>
+        <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
+          <Link to={`/library?similarTo=${p.id}`}>Find similar</Link>
+          {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare</Link>}
+          <button onClick={() => go(-1)}>← Previous</button>
+          {idx >= 0 && <span style={{ color: '#6f6c67' }}>{idx + 1} of {list.length}</span>}
+          <button onClick={() => go(1)}>Next →</button>
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 520px', minWidth: 0, position: 'sticky', top: 16 }}>
+          <div style={{ background: '#000', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 240px)', minHeight: 360, padding: 16 }}>
+            <img src={imgUrl(p.id, 'preview')} alt={p.title} style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
           </div>
-          <div className="stage"><div><Fit p={p} /></div></div>
-          {similar.data && similar.data.length > 0 && (
-            <div className="strip" style={{ height: 84 }}>
-              {similar.data.map((s) => <Link key={s.id} to={`/photo/${s.id}`} title={`${Math.round((s.similarity ?? 0) * 100)}% similar`} aria-label={`Similar: ${s.title}`} style={{ aspectRatio: String(s.ar) }}><Img p={s} style={{ height: '100%', width: 'auto' }} /></Link>)}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 8, height: 54, marginTop: 12, overflow: 'hidden' }}>
+            {mates.map((t) => (
+              <Link key={t.id} to={`/photo/${t.id}`} aria-label={t.title} style={{ height: '100%', flex: 'none', aspectRatio: String(t.ar), borderRadius: 3, overflow: 'hidden', opacity: t.id === p.id ? 1 : 0.5, outline: t.id === p.id ? '1px solid #efede8' : 'none', outlineOffset: 2 }}>
+                <img src={imgUrl(t.id, 'thumb')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              </Link>
+            ))}
+          </div>
         </div>
-        <aside className="side">
+
+        <aside style={{ width: 340, flex: 'none', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
-            <input className="serif inline" aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title.trim() && title !== p.title && patch({ title })} style={{ fontSize: 28 }} />
-            <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>{[shoot?.name, fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }), p.file].filter(Boolean).join(' · ')}</div>
+            <input className="serif inline" aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title.trim() && title !== p.title && patch({ title })} style={{ fontSize: 40, lineHeight: 1 }} />
+            {shoot && <Link to={`/shoots/${shoot.id}`} style={{ fontSize: 13, color: '#a8a59f', display: 'block', marginTop: 6 }}>{shoot.name}{shoot.place ? ` · ${shoot.place}` : ''}</Link>}
             {p.missing && <div className="reason">The original file is missing from the library.</div>}
             {p.archived && <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>Left out of review. It still appears everywhere else.</div>}
             {p.parentId && <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>A variant of <Link to={`/photo/${p.parentId}`} className="t2" style={{ textDecoration: 'underline' }}>another photo</Link>. <button className="t2" onClick={() => patch({ parentId: null })}>Unlink</button></div>}
           </div>
 
-          <div>
-            {rs.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>Not reviewed yet. Counted from when it was added ({fmtDate(p.lastReviewedAt, { day: 'numeric', month: 'short', year: 'numeric' })}){p.nextReviewAt && <>, so its first review is {fmtDate(p.nextReviewAt, { day: 'numeric', month: 'short', year: 'numeric' })}</>}.</div> : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                  <span className="serif" style={{ fontSize: 52, lineHeight: 1 }}>{avg.toFixed(1)}</span>
-                  <span className="muted" style={{ fontSize: 12.5 }}>average of {rs.length} {rs.length === 1 ? 'review' : 'reviews'}</span>
-                </div>
-                <div className="spark" style={{ margin: '12px 0 6px' }} aria-label="Ratings by session">{rs.map((r) => <i key={r.session} title={`${emoji(r.rating)} ${r.rating}`} style={{ height: `${(r.rating / 5) * 100}%` }} />)}</div>
-                {rs.length > 1 && <div className="muted" style={{ fontSize: 12.5 }}>{trend > 0 ? 'Improving ↗' : trend < 0 ? 'Declining ↘' : 'Steady →'}</div>}
-                <div className="muted" style={{ fontSize: 12.5 }}>Last reviewed {fmtDate(p.lastReviewedAt, { day: 'numeric', month: 'short', year: 'numeric' })}{p.nextReviewAt && <> · next {fmtDate(p.nextReviewAt, { day: 'numeric', month: 'short', year: 'numeric' })}</>}</div>
-              </>
-            )}
-            {p.xmpRating && <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>Rated {p.xmpRating}/5 in another app (not counted as a review).</div>}
-          </div>
-          {rs.length > 0 && (
-            <div>
-              {rs.slice().reverse().map((r) => <div className="row" key={r.session}><span className="t2">Session {r.session} · {fmtDate(r.date)}</span><span>{emoji(r.rating)}</span></div>)}
-              {lastNote && <p className="serif" style={{ fontStyle: 'italic', fontSize: 15, color: 'var(--muted)', margin: '10px 0 0' }}>{lastNote}</p>}
+          <div style={{ background: '#161615', borderRadius: 10, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
+              <div>
+                <div style={{ font: `400 44px/1 ${serif}` }}>{fmt(score)}</div>
+                <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 4 }}>combined score{rankInShoot ? ` · #${rankInShoot} in its shoot` : ''}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 44, width: 110 }} aria-label="Ratings by session">
+                {rs.map((r) => <i key={r.session} title={`${emoji(r.rating)} ${r.rating}`} style={{ flex: 1, background: 'rgba(239,237,232,.75)', borderRadius: 1, height: `${(r.rating / 5) * 100}%` }} />)}
+              </div>
             </div>
-          )}
+            {[['You', avg === null ? 'Not rated yet' : `${fmt(avg)} · ${rs.length} of ${settings?.sessions ?? 4} sessions`], ['Guests', g?.avg != null ? `${fmt(g.avg)} · ${g.n} ${g.n === 1 ? 'person' : 'people'}` : 'None yet'], ['Next review', p.nextReviewAt ? day(p.nextReviewAt) : rs.length ? 'All sessions done' : '–']].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderTop: '1px solid rgba(255,255,255,.08)' }}><span style={{ color: '#a8a59f' }}>{k}</span><span>{v}</span></div>
+            ))}
+            <button onClick={async () => { await patch({ reviewAgain: true }); refreshSummary(); nav('/review'); }} style={{ marginTop: 10, fontSize: 12.5, color: '#efede8', textDecoration: 'underline', textUnderlineOffset: 3 }}>Rate it now</button>
+            {p.xmpRating && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Rated {p.xmpRating}/5 in another app (not counted as a review).</div>}
+          </div>
 
           <div>
-            <div className="label" style={{ marginBottom: 8 }}>Description</div>
+            <div style={eyebrow}>Compositions</div>
+            {(colls.data ?? []).filter((c) => !c.printedAt || inComp(c)).map((c) => (
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 13 }}>
+                <Link to={`/collections/${c.id}`} style={{ textAlign: 'left' }}><span style={{ font: `400 18px ${serif}` }}>{c.name}</span><div style={{ fontSize: 12, color: '#8f8c86' }}>{stateOf(c)}</div></Link>
+                {c.printedAt ? <Link to={`/collections/${c.id}`} style={{ flex: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, boxShadow: ring }}>Open</Link>
+                  : <button onClick={() => toggleComp(c)} style={{ flex: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, background: inComp(c) ? '#efede8' : 'transparent', color: inComp(c) ? '#0d0d0d' : '#efede8', boxShadow: ring }}>{inComp(c) ? 'Added ✓' : 'Add'}</button>}
+              </div>
+            ))}
+            <button onClick={() => openNew({ name: `${shoot?.name ?? p.title} prints`, photoIds: [p.id, ...mates.map((x) => x.id)] })} style={{ marginTop: 12, width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Start a composition with this</button>
+          </div>
+
+          <div>
+            <div style={eyebrow}>Prints at 300 PPI</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+              {fits.map((f) => (
+                <div key={f.size} style={{ background: '#161615', borderRadius: 8, padding: 10, textAlign: 'center', boxShadow: f.ok ? 'none' : 'inset 0 0 0 1px rgba(231,140,120,.5)' }}>
+                  <div style={{ font: `400 20px ${serif}` }}>{f.size}</div>
+                  <div style={{ fontSize: 11.5, color: f.ok ? '#a8a59f' : 'oklch(0.78 0.11 35)', marginTop: 2 }}>{f.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ font: `400 11.5px ${mono}`, color: '#8f8c86', marginTop: 8 }}>{p.w} × {p.h} px · {p.fileType}</div>
+          </div>
+
+          <div>
+            <div style={eyebrow}>Subjects & tags</div>
+            <TagGroup p={p} kind="subject" mine={tagsOf('subject')} suggested={suggested.filter((t) => t.kind === 'subject')} tagAct={tagAct} />
+            <TagGroup p={p} kind="tag" mine={tagsOf('tag')} suggested={suggested.filter((t) => t.kind === 'tag')} tagAct={tagAct} />
+          </div>
+
+          <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: '#a8a59f', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
+            <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
+            <dt style={{ color: '#6f6c67' }}>Place</dt>
+            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} />{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
+            <dt style={{ color: '#6f6c67' }}>Camera</dt><dd style={{ margin: 0 }}>{[p.camera, p.lens].filter(Boolean).join(' · ') || '–'}</dd>
+            <dt style={{ color: '#6f6c67' }}>Exposure</dt><dd style={{ margin: 0 }}>{p.exposure || '–'}</dd>
+            <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>
+          </dl>
+
+          <div>
+            <div style={eyebrow}>Description</div>
             <textarea aria-label="Description" className="area" rows={3} value={desc} placeholder="Add a description" onChange={(e) => setDesc(e.target.value)} onBlur={() => desc !== p.description && patch({ description: desc })} />
             {showAiDescription && (
               <div className="aibox">
                 <div className="label" style={{ marginBottom: 6 }}>AI description</div>
                 <p style={{ margin: '0 0 8px' }}>{sug!.description}</p>
-                <button className="pill" onClick={() => patch({ acceptAiDescription: true }, 'Description saved.')}>Use this</button>{' '}
-                <button className="pill" onClick={() => patch({ rejectAiDescription: true })}>Reject</button>
+                <button className="pill" onClick={() => patch({ acceptAiDescription: true }, 'Description saved.').then(refreshSummary)}>Use this</button>{' '}
+                <button className="pill" onClick={() => patch({ rejectAiDescription: true }).then(refreshSummary)}>Reject</button>
               </div>
             )}
             {ai && sug && (sug.composition || sug.lighting || sug.mood) && (
@@ -115,12 +189,9 @@ export function PhotoDetail() {
             {ai && <button className="t2" style={{ fontSize: 12, marginTop: 8 }} onClick={() => patch({ reanalyse: true }, 'Queued for AI analysis.')}>{p.aiStatus === 'done' ? 'Analyse again' : p.aiStatus === 'error' ? 'Analysis failed. Try again' : 'Analyse now'}</button>}
           </div>
 
-          <TagGroup p={p} ai={ai} kind="subject" label="Subjects" tagAct={tagAct} />
-          <TagGroup p={p} ai={ai} kind="tag" label="Tags" tagAct={tagAct} />
-
           {p.palette.length > 0 && (
             <div>
-              <div className="label" style={{ marginBottom: 8 }}>Colour and light</div>
+              <div style={eyebrow}>Colour and light</div>
               <Swatches palette={p.palette} />
               <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
                 {[...new Set(p.palette.map((s) => s.name))].slice(0, 3).join(', ')} · {p.brightness !== null && (p.brightness < 0.35 ? 'dark' : p.brightness > 0.65 ? 'bright' : 'mid-tone')} · {p.contrast !== null && (p.contrast < 0.15 ? 'low contrast' : p.contrast > 0.28 ? 'high contrast' : 'medium contrast')}
@@ -128,30 +199,16 @@ export function PhotoDetail() {
             </div>
           )}
 
-          <div>
-            <div className="label" style={{ marginBottom: 8 }}>Variants</div>
-            <div className="variants">
-              <figure><Img p={p} style={{ height: 40, width: 'auto' }} />This one</figure>
-              {p.variants.map((v) => <Link key={v} to={`/photo/${v}`}><Img p={{ id: v, ar: 1.5 }} style={{ height: 40, width: 'auto' }} /></Link>)}
+          {(p.variants.length > 0 || !p.parentId) && (
+            <div>
+              <div style={eyebrow}>Variants</div>
+              <div className="variants">
+                <figure><Img p={p} style={{ height: 40, width: 'auto' }} />This one</figure>
+                {p.variants.map((v) => <Link key={v} to={`/photo/${v}`}><Img p={{ id: v, ar: 1.5 }} style={{ height: 40, width: 'auto' }} /></Link>)}
+              </div>
+              {p.variants.length === 0 && <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>Edits and crops of this photo appear here once linked. <Link to="/duplicates" className="t2" style={{ textDecoration: 'underline' }}>Review near-duplicates</Link></div>}
             </div>
-            {p.variants.length === 0 && !p.parentId && <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>Edits and crops of this photo appear here once linked. <Link to="/duplicates" className="t2" style={{ textDecoration: 'underline' }}>Review near-duplicates</Link></div>}
-          </div>
-
-          <div>
-            <div className="label" style={{ marginBottom: 8 }}>Location</div>
-            {p.lat !== null && p.lon !== null && <div className="mono" style={{ fontSize: 12, marginBottom: 6 }}>{fmtCoord(p.lat, p.lon)}</div>}
-            <form className="form" onSubmit={(e) => { e.preventDefault(); patch({ place }); }}>
-              <input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" />
-            </form>
-          </div>
-
-          <dl className="exif" style={{ margin: 0 }}>
-            <dt>camera</dt><dd>{p.camera || '–'}</dd>
-            <dt>lens</dt><dd>{p.lens || '–'}</dd>
-            <dt>exposure</dt><dd>{p.exposure || '–'}</dd>
-            <dt>pixels</dt><dd>{p.w ? `${p.w} × ${p.h}` : '–'}</dd>
-            <dt>file</dt><dd>{p.fileType} · {p.sizeMb} MB</dd>
-          </dl>
+          )}
 
           {p.conflicts.length > 0 && (
             <div className="aibox">
@@ -166,13 +223,13 @@ export function PhotoDetail() {
             </div>
           )}
 
-          <div style={{ position: 'relative', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <AddToComposition ids={[p.id]} onDone={setMsg} />
-            <button className="pill" aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio composition.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
-            <button className="pill" onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
-            <button className="pill" onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
-            <a className="pill" href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
-            <button className="pill" onClick={async () => {
+          <div style={{ display: 'flex', gap: '8px 18px', fontSize: 12.5, color: '#8f8c86', flexWrap: 'wrap' }}>
+            <a href={`/api/photos/${p.id}/original`} download>Download original</a>
+            <a href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
+            <button aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio composition.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
+            <button onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
+            <button onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
+            <button onClick={async () => {
               if (!window.confirm(`Take “${p.title}” out of Frames?\n\nIts reviews, tags and composition places go with it. The file in your library folder is not touched (a copy Frames holds itself, such as an upload, is deleted). A scan will not bring it back.`)) return;
               await api(`/photos/${p.id}`, { method: 'DELETE' });
               refreshSummary();
@@ -192,26 +249,26 @@ export function PhotoDetail() {
   );
 }
 
-/** Subjects or tags: the accepted ones, the AI's suggestions to accept or reject, and a box to add one. A top-level component, so typing never loses focus. */
-function TagGroup({ p, ai, kind, label, tagAct }: { p: PhotoFull; ai: boolean; kind: 'tag' | 'subject'; label: string; tagAct: (name: string, kind: string, action: string) => Promise<void> }) {
+type Tag = PhotoFull['tags'][number];
+
+/** Subjects or tags as pills: the accepted ones, the AI's suggestions to accept or reject, and a "+ Add" box. A top-level component, so typing never loses focus. */
+function TagGroup({ p, kind, mine, suggested, tagAct }: { p: PhotoFull; kind: 'tag' | 'subject'; mine: Tag[]; suggested: Tag[]; tagAct: (name: string, kind: string, action: string) => Promise<void> }) {
   const [text, setText] = useState('');
-  const mine = p.tags.filter((t) => t.kind === kind && t.accepted);
-  const suggested = ai ? p.tags.filter((t) => t.kind === kind && !t.accepted && t.source === 'ai') : [];
+  const [adding, setAdding] = useState(false);
   return (
-    <div>
-      <div className="label" style={{ marginBottom: 8 }}>{label}{suggested.length > 0 && ' · AI suggested'}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {mine.map((t) => <span key={t.name} className="chip"><Link to={`/library?${kind}=${encodeURIComponent(t.name)}`}>{t.name}</Link><button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')}>✕</button></span>)}
-        {suggested.map((t) => (
-          <span key={t.name} className="chip sug">{t.name}
-            <button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')}>✓</button>
-            <button aria-label={`Reject ${t.name}`} onClick={() => tagAct(t.name, kind, 'reject')}>✕</button>
-          </span>
-        ))}
-      </div>
-      <form className="form" style={{ marginTop: 8 }} onSubmit={(e) => { e.preventDefault(); if (text.trim()) { void tagAct(text, kind, 'add'); setText(''); } }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Add a ${kind}`} aria-label={`Add a ${kind}`} />
-      </form>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }} data-photo={p.id}>
+      {mine.map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)', display: 'inline-flex', gap: 6, alignItems: 'center' }}><Link to={`/library?${kind}=${encodeURIComponent(t.name)}`}>{t.name}</Link><button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')} style={{ color: '#8f8c86' }}>✕</button></span>)}
+      {suggested.map((t) => (
+        <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.35)', borderStyle: 'dashed', display: 'inline-flex', gap: 6, alignItems: 'center', color: '#a8a59f' }} title="Suggested by the AI">{t.name}
+          <button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')} style={{ color: '#efede8' }}>✓</button>
+          <button aria-label={`Reject ${t.name}`} onClick={() => tagAct(t.name, kind, 'reject')}>✕</button>
+        </span>
+      ))}
+      {adding ? (
+        <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) { void tagAct(text, kind, 'add'); setText(''); } setAdding(false); }}>
+          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={() => setAdding(false)} placeholder={`Add a ${kind}`} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, width: 130 }} />
+        </form>
+      ) : <button onClick={() => setAdding(true)} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', color: '#a8a59f' }}>+ {kind === 'subject' ? 'Subject' : 'Tag'}</button>}
     </div>
   );
 }
