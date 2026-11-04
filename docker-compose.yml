@@ -22,7 +22,7 @@ services:
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      # An env file exported from Settings, Env file holds every setting and secret as plain variables (AI_1_URL, AUTH_1_KEY and so on) and
+      # An env file exported from Settings, Env file holds the server's settings and secrets as plain variables (SHARED_AI_1_ENDPOINT, AUTH_1_KEY and so on) and
       # the switch that stops a second export. It reaches Frames through env_file below.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
       # Optional Cloudflare tunnel, set up by Frames itself (see README, Cloudflare tunnel). Leave empty to run without it.

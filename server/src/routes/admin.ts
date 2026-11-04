@@ -139,7 +139,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   const envStatus = () => ({
     allowed: x.cfg.allowEnvExport !== false,
     loaded: envConfigLoaded(),
-    settings: { system: Object.keys(snapshot(sys)).length, owner: Object.keys(snapshot(x.tenants.owner().db)).length },
+    settings: { system: Object.keys(snapshot(sys)).length, owner: 0 }, // only the server's settings are written to the file
     version: x.cfg.version ?? 'dev',
   });
   app.get('/api/admin/env', async () => envStatus());

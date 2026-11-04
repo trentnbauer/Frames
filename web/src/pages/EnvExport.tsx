@@ -20,7 +20,7 @@ export function EnvExport() {
         <h3>Download</h3>
         {i.allowed ? (
           <>
-            <p>{i.settings.system + i.settings.owner} saved settings will be written to the file. The file switches the export off again (<span className="mono">ALLOW_ENV_EXPORT=false</span>), so once you use it the secrets cannot be downloaded a second time.</p>
+            <p>{i.settings.system + i.settings.owner} saved server settings will be written to the file: sign-in, the tunnel, the privacy page, cloud storage providers and the AIs for everyone. The file switches the export off again (<span className="mono">ALLOW_ENV_EXPORT=false</span>), so once you use it the secrets cannot be downloaded a second time.</p>
             <a className="pill primary" href="/api/admin/env/export" download="frames.env">Download frames.env</a>
           </>
         ) : (
@@ -35,7 +35,7 @@ export function EnvExport() {
           <li>Make sure the compose file reads the file with <span className="mono">env_file:</span>, so every setting reaches Frames as its own variable (like <span className="mono">AI_1_KEY</span> or <span className="mono">AUTH_ALLOW</span>). The compose files in this repository already do.</li>
           <li>Restart Frames. The file now <b>wins over the app</b>: its values are written over what was saved every time Frames starts.</li>
         </ol>
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>People other than the owner, and your photographs, previews and collections, stay in the data volume: keep using the same volume. Sign-in sessions are not in the file, so everyone signs in again after a move.</p>
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Only the server’s settings are in the file. Everyone’s own library, the owner’s included (their AIs, cloud folders, portfolio, review settings), and the photographs, previews and collections stay in the data volume: keep using the same volume. Sign-in sessions are not in the file, so everyone signs in again after a move.</p>
       </div>
 
       <div className="field">

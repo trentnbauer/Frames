@@ -46,18 +46,24 @@ describe('which settings travel', () => {
 });
 
 describe('the env file', () => {
-  it('switches its own export off, says how to use it, and carries each setting as its own plain variable', () => {
+  it('switches its own export off, says how to use it, and carries each server setting as its own plain variable, and nobody’s library', () => {
     const e = mk();
-    setSetting(e.db, 'aiSources', [{ id: 'a', type: 'openai', name: 'Main', endpoint: 'https://api.example.test', model: 'm1', embedModel: '', ack: true }]);
-    setSetting(e.db, 'secret:ai:a:key', SECRET);
+    setSetting(sysOf(e), 'aiSources', [{ id: 'a', type: 'openai', name: 'Main', endpoint: 'https://api.example.test', model: 'm1', embedModel: '', ack: true }]);
+    setSetting(sysOf(e), 'secret:ai:a:key', SECRET);
+    // The owner's own library: not the server's, so not in the file.
+    setSetting(e.db, 'aiSources', [{ id: 'mine', type: 'ollama', name: 'My own', endpoint: 'http://ollama:11434', model: 'llava', embedModel: '', ack: false }]);
+    setSetting(e.db, 'secret:ai:mine:key', 'owner-private-key');
+    setSetting(e.db, 'portfolio', { tagline: 'Owner only' });
+    setSetting(e.db, 'cloud', { clients: {}, connections: [{ id: 'c1', provider: 'google', account: 'me@x.test' }] });
     const f = buildEnvFile(sysOf(e), e.db, { version: '1.2.3', date: new Date('2026-11-04T00:00:00Z'), env: {} });
     expect(f).toContain('# Frames 1.2.3 settings, exported 2026-11-04.');
     expect(f).toMatch(/^ALLOW_ENV_EXPORT=false$/m);
     const v = parseEnv(f);
     expect(v.ALLOW_ENV_EXPORT).toBe('false');
-    expect(v).toMatchObject({ AI_1_ID: 'a', AI_1_TYPE: 'openai', AI_1_ENDPOINT: 'https://api.example.test', AI_1_MODEL: 'm1', AI_1_ACK: 'true', AI_1_KEY: SECRET });
+    expect(v).toMatchObject({ SHARED_AI_1_ID: 'a', SHARED_AI_1_TYPE: 'openai', SHARED_AI_1_ENDPOINT: 'https://api.example.test', SHARED_AI_1_MODEL: 'm1', SHARED_AI_1_ACK: 'true', SHARED_AI_1_KEY: SECRET });
     expect(f).not.toContain('FRAMES_CONFIG_'); // no JSON blobs
-    expect(f).not.toContain('{"');
+    expect(f).not.toContain('FRAMES_OWNER__');
+    for (const gone of ['My own', 'owner-private-key', 'Owner only', 'AI_1_', 'CLOUD_1_', 'me@x.test']) expect(f.replace(/SHARED_AI_1_/g, ''), gone).not.toContain(gone);
     expect(f.endsWith('\n')).toBe(true);
   });
   it('carries over the plain variables the container was started with, and only those', () => {
@@ -111,55 +117,46 @@ describe('the env file wins', () => {
 });
 
 describe('readable names', () => {
-  it('numbers every AI source, sign-in method and cloud folder, with its key beside it, and reads them back exactly', () => {
+  it('numbers every shared AI and sign-in method, with its key beside it, and reads them back exactly', () => {
     const a = mk();
-    setSetting(a.db, 'aiSources', [
+    const s = sysOf(a);
+    setSetting(s, 'aiSources', [
       { id: 'one', type: 'ollama', name: 'Home', endpoint: 'http://ollama:11434', model: 'llava', embedModel: 'nomic', ack: false },
       { id: 'two', type: 'openai', name: '12345', endpoint: 'https://api.example.test', model: 'true', embedModel: '', ack: true },
     ]);
-    setSetting(a.db, 'secret:ai:two:key', SECRET);
-    setSetting(a.db, 'cloud', { clients: {}, connections: [{ id: 'c1', provider: 'google', account: 'me@x.test', folderId: 'f', folderName: 'Photos', intervalMin: 60, enabled: true, lastSync: 'now', lastResult: { downloaded: 3 }, needsReconnect: false }] });
-    setSetting(a.db, 'secret:cloud:tok:c1', '{"access":"a","exp":1,"refresh":"r"}');
-    setSetting(a.db, 'portfolio', { enabled: true, host: 'gallery.example.com', tagline: 'Line one\nline two', social: { instagram: 'me', twitter: '', behance: '' } });
-    const s = sysOf(a);
+    setSetting(s, 'secret:ai:two:key', SECRET);
     setSetting(s, 'auth', { enabled: true, allow: ['me@x.test', '@family.test'], publicUrl: 'https://frames.example.com', testedBy: { provider: 'g1', sub: 's', email: 'me@x.test', emailVerified: true, name: 'Me' },
       providers: [{ id: 'g1', type: 'google', name: 'Google', clientId: 'cid-1' }, { id: 'cf', type: 'cloudflare', name: 'Cloudflare Access', clientId: '', teamDomain: 'team.example.test', aud: 'a'.repeat(64) }] });
     setSetting(s, 'secret:oauth:g1', 'oauth-secret-1');
     setSetting(s, 'cloudClients', { google: { clientId: 'goog-id' } });
     setSetting(s, 'secret:cloud:client:google', 'goog-secret');
+    setSetting(s, 'privacy', { operator: 'Studio\nTwo' });
     const file = buildEnvFile(s, a.db, { env: {} });
     const v = parseEnv(file);
     expect(v).toMatchObject({
-      AI_1_ID: 'one', AI_1_ENDPOINT: 'http://ollama:11434', AI_1_EMBED_MODEL: 'nomic', AI_1_ACK: 'false',
-      AI_2_NAME: '"12345"', AI_2_MODEL: '"true"', AI_2_KEY: SECRET, // text that looks like a number or a boolean is quoted so it stays text
+      SHARED_AI_1_ID: 'one', SHARED_AI_1_ENDPOINT: 'http://ollama:11434', SHARED_AI_1_EMBED_MODEL: 'nomic', SHARED_AI_1_ACK: 'false',
+      SHARED_AI_2_NAME: '"12345"', SHARED_AI_2_MODEL: '"true"', SHARED_AI_2_KEY: SECRET, // text that looks like a number or a boolean is quoted so it stays text
       AUTH_ENABLED: 'true', AUTH_ALLOW: 'me@x.test,@family.test', AUTH_PUBLIC_URL: 'https://frames.example.com',
       AUTH_1_TYPE: 'google', AUTH_1_CLIENT_ID: 'cid-1', AUTH_1_KEY: 'oauth-secret-1', AUTH_2_TYPE: 'cloudflare', AUTH_2_TEAM_DOMAIN: 'team.example.test',
-      CLOUD_1_PROVIDER: 'google', CLOUD_1_FOLDER_NAME: 'Photos', CLOUD_1_TOKEN: '{"access":"a","exp":1,"refresh":"r"}',
       CLOUD_GOOGLE_CLIENT_ID: 'goog-id', CLOUD_GOOGLE_CLIENT_SECRET: 'goog-secret',
     });
-    expect('CLOUD_1_LAST_SYNC' in v).toBe(false); // what is happening now is not settings
-    expect(v.FRAMES_OWNER__portfolio__tagline).toBe('"Line one\\nline two"'); // the rest is by path, a line break kept as text
-    expect(v.FRAMES_OWNER__portfolio__social__instagram).toBe('me');
+    expect(v.FRAMES_SYSTEM__privacy__operator).toBe('"Studio\\nTwo"'); // the rest is by path, a line break kept as text
     expect(file.split('\n').some((l) => l.startsWith('FRAMES_CONFIG'))).toBe(false); // no JSON blobs
     // Read it all back into a fresh instance.
     const b = mk();
     const out = applyEnvConfig(sysOf(b), b.db, v);
     expect(out.problems).toEqual([]);
-    const want = snapshot(a.db), got = snapshot(b.db);
-    for (const k of ['aiSources', 'secret:ai:two:key', 'secret:cloud:tok:c1']) expect(got[k], k).toEqual(want[k]);
-    expect((got.cloud as any).connections).toEqual([{ id: 'c1', provider: 'google', account: 'me@x.test', folderId: 'f', folderName: 'Photos', intervalMin: 60, enabled: true, needsReconnect: false }]);
-    expect(got.portfolio).toEqual(want.portfolio);
-    const sw = snapshot(sysOf(a)), sg = snapshot(sysOf(b));
-    for (const k of ['auth', 'secret:oauth:g1', 'cloudClients', 'secret:cloud:client:google']) expect(sg[k], k).toEqual(sw[k]);
+    const want = snapshot(s), got = snapshot(sysOf(b));
+    for (const k of ['aiSources', 'secret:ai:two:key', 'auth', 'secret:oauth:g1', 'cloudClients', 'secret:cloud:client:google', 'privacy']) expect(got[k], k).toEqual(want[k]);
   });
   it('can be written by hand: a few variables are enough, and a plain list for who is allowed in', () => {
     const b = mk();
-    const out = applyEnvConfig(sysOf(b), b.db, { AI_1_ID: 'mine', AI_1_TYPE: 'ollama', AI_1_NAME: 'Mine', AI_1_ENDPOINT: 'http://ollama:11434', AI_1_MODEL: 'llava', AI_1_EMBED_MODEL: '', AI_1_ACK: 'true', AUTH_ALLOW: 'a@x.test, b@x.test' });
+    const out = applyEnvConfig(sysOf(b), b.db, { SHARED_AI_1_ID: 'mine', SHARED_AI_1_TYPE: 'ollama', SHARED_AI_1_NAME: 'Mine', SHARED_AI_1_ENDPOINT: 'http://ollama:11434', SHARED_AI_1_MODEL: 'llava', SHARED_AI_1_EMBED_MODEL: '', SHARED_AI_1_ACK: 'true', AUTH_ALLOW: 'a@x.test, b@x.test' });
     expect(out.problems).toEqual([]);
-    expect(snapshot(b.db).aiSources).toEqual([{ id: 'mine', type: 'ollama', name: 'Mine', endpoint: 'http://ollama:11434', model: 'llava', embedModel: '', ack: true }]);
+    expect(snapshot(sysOf(b)).aiSources).toEqual([{ id: 'mine', type: 'ollama', name: 'Mine', endpoint: 'http://ollama:11434', model: 'llava', embedModel: '', ack: true }]);
     expect((snapshot(sysOf(b)).auth as any).allow).toEqual(['a@x.test', 'b@x.test']);
   });
-  it('still reads the older JSON variables, and the plain ones win over them', () => {
+  it('still reads the owner’s settings from a file made by an earlier version, and the plain variables win over the older JSON', () => {
     const b = mk();
     applyEnvConfig(sysOf(b), b.db, { [OWNER_VAR]: JSON.stringify({ portfolio: { tagline: 'old', gear: 'camera' } }), FRAMES_OWNER__portfolio__tagline: 'new' });
     expect(snapshot(b.db).portfolio).toEqual({ tagline: 'new' }); // a setting written by path replaces the old whole
@@ -167,11 +164,10 @@ describe('readable names', () => {
 });
 
 describe('export, import, and the block', () => {
-  it('moves a configured app (AI sources, keys, the tunnel token, the privacy page) to a fresh one, and then refuses a second export', async () => {
+  it('moves a configured server (shared AIs, keys, the tunnel token, the privacy page) to a fresh one, and then refuses a second export', async () => {
     // 1. Set up with no variables at all, through the app.
     const a = mk(); const A = api(a);
-    const created = (await A.post('/api/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm1', embedModel: 'e1', ack: true, key: SECRET })).body.sources[0];
-    await A.put('/api/ai/active', { id: created.id });
+    await A.post('/api/admin/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm1', embedModel: 'e1', ack: true, key: SECRET });
     await A.put('/api/tunnel', { apiToken: SECRET + '-tunnel', accountId: 'c'.repeat(32), appUrl: 'https://frames.example.com' });
     await A.put('/api/admin/privacy', { operator: 'Studio', contact: 'hi@example.test' });
     // 2. Export: allowed (the default), and an attachment that is never cached.
@@ -187,8 +183,7 @@ describe('export, import, and the block', () => {
     const b = mk({ allowEnvExport: vars.ALLOW_ENV_EXPORT !== 'false' }); const B = api(b);
     const list = (await B.get('/api/ai/sources')).body;
     expect(list.sources).toHaveLength(1);
-    expect(list.sources[0]).toMatchObject({ type: 'openai', model: 'm1', hasKey: true, ready: true });
-    expect(list.active).toBe(created.id);
+    expect(list.sources[0]).toMatchObject({ type: 'openai', model: 'm1', hasKey: true, ready: true, shared: true });
     expect(JSON.stringify(list)).not.toContain(SECRET); // still write-only through the API
     expect((await B.get('/api/tunnel')).body).toMatchObject({ hasApiToken: true, appUrl: 'https://frames.example.com' });
     expect(String((await B.get('/privacy')).body)).toContain('Studio');
@@ -196,7 +191,7 @@ describe('export, import, and the block', () => {
     const again = await B.get('/api/admin/env/export');
     expect(again.status).toBe(403);
     expect(again.body.error).toMatch(/ALLOW_ENV_EXPORT/);
-    expect((await B.get('/api/admin/env')).body).toMatchObject({ allowed: false, loaded: { system: true, owner: true } });
+    expect((await B.get('/api/admin/env')).body).toMatchObject({ allowed: false, loaded: { system: true, owner: false } }); // only the server's settings are in the file
   });
   it('changes made in the app after import last only until restart: the env file wins again', async () => {
     const a = mk(); const A = api(a);
@@ -218,47 +213,47 @@ describe('export, import, and the block', () => {
 
 describe('several AIs in the export', () => {
   const KEYS = { claude: 'sk-ant-' + Buffer.from('one').toString('hex'), gemini: 'g-' + Buffer.from('two').toString('hex'), openai: 'sk-' + Buffer.from('three').toString('hex') };
-  it('carries every AI, its own key, its settings and which one is in use, and gives a fresh instance exactly that', async () => {
+  const post = (A: ReturnType<typeof api>, type: string, fields: object) => A.post('/api/admin/ai/sources', { type, ...fields });
+  it('carries every AI set up for everyone, with its own key and settings, and gives a fresh instance exactly that', async () => {
     const a = mk(); const A = api(a);
-    const add = async (type: string, fields: object) => (await A.post('/api/ai/sources', { type, ...fields })).body.sources.at(-1);
+    const add = async (type: string, fields: object) => (await post(A, type, fields)).body.sources.at(-1);
     const claude = await add('anthropic', { name: 'Claude for descriptions', endpoint: 'https://api.anthropic.com', model: 'claude-x', ack: true, key: KEYS.claude });
     const gemini = await add('gemini', { endpoint: 'https://generativelanguage.example/v1beta/openai', model: 'gem-x', embedModel: 'gem-embed', ack: true, key: KEYS.gemini });
     const openai = await add('openai', { model: 'gpt-x', embedModel: 'te-x', ack: true, key: KEYS.openai });
     const local = await add('ollama', { endpoint: 'http://192.168.1.20:11434', model: 'llava', embedModel: 'nomic' }); // on the network, and no key
-    await A.put('/api/ai/active', { id: gemini.id });
-    await A.del(`/api/ai/sources/${openai.id}`); // a removed AI must not travel, and neither must its key
+    await A.del(`/api/admin/ai/sources/${openai.id}`); // a removed AI must not travel, and neither must its key
+    // The owner's own AI is theirs, not the server's: it is not in the file.
+    await A.post('/api/ai/sources', { type: 'ollama', name: 'Only mine', endpoint: 'http://localhost:11434', model: 'mine', embedModel: '' });
 
     const text = Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString();
     expect(text).toContain(KEYS.claude);
     expect(text).toContain(KEYS.gemini);
     expect(text).not.toContain(KEYS.openai);
-    const vars = parseEnv(text);
-    useVars(vars);
+    expect(text).not.toContain('Only mine');
+    useVars(parseEnv(text));
 
     const b = mk(); const B = api(b);
     const got = (await B.get('/api/ai/sources')).body;
     expect(got.sources.map((x: any) => `${x.type}:${x.name}`)).toEqual(['anthropic:Claude for descriptions', 'gemini:Gemini (Google)', 'ollama:Ollama']);
-    expect(got.active).toBe(gemini.id);
+    expect(got.sources.every((x: any) => x.shared)).toBe(true);
     const by = Object.fromEntries(got.sources.map((x: any) => [x.type, x]));
     expect(by.anthropic).toMatchObject({ id: claude.id, endpoint: 'https://api.anthropic.com', model: 'claude-x', ack: true, hasKey: true, ready: true });
     expect(by.gemini).toMatchObject({ id: gemini.id, model: 'gem-x', embedModel: 'gem-embed', hasKey: true, ready: true });
     expect(by.ollama).toMatchObject({ id: local.id, endpoint: 'http://192.168.1.20:11434', model: 'llava', hasKey: false, ready: true });
-    // The settings page sees one AI in use, and it is the one that was.
-    expect((await B.get('/api/settings')).body.settings).toMatchObject({ aiActive: gemini.id, ai: 'external' });
     expect(JSON.stringify(got)).not.toMatch(/sk-ant-|g-[0-9a-f]{6}/); // still write-only through the API
-    // Each key belongs to its own AI: the one that is in use is sent its own key, nobody else's.
-    expect(b.db.prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${gemini.id}:key`)).toEqual({ value: JSON.stringify(KEYS.gemini) });
-    expect(b.db.prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${openai.id}:key`)).toBeUndefined();
+    // Each key belongs to its own AI, in the server's database; nobody else's.
+    expect(sysOf(b).prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${gemini.id}:key`)).toEqual({ value: JSON.stringify(KEYS.gemini) });
+    expect(sysOf(b).prepare('SELECT value FROM settings WHERE key = ?').get(`secret:ai:${openai.id}:key`)).toBeUndefined();
   });
   it('the file wins over AIs added in the app since, at the next start', async () => {
     const a = mk(); const A = api(a);
-    await A.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
-    const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
-    useVars(vars);
+    await post(A, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
+    useVars(parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString()));
     const b = mk(); const B = api(b);
-    await B.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });
-    expect((await B.get('/api/ai/sources')).body.sources.map((x: any) => x.name)).toEqual(['From the file', 'Added later in the app']);
+    await post(B, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });
+    const names = async () => (await B.get('/api/admin/ai/sources')).body.sources.map((x: any) => x.name);
+    expect(await names()).toEqual(['From the file', 'Added later in the app']);
     applyEnvConfig(sysOf(b), b.db); // what the next start does
-    expect((await B.get('/api/ai/sources')).body.sources.map((x: any) => x.name)).toEqual(['From the file']);
+    expect(await names()).toEqual(['From the file']);
   });
 });
