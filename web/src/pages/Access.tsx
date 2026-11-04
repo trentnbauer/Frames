@@ -12,6 +12,60 @@ type Cfg = {
   passwordOption: boolean; disabledByEnv: boolean; callbackBase: string; sessions: number;
 };
 
+const ext = (href: string, text: string) => <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{text}</a>;
+
+/** What to do in each service's console, step by step, ending with what to paste into the boxes above. */
+function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; appUrl: string }) {
+  const uri = <span className="mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{redirect}</span>;
+  const steps: Record<Provider['type'], React.ReactNode[]> = {
+    google: [
+      <>In the {ext('https://console.cloud.google.com/auth/overview', 'Google Cloud console')} make or pick a project (any name, it is free).</>,
+      <><b>Google Auth platform, Branding</b> (earlier called OAuth consent screen): app name Frames, your email as support and contact. Under <b>Audience</b> choose <b>External</b>. Frames asks only for <span className="mono">openid</span>, <span className="mono">email</span> and <span className="mono">profile</span>, so there is nothing to add under Data Access.</>,
+      <>Still under Audience, press <b>Publish app</b>. Left in <i>Testing</i>, only the test users you add can sign in and Google ends the sign-in every 7 days; with just those three basic scopes, publishing needs no review from Google.</>,
+      <>{ext('https://console.cloud.google.com/auth/clients', 'Clients')}, <b>Create client</b>, application type <b>Web application</b>. Under <b>Authorised redirect URIs</b> add exactly: {uri}</>,
+      <>Copy the <b>Client ID</b> and the <b>Client secret</b> into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
+    ],
+    github: [
+      <>Open {ext('https://github.com/settings/developers', 'GitHub, Settings, Developer settings')}, <b>OAuth Apps</b>, <b>New OAuth App</b> (not a GitHub App).</>,
+      <>Application name Frames. <b>Homepage URL</b>: {appUrl ? <span className="mono">{appUrl}</span> : 'the address you open Frames at'}. <b>Authorization callback URL</b>: {uri}</>,
+      <>Register it, then <b>Generate a new client secret</b> (shown once). Copy the <b>Client ID</b> and the secret into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
+      <>Frames asks for <span className="mono">read:user</span> and <span className="mono">user:email</span> to learn the account’s verified email. An allowed-list entry like <span className="mono">github:12345</span> or an email both work.</>,
+    ],
+    microsoft: [
+      <>Open {ext('https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade', 'Microsoft Entra, App registrations')}, <b>New registration</b>, name Frames.</>,
+      <><b>Supported account types</b>: <i>this organizational directory only</i> (the tenant ID below is that directory). <b>Redirect URI</b>: platform <b>Web</b>, {uri}</>,
+      <>On the app’s <b>Overview</b> copy the <b>Directory (tenant) ID</b> into <i>Tenant ID</i> and the <b>Application (client) ID</b> into <i>Client ID</i>.</>,
+      <><b>Certificates &amp; secrets, New client secret</b>: copy its <b>Value</b> (not the Secret ID) into <i>Client secret</i>. The default permission (<span className="mono">User.Read</span>) is enough.</>,
+      <>Press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
+    ],
+    oidc: [
+      <>In your OpenID Connect server (Authentik, Keycloak, Authelia and so on) create a new <b>client / application</b> of the <b>confidential</b> kind (it has a secret) using the <b>authorization code</b> flow.</>,
+      <>Redirect URI: {uri}. Scopes: <span className="mono">openid email profile</span>.</>,
+      <><i>Issuer address</i> is the address that serves <span className="mono">/.well-known/openid-configuration</span>, without that last part (for Authentik, the application’s own <i>OpenID Configuration Issuer</i>; for Keycloak <span className="mono">https://host/realms/NAME</span>).</>,
+      <>Paste the client ID and secret into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>. A server on plain <span className="mono">http://</span> needs <span className="mono">OIDC_ALLOW_HTTP=true</span>.</>,
+    ],
+    oauth2: [
+      <>Register an OAuth 2 application with the service. Redirect (callback) address: {uri}. Frames asks for the scopes <span className="mono">profile email</span>.</>,
+      <>Fill in the service’s <b>authorize</b>, <b>token</b> and <b>user-info</b> addresses (its developer documentation lists them). The user-info answer must say who the person is and give an email.</>,
+      <>Paste the client ID and secret into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
+    ],
+    cloudflare: [
+      <>Easiest: tick <b>Protect the App URL with Cloudflare Access</b> under Settings, Cloudflare tunnel. Frames then creates the Access application and adds this method for you, with the team domain and audience tag filled in.</>,
+      <>By hand: in {ext('https://one.dash.cloudflare.com/', 'Cloudflare Zero Trust')} open <b>Access, Applications</b>, <b>Add an application</b>, <b>Self-hosted</b>, with {appUrl ? <span className="mono">{appUrl}</span> : 'the address you open Frames at'} as its address, and a policy that allows the people on the list below.</>,
+      <>The <b>team domain</b> is under <b>Settings, Custom Pages</b> (it looks like <span className="mono">myteam.cloudflareaccess.com</span>). The <b>Application Audience (AUD) tag</b> is on the application’s <b>Overview</b> tab.</>,
+      <>There is no redirect address, client ID or secret: Access signs people in before Frames sees them. Save, then open Frames through the Access-protected address and press <b>Test sign-in</b>.</>,
+    ],
+  };
+  const list = steps[p.type];
+  if (!list.length) return null;
+  return (
+    <details style={{ marginTop: 10 }} open={!p.clientId}>
+      <summary style={{ cursor: 'pointer', fontSize: 13.5 }}><b>How to set up {p.name || p.type}</b></summary>
+      <ol className="muted" style={{ fontSize: 13, margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.7 }}>{list.map((x, i) => <li key={i}>{x}</li>)}</ol>
+    </details>
+  );
+}
+
 const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
   { type: 'google', label: 'Google', hint: 'Sign in with a Google account.' },
   { type: 'github', label: 'GitHub', hint: 'Sign in with a GitHub account.' },
@@ -101,7 +155,12 @@ export function Access() {
                 <label key={k}>{{ authUrl: 'Authorize address', tokenUrl: 'Token address', userUrl: 'User-info address', emailsUrl: 'Emails address (optional)' }[k]} <input disabled={locked} value={p[k] ?? ''} aria-label={`${p.id} ${k}`} onChange={(e) => edit(i, { [k]: e.target.value })} /></label>
               ))}
             </div>
-            {p.redirectUrl && <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>Register this redirect address with the provider: <span className="mono" style={{ userSelect: 'all' }}>{p.redirectUrl}</span></p>}
+            {p.type !== 'cloudflare' && (
+              <div className="banner" role="note" style={{ marginTop: 12 }}>
+                <span><b>Redirect address</b> (give this to {p.name || 'the provider'} when it asks for a redirect URI or callback URL): <span className="mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{p.redirectUrl ?? `${c.callbackBase}/auth/callback/${p.id}`}</span></span>
+              </div>
+            )}
+            <SetupSteps p={p} redirect={p.redirectUrl ?? `${c.callbackBase}/auth/callback/${p.id}`} appUrl={publicUrl || c.callbackBase} />
           </div>
         ))}
         {!locked && (
