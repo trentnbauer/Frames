@@ -159,7 +159,26 @@ Settings, Cloud sync copies the photographs from a cloud folder into Frames, the
 
 Settings, Cloudflare tunnel lets you reach Frames (or just your public portfolio) from outside your network with no open ports. Frames runs the bundled `cloudflared` for you.
 
-- **Two ways to set it up.** Paste a tunnel token you made in the Cloudflare dashboard, or give Frames an API token and it creates the tunnel, its routes and the DNS records itself. The API token only needs *Account: Cloudflare Tunnel: Edit* and *Zone: DNS: Edit* (plus *Zone: Read*), limited to your domain.
+### Setting up Cloudflare, step by step
+
+You need a domain that is on Cloudflare (its nameservers point to Cloudflare). Everything below is a few minutes in the dashboard; Frames does the rest.
+
+1. **Make an API token.** Open **<https://dash.cloudflare.com/profile/api-tokens>**, press **Create Token**, then **Create Custom Token**. Name it `Frames`, and add these permissions (press *+ Add more* for each row):
+
+   | Row | First box | Second box | Third box |
+   |---|---|---|---|
+   | 1 | Account | Cloudflare Tunnel | Edit |
+   | 2 | Account | Access: Apps and Policies | Edit |
+   | 3 | Zone | DNS | Edit |
+   | 4 | Zone | Zone | Read |
+
+   Under *Account Resources* choose *Include, your account*; under *Zone Resources* choose *Include, Specific zone, your domain* (or *All zones*). Press *Continue to summary*, then **Create Token**, and **copy the token now**: Cloudflare shows it once. (Row 2 is only needed for the environment-variable setup below, which also puts a login in front of the app. Setting the tunnel up from Settings needs rows 1, 3 and 4 only.)
+2. **Find your account ID.** Open **<https://dash.cloudflare.com>**, choose your domain, and look for **Account ID** in the right-hand column of the overview page (or use the three dots next to your account name, *Copy account ID*). It is 32 letters and numbers. [Cloudflare's guide](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/) shows where.
+3. **Turn on the login (only for the app address).** Open the Zero Trust dashboard at **<https://one.dash.cloudflare.com>**. If it asks you to choose a team name, pick one (the free plan covers up to 50 people; Cloudflare may ask for a payment method to switch the free plan on). Then go to *Settings, Authentication, Login methods* and add **One-time PIN**, which emails a code to the people you allow. [Cloudflare's guide](https://developers.cloudflare.com/cloudflare-one/identity/one-time-pin/). A portfolio-only setup needs no login, so you can skip this step.
+4. **Tell Frames.** Either open **Settings, Cloudflare tunnel** and choose *Set it up for me*, or let **Settings, Deployment** write the variables for you: paste the token and account ID, type the addresses (for example `frames.example.com` for the app and `gallery.example.com` for the portfolio) and the emails to let in, and download the file.
+5. **Check it.** The tunnel shows *Connected* in Settings, Cloudflare tunnel, and `https://<your app address>` asks for an emailed code. Share links and the portfolio open without one.
+
+- **Two ways to set it up.** Paste a tunnel token you made in the Cloudflare dashboard, or give Frames an API token (made in step 1 above) and it creates the tunnel, its routes and the DNS records itself. The API token only needs *Account: Cloudflare Tunnel: Edit* and *Zone: DNS: Edit* (plus *Zone: Read*), limited to your domain.
 - **One set of addresses.** The tunnel's whole-app address and the **public address** under Settings, Access are the same address, and its portfolio address and the one under Settings, Portfolio are the same address: changing either place changes the other. If Frames made the tunnel for you (*Set it up for me*), Cloudflare's routes and DNS records are brought into line at the same moment, so there is nothing to press. A tunnel run from a pasted token is routed in the Cloudflare dashboard, so only Frames' list changes. A tunnel set up from environment variables is left alone: the variables decide.
 - **Safe by default.** Every hostname goes to this Frames server and nothing else on your network. A **portfolio** hostname shows only the public portfolio (set the same address in Settings, Portfolio). Exposing the **whole app** is allowed with Frames' own sign-in off, for when you lock the address down in Cloudflare (Access, an IP rule): Settings says plainly that nothing in Frames protects it, and it is up to you to.
 - **Secrets stay put.** Tokens are write-only (never shown again), are kept out of backups, reach `cloudflared` through its environment (not the command line) and are removed from the tunnel log.

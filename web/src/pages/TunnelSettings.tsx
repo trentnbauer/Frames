@@ -82,7 +82,12 @@ export function TunnelSettings() {
             <label>Account ID <input aria-label="Account ID" value={account} placeholder="32 letters and numbers, from the dashboard" onChange={(e) => setAccount(e.target.value)} /></label>
             <label>API token <input type="password" autoComplete="off" aria-label="API token" value={apiToken} placeholder={d.data.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token'} onChange={(e) => setApiToken(e.target.value)} /></label>
             <label>Tunnel name <input aria-label="Tunnel name" value={name} onChange={(e) => setName(e.target.value)} /></label>
-            <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The token needs only <b>Account: Cloudflare Tunnel: Edit</b> and <b>Zone: DNS: Edit</b> (plus Zone: Read), limited to your domain. It is kept on this server only, never shown again, and left out of backups.</p>
+            <ol className="muted" style={{ fontSize: 12.5, margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+              <li><a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Make an API token</a>: Create Token, Create Custom Token, with <b>Account: Cloudflare Tunnel: Edit</b>, <b>Zone: DNS: Edit</b> and <b>Zone: Zone: Read</b>, limited to your domain. Copy it; Cloudflare shows it once.</li>
+              <li><a href="https://dash.cloudflare.com" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Find your account ID</a>: choose your domain, then Account ID in the right-hand column.</li>
+              <li>Paste both above, add your addresses below, and press Create the tunnel.</li>
+            </ol>
+            <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The token is kept on this server only, never shown again, and left out of backups.</p>
           </div>
         )}
       </div>
