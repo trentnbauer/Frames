@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
 import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
+import { clientOf } from '../cloud.js';
 import { bindOwner, resolveUser, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -120,7 +121,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       for (const raw of b.providers.slice(0, 10)) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bad('Each provider must be an object.');
         const p: Provider = {
-          id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
+          ...(raw.useCloudApp === true ? { useCloudApp: true } : {}), id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
           ...(raw.issuer ? { issuer: String(raw.issuer).trim().slice(0, 300) } : {}), ...(raw.tenant ? { tenant: String(raw.tenant).trim().slice(0, 100) } : {}),
           ...(raw.authUrl ? { authUrl: String(raw.authUrl).trim().slice(0, 300) } : {}), ...(raw.tokenUrl ? { tokenUrl: String(raw.tokenUrl).trim().slice(0, 300) } : {}),
           ...(raw.teamDomain ? { teamDomain: String(raw.teamDomain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 253) } : {}), ...(raw.aud ? { aud: String(raw.aud).trim().toLowerCase().slice(0, 64) } : {}),
@@ -128,9 +129,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
         };
         const err = validateProvider(p);
         if (err) return bad(err);
+        if (p.useCloudApp && !clientOf(cfg, db, p.type === 'microsoft' ? 'onedrive' : (p.type as 'google' | 'dropbox')).clientId) return bad(`Set up ${p.type === 'microsoft' ? 'OneDrive' : p.type === 'google' ? 'Google Drive' : 'Dropbox'} under Administration, Cloud services first: its client ID and secret are what this uses.`);
         if (seen.has(p.id)) return bad(`Two providers use the id “${p.id}”`);
         seen.add(p.id);
-        p.name ||= ({ google: 'Google', github: 'GitHub', microsoft: 'Microsoft', oidc: 'OpenID Connect', oauth2: 'OAuth', cloudflare: 'Cloudflare Access' } as Record<string, string>)[p.type];
+        p.name ||= ({ google: 'Google', github: 'GitHub', microsoft: 'Microsoft', dropbox: 'Dropbox', oidc: 'OpenID Connect', oauth2: 'OAuth', cloudflare: 'Cloudflare Access' } as Record<string, string>)[p.type];
         if (typeof raw.clientSecret === 'string' && raw.clientSecret) secrets[p.id] = raw.clientSecret.slice(0, 500);
         list.push(p);
       }

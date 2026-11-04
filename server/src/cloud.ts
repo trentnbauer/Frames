@@ -73,9 +73,10 @@ const SCOPE: Record<ProviderId, string> = {
   onedrive: 'Files.Read offline_access User.Read',
 };
 const EXTRA: Record<ProviderId, Record<string, string>> = {
-  google: { access_type: 'offline', prompt: 'consent' },
-  dropbox: { token_access_type: 'offline' },
-  onedrive: {},
+  // Always show the account chooser, so a second account of the same service can be picked even when the browser is signed in to the first.
+  google: { access_type: 'offline', prompt: 'select_account consent' },
+  dropbox: { token_access_type: 'offline', force_reauthentication: 'true' },
+  onedrive: { prompt: 'select_account' },
 };
 
 // ---------- sign-in with the provider (authorization code + PKCE) ----------
@@ -116,10 +117,20 @@ export async function finishConnect(db: DB, cfg: AppCfg, code: string, state: st
   const t = await tokenCall(db, cfg, p.provider, { grant_type: 'authorization_code', code, redirect_uri: redirectUri, code_verifier: p.verifier });
   if (!t.refresh_token) throw new CloudError('The provider did not allow lasting access. Remove Frames from the account’s connected apps and try again.');
   const id = crypto.randomBytes(4).toString('hex');
-  saveTokens(db, id, { access: t.access_token, exp: Date.now() + (t.expires_in ?? 3600) * 1000, refresh: t.refresh_token });
+  const tokens = { access: t.access_token, exp: Date.now() + (t.expires_in ?? 3600) * 1000, refresh: t.refresh_token };
+  saveTokens(db, id, tokens);
   const conn: Conn = { id, provider: p.provider, account: '', folderId: null, folderName: '', intervalMin: 0, enabled: false, lastSync: null, lastResult: null, needsReconnect: false };
   try { conn.account = await adapters[p.provider].who(http(db, cfg, conn), urls(cfg, p.provider)); } catch { /* the name is only a label */ }
   const c = loadCloud(db);
+  // The same account again (to reconnect it, or by accident) renews the connection it already has instead of adding a second copy.
+  const same = conn.account ? c.connections.find((x) => x.provider === conn.provider && x.account.toLowerCase() === conn.account.toLowerCase()) : undefined;
+  if (same) {
+    saveTokens(db, same.id, tokens);
+    saveTokens(db, id, null);
+    same.needsReconnect = false;
+    saveCloud(db, c);
+    return same;
+  }
   c.connections.push(conn);
   saveCloud(db, c);
   return conn;
