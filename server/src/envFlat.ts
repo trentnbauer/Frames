@@ -1,12 +1,13 @@
 /**
  * Settings as plain environment variables.
  *
- * Things that come as a list get numbered, readable names (the first AI source is AI_1_ENDPOINT, AI_1_MODEL, AI_1_KEY; the first sign-in
- * method AUTH_1_TYPE, AUTH_1_CLIENT_ID, AUTH_1_KEY; the first connected cloud folder CLOUD_1_PROVIDER, CLOUD_1_TOKEN), plus AUTH_ENABLED,
- * AUTH_ALLOW (comma separated), AUTH_PUBLIC_URL and CLOUD_GOOGLE_CLIENT_ID / CLOUD_GOOGLE_CLIENT_SECRET (and DROPBOX, ONEDRIVE).
- * Every other setting is written by path, FRAMES_SYSTEM__<setting>__<step>__<step> (FRAMES_OWNER__ for the owner's library), where a
- * character that is not a letter or digit is written _xHH_ so a double underscore only ever means one step down, and a list is steps
- * 0, 1, 2.
+ * Only the server's own settings are written to the file, never anyone's library (the owner's AIs, cloud folders and portfolio stay in
+ * the data volume). Things that come as a list get numbered, readable names (the first AI for everyone is SHARED_AI_1_ENDPOINT,
+ * SHARED_AI_1_MODEL, SHARED_AI_1_KEY; the first sign-in method AUTH_1_TYPE, AUTH_1_CLIENT_ID, AUTH_1_KEY), plus AUTH_ENABLED, AUTH_ALLOW
+ * (comma separated), AUTH_PUBLIC_URL and CLOUD_GOOGLE_CLIENT_ID / CLOUD_GOOGLE_CLIENT_SECRET (and DROPBOX, ONEDRIVE).
+ * Every other server setting is written by path, FRAMES_SYSTEM__<setting>__<step>__<step>, where a character that is not a letter or
+ * digit is written _xHH_ so a double underscore only ever means one step down, and a list is steps 0, 1, 2. (A file from an earlier
+ * version may still carry FRAMES_OWNER__ variables: they are read, not written.)
  *
  * A value that would be read as something other than the text it is (true, 12, null, [], a line break) is wrapped in double quotes.
  */
@@ -67,9 +68,9 @@ export function unflatten(entries: [string[], string][]): unknown {
 type Scope = 'system' | 'owner';
 type ListSpec = { scope: Scope; key: string; inside?: string; prefix: string; secret: { name: string; setting: (id: string) => string }; skip?: string[] };
 const LISTS: ListSpec[] = [
-  { scope: 'owner', key: 'aiSources', prefix: 'AI', secret: { name: 'KEY', setting: (id) => `secret:ai:${id}:key` } },
+  // The AIs the administrator set up for everyone (they live in the server's database, with their keys).
+  { scope: 'system', key: 'aiSources', prefix: 'SHARED_AI', secret: { name: 'KEY', setting: (id) => `secret:ai:${id}:key` } },
   { scope: 'system', key: 'auth', inside: 'providers', prefix: 'AUTH', secret: { name: 'KEY', setting: (id) => `secret:oauth:${id}` } },
-  { scope: 'owner', key: 'cloud', inside: 'connections', prefix: 'CLOUD', secret: { name: 'TOKEN', setting: (id) => `secret:cloud:tok:${id}` }, skip: ['lastSync', 'lastResult'] },
 ];
 const AUTH_SCALARS: [string, string][] = [['enabled', 'AUTH_ENABLED'], ['allow', 'AUTH_ALLOW'], ['publicUrl', 'AUTH_PUBLIC_URL']];
 const CLOUD_SERVICES = ['google', 'dropbox', 'onedrive'];

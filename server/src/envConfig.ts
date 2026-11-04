@@ -7,11 +7,12 @@ import { friendlyEntries, pathEntries, readFriendly, readPathVars } from './envF
  * Settings as an env file. Set Frames up in the app with next to no variables, export everything (secrets included) as one file for
  * the stack, and from then on that file wins: at every start its values are written over what the app had saved.
  *
- * Every setting is its own plain variable (see envFlat.ts for the names: AI_1_ENDPOINT, AI_1_KEY, AUTH_1_CLIENT_ID, AUTH_1_KEY,
- * AUTH_ALLOW, and FRAMES_SYSTEM__ / FRAMES_OWNER__ names by path for the rest). The server's settings (sign-in, the tunnel, the privacy
- * page) and the owner's library (AI sources and their keys, cloud accounts, the portfolio, review settings) are both in it. The older
- * form, FRAMES_CONFIG_SYSTEM and FRAMES_CONFIG_OWNER (a JSON object each), is still read; the plain variables win over it.
- * Other people's libraries are not in the file: their data lives in the data volume.
+ * Every server setting is its own plain variable (see envFlat.ts for the names: SHARED_AI_1_ENDPOINT, SHARED_AI_1_KEY, AUTH_1_CLIENT_ID,
+ * AUTH_1_KEY, AUTH_ALLOW, and FRAMES_SYSTEM__ names by path for the rest): sign-in, the tunnel, the privacy page, the cloud services'
+ * app registrations and the AIs set up for everyone. No one's library is in the file, the owner's included: their AI sources, cloud
+ * folders, portfolio and review settings stay in the data volume. Files from an earlier version may still carry the owner's settings
+ * (FRAMES_OWNER__ variables, or the older FRAMES_CONFIG_SYSTEM and FRAMES_CONFIG_OWNER JSON objects): those are still read.
+ * Other people's libraries are not in the file either.
  *
  * ALLOW_ENV_EXPORT (default true) says whether the file may be downloaded. The file always carries ALLOW_ENV_EXPORT=false, so using
  * it as the stack's env switches the export off again: the secrets cannot be downloaded a second time unless you edit it back.
@@ -122,7 +123,6 @@ export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; dat
     const { entries, rest } = friendlyEntries(scope, settings);
     lines.push('', `# ${title}`, ...entries.map(([k, t]) => envLine(k, t)), ...pathEntries(prefix, rest).map(([k, t]) => envLine(k, t)));
   };
-  section('The settings saved in the app: sign-in, the tunnel and the privacy page', SYSTEM_PREFIX, 'system', snapshot(sys));
-  section('The owner’s library settings: AI sources and keys, cloud accounts, the portfolio and review settings', OWNER_PREFIX, 'owner', snapshot(ownerDb));
+  section('The server’s settings: sign-in, the tunnel, the privacy page, cloud storage providers and the AIs for everyone', SYSTEM_PREFIX, 'system', snapshot(sys));
   return lines.join('\n') + '\n';
 }
