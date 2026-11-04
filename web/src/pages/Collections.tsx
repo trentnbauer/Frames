@@ -150,6 +150,8 @@ export function CollectionDetail() {
   const [fSub, setFSub] = useState<string[]>([]);
   const [fTag, setFTag] = useState<string[]>([]);
   const [pick, setPick] = useState<Set<number>>(new Set());
+  const [over, setOver] = useState<number | null>(null);
+  const [dropNote, setDropNote] = useState('');
   const subjects = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=subject' : null);
   const tagList = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=tag' : null);
   const filt = new URLSearchParams(); if (fSub.length) filt.set('subject', fSub.join(',')); if (fTag.length) filt.set('tag', fTag.join(','));
@@ -186,6 +188,25 @@ export function CollectionDetail() {
   const tooSmall = order.filter((pid) => problemOf(pid)).length;
   const unrated = order.filter((pid) => !rankOf.get(pid)?.mineN).length;
 
+  // Dragging a candidate (or a print) onto a print slot: it takes that place; one already there goes back to the candidates,
+  // or swaps if it came from another slot. The chosen photographs are also put first, in slot order, so the order survives.
+  const dropOn = (slot: number, pid: number) => {
+    if (!target || printed) return;
+    setOver(null); setDropNote('');
+    const bad = problemOf(pid);
+    if (bad) { setDropNote(`${byId.get(pid)?.title ?? 'That photograph'} cannot go in a print: ${bad}`); return; }
+    const chosenNow = [...c.chosenIds];
+    const from = chosenNow.indexOf(pid);
+    let next: number[];
+    if (from >= 0) {
+      next = [...chosenNow];
+      const to = Math.min(slot, next.length - 1);
+      [next[from], next[to]] = [next[to], next[from]];
+    } else if (slot < chosenNow.length) { next = [...chosenNow]; next[slot] = pid; }
+    else if (chosenNow.length < count) next = [...chosenNow, pid];
+    else return;
+    save({ chosenIds: next, order: [...next, ...c.photoIds.filter((x) => !next.includes(x))] });
+  };
   const toggle = (pid: number) => {
     if (!target || printed) return;
     const on = c.chosenIds.includes(pid);
@@ -301,9 +322,12 @@ export function CollectionDetail() {
             const p = byId.get(c.chosenIds[i]);
             return (
               <div key={i}>
-                <div style={{ aspectRatio: '1.414', borderRadius: 8, background: '#161615', position: 'relative', overflow: 'hidden', boxShadow: p ? 'inset 0 0 0 1px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {p ? <img src={imgUrl(p.id, 'preview')} alt={p.title} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain' }} />
-                    : <span style={{ fontSize: 12.5, color: '#6f6c67', textAlign: 'center', padding: '0 16px' }}>Print {i + 1}<br />Choose from the ranking below</span>}
+                <div data-slot={i + 1}
+                  onDragOver={(e) => { if (!printed) { e.preventDefault(); setOver(i); } }} onDragLeave={() => setOver((o) => (o === i ? null : o))}
+                  onDrop={(e) => { e.preventDefault(); const pid = Number(e.dataTransfer.getData('text/plain')); if (pid) dropOn(i, pid); }}
+                  style={{ aspectRatio: '1.414', borderRadius: 8, background: over === i ? '#1e1e1d' : '#161615', position: 'relative', overflow: 'hidden', boxShadow: over === i ? 'inset 0 0 0 2px #efede8' : p ? 'inset 0 0 0 1px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {p ? <img src={imgUrl(p.id, 'preview')} alt={p.title} draggable={!printed} onDragStart={(e) => e.dataTransfer.setData('text/plain', String(p.id))} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain', cursor: printed ? 'default' : 'grab' }} />
+                    : <span style={{ fontSize: 12.5, color: '#6f6c67', textAlign: 'center', padding: '0 16px' }}>Print {i + 1}<br />Drag one here, or choose from the ranking below</span>}
                   <span style={{ position: 'absolute', top: 8, left: 10, font: `italic 400 20px ${serif}`, color: '#efede8', textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>{i + 1}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, color: '#8f8c86', minHeight: 18 }}>
@@ -316,6 +340,7 @@ export function CollectionDetail() {
         </div>
       )}
 
+      {dropNote && <div className="reason" role="status" style={{ marginBottom: 12, fontSize: 13 }}>{dropNote}</div>}
       {c.photoIds.length === 0 && !adding && <div className="empty">This composition is empty. Use Add photos, or Add to composition on a photograph.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: 40 }}>
         <div>
@@ -336,7 +361,7 @@ export function CollectionDetail() {
                 const slot = c.chosenIds.indexOf(pid) + 1;
                 return (
                   <div key={pid}>
-                    <button onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: '#161615', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
+                    <button draggable={!printed && !!target} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: '#161615', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
                       <img src={imgUrl(pid, 'thumb')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
                       <span style={{ position: 'absolute', top: 6, left: 8, font: `500 11px ${mono}`, background: 'rgba(0,0,0,.62)', padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
                       {on && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 11, background: '#efede8', color: '#0d0d0d', fontWeight: 500, padding: '2px 8px', borderRadius: 999 }}>Print {slot}</span>}
