@@ -6,7 +6,7 @@ type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
-  managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
+  dns: { name: string; target: string }[]; managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
 };
 
 const LABEL = { stopped: 'Stopped', starting: 'Connecting…', connected: 'Connected', error: 'Problem' } as const;
@@ -82,18 +82,31 @@ export function TunnelSettings() {
       </div>
 
       <div className="field">
-        <h3>3. Add these in Cloudflare</h3>
+        <h3>3. Point DNS at the tunnel</h3>
         {t.hostnames.length === 0
-          ? <p className="muted">Enter the App URL above (and tick Portfolios, once people have set a portfolio address) to see what to add.</p>
+          ? <p className="muted">Enter the App URL above (and tick Portfolios, once people have set a portfolio address) to see what to do.</p>
           : (
             <>
-              <p>In the tunnel’s <b>Published application routes</b> (also called Public Hostnames), add one route for each address, with the service <span className="mono" style={{ userSelect: 'all' }}>{t.service}</span>:</p>
-              {t.hostnames.map((h) => (
-                <div className="row" key={h.hostname}>
-                  <span className="mono" style={{ userSelect: 'all' }}>{h.hostname}</span>
-                  <span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`} → {t.service}</span>
-                </div>
-              ))}
+              <p>Frames writes the tunnel’s routes itself: each address below is served by this server ({link('https://developers.cloudflare.com/tunnel/', 'a locally managed tunnel')}), and the routes change on their own when you change an address. You do not add anything in the tunnel’s Published application routes.</p>
+              {t.dns.length > 0
+                ? (
+                  <>
+                    <p>The one thing left is a <b>DNS record</b> for each address, in your domain’s DNS ({link('https://dash.cloudflare.com/?to=/:account/:zone/dns/records', 'open DNS')}): type <b>CNAME</b>, proxied (orange cloud), pointing at the tunnel:</p>
+                    {t.dns.map((r) => (
+                      <div className="row" key={r.name}>
+                        <span className="mono" style={{ userSelect: 'all' }}>{r.name}</span>
+                        <span className="faint">CNAME → <span className="mono" style={{ userSelect: 'all' }}>{r.target}</span></span>
+                      </div>
+                    ))}
+                  </>
+                )
+                : (
+                  <>
+                    <p>Save the tunnel token above to see the DNS record each address needs. These are the addresses:</p>
+                    {t.hostnames.map((h) => <div className="row" key={h.hostname}><span className="mono">{h.hostname}</span><span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`}</span></div>)}
+                  </>
+                )}
+              <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>If Cloudflare says your tunnel is <i>remotely managed</i> (routes editable in the dashboard), it ignores the routes Frames writes: add the addresses as Published application routes there, with the service <span className="mono" style={{ userSelect: 'all' }}>{t.service}</span>.</p>
             </>
           )}
       </div>

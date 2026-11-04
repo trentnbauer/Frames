@@ -48,6 +48,7 @@ export function eraseUserData(x: Ctx, id: number) {
   x.tenants.forget(id);
   fs.rmSync(userDir(base, id), { recursive: true, force: true });
   deleteUserRow(x.sys, id); // their sessions and portfolio hostname go with it
+  x.tunnelRefresh?.();
 }
 
 export function registerAdmin(app: FastifyInstance, x: Ctx) {

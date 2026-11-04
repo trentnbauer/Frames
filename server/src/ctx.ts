@@ -32,6 +32,8 @@ export type Ctx = {
   bag: <T>(key: string, init: () => T) => T;
   /** Is anything protecting this instance right now (a password or OAuth sign-in)? */
   isProtected: () => boolean;
+  /** Set by the tunnel: tell it the addresses may have changed, so it rewrites its routes and restarts if they did. */
+  tunnelRefresh?: () => void;
   /** This server's public address as the visitor sees it (used for OAuth return addresses). */
   baseUrl: (req: any) => string;
 };

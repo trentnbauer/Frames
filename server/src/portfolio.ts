@@ -215,6 +215,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     // The system database maps each hostname to its owner, so a visitor reaches the right library without signing in.
     x.sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(x.tenant().user.id);
     if (n.host) x.sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(n.host.toLowerCase(), x.tenant().user.id);
+    x.tunnelRefresh?.(); // the tunnel's routes follow the portfolio addresses
     return dto(n);
   });
 

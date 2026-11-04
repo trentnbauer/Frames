@@ -163,6 +163,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     for (const p of cur.providers) if (!next.providers.some((n) => n.id === p.id)) setSecret(db, `oauth:${p.id}`, ''); // a removed provider's secret goes with it
     saveAuth(db, next);
     if (!next.enabled && cur.enabled) endAllSessions(db); // switching off ends every sign-in
+    x.tunnelRefresh?.(); // the tunnel's routes follow the public address
     return dto(req, next);
   });
 

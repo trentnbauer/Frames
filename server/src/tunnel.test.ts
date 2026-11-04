@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createTunnelRunner } from './tunnel.js';
+import { buildIngress, createTunnelRunner, tunnelIdOf } from './tunnel.js';
 import { seedTunnelFromEnv } from './tunnelEnv.js';
 import { resolveUser } from './users.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
@@ -15,7 +15,7 @@ function fakeBin(dir: string, kind: 'ok' | 'die'): string {
   fs.writeFileSync(f, `#!/usr/bin/env node
 const fs = require('node:fs'), http = require('node:http');
 const argv = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(path.join(dir, 'runs.log'))}, JSON.stringify({ argv, tokenEnv: process.env.TUNNEL_TOKEN, pid: process.pid }) + '\\n');
+fs.appendFileSync(${JSON.stringify(path.join(dir, 'runs.log'))}, JSON.stringify({ argv, tokenEnv: process.env.TUNNEL_TOKEN, pid: process.pid, config: argv.includes('--config') ? fs.readFileSync(argv[argv.indexOf('--config') + 1], 'utf8') : null }) + '\\n');
 console.error('connecting with token ' + process.env.TUNNEL_TOKEN + ' to the edge');
 if (${JSON.stringify(kind)} === 'die') { console.error('Failed to start'); process.exit(1); }
 const m = argv[argv.indexOf('--metrics') + 1].split(':');
@@ -207,3 +207,54 @@ describe('pre-filling from the environment', () => {
     expect((await A.get('/api/portfolio')).body.config.host).toBe('gallery.example.com');
   });
 });
+
+describe('the routes are written by Frames', () => {
+  // A token in the real shape: base64 JSON holding the account, the tunnel's id and a secret. Built here, not written out in full.
+  const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0';
+  const REAL = Buffer.from(JSON.stringify({ a: 'acct', t: ID, s: 'secret' })).toString('base64');
+  let e: Env, A: ReturnType<typeof api>;
+  const runs = () => (fs.existsSync(path.join(e.tmp, 'runs.log')) ? fs.readFileSync(path.join(e.tmp, 'runs.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+  beforeAll(() => { e = makeEnv(); A = api(e); process.env.CLOUDFLARED_BIN = fakeBin(e.tmp, 'ok'); });
+  afterAll(async () => { await e.app.close(); delete process.env.CLOUDFLARED_BIN; cleanup(e); });
+
+  it('hands cloudflared a config with one route per address, all to this server, and a 404 for the rest', async () => {
+    await A.put('/api/tunnel', { appUrl: 'https://frames.example.com', portfolios: true, tunnelToken: REAL });
+    await A.put('/api/portfolio', { host: 'gallery.example.com' });
+    await A.post('/api/tunnel/start');
+    expect(await until(() => runs().length > 0)).toBe(true);
+    const last = runs().at(-1);
+    expect(last.argv).toEqual(expect.arrayContaining(['--config']));
+    expect(last.config).toBe('ingress:\n  - hostname: frames.example.com\n    service: http://localhost:3000\n  - hostname: gallery.example.com\n    service: http://localhost:3000\n  - service: http_status:404\n');
+    expect(last.config).not.toContain(REAL); // the token is only ever in the environment
+    expect(JSON.stringify(last.argv)).not.toContain(REAL);
+    expect(last.tokenEnv).toBe(REAL);
+  });
+  it('restarts with the new routes when an address changes anywhere in Settings, and not when nothing changed', async () => {
+    const before = runs().length;
+    await A.put('/api/portfolio', { photographerName: 'Not an address' }); // nothing about the routes changed
+    await new Promise((r) => setTimeout(r, 600));
+    expect(runs().length).toBe(before);
+    await A.put('/api/portfolio', { host: 'gallery2.example.com' });
+    expect(await until(() => runs().length === before + 1)).toBe(true);
+    expect(runs().at(-1).config).toContain('hostname: gallery2.example.com');
+    expect(runs().at(-1).config).not.toContain('hostname: gallery.example.com');
+    await A.put('/api/auth/config', { publicUrl: 'https://app.example.org' }); // the public address, set under Access
+    expect(await until(() => runs().length === before + 2)).toBe(true);
+    expect(runs().at(-1).config).toContain('hostname: app.example.org');
+    await A.put('/api/tunnel', { portfolios: false });
+    expect(await until(() => runs().length === before + 3)).toBe(true);
+    expect(runs().at(-1).config).not.toContain('gallery2.example.com');
+  });
+  it('with nothing to serve, the config is only the final 404 rule', () => {
+    expect(buildIngress((makeEnvSys()))).toBe('ingress:\n  - service: http_status:404\n');
+  });
+  it('tells the page the DNS record each address needs, from the tunnel id inside the token', async () => {
+    const t = (await A.get('/api/tunnel')).body;
+    expect(t.dns).toEqual([{ name: 'app.example.org', target: `${ID}.cfargotunnel.com` }]);
+    expect(tunnelIdOf(REAL)).toBe(ID);
+    for (const bad of ['', 'not base64 json', Buffer.from('{"t":"nope"}').toString('base64'), Buffer.from('{"t":"../../etc"}').toString('base64')]) expect(tunnelIdOf(bad), bad).toBe('');
+    await A.put('/api/tunnel', { clearTunnelToken: true });
+    expect((await A.get('/api/tunnel')).body.dns).toEqual([]);
+  });
+});
+function makeEnvSys() { const x = makeEnv(); const sys = (x.app as any).frames.sys; setImmediate(() => { x.app.close(); cleanup(x); }); return sys; }
