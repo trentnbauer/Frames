@@ -20,7 +20,7 @@ export function MoveToShoot({ ids, except, onDone, up = false }: { ids: number[]
     <span style={{ position: 'relative' }}>
       <button className="pill" disabled={ids.length === 0} aria-haspopup="menu" aria-expanded={open} onClick={() => { if (!open) shoots.reload(); setOpen(!open); }}>Move to…</button>
       {open && (
-        <div className="menu" role="menu" aria-label="Move to a photoshoot" style={up ? { bottom: '110%', top: 'auto', minWidth: 260, maxHeight: 320, overflow: 'auto' } : { minWidth: 260 }}>
+        <div className="menu" role="menu" aria-label="Move to a photoshoot" style={up ? { bottom: '110%', top: 'auto', minWidth: 260, maxHeight: 'min(320px, 45vh)', overflow: 'auto' } : { minWidth: 260 }}>
           <form onSubmit={(e) => { e.preventDefault(); create(); }} style={{ display: 'flex', gap: 6, padding: 6 }}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New photoshoot name" aria-label="New photoshoot name" />
             <button className="pill">Create</button>

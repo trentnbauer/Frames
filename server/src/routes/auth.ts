@@ -3,6 +3,7 @@ import { envConfigLoaded } from '../envConfig.js';
 import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
+import { getSetting } from '../db.js';
 import { bindOwner, identitiesOf, linkIdentity, resolveUser, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -117,7 +118,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     return {
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
-      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: cfg.allowSignups !== false,
+      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: cfg.allowSignups !== false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
     };
   });
 
