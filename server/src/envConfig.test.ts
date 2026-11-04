@@ -23,7 +23,10 @@ const sysOf = (e: Env) => (e.app as any).frames.sys;
 const SECRET = 'sk-' + Buffer.from('export-test').toString('hex');
 const envs: Env[] = [];
 const mk = (extra = {}) => { const e = makeEnv(extra); envs.push(e); return e; };
-afterEach(() => { for (const e of envs.splice(0)) { e.app.close(); cleanup(e); } delete process.env[SYSTEM_VAR]; delete process.env[OWNER_VAR]; });
+const used: string[] = [];
+/** What loading the file as the stack's env does: every setting variable becomes part of the environment. */
+const useVars = (vars: Record<string, string>) => { for (const [k, v] of Object.entries(vars)) if (k !== 'ALLOW_ENV_EXPORT') { process.env[k] = v; used.push(k); } };
+afterEach(() => { for (const e of envs.splice(0)) { e.app.close(); cleanup(e); } for (const k of used.splice(0)) delete process.env[k]; delete process.env[SYSTEM_VAR]; delete process.env[OWNER_VAR]; });
 
 describe('which settings travel', () => {
   it('everything about how Frames is set up, secrets included, and nothing about what is happening now', () => {
@@ -43,24 +46,30 @@ describe('which settings travel', () => {
 });
 
 describe('the env file', () => {
-  it('switches its own export off, says how to use it, and carries the settings as JSON', () => {
+  it('switches its own export off, says how to use it, and carries each setting as its own plain variable', () => {
     const e = mk();
+    setSetting(e.db, 'aiSources', [{ id: 'a', type: 'openai', name: 'Main', endpoint: 'https://api.example.test', model: 'm1', embedModel: '', ack: true }]);
     setSetting(e.db, 'secret:ai:a:key', SECRET);
     const f = buildEnvFile(sysOf(e), e.db, { version: '1.2.3', date: new Date('2026-11-04T00:00:00Z'), env: {} });
     expect(f).toContain('# Frames 1.2.3 settings, exported 2026-11-04.');
     expect(f).toMatch(/^ALLOW_ENV_EXPORT=false$/m);
     const v = parseEnv(f);
     expect(v.ALLOW_ENV_EXPORT).toBe('false');
-    expect(JSON.parse(v[OWNER_VAR])['secret:ai:a:key']).toBe(SECRET);
-    expect(JSON.parse(v[SYSTEM_VAR])).toBeTypeOf('object');
+    expect(v).toMatchObject({ AI_1_ID: 'a', AI_1_TYPE: 'openai', AI_1_ENDPOINT: 'https://api.example.test', AI_1_MODEL: 'm1', AI_1_ACK: 'true', AI_1_KEY: SECRET });
+    expect(f).not.toContain('FRAMES_CONFIG_'); // no JSON blobs
+    expect(f).not.toContain('{"');
     expect(f.endsWith('\n')).toBe(true);
   });
   it('carries over the plain variables the container was started with, and only those', () => {
     const e = mk();
     const f = buildEnvFile(sysOf(e), e.db, { env: { AUTH_DISABLE: 'true', AUTH_PASSWORD: 'pass word', APP_HOSTNAME: 'frames.example.com', PATH: '/usr/bin', HOME: '/root', EMPTY: '' } });
     const v = parseEnv(f);
-    expect(v).toMatchObject({ AUTH_DISABLE: 'true', AUTH_PASSWORD: 'pass word', APP_HOSTNAME: 'frames.example.com' });
+    expect(v).toMatchObject({ AUTH_DISABLE: 'true', AUTH_PASSWORD: 'pass word' });
     expect('PATH' in v || 'HOME' in v || 'EMPTY' in v).toBe(false);
+    // The Cloudflare API variables are the environment setup's: left-overs when the tunnel is managed from Settings, so not carried.
+    expect('APP_HOSTNAME' in v).toBe(false);
+    setSetting(sysOf(e), 'tunnel', { env: true });
+    expect(parseEnv(buildEnvFile(sysOf(e), e.db, { env: { APP_HOSTNAME: 'frames.example.com' } })).APP_HOSTNAME).toBe('frames.example.com');
   });
   it('is quoted so Docker Compose reads back exactly what was written, whatever the values hold', () => {
     const e = mk();
@@ -101,6 +110,62 @@ describe('the env file wins', () => {
   });
 });
 
+describe('readable names', () => {
+  it('numbers every AI source, sign-in method and cloud folder, with its key beside it, and reads them back exactly', () => {
+    const a = mk();
+    setSetting(a.db, 'aiSources', [
+      { id: 'one', type: 'ollama', name: 'Home', endpoint: 'http://ollama:11434', model: 'llava', embedModel: 'nomic', ack: false },
+      { id: 'two', type: 'openai', name: '12345', endpoint: 'https://api.example.test', model: 'true', embedModel: '', ack: true },
+    ]);
+    setSetting(a.db, 'secret:ai:two:key', SECRET);
+    setSetting(a.db, 'cloud', { clients: {}, connections: [{ id: 'c1', provider: 'google', account: 'me@x.test', folderId: 'f', folderName: 'Photos', intervalMin: 60, enabled: true, lastSync: 'now', lastResult: { downloaded: 3 }, needsReconnect: false }] });
+    setSetting(a.db, 'secret:cloud:tok:c1', '{"access":"a","exp":1,"refresh":"r"}');
+    setSetting(a.db, 'portfolio', { enabled: true, host: 'gallery.example.com', tagline: 'Line one\nline two', social: { instagram: 'me', twitter: '', behance: '' } });
+    const s = sysOf(a);
+    setSetting(s, 'auth', { enabled: true, allow: ['me@x.test', '@family.test'], publicUrl: 'https://frames.example.com', testedBy: { provider: 'g1', sub: 's', email: 'me@x.test', emailVerified: true, name: 'Me' },
+      providers: [{ id: 'g1', type: 'google', name: 'Google', clientId: 'cid-1' }, { id: 'cf', type: 'cloudflare', name: 'Cloudflare Access', clientId: '', teamDomain: 'team.example.test', aud: 'a'.repeat(64) }] });
+    setSetting(s, 'secret:oauth:g1', 'oauth-secret-1');
+    setSetting(s, 'cloudClients', { google: { clientId: 'goog-id' } });
+    setSetting(s, 'secret:cloud:client:google', 'goog-secret');
+    const file = buildEnvFile(s, a.db, { env: {} });
+    const v = parseEnv(file);
+    expect(v).toMatchObject({
+      AI_1_ID: 'one', AI_1_ENDPOINT: 'http://ollama:11434', AI_1_EMBED_MODEL: 'nomic', AI_1_ACK: 'false',
+      AI_2_NAME: '"12345"', AI_2_MODEL: '"true"', AI_2_KEY: SECRET, // text that looks like a number or a boolean is quoted so it stays text
+      AUTH_ENABLED: 'true', AUTH_ALLOW: 'me@x.test,@family.test', AUTH_PUBLIC_URL: 'https://frames.example.com',
+      AUTH_1_TYPE: 'google', AUTH_1_CLIENT_ID: 'cid-1', AUTH_1_KEY: 'oauth-secret-1', AUTH_2_TYPE: 'cloudflare', AUTH_2_TEAM_DOMAIN: 'team.example.test',
+      CLOUD_1_PROVIDER: 'google', CLOUD_1_FOLDER_NAME: 'Photos', CLOUD_1_TOKEN: '{"access":"a","exp":1,"refresh":"r"}',
+      CLOUD_GOOGLE_CLIENT_ID: 'goog-id', CLOUD_GOOGLE_CLIENT_SECRET: 'goog-secret',
+    });
+    expect('CLOUD_1_LAST_SYNC' in v).toBe(false); // what is happening now is not settings
+    expect(v.FRAMES_OWNER__portfolio__tagline).toBe('"Line one\\nline two"'); // the rest is by path, a line break kept as text
+    expect(v.FRAMES_OWNER__portfolio__social__instagram).toBe('me');
+    expect(file.split('\n').some((l) => l.startsWith('FRAMES_CONFIG'))).toBe(false); // no JSON blobs
+    // Read it all back into a fresh instance.
+    const b = mk();
+    const out = applyEnvConfig(sysOf(b), b.db, v);
+    expect(out.problems).toEqual([]);
+    const want = snapshot(a.db), got = snapshot(b.db);
+    for (const k of ['aiSources', 'secret:ai:two:key', 'secret:cloud:tok:c1']) expect(got[k], k).toEqual(want[k]);
+    expect((got.cloud as any).connections).toEqual([{ id: 'c1', provider: 'google', account: 'me@x.test', folderId: 'f', folderName: 'Photos', intervalMin: 60, enabled: true, needsReconnect: false }]);
+    expect(got.portfolio).toEqual(want.portfolio);
+    const sw = snapshot(sysOf(a)), sg = snapshot(sysOf(b));
+    for (const k of ['auth', 'secret:oauth:g1', 'cloudClients', 'secret:cloud:client:google']) expect(sg[k], k).toEqual(sw[k]);
+  });
+  it('can be written by hand: a few variables are enough, and a plain list for who is allowed in', () => {
+    const b = mk();
+    const out = applyEnvConfig(sysOf(b), b.db, { AI_1_ID: 'mine', AI_1_TYPE: 'ollama', AI_1_NAME: 'Mine', AI_1_ENDPOINT: 'http://ollama:11434', AI_1_MODEL: 'llava', AI_1_EMBED_MODEL: '', AI_1_ACK: 'true', AUTH_ALLOW: 'a@x.test, b@x.test' });
+    expect(out.problems).toEqual([]);
+    expect(snapshot(b.db).aiSources).toEqual([{ id: 'mine', type: 'ollama', name: 'Mine', endpoint: 'http://ollama:11434', model: 'llava', embedModel: '', ack: true }]);
+    expect((snapshot(sysOf(b)).auth as any).allow).toEqual(['a@x.test', 'b@x.test']);
+  });
+  it('still reads the older JSON variables, and the plain ones win over them', () => {
+    const b = mk();
+    applyEnvConfig(sysOf(b), b.db, { [OWNER_VAR]: JSON.stringify({ portfolio: { tagline: 'old', gear: 'camera' } }), FRAMES_OWNER__portfolio__tagline: 'new' });
+    expect(snapshot(b.db).portfolio).toEqual({ tagline: 'new' }); // a setting written by path replaces the old whole
+  });
+});
+
 describe('export, import, and the block', () => {
   it('moves a configured app (AI sources, keys, the tunnel token, the privacy page) to a fresh one, and then refuses a second export', async () => {
     // 1. Set up with no variables at all, through the app.
@@ -118,7 +183,7 @@ describe('export, import, and the block', () => {
     expect(text).toContain(SECRET);
     // 3. Use the file as the stack's env on a fresh instance: its values win, and export is now off.
     const vars = parseEnv(text);
-    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+    useVars(vars);
     const b = mk({ allowEnvExport: vars.ALLOW_ENV_EXPORT !== 'false' }); const B = api(b);
     const list = (await B.get('/api/ai/sources')).body;
     expect(list.sources).toHaveLength(1);
@@ -137,7 +202,7 @@ describe('export, import, and the block', () => {
     const a = mk(); const A = api(a);
     await A.put('/api/admin/privacy', { operator: 'From the file' });
     const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
-    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+    useVars(vars);
     const b = mk(); const B = api(b);
     await B.put('/api/admin/privacy', { operator: 'Changed in the app' });
     expect(String((await B.get('/privacy')).body)).toContain('Changed in the app');
@@ -168,7 +233,7 @@ describe('several AIs in the export', () => {
     expect(text).toContain(KEYS.gemini);
     expect(text).not.toContain(KEYS.openai);
     const vars = parseEnv(text);
-    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+    useVars(vars);
 
     const b = mk(); const B = api(b);
     const got = (await B.get('/api/ai/sources')).body;
@@ -189,7 +254,7 @@ describe('several AIs in the export', () => {
     const a = mk(); const A = api(a);
     await A.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
     const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
-    process.env[SYSTEM_VAR] = vars[SYSTEM_VAR]; process.env[OWNER_VAR] = vars[OWNER_VAR];
+    useVars(vars);
     const b = mk(); const B = api(b);
     await B.post('/api/ai/sources', { type: 'ollama', endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });
     expect((await B.get('/api/ai/sources')).body.sources.map((x: any) => x.name)).toEqual(['From the file', 'Added later in the app']);

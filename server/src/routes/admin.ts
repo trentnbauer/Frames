@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import type { DB } from '../db.js';
-import { buildEnvFile, OWNER_VAR, snapshot, SYSTEM_VAR } from '../envConfig.js';
+import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, updateUser, validFolder, type User } from '../users.js';
 
@@ -71,7 +71,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   // true, and the file it makes sets that to false, so once it is in use the secrets cannot be downloaded again.
   const envStatus = () => ({
     allowed: x.cfg.allowEnvExport !== false,
-    loaded: { system: !!(process.env[SYSTEM_VAR] ?? '').trim(), owner: !!(process.env[OWNER_VAR] ?? '').trim() },
+    loaded: envConfigLoaded(),
     settings: { system: Object.keys(snapshot(sys)).length, owner: Object.keys(snapshot(x.tenants.owner().db)).length },
     version: x.cfg.version ?? 'dev',
   });
