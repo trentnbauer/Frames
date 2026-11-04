@@ -188,6 +188,8 @@ export function CollectionDetail() {
   const printed = !!c.printedAt;
   const reload = () => { ranking.reload(); insights.reload(); };
   const save = async (patch: Record<string, unknown>) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: patch })); reload(); };
+  // Takes a photograph out of this composition (it stays in the library, and any print slot it held is freed).
+  const removeFromComp = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' })); reload(); };
   const addPhoto = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' })); reload(); };
   const req = target ? requiredPx(target) : null;
   const chosen = c.chosenIds.map((pid) => byId.get(pid)).filter((p): p is PhotoLite => !!p);
@@ -371,12 +373,13 @@ export function CollectionDetail() {
                 const prob = problemOf(pid); const on = c.chosenIds.includes(pid);
                 const slot = c.chosenIds.indexOf(pid) + 1;
                 return (
-                  <div key={pid}>
+                  <div key={pid} style={{ position: 'relative' }}>
                     <button draggable={!printed && !!target} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: '#161615', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
                       <img src={imgUrl(pid, 'thumb')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
                       <span style={{ position: 'absolute', top: 6, left: 8, font: `500 11px ${mono}`, background: 'rgba(0,0,0,.62)', padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
-                      {on && <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 11, background: '#efede8', color: '#0d0d0d', fontWeight: 500, padding: '2px 8px', borderRadius: 999 }}>Print {slot}</span>}
+                      {on && <span style={{ position: 'absolute', top: 6, right: printed ? 8 : 36, fontSize: 11, background: '#efede8', color: '#0d0d0d', fontWeight: 500, padding: '2px 8px', borderRadius: 999 }}>Print {slot}</span>}
                     </button>
+                    {!printed && <button aria-label={`Remove ${p.title} from this composition`} title="Remove from this composition" onClick={() => removeFromComp(pid)} style={{ position: 'absolute', top: 5, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,.62)', color: '#efede8', fontSize: 12, lineHeight: '24px', textAlign: 'center' }}>✕</button>}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
                       <span style={{ font: `400 22px/1 ${serif}` }}>{fmt(r?.score ?? null)}</span>
                       <span style={{ font: `400 11.5px ${mono}`, color: '#8f8c86' }}>you {fmt(r?.mine ?? null)} · guests {fmt(r?.guest ?? null)} ({r?.guestN ?? 0})</span>
