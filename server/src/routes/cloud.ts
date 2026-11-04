@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { beginConnect, CloudError, clientSecret, finishConnect, isProvider, listFolders, loadCloud, PROVIDERS, progressOf, removeConnection, saveCloud, setClientSecret, syncConnection, validFolderId } from '../cloud.js';
+import { beginConnect, CloudError, clientOf, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
+import { setSecret } from '../ai.js';
 import type { Ctx, Row } from '../ctx.js';
 
 /** Settings, Cloud sync: connect Google Drive / Dropbox / OneDrive, pick a folder, and copy its photographs in. */
@@ -11,7 +12,8 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   const dto = () => {
     const c = loadCloud(db);
     return {
-      providers: PROVIDERS.map((p) => ({ ...p, clientId: c.clients[p.id]?.clientId ?? '', hasSecret: !!clientSecret(db, p.id) })),
+      // Everyone sees which services can be connected; only an administrator sees (and edits) the app registration behind them.
+      providers: PROVIDERS.map((p) => { const k = clientOf(cfg, db, p.id); return { ...p, configured: !!k.clientId, ...(x.tenant().user.role === 'admin' ? { clientId: k.clientId, hasSecret: !!k.secret } : {}) }; }),
       connections: c.connections, // holds no tokens: those are kept apart as secrets
       progress: { ...progressOf(cfg) },
     };
@@ -23,18 +25,18 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     const { provider } = req.params as Row;
     if (!isProvider(provider)) return x.notFound(rep);
     const b = (req.body ?? {}) as Row;
-    const c = loadCloud(db);
+    const c = loadClients(x.sys);
     if (typeof b.clientId === 'string') {
       const id = b.clientId.trim();
       if (id.length > 300) return rep.code(400).send({ error: 'That client ID is too long.' });
-      c.clients[provider] = { clientId: id };
+      c[provider] = { clientId: id };
     }
     if (typeof b.clientSecret === 'string' && b.clientSecret.trim()) {
       if (b.clientSecret.length > 500) return rep.code(400).send({ error: 'That secret is too long.' });
-      setClientSecret(db, provider, b.clientSecret.trim());
+      setSecret(x.sys, `cloud:client:${provider}`, b.clientSecret.trim());
     }
-    if (b.clearSecret === true) setClientSecret(db, provider, '');
-    saveCloud(db, c);
+    if (b.clearSecret === true) setSecret(x.sys, `cloud:client:${provider}`, '');
+    saveClients(x.sys, c);
     return dto();
   });
 

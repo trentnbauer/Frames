@@ -4,7 +4,7 @@ import { fmtDate } from '../data';
 
 type Result = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number };
 type Conn = { id: string; provider: string; account: string; folderId: string | null; folderName: string; intervalMin: number; enabled: boolean; lastSync: string | null; lastResult: Result | null; needsReconnect: boolean };
-type Prov = { id: string; label: string; console: string; clientId: string; hasSecret: boolean };
+type Prov = { id: string; label: string; console: string; configured: boolean; clientId?: string; hasSecret?: boolean };
 type Data = { redirectUri: string; providers: Prov[]; connections: Conn[]; progress: { running: boolean; connId: string | null; downloaded: number; current: string } };
 
 const ROOT: Record<string, string> = { google: 'root', dropbox: '', onedrive: 'root' };
@@ -22,7 +22,7 @@ export function CloudSettings() {
   const running = d.data?.progress.running;
   useEffect(() => { if (!running) return; const t = setInterval(d.reload, 1500); return () => clearInterval(t); }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data) return <p className="empty">Loading…</p>;
-  const { providers, connections, progress, redirectUri } = d.data;
+  const { providers, connections, progress } = d.data;
   const act = async (fn: () => Promise<unknown>, ok?: string) => { setMsg(null); try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } d.reload(); };
 
   return (
@@ -32,15 +32,19 @@ export function CloudSettings() {
 
       <div className="field">
         <h3>Your connected folders</h3>
-        {connections.length === 0 && <p className="muted">Nothing connected yet. Set up a service below, then connect.</p>}
+        {connections.length === 0 && <p className="muted">Nothing connected yet. Connect an account below.</p>}
         {connections.map((c) => <Connection key={c.id} c={c} p={providers.find((p) => p.id === c.provider)!} progress={progress} act={act} />)}
       </div>
 
       <div className="field">
-        <h3>Services</h3>
-        <p>Frames has no shared account with these services, so you register a small app of your own with each one (free, and only you can use it). Use this return address when asked:</p>
-        <p><span className="mono" style={{ userSelect: 'all' }}>{redirectUri}</span></p>
-        {providers.map((p) => <Service key={p.id} p={p} act={act} />)}
+        <h3>Connect an account</h3>
+        <p>Sign in to your own cloud account. The services are set up once for the whole server by an administrator, under Settings, Cloud services.</p>
+        {providers.map((p) => (
+          <div className="row" key={p.id}>
+            <span><b>{p.label}</b> <span className="faint">{p.configured ? '' : 'not set up on this server yet: ask an administrator'}</span></span>
+            <button className="pill primary" disabled={!p.configured} onClick={() => act(async () => { const r = await api<{ url: string }>(`/cloud/connect/${p.id}`, { body: {} }); window.location.assign(r.url); })}>Connect an account</button>
+          </div>
+        ))}
       </div>
     </>
   );
@@ -56,13 +60,13 @@ function Steps({ p }: { p: Prov }) {
         <li>In {link(p.console, 'Google Cloud console')}, make or pick a project. Under <b>APIs &amp; Services, Library</b>, enable the <b>Google Drive API</b>.</li>
         <li><b>OAuth consent screen</b> (Google Auth platform): user type <b>External</b>, add yourself as a <b>test user</b>. Add the scope <span className="mono">.../auth/drive.readonly</span> (“See and download all your Google Drive files”). While the app is in <i>Testing</i>, Google ends the connection every 7 days; press <b>Publish app</b> to avoid that (you can ignore the unverified-app warning for your own app).</li>
         <li><b>Credentials, Create credentials, OAuth client ID</b>, application type <b>Web application</b> (not a service account, not an API key). Under <b>Authorised redirect URIs</b> add the return address above exactly.</li>
-        <li>Copy the <b>client ID</b> and <b>client secret</b> into the boxes above.</li>
+        <li>Copy the <b>client ID</b> and <b>client secret</b> into the boxes above, then press Save.</li>
       </>}
       {p.id === 'dropbox' && <>
         <li>In the {link(p.console, 'Dropbox App Console')} press <b>Create app</b>, choose <b>Scoped access</b> and <b>Full Dropbox</b> (or <i>App folder</i> to limit it to one folder), and name it.</li>
         <li>On the <b>Permissions</b> tab tick <span className="mono">files.metadata.read</span>, <span className="mono">files.content.read</span> and <span className="mono">account_info.read</span>, then press <b>Submit</b>. Nothing that writes is needed.</li>
         <li>On the <b>Settings</b> tab add the return address above under <b>Redirect URIs</b>. Leave <i>Allow public clients (Implicit Grant &amp; PKCE)</i> as it is.</li>
-        <li>Copy the <b>App key</b> (the client ID) and <b>App secret</b> into the boxes above.</li>
+        <li>Copy the <b>App key</b> (the client ID) and <b>App secret</b> into the boxes above, then press Save.</li>
       </>}
       {p.id === 'onedrive' && <>
         <li>In {link(p.console, 'Microsoft Entra, App registrations')} press <b>New registration</b>. Supported account types: <b>Personal Microsoft accounts only</b> for OneDrive, or the option that includes personal accounts if you also use work accounts.</li>
@@ -74,21 +78,34 @@ function Steps({ p }: { p: Prov }) {
   );
 }
 
+/** Administrators: the app registration for each service, once for the whole server. People then only connect their own account. */
+export function CloudServices() {
+  const d = useApi<Data>('/cloud');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  if (!d.data) return <p className="empty">Loading…</p>;
+  const act = async (fn: () => Promise<unknown>, ok?: string) => { setMsg(null); try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } d.reload(); };
+  return (
+    <>
+      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
+      <p>Frames has no shared account with these services, so you register a small app of your own with each one (free). It is set up here once for the whole server; every person then signs in to their own account under Settings, Cloud sync. Use this return address when asked:</p>
+      <p><span className="mono" style={{ userSelect: 'all' }}>{d.data.redirectUri}</span></p>
+      {d.data.providers.map((p) => <Service key={p.id} p={p} act={act} />)}
+    </>
+  );
+}
+
 function Service({ p, act }: { p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
-  const [id, setId] = useState(p.clientId);
+  const [id, setId] = useState(p.clientId ?? '');
   const [secret, setSecret] = useState('');
   return (
     <details className="row" style={{ display: 'block', padding: '10px 0' }}>
-      <summary style={{ cursor: 'pointer' }}><b>{p.label}</b> <span className="faint">{p.clientId ? 'ready to connect' : 'not set up'}</span></summary>
+      <summary style={{ cursor: 'pointer' }}><b>{p.label}</b> <span className="faint">{p.configured ? 'ready: people can connect' : 'not set up'}</span></summary>
       <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520, marginTop: 10 }}>
         <label>Client ID <input aria-label={`${p.label} client ID`} value={id} onChange={(e) => setId(e.target.value)} /></label>
         <label>Client secret <input type="password" autoComplete="off" aria-label={`${p.label} client secret`} value={secret} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} onChange={(e) => setSecret(e.target.value)} /></label>
         <Steps p={p} />
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The secret is kept on this server only, never shown again and left out of backups.</p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="pill" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save</button>
-          <button className="pill primary" disabled={!p.clientId} onClick={() => act(async () => { const r = await api<{ url: string }>(`/cloud/connect/${p.id}`, { body: {} }); window.location.assign(r.url); })}>Connect an account</button>
-        </div>
+        <div><button className="pill" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save</button></div>
       </div>
     </details>
   );
