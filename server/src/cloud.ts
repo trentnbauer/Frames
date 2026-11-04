@@ -6,7 +6,9 @@ import { pipeline } from 'node:stream/promises';
 import { getSecret, setSecret } from './ai.js';
 import type { AppCfg } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
-import { IMAGE_EXT } from './ingest.js';
+import { hashFile, IMAGE_EXT } from './ingest.js';
+import sharp from 'sharp';
+import type { Readable as ReadableStream } from 'node:stream';
 
 /**
  * Cloud sync: copy photographs from a Google Drive, Dropbox or OneDrive folder into Frames' own `cloud` folder, which is
@@ -28,8 +30,12 @@ export type Conn = {
   id: string; provider: ProviderId; account: string;
   folderId: string | null; folderName: string; intervalMin: number; enabled: boolean;
   lastSync: string | null; lastResult: SyncResult | null; needsReconnect: boolean;
+  /** Keep only a smaller copy of each photograph in Frames (JPEG, quality 80, the same pixels). The original stays in the cloud and is fetched when it is exported. */
+  shrink?: boolean;
 };
-export type SyncResult = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number };
+export type SyncResult = { downloaded: number; skipped: number; changedRemotely: number; errors: string[]; error: string | null; bytes: number;
+  /** Photographs made smaller this time, and the space that freed. */
+  shrunk?: number; freed?: number };
 type CloudCfg = { clients: Partial<Record<ProviderId, { clientId: string }>>; connections: Conn[] };
 
 export const loadCloud = (db: DB): CloudCfg => ({ clients: {}, connections: [], ...getSetting<Partial<CloudCfg>>(db, 'cloud', {}) });
@@ -249,6 +255,64 @@ export function safeName(n: string): string {
   return s || '_';
 }
 
+// ---------- smaller copies ----------
+const SHRINKABLE = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff']);
+export const SHRINK_QUALITY = 80;
+
+/**
+ * A smaller copy of a photograph: JPEG at quality 80 with the same pixels and the camera data kept. Not done when it would save little
+ * (an already small file), or for RAW and other files that cannot be shown as a JPEG without losing what makes them RAW.
+ */
+async function shrinkFile(file: string): Promise<{ file: string; before: number; after: number; w: number; h: number } | null> {
+  const ext = path.extname(file).toLowerCase();
+  if (!SHRINKABLE.has(ext)) return null;
+  const before = fs.statSync(file).size;
+  const tmp = `${file}.shrinking`; // not an image extension, so a scan never sees it
+  try {
+    const meta = await sharp(file, { failOn: 'none' }).metadata();
+    let img = sharp(file, { failOn: 'none' });
+    if (ext === '.png') img = img.flatten({ background: '#ffffff' });
+    await img.jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
+    const after = fs.statSync(tmp).size;
+    if (after >= before * 0.9) { fs.rmSync(tmp, { force: true }); return null; }
+    const out = ext === '.jpg' || ext === '.jpeg' ? file : file.slice(0, -ext.length) + '.jpg';
+    if (out !== file) fs.rmSync(file, { force: true });
+    fs.renameSync(tmp, out);
+    return { file: out, before, after, w: meta.width ?? 0, h: meta.height ?? 0 };
+  } catch { fs.rmSync(tmp, { force: true }); return null; }
+}
+
+/** Make a photograph that Frames already knows about smaller, and keep its record in step with the new file. */
+async function shrinkKnown(db: DB, file: string): Promise<{ file: string; before: number; after: number } | null> {
+  const s = await shrinkFile(file);
+  if (!s) return null;
+  const hash = await hashFile(s.file);
+  db.prepare("UPDATE photos SET path = ?, file = ?, size_bytes = ?, mtime = ?, hash = ?, file_type = CASE WHEN file_type IN ('PNG', 'TIF', 'TIFF') THEN 'JPG' ELSE file_type END WHERE path = ?")
+    .run(s.file, path.basename(s.file), s.after, Math.floor(fs.statSync(s.file).mtimeMs), hash, file);
+  return { file: s.file, before: s.before, after: s.after };
+}
+
+export type Original = { stream: ReadableStream; size: number; name: string };
+/**
+ * The full-size original of a photograph Frames holds only a smaller copy of: fetched from the cloud account it came from, now. Null when the
+ * photograph is not one of those (use the file Frames has). Throws a CloudError, in plain words, when the original cannot be fetched.
+ */
+export async function remoteOriginal(db: DB, cfg: AppCfg, file: string): Promise<Original | null> {
+  const rel = path.relative(path.join(cfg.dataDir, 'cloud'), file);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  const [connId, ...rest] = rel.split(path.sep);
+  const row = db.prepare('SELECT remote_id, version, orig_size, remote_name FROM cloud_files WHERE conn_id = ? AND rel = ? AND shrunk = 1').get(connId, rest.join('/')) as { remote_id: string; version: string; orig_size: number; remote_name: string } | undefined;
+  if (!row) return null;
+  const conn = loadCloud(db).connections.find((c) => c.id === connId);
+  if (!conn) throw new CloudError('This photograph is kept as a smaller copy and its original is in a cloud account that has been disconnected. Connect that account again to get the original.');
+  if (conn.needsReconnect) throw new CloudError(`The original is in your ${PROVIDERS.find((p) => p.id === conn.provider)?.label ?? 'cloud'} account, which needs to be reconnected (Settings, Cloud sync).`);
+  let r: Response;
+  try { r = await adapters[conn.provider].download(http(db, cfg, conn), urls(cfg, conn.provider), { id: row.remote_id, name: row.remote_name, folder: false, size: row.orig_size, version: row.version }); }
+  catch (e) { throw new CloudError(`The original could not be fetched from ${conn.account || 'the cloud account'}: ${msg(e)}`); }
+  if (!r.body) throw new CloudError('The cloud account sent an empty answer.');
+  return { stream: Readable.fromWeb(r.body as any) as unknown as ReadableStream, size: row.orig_size || Number(r.headers.get('content-length')) || 0, name: row.remote_name || path.basename(file) };
+}
+
 export type Progress = { running: boolean; connId: string | null; downloaded: number; current: string };
 const progresses = new Map<string, Progress>();
 /** What a person's sync is doing right now (one sync at a time per person). */
@@ -269,9 +333,10 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const a = adapters[c0.provider];
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
-  const known = db.prepare('SELECT version FROM cloud_files WHERE conn_id = ? AND remote_id = ?');
+  const known = db.prepare('SELECT version, rel, shrunk FROM cloud_files WHERE conn_id = ? AND remote_id = ?');
   const taken = db.prepare('SELECT remote_id FROM cloud_files WHERE conn_id = ? AND rel = ?');
-  const add = db.prepare('INSERT INTO cloud_files (conn_id, remote_id, rel, version, size, synced) VALUES (?, ?, ?, ?, ?, ?)');
+  const add = db.prepare('INSERT INTO cloud_files (conn_id, remote_id, rel, version, size, synced, shrunk, orig_size, orig_w, orig_h, remote_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const shrinkRow = db.prepare('UPDATE cloud_files SET rel = ?, shrunk = 1, orig_size = ?, orig_w = ?, orig_h = ?, remote_name = ?, size = ? WHERE conn_id = ? AND remote_id = ?');
   try {
     const seen = new Set<string>();
     const queue: { id: string; rel: string[]; depth: number }[] = [{ id: c0.folderId!, rel: [], depth: 0 }];
@@ -286,8 +351,27 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         if (++entries > MAX_ENTRIES) throw new CloudError('That folder holds too many items.');
         if (e.folder) { queue.push({ id: e.id, rel: [...f.rel, safeName(e.name)], depth: f.depth + 1 }); continue; }
         if (!ALLOWED.has(path.extname(e.name).toLowerCase())) continue;
-        const prior = known.get(id, e.id) as { version: string } | undefined;
-        if (prior) { if (prior.version === e.version) res.skipped++; else res.changedRemotely++; continue; }
+        const prior = known.get(id, e.id) as { version: string; rel: string; shrunk: number } | undefined;
+        if (prior) {
+          if (prior.version !== e.version) { res.changedRemotely++; continue; }
+          // Still the same in the cloud, so this is the moment it is safe to keep only a smaller copy here.
+          if (c0.shrink && !prior.shrunk) {
+            const local = path.join(dest, ...prior.rel.split('/'));
+            if (fs.existsSync(local) && path.resolve(local).startsWith(dest + path.sep)) {
+              try {
+                const meta = await sharp(local, { failOn: 'none' }).metadata().catch(() => null);
+                const done = await shrinkKnown(db, local);
+                if (done) {
+                  shrinkRow.run(path.relative(dest, done.file).split(path.sep).join('/'), done.before, meta?.width ?? 0, meta?.height ?? 0, e.name, done.after, id, e.id);
+                  res.shrunk = (res.shrunk ?? 0) + 1; res.freed = (res.freed ?? 0) + (done.before - done.after);
+                  progress.current = e.name;
+                  continue;
+                }
+              } catch (err) { res.errors.push(`${e.name}: could not make a smaller copy (${msg(err)})`); }
+            }
+          }
+          res.skipped++; continue;
+        }
         if (path.extname(e.name).toLowerCase() === '.xmp' && e.size > MAX_SIDECAR) { res.errors.push(`${e.name}: a metadata file larger than ${MAX_SIDECAR / 1048576} MB`); continue; }
         if (e.size > MAX_FILE) { res.errors.push(`${e.name}: larger than the ${MAX_FILE / 1048576} MB limit`); continue; }
         let name = safeName(e.name);
@@ -305,7 +389,14 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
           if (e.size && got !== e.size) throw new CloudError(`incomplete download (${got} of ${e.size} bytes)`);
           fs.mkdirSync(path.dirname(target), { recursive: true });
           fs.renameSync(part, target);
-          add.run(id, e.id, rel, e.version, got, new Date().toISOString());
+          // Asked to keep only smaller copies: make it now, before Frames ever sees the full-size file, and remember what the original was.
+          let finalRel = rel, shrunk = 0, ow = 0, oh = 0, keptSize = got;
+          if (c0.shrink) {
+            const meta = await sharp(target, { failOn: 'none' }).metadata().catch(() => null);
+            const sh = await shrinkFile(target);
+            if (sh) { finalRel = path.relative(dest, sh.file).split(path.sep).join('/'); shrunk = 1; ow = meta?.width ?? sh.w; oh = meta?.height ?? sh.h; keptSize = sh.after; res.shrunk = (res.shrunk ?? 0) + 1; res.freed = (res.freed ?? 0) + (sh.before - sh.after); }
+          }
+          add.run(id, e.id, finalRel, e.version, keptSize, new Date().toISOString(), shrunk, got, ow, oh, e.name);
           res.downloaded++; res.bytes += got; progress.downloaded = res.downloaded;
         } catch (err) {
           fs.rmSync(part, { force: true });
@@ -338,5 +429,5 @@ export function removeConnection(db: DB, id: string) {
   c.connections = c.connections.filter((x) => x.id !== id);
   saveCloud(db, c);
   saveTokens(db, id, null);
-  db.prepare('DELETE FROM cloud_files WHERE conn_id = ?').run(id); // the photos already downloaded stay
+  db.prepare('DELETE FROM cloud_files WHERE conn_id = ? AND shrunk = 0').run(id); // the photos already downloaded stay. Smaller copies keep their record: it is how their original is found again
 }

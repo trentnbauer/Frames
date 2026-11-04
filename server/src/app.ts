@@ -14,6 +14,7 @@ import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
 import { parseTarget } from './target.js';
 import { addDays, nextIntervalDays } from './schedule.js';
+import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerInsights } from './routes/insights.js';
@@ -404,9 +405,21 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // collection saved in order sorts correctly. Looked up by id only, never by a client-supplied path.
   app.get('/api/photos/:id/original', async (req, rep) => {
     const p = one('SELECT path, file FROM photos WHERE id = ?', num((req.params as Row).id));
-    if (!p || !fs.existsSync(p.path)) return notFound(rep, 'The original file is missing');
+    if (!p) return notFound(rep, 'The original file is missing');
     const n = Math.round(num((req.query as Row).n, 0));
     const pad = Math.min(4, Math.max(0, Math.round(num((req.query as Row).pad, 0))));
+    // A photograph kept as a smaller copy: its full-size original is fetched from the cloud account it came from, now.
+    let remote = null;
+    try { remote = await remoteOriginal(db, cfg, p.path); } catch (e) { return rep.code(502).send({ error: (e as Error).message }); }
+    if (remote) {
+      const rn = (n > 0 ? `${String(n).padStart(pad, '0')}_` : '') + remote.name;
+      return rep.header('Content-Type', 'application/octet-stream')
+        .header('Content-Disposition', `attachment; filename="${rn.replace(/[^\x20-\x7e]|["\\;]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(rn)}`)
+        .header('Cache-Control', 'no-store')
+        .header(...(remote.size ? ['Content-Length', String(remote.size)] as [string, string] : ['X-Original-From', 'cloud'] as [string, string]))
+        .send(remote.stream);
+    }
+    if (!fs.existsSync(p.path)) return notFound(rep, 'The original file is missing');
     const name = (n > 0 ? `${String(n).padStart(pad, '0')}_` : '') + p.file;
     const ascii = name.replace(/[^\x20-\x7e]|["\\;]/g, '_');
     return rep

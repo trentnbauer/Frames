@@ -6,6 +6,7 @@ import type { Ctx, Row } from './ctx.js';
 import type { Tenant, Tenants } from './tenants.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { loadAuth } from './auth.js';
+import { remoteOriginal } from './cloud.js';
 import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
 
@@ -162,6 +163,15 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (m[2] === '-full') {
       if (c.fullSize !== 'original' || !originalsAllowed()) return notFound(rep);
       const p = one('SELECT path, file FROM photos WHERE id = ?', id)!;
+      // Kept here only as a smaller copy: the visitor gets the full-size original, fetched from the owner's cloud account (or the resized picture if that is not possible now).
+      try {
+        const remote = await remoteOriginal(db, cfg, p.path);
+        if (remote) {
+          const rt = BROWSER_TYPES[path.extname(remote.name).toLowerCase()];
+          if (rt) return rep.header('Cache-Control', 'private, max-age=300').type(rt).send(remote.stream);
+          remote.stream.destroy();
+        }
+      } catch { /* the cloud is not reachable: the resized picture below */ }
       const type = BROWSER_TYPES[path.extname(p.file).toLowerCase()];
       // A browser can show JPEG and PNG. A RAW or TIFF original cannot be shown, so those get the resized picture.
       if (type && fs.existsSync(p.path)) return rep.header('Cache-Control', cache).type(type).send(fs.createReadStream(p.path));

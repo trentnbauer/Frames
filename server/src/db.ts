@@ -174,6 +174,14 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     db.exec('CREATE TABLE IF NOT EXISTS removed (hash TEXT PRIMARY KEY, path TEXT NOT NULL, file TEXT NOT NULL, removed_at TEXT NOT NULL)');
   },
+  // 9: a cloud photograph kept as a smaller copy remembers its original in the cloud (its name and size there), to fetch it again for an export.
+  (db) => {
+    addColumn(db, 'cloud_files', 'shrunk', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'cloud_files', 'orig_size', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'cloud_files', 'orig_w', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'cloud_files', 'orig_h', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'cloud_files', 'remote_name', "TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 export function migrate(db: DB) {

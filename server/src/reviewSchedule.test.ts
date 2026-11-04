@@ -19,7 +19,7 @@ describe('photographs nobody has reviewed yet', () => {
     db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES(2, 1, 'r', '2026-01-02T00:00:00.000Z', 4)").run();
     setSetting(db, 'settings', { intervals: ['1 month', '3 months'] });
     const v = db.pragma('user_version', { simple: true }) as number;
-    db.pragma(`user_version = ${v - 2}`); // so the review step (and the one after it, which can repeat) runs again
+    db.pragma(`user_version = ${v - 3}`); // so the review step (and the steps after it, which can repeat) runs again
     db.close();
     const again = openDb(dir);
     const next = (f: string) => (again.prepare('SELECT next_review_at n FROM photos WHERE file = ?').get(f) as { n: string }).n;
