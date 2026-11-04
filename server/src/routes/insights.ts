@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { dominantHue, hamming, similarity } from '../analysis.js';
+import { getSetting, setSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
 import { checkTarget, type Target } from '../target.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -138,6 +139,31 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- collection insights ----------
+  // Ranking for one composition: what you rated, what guests rated through its share links, and a blend of the two.
+  const GUEST_WEIGHT_KEY = 'guestWeight';
+  const guestWeight = () => Math.min(60, Math.max(0, Math.round(Number(getSetting<number>(db, GUEST_WEIGHT_KEY, 35)) || 0)));
+  app.put('/api/collections/guest-weight', async (req, rep) => {
+    const w = ((req.body ?? {}) as Row).weight;
+    if (typeof w !== 'number' || !Number.isFinite(w) || w < 0 || w > 60) return rep.code(400).send({ error: 'The guests’ share must be between 0 and 60 percent.' });
+    setSetting(db, GUEST_WEIGHT_KEY, Math.round(w));
+    return { weight: guestWeight() };
+  });
+  app.get('/api/collections/:id/ranking', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return rep.code(404).send({ error: 'Not found' });
+    const w = guestWeight() / 100;
+    const mine = new Map(all('SELECT r.photo_id, AVG(r.rating) a, COUNT(*) n FROM reviews r JOIN collection_photos cp ON cp.photo_id = r.photo_id WHERE cp.collection_id = ? GROUP BY r.photo_id', id).map((r) => [r.photo_id as number, r]));
+    const guest = new Map(all("SELECT sr.photo_id, AVG(sr.rating) a, COUNT(DISTINCT sr.reviewer) n FROM share_reviews sr JOIN shares s ON s.id = sr.share_id WHERE s.kind = 'collection' AND s.target_id = ? GROUP BY sr.photo_id", id).map((r) => [r.photo_id as number, r]));
+    const guests = (one("SELECT COUNT(DISTINCT sr.reviewer) n FROM share_reviews sr JOIN shares s ON s.id = sr.share_id WHERE s.kind = 'collection' AND s.target_id = ?", id) as Row).n as number;
+    const items = (all('SELECT photo_id FROM collection_photos WHERE collection_id = ?', id)).map((r) => {
+      const m = mine.get(r.photo_id), g = guest.get(r.photo_id);
+      const a = m ? (m.a as number) : null, b = g ? (g.a as number) : null;
+      // Only what exists counts: with no guest rating the score is yours, with no rating of yours it is the guests'.
+      const score = a !== null && b !== null ? a * (1 - w) + b * w : a ?? b ?? 0;
+      return { id: r.photo_id as number, mine: a, mineN: m ? (m.n as number) : 0, guest: b, guestN: g ? (g.n as number) : 0, score };
+    }).sort((x, y) => y.score - x.score || x.id - y.id);
+    return { weight: guestWeight(), guests, items };
+  });
   app.get('/api/collections/:id/insights', async (req, rep) => {
     const c = one('SELECT * FROM collections WHERE id = ?', num((req.params as Row).id));
     if (!c) return x.notFound(rep);

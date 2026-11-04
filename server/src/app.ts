@@ -185,7 +185,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   };
   const collectionDto = (c: Row) => {
     const rows = db.prepare('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos').all(c.id) as Row[];
-    return { id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', target: c.target ? JSON.parse(c.target) : null, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id) };
+    return { id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', target: c.target ? JSON.parse(c.target) : null, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), printedAt: c.printed_at ?? null };
   };
 
   const notFound = (rep: any, what = 'Not found') => rep.code(404).send({ error: what });
@@ -372,6 +372,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     if (typeof b.description === 'string') db.prepare('UPDATE collections SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if (typeof b.theme === 'string') db.prepare('UPDATE collections SET theme = ? WHERE id = ?').run(b.theme.slice(0, 120), id);
+    // Printed: done and archived. Reopening clears it.
+    if (typeof b.printed === 'boolean') db.prepare('UPDATE collections SET printed_at = ? WHERE id = ?').run(b.printed ? new Date().toISOString() : null, id);
     if ('target' in b) {
       const t = b.target ? parseTarget(b.target) : null;
       db.prepare('UPDATE collections SET target = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, id);

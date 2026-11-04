@@ -22,7 +22,7 @@ export type Shoot = {
   id: number; name: string; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
   dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; sessions: number;
 };
-export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[] };
+export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null };
 
 export const RATINGS = [
   { value: 1, emoji: '😐', label: 'meh' },
