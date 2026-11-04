@@ -6,7 +6,7 @@ type Cfg = {
   social: { instagram: string; twitter: string; behance: string }; gear: string; footer: string;
   fullSize: 'resized' | 'original' | 'none'; captions: boolean; order: 'collection' | 'newest' | 'oldest' | 'captured';
 };
-type Data = { config: Cfg; status: { photoCount: number; collection: { id: number; name: string } | null }; collections: { id: number; name: string; n: number }[] };
+type Data = { config: Cfg; status: { photoCount: number; collection: { id: number; name: string } | null }; collections: { id: number; name: string; n: number }[]; dnsTarget: string };
 
 /** The public portfolio website: what it shows, who it is for, and how it looks. */
 export function PortfolioSettings() {
@@ -88,6 +88,15 @@ export function PortfolioSettings() {
         <h3>Its own web address</h3>
         <p>Optional. If you give the portfolio its own name (for example <span className="mono">photography.example.com</span>) and point a tunnel or reverse proxy at Frames, that name shows <b>only</b> the portfolio. Nothing else of Frames can be reached through it, so it is safe to make public. Without a name, the portfolio is at <span className="mono">/portfolio/</span> on this server.</p>
         <div className="form"><input aria-label="Portfolio hostname" style={{ minWidth: 320 }} value={f.host} placeholder="photography.example.com" onChange={(e) => set({ host: e.target.value })} /><button className="pill" onClick={() => save({ host: f.host }, 'Address saved.')}>Save address</button></div>
+        {d.data.config.host && (
+          <div style={{ marginTop: 12 }}>
+            <p style={{ marginBottom: 6 }}><b>DNS for {d.data.config.host}</b>: at the company that manages this domain, add a record that points it at this Frames.</p>
+            {d.data.dnsTarget
+              ? <div className="row"><span className="mono" style={{ userSelect: 'all' }}>{d.data.config.host}</span><span className="faint">CNAME → <span className="mono" style={{ userSelect: 'all' }}>{d.data.dnsTarget}</span> (proxied, if it is on Cloudflare)</span></div>
+              : <p className="muted">Set the App URL under Settings, Cloudflare tunnel first: the record points at that address.</p>}
+            <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>If the domain is on the same Cloudflare account as the tunnel, Frames makes this record and the route itself, and lets the portfolio through Cloudflare Access without a login.</p>
+          </div>
+        )}
       </div>
     </>
   );

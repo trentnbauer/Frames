@@ -5,7 +5,7 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
-  accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; appliedAt: string | null;
+  accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; accessNote: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
   managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
 };
@@ -69,6 +69,7 @@ export function TunnelSettings() {
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>The token is kept on this server only, never shown again, and left out of backups.</p>
         {t.error && <p className="reason" role="alert" style={{ marginTop: 10 }}>{t.error}</p>}
+        {t.accessNote && <p className="muted" role="status" style={{ marginTop: 10, fontSize: 12.5 }}>{t.accessNote}</p>}
         {!t.error && t.appliedAt && <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Cloudflare is set up and matches the addresses below ({new Date(t.appliedAt).toLocaleString()}).</p>}
       </div>
 

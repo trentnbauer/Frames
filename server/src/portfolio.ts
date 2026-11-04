@@ -5,6 +5,8 @@ import sharp from 'sharp';
 import type { Ctx, Row } from './ctx.js';
 import type { Tenant, Tenants } from './tenants.js';
 import { getSetting, setSetting, type DB } from './db.js';
+import { loadAuth } from './auth.js';
+import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
 
 /**
@@ -168,7 +170,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   };
   const dto = (c: PortfolioCfg) => ({ config: c, status: status(c), collections: all('SELECT c.id, c.name, COUNT(cp.photo_id) n FROM collections c LEFT JOIN collection_photos cp ON cp.collection_id = c.id GROUP BY c.id ORDER BY c.name') });
 
-  app.get('/api/portfolio', async () => dto(loadPortfolio(db)));
+  app.get('/api/portfolio', async () => ({ ...dto(loadPortfolio(db)), dnsTarget: hostOfUrl(loadAuth(x.sys).publicUrl) }));
 
   app.put('/api/portfolio', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
