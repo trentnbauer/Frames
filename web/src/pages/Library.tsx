@@ -28,7 +28,6 @@ export function Library() {
   const inComps = new Map<number, string[]>();
   for (const c of colls.data ?? []) for (const id of c.photoIds) inComps.set(id, [...(inComps.get(id) ?? []), c.name]);
   const badge = (p: PhotoLite) => { const n = inComps.get(p.id); return n ? (n.length === 1 ? n[0] : `${n.length} compositions`) : undefined; };
-  const cap = (p: PhotoLite) => `${p.reviewCount ? p.avgRating.toFixed(1) : '–'} · ${p.title}`;
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [note, setNote] = useState('');
   const tick = (p: PhotoLite) => setPicked((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; });
@@ -127,7 +126,7 @@ export function Library() {
 
       {(list.loading || list.error) && <Loading error={list.error} />}
       {list.data && count === 0 && <div className="empty">{chips.length || sp.get('q') ? 'No photographs match.' : <>No photographs yet. Add some on the <Link to="/shoots" className="t2" style={{ textDecoration: 'underline' }}>Photoshoots</Link> page.</>}</div>}
-      {flat && list.data && count > 0 && <Justified {...tiles} badges={badge} photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : cap} />}
+      {flat && list.data && count > 0 && <Justified {...tiles} badges={badge} photos={list.data.photos} captions={similarTo || sp.get('semantic') ? (p) => `${Math.round((p.similarity ?? 0) * 100)}% match` : undefined} />}
       {groups.map(({ s, photos }) => (
         <section className="group" key={s.id}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14 }}>
@@ -140,7 +139,7 @@ export function Library() {
               <button style={{ color: '#efede8' }} onClick={() => openNew({ name: s.name, photoIds: photos.map((p) => p.id) })}>Compose from these →</button>
             </div>
           </div>
-          <Justified {...tiles} badges={badge} captions={cap} photos={photos} />
+          <Justified {...tiles} badges={badge} photos={photos} />
         </section>
       ))}
       {selecting && (
