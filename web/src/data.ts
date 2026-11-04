@@ -1,5 +1,5 @@
 // Shared types and small helpers. All real data comes from the server (see api.ts).
-export { checkTarget, parseTarget, requiredPx, targetProblem, type Target } from './target';
+export { checkTarget, parseTarget, printRatio, requiredPx, targetProblem, type Target } from './target';
 import type { Target } from './target';
 
 export type Tag = { name: string; kind: 'tag' | 'subject'; source: string; accepted: boolean };
