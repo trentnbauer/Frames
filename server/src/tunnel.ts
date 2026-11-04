@@ -1,12 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import fs from 'node:fs';
 import net from 'node:net';
-import os from 'node:os';
-import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
 import { loadAccess, PUBLIC_DESTINATIONS } from './access.js';
 import { loadAuth, saveAuth } from './auth.js';
+import { CloudflareError, cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { loadEnvState } from './tunnelEnv.js';
@@ -16,9 +14,10 @@ import { loadEnvState } from './tunnelEnv.js';
  * Cloudflare, so you need no open ports. You create the tunnel in the Cloudflare dashboard and paste its token here; Frames runs it.
  *
  * The addresses are not typed in twice. The App URL is the public address (Settings, Access), and with "Portfolios" ticked each
- * person's own portfolio address (Settings, Portfolio) comes along. Frames lists them so you can add them as public hostnames in
- * Cloudflare, and traffic always goes to this server, never an address you type in.
- * (Setting the tunnel up through the Cloudflare API is done from environment variables, see tunnelEnv.ts.)
+ * person's own portfolio address (Settings, Portfolio) comes along. Given a Cloudflare account ID and API token, Frames finds
+ * (or makes) its tunnel by name, sets the tunnel's routes to this server and keeps a proxied DNS record for each address, again
+ * whenever an address changes. No tunnel id is stored: the tunnel is looked up by its name each time.
+ * (Doing the same from environment variables, plus Cloudflare Access, is tunnelEnv.ts.)
  */
 
 export type HostKind = 'portfolio' | 'app';
@@ -26,31 +25,18 @@ export type TunnelCfg = {
   enabled: boolean;
   /** Also serve each person's portfolio address through the tunnel. */
   portfolios: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
+  /** The last problem talking to Cloudflare, and when the last run worked. */
+  error: string | null; appliedAt: string | null;
   hostnames: { hostname: string; kind: HostKind }[];
   dns: Record<string, { zoneId: string; recordId: string }>; // records Frames made, so it only ever removes its own
   /** Set up from environment variables (tunnelEnv.ts): shown read-only, changed by editing the variables. */
   env?: boolean;
 };
-const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {} };
+const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, mode: 'token', accountId: '', tunnelName: 'Frames', tunnelId: '', hostnames: [], dns: {}, error: null, appliedAt: null };
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
 const saveTunnel = (db: DB, c: TunnelCfg) => setSetting(db, 'tunnel', c);
 
 const servicePort = () => Number(process.env.PORT ?? 3000);
-
-/**
- * The routes cloudflared serves, as its own config file: one rule per address from Settings (the App URL, and each person's portfolio
- * address when Portfolios is ticked), all pointing at this server, then a final rule that answers 404 for anything else. A tunnel that
- * is "locally managed" (its routes cannot be edited in the dashboard) reads exactly this; a tunnel managed in the dashboard ignores it.
- */
-export function buildIngress(sys: DB, port = servicePort()): string {
-  const rules = wantedHostnames(sys).map((h) => `  - hostname: ${h.hostname}\n    service: http://localhost:${port}`);
-  return `ingress:\n${[...rules, '  - service: http_status:404'].join('\n')}\n`;
-}
-
-/** The tunnel's id is inside its token (base64 JSON: account, tunnel, secret). Only the id is read, and only if it looks like one. */
-export function tunnelIdOf(token: string): string {
-  try { const t = (JSON.parse(Buffer.from(token.trim(), 'base64').toString('utf8')) as { t?: unknown }).t; return typeof t === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) ? t.toLowerCase() : ''; } catch { return ''; }
-}
 
 export type TunnelStatus = { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
 
@@ -60,7 +46,6 @@ const freePort = () => new Promise<number>((resolve, reject) => { const s = net.
 export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: number[] } = {}) {
   const bin = () => opts.bin ?? process.env.CLOUDFLARED_BIN ?? 'cloudflared';
   const backoff = opts.backoffMs ?? [2000, 4000, 8000, 16000, 32000, 60000];
-  let configFile = '', lastConfig = '';
   let child: ChildProcess | null = null, wanted = false, timer: NodeJS.Timeout | null = null, poll: NodeJS.Timeout | null = null, port = 0, startedAt = 0;
   const logs: string[] = [];
   const status: TunnelStatus = { state: 'stopped', error: null, since: null, restarts: 0 };
@@ -80,15 +65,9 @@ export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: num
     port = await freePort();
     // The token goes in the environment, not the command line, so it never shows in a process list.
     const env = { PATH: process.env.PATH ?? '', HOME: '/tmp', TUNNEL_TOKEN: token };
-    // Its routes: written fresh each time it starts, into the temporary folder (nothing in it is secret: the token is in the environment).
-    try {
-      configFile ||= path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'frames-cloudflared-')), 'config.yml');
-      lastConfig = buildIngress(db);
-      fs.writeFileSync(configFile, lastConfig);
-    } catch (e) { return fail(`Could not write the tunnel's routes: ${(e as Error).message}`); }
     startedAt = Date.now();
     let c: ChildProcess;
-    try { c = spawn(bin(), ['tunnel', '--config', configFile, '--no-autoupdate', '--metrics', `127.0.0.1:${port}`, 'run'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { c = spawn(bin(), ['tunnel', '--no-autoupdate', '--metrics', `127.0.0.1:${port}`, 'run'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { return fail(`Could not start cloudflared: ${(e as Error).message}`); }
     child = c;
     c.stdout?.on('data', (d) => log(String(d), token));
@@ -128,8 +107,6 @@ export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: num
       set('stopped');
     },
     restart() { void this.stop().then(() => this.start()); },
-    /** The addresses may have changed: restart with the new routes, but only if the routes really are different. */
-    refresh() { if (wanted && child && buildIngress(db) !== lastConfig) this.restart(); },
   };
 }
 export type TunnelRunner = ReturnType<typeof createTunnelRunner>;
@@ -148,6 +125,39 @@ export function wantedHostnames(sys: DB): Wanted[] {
   return [...(app ? [{ hostname: app, kind: 'app' as const, who: '' }] : []), ...people.map((p) => ({ hostname: p.host.toLowerCase(), kind: 'portfolio' as const, who: p.name || p.email }))];
 }
 
+const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
+export const hasApi = (sys: DB) => !!getSecret(sys, 'cloudflare:apiToken') && ACCOUNT_ID.test(loadTunnel(sys).accountId);
+
+/**
+ * Makes Cloudflare match Settings: finds or makes the tunnel by name, sets its routes (every address to this server), keeps a proxied
+ * DNS record per address and removes the ones it made for addresses that are gone. Safe to repeat; never throws (it runs from timers
+ * and request hooks), the problem is kept in the tunnel's settings for the page to show. Only records it made are ever removed.
+ */
+export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(process.env.PORT ?? 3000), apiBase?: string): Promise<void> {
+  try {
+    const c = loadTunnel(sys);
+    if (c.env || !hasApi(sys)) return;
+    const hosts = wantedHostnames(sys).map((h) => h.hostname);
+    try {
+      const cf = cloudflare(getSecret(sys, 'cloudflare:apiToken'), c.accountId, apiBase);
+      const zones = new Map<string, { id: string }>();
+      for (const h of hosts) zones.set(h, await cf.zoneFor(h)); // fail before changing anything
+      const id = (await cf.findTunnel(c.tunnelName)) ?? (await cf.createTunnel(c.tunnelName)).id;
+      await cf.setRoutes(id, hosts.map((hostname) => ({ hostname, service: `http://localhost:${port}` })));
+      const dns: TunnelCfg['dns'] = {};
+      for (const h of hosts) dns[h] = { zoneId: zones.get(h)!.id, recordId: await cf.pointDns(zones.get(h)!.id, h, id) };
+      for (const [h, rec] of Object.entries(c.dns)) if (!hosts.includes(h)) await cf.removeDns(rec.zoneId, rec.recordId);
+      const token = await cf.token(id);
+      const changed = token !== getSecret(sys, 'cloudflare:tunnelToken');
+      if (changed) setSecret(sys, 'cloudflare:tunnelToken', token);
+      saveTunnel(sys, { ...loadTunnel(sys), dns, error: null, appliedAt: new Date().toISOString() });
+      if (changed && loadTunnel(sys).enabled) runner.restart(); // routes changed in Cloudflare need no restart; a new tunnel does
+    } catch (e) {
+      saveTunnel(sys, { ...loadTunnel(sys), error: e instanceof CloudflareError ? `Cloudflare said: ${e.message}` : (e as Error).message });
+    }
+  } catch { /* the database was closed under us */ }
+}
+
 export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunner) {
   const db = x.sys;
   const port = () => Number(process.env.PORT ?? 3000);
@@ -158,10 +168,9 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     return {
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
+      accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
-      // A locally managed tunnel has its routes written by Frames, so the one step left is a DNS record per address, pointing at the tunnel.
-      dns: tunnelIdOf(getSecret(db, 'cloudflare:tunnelToken')) ? hostnames.map((h) => ({ name: h.hostname, target: `${tunnelIdOf(getSecret(db, 'cloudflare:tunnelToken'))}.cfargotunnel.com` })) : [],
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
       appOpen: hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env,
       // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
@@ -169,7 +178,10 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     };
   };
 
-  x.tunnelRefresh = () => runner.refresh();
+  // One run at a time, queued: an address change while another is being applied is applied after it.
+  let queue: Promise<void> = Promise.resolve();
+  const apply = () => (queue = queue.then(() => applyTunnel(db, runner, port())));
+  x.tunnelRefresh = () => { void apply(); };
   app.get('/api/tunnel', async () => dto(loadTunnel(db)));
   app.get('/api/tunnel/logs', async () => ({ lines: runner.logs.slice(-100) }));
 
@@ -189,20 +201,28 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       saveAuth(db, { ...loadAuth(db), publicUrl: v.slice(0, 300) });
     }
     if (typeof b.portfolios === 'boolean') n.portfolios = b.portfolios;
-    if (typeof b.tunnelToken === 'string' && b.tunnelToken.trim()) setSecret(db, 'cloudflare:tunnelToken', b.tunnelToken.trim().slice(0, 4000));
-    if (b.clearTunnelToken === true) setSecret(db, 'cloudflare:tunnelToken', '');
-    if (typeof b.enabled === 'boolean') {
-      if (b.enabled && !getSecret(db, 'cloudflare:tunnelToken')) return bad('Paste the tunnel token first.');
-      n.enabled = b.enabled;
+    if (b.accountId !== undefined) {
+      const v = String(b.accountId).trim();
+      if (v && !ACCOUNT_ID.test(v)) return bad('The account ID is the 32 letters and numbers shown in the Cloudflare dashboard.');
+      n.accountId = v.toLowerCase();
     }
+    if (typeof b.apiToken === 'string' && b.apiToken.trim()) setSecret(db, 'cloudflare:apiToken', b.apiToken.trim().slice(0, 500));
+    if (b.clearApiToken === true) setSecret(db, 'cloudflare:apiToken', '');
+    if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
     saveTunnel(db, n);
-    if (n.enabled) { if (b.enabled === true || b.tunnelToken) runner.restart(); else runner.refresh(); } else if (cur.enabled) void runner.stop();
-    return dto(n);
+    await apply(); // creates the tunnel and its records, and fetches the token to run it with
+    if (n.enabled && !getSecret(db, 'cloudflare:tunnelToken')) {
+      saveTunnel(db, { ...loadTunnel(db), enabled: false });
+      return bad(loadTunnel(db).error || 'Enter the Cloudflare account ID and API token first.');
+    }
+    if (n.enabled) { if (b.enabled === true) runner.restart(); } else if (cur.enabled) void runner.stop();
+    return dto(loadTunnel(db));
   });
 
   app.post('/api/tunnel/start', async (_req, rep) => {
     if (locked(rep)) return;
-    if (!getSecret(db, 'cloudflare:tunnelToken')) return rep.code(400).send({ error: 'There is no tunnel token yet.' });
+    await apply();
+    if (!getSecret(db, 'cloudflare:tunnelToken')) return rep.code(400).send({ error: loadTunnel(db).error || 'Enter the Cloudflare account ID and API token first.' });
     saveTunnel(db, { ...loadTunnel(db), enabled: true });
     runner.start();
     return dto(loadTunnel(db));

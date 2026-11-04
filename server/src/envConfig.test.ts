@@ -3,6 +3,8 @@ import { applyEnvConfig, buildEnvFile, envLine, isConfigKey, OWNER_VAR, snapshot
 import { setSetting } from './db.js';
 import { getUser } from './users.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
+// Nothing in these tests may reach the real Cloudflare: a made-up token is saved, and Frames would try it.
+process.env.CLOUDFLARE_API_BASE = 'http://127.0.0.1:9';
 
 // The built-in way Docker Compose reads a value, for the quoting forms envLine produces.
 const parseEnv = (text: string) => {
@@ -105,7 +107,7 @@ describe('export, import, and the block', () => {
     const a = mk(); const A = api(a);
     const created = (await A.post('/api/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm1', embedModel: 'e1', ack: true, key: SECRET })).body.sources[0];
     await A.put('/api/ai/active', { id: created.id });
-    await A.put('/api/tunnel', { tunnelToken: SECRET + '-tunnel', appUrl: 'https://frames.example.com' });
+    await A.put('/api/tunnel', { apiToken: SECRET + '-tunnel', accountId: 'c'.repeat(32), appUrl: 'https://frames.example.com' });
     await A.put('/api/admin/privacy', { operator: 'Studio', contact: 'hi@example.test' });
     // 2. Export: allowed (the default), and an attachment that is never cached.
     const r = await A.raw('GET', '/api/admin/env/export');
@@ -123,7 +125,7 @@ describe('export, import, and the block', () => {
     expect(list.sources[0]).toMatchObject({ type: 'openai', model: 'm1', hasKey: true, ready: true });
     expect(list.active).toBe(created.id);
     expect(JSON.stringify(list)).not.toContain(SECRET); // still write-only through the API
-    expect((await B.get('/api/tunnel')).body).toMatchObject({ hasToken: true, appUrl: 'https://frames.example.com' });
+    expect((await B.get('/api/tunnel')).body).toMatchObject({ hasApiToken: true, appUrl: 'https://frames.example.com' });
     expect(String((await B.get('/privacy')).body)).toContain('Studio');
     expect((await B.get('/api/me')).body.envConfig).toBe(true);
     const again = await B.get('/api/admin/env/export');

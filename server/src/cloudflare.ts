@@ -45,6 +45,11 @@ export function cloudflare(token: string, accountId: string, base = process.env.
     async tunnelExists(id: string): Promise<boolean> {
       try { const t = await call<{ deleted_at?: string | null }>('GET', `${acct}/cfd_tunnel/${id}`); return !t.deleted_at; } catch (e) { if (e instanceof CloudflareError && e.status === 404) return false; throw e; }
     },
+    /** The live tunnel with this name, if there is one. */
+    async findTunnel(name: string): Promise<string | null> {
+      const r = await call<{ id: string; name: string }[]>('GET', `${acct}/cfd_tunnel?is_deleted=false&name=${encodeURIComponent(name)}`);
+      return r.find((t) => t.name === name)?.id ?? null;
+    },
     /** A tunnel whose routes are managed through the API (so no files, and no restart to change a route). */
     async createTunnel(name: string): Promise<{ id: string }> {
       const secret = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64');

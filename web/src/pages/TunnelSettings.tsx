@@ -5,8 +5,9 @@ type Host = { hostname: string; kind: 'portfolio' | 'app'; who: string };
 type Data = {
   config: { enabled: boolean; portfolios: boolean; env: boolean };
   appUrl: string; hostnames: Host[]; hasToken: boolean; signInOn: boolean; appOpen: boolean; service: string;
+  accountId: string; hasApiToken: boolean; apiReady: boolean; error: string | null; appliedAt: string | null;
   status: { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
-  dns: { name: string; target: string }[]; managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
+  managedByEnv: boolean; access: { appHost: string; emails: string[]; publicPaths: string[]; error: string | null } | null;
 };
 
 const LABEL = { stopped: 'Stopped', starting: 'Connecting…', connected: 'Connected', error: 'Problem' } as const;
@@ -17,10 +18,11 @@ export function TunnelSettings() {
   const d = useApi<Data>('/tunnel');
   const logs = useApi<{ lines: string[] }>('/tunnel/logs');
   const [appUrl, setAppUrl] = useState('');
-  const [token, setToken] = useState('');
+  const [account, setAccount] = useState('');
+  const [apiToken, setApiToken] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
-  useEffect(() => { if (d.data) setAppUrl(d.data.appUrl); }, [d.data?.appUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d.data) { setAppUrl(d.data.appUrl); setAccount(d.data.accountId); } }, [d.data?.appUrl, d.data?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Keep the status fresh while this page is open.
   useEffect(() => { const t = setInterval(() => { d.reload(); if (showLogs) logs.reload(); }, 3000); return () => clearInterval(t); }, [showLogs]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data) return <p className="empty">Loading…</p>;
@@ -53,18 +55,21 @@ export function TunnelSettings() {
       </div>
 
       <div className="field">
-        <h3>1. Make the tunnel in Cloudflare</h3>
+        <h3>1. Let Frames use your Cloudflare account</h3>
+        <p>Frames makes the tunnel, its routes and the DNS records itself, and keeps them right when an address changes. It needs your account ID and an API token.</p>
         <ol className="muted" style={{ fontSize: 13.5, margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
-          <li>{link('https://dash.cloudflare.com/?to=/:account/tunnels', 'Open Tunnels in Cloudflare')}, press <b>Create a tunnel</b> and choose <b>Cloudflared</b>. ({link('https://developers.cloudflare.com/tunnel/get-started/', 'Cloudflare’s guide')})</li>
-          <li>Name it, pick <b>Docker</b>, and copy the <b>token</b>: the long text after <span className="mono">--token</span>.</li>
-          <li>Paste it here.</li>
+          <li>{link('https://dash.cloudflare.com/profile/api-tokens', 'Create an API token')} with two permissions: <b>Account, Cloudflare Tunnel, Edit</b> and <b>Zone, DNS, Edit</b> (for your domain). Copy it.</li>
+          <li>Your <b>account ID</b> is on the right of the {link('https://dash.cloudflare.com/', 'dashboard')}’s home page for your domain, and in its address after <span className="mono">dash.cloudflare.com/</span>.</li>
         </ol>
-        <div className="form" style={{ marginTop: 12, maxWidth: 520 }}>
-          <input type="password" autoComplete="off" aria-label="Tunnel token" value={token} placeholder={t.hasToken ? 'Saved. Type to replace' : 'Paste the tunnel token'} onChange={(e) => setToken(e.target.value)} />
-          <button className="pill" disabled={!token} onClick={async () => { if (await save({ tunnelToken: token }, 'Token saved.')) setToken(''); }}>Save token</button>
-          {t.hasToken && <button className="t2" onClick={() => save({ clearTunnelToken: true, enabled: false }, 'Token removed.')}>Remove it</button>}
+        <div className="form" style={{ marginTop: 12, maxWidth: 560 }}>
+          <input aria-label="Account ID" value={account} placeholder="Account ID (32 letters and numbers)" onChange={(e) => setAccount(e.target.value)} />
+          <input type="password" autoComplete="off" aria-label="API token" value={apiToken} placeholder={t.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token'} onChange={(e) => setApiToken(e.target.value)} />
+          <button className="pill" disabled={account === t.accountId && !apiToken} onClick={async () => { if (await save({ accountId: account, ...(apiToken ? { apiToken } : {}) }, 'Saved. Frames is setting up Cloudflare.')) setApiToken(''); }}>Save</button>
+          {t.hasApiToken && <button className="t2" onClick={() => save({ clearApiToken: true, enabled: false }, 'API token removed.')}>Remove it</button>}
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>The token is kept on this server only, never shown again, and left out of backups.</p>
+        {t.error && <p className="reason" role="alert" style={{ marginTop: 10 }}>{t.error}</p>}
+        {!t.error && t.appliedAt && <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Cloudflare is set up and matches the addresses below ({new Date(t.appliedAt).toLocaleString()}).</p>}
       </div>
 
       <div className="field">
@@ -82,31 +87,13 @@ export function TunnelSettings() {
       </div>
 
       <div className="field">
-        <h3>3. Point DNS at the tunnel</h3>
+        <h3>3. What Frames sets up</h3>
         {t.hostnames.length === 0
-          ? <p className="muted">Enter the App URL above (and tick Portfolios, once people have set a portfolio address) to see what to do.</p>
+          ? <p className="muted">Enter the App URL above (and tick Portfolios, once people have set a portfolio address) to see the addresses.</p>
           : (
             <>
-              <p>Frames writes the tunnel’s routes itself: each address below is served by this server ({link('https://developers.cloudflare.com/tunnel/', 'a locally managed tunnel')}), and the routes change on their own when you change an address. You do not add anything in the tunnel’s Published application routes.</p>
-              {t.dns.length > 0
-                ? (
-                  <>
-                    <p>The one thing left is a <b>DNS record</b> for each address, in your domain’s DNS ({link('https://dash.cloudflare.com/?to=/:account/:zone/dns/records', 'open DNS')}): type <b>CNAME</b>, proxied (orange cloud), pointing at the tunnel:</p>
-                    {t.dns.map((r) => (
-                      <div className="row" key={r.name}>
-                        <span className="mono" style={{ userSelect: 'all' }}>{r.name}</span>
-                        <span className="faint">CNAME → <span className="mono" style={{ userSelect: 'all' }}>{r.target}</span></span>
-                      </div>
-                    ))}
-                  </>
-                )
-                : (
-                  <>
-                    <p>Save the tunnel token above to see the DNS record each address needs. These are the addresses:</p>
-                    {t.hostnames.map((h) => <div className="row" key={h.hostname}><span className="mono">{h.hostname}</span><span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`}</span></div>)}
-                  </>
-                )}
-              <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>If Cloudflare says your tunnel is <i>remotely managed</i> (routes editable in the dashboard), it ignores the routes Frames writes: add the addresses as Published application routes there, with the service <span className="mono" style={{ userSelect: 'all' }}>{t.service}</span>.</p>
+              <p>Each address gets a route to this server (<span className="mono">{t.service}</span>) and a proxied DNS record, made and updated by Frames. There is nothing to add in Cloudflare yourself.</p>
+              {t.hostnames.map((h) => <div className="row" key={h.hostname}><span className="mono">{h.hostname}</span><span className="faint">{h.kind === 'app' ? 'Frames (the app)' : `portfolio${h.who ? `: ${h.who}` : ''}`}</span></div>)}
             </>
           )}
       </div>
