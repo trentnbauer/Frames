@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
 
-let tmp: string, lib: string, app: ReturnType<typeof buildApp>;
+let tmp: string, lib: string, app: ReturnType<typeof buildApp>, appDb: ReturnType<typeof openDb>;
 const j = async (method: string, url: string, payload?: unknown) => {
   const r = await app.inject({ method: method as any, url, payload: payload as any });
   return { status: r.statusCode, body: r.headers['content-type']?.toString().includes('json') ? r.json() : r.rawPayload, headers: r.headers };
@@ -21,7 +21,8 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(lib, 'b.jpg'), await img(900, 600, '#993333'));
   fs.writeFileSync(path.join(lib, 'dup.jpg'), fs.readFileSync(path.join(lib, 'a.jpg'))); // same bytes as a.jpg
   fs.writeFileSync(path.join(lib, 'notes.txt'), 'ignored');
-  app = buildApp(openDb(path.join(tmp, 'data')), { libraries: [path.join(tmp, 'library')], dataDir: path.join(tmp, 'data') });
+  appDb = openDb(path.join(tmp, 'data'));
+  app = buildApp(appDb, { libraries: [path.join(tmp, 'library')], dataDir: path.join(tmp, 'data') });
 });
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -66,6 +67,11 @@ describe('rate limit', () => {
 
 describe('reviews', () => {
   it('runs a session, hides nothing it should keep, and schedules the next review', async () => {
+    // A photograph that has never been reviewed counts as reviewed when it was added, so it is not due straight away: one week later.
+    expect((await j('GET', '/api/review/summary')).body.due).toBe(0);
+    const added = appDb.prepare('SELECT added_at a, next_review_at n FROM photos LIMIT 1').get() as { a: string; n: string };
+    expect(Math.round((Date.parse(added.n) - Date.parse(added.a)) / 86_400_000)).toBe(7);
+    appDb.prepare('UPDATE photos SET next_review_at = added_at').run(); // a week has gone by
     expect((await j('GET', '/api/review/summary')).body.due).toBe(2);
     const s = (await j('POST', '/api/review/start')).body;
     expect(s.queue).toHaveLength(2);

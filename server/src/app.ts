@@ -142,7 +142,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const reviewsOf = (id: number) =>
     (db.prepare('SELECT session, date, rating, note FROM reviews WHERE photo_id = ? ORDER BY session, id').all(id) as Row[]).map((r) => ({ session: r.session, date: r.date, rating: r.rating, note: r.note ?? undefined }));
   // The server path of an original is never sent to the browser.
-  const photoDto = (p: Row, full = false, agg?: Map<number, { n: number; a: number }>) => {
+  const photoDto = (p: Row, full = false, agg?: Map<number, { n: number; a: number; d?: string }>) => {
     const ratings = agg ? [] : (db.prepare('SELECT rating FROM reviews WHERE photo_id = ?').all(p.id) as Row[]).map((r) => r.rating);
     const g = agg?.get(p.id);
     return {
@@ -150,6 +150,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       ar: p.w && p.h ? p.w / p.h : 1.5, hasImage: !!p.has_derivs,
       capturedAt: p.captured_at, camera: p.camera, lens: p.lens, exposure: p.exposure,
       fileType: p.file_type, sizeMb: Math.round(p.size_bytes / 1048576), archived: !!p.archived, missing: !!p.missing,
+      // When it was last reviewed; a photograph never reviewed counts from when it was added.
+      lastReviewedAt: agg ? (g?.d ?? p.added_at) : ((one('SELECT MAX(date) d FROM reviews WHERE photo_id = ?', p.id)?.d as string | undefined) ?? p.added_at),
       nextReviewAt: p.next_review_at, reviewCount: g ? g.n : ratings.length, avgRating: g ? g.a : avgOf(ratings),
       lat: p.lat, lon: p.lon, place: p.place, parentId: p.parent_id,
       palette: p.palette ? JSON.parse(p.palette) : [], brightness: p.brightness, contrast: p.contrast, saturation: p.saturation,
@@ -187,7 +189,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const notFound = (rep: any, what = 'Not found') => rep.code(404).send({ error: what });
   const one = (sql: string, ...a: unknown[]) => db.prepare(sql).get(...a) as Row | undefined;
   const all = (sql: string, ...a: unknown[]) => db.prepare(sql).all(...a) as Row[];
-  const ratingAgg = () => new Map(all('SELECT photo_id, COUNT(*) n, AVG(rating) a FROM reviews GROUP BY photo_id').map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number }]));
+  const ratingAgg = () => new Map(all('SELECT photo_id, COUNT(*) n, AVG(rating) a, MAX(date) d FROM reviews GROUP BY photo_id').map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number, d: r.d as string }]));
   // Photographs are analysed in the background once AI is on. Errors are retried a few times and never block anything else.
   const ai = tenantProxy(() => tenants.current().ai);
   const kickAi = (t: Tenant = tenants.current()) => { if (aiConfig(t.db)) void t.ai.run().catch((e) => console.error('AI run failed', e)); };
@@ -260,7 +262,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
 
   // ---------- reviews ----------
   type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
-  const dueIds = () => (db.prepare("SELECT id FROM photos WHERE archived = 0 AND missing = 0 AND next_review_at IS NOT NULL AND next_review_at <= ? ORDER BY next_review_at").all(new Date().toISOString()) as Row[]).map((r) => r.id as number);
+  // Due photographs, the one reviewed longest ago first. One never reviewed counts as reviewed when it was added.
+  const dueIds = () => (db.prepare("SELECT id FROM photos p WHERE archived = 0 AND missing = 0 AND next_review_at IS NOT NULL AND next_review_at <= ? ORDER BY COALESCE((SELECT MAX(date) FROM reviews r WHERE r.photo_id = p.id), p.added_at), p.id").all(new Date().toISOString()) as Row[]).map((r) => r.id as number);
   const getSession = () => getSetting<Session | null>(db, 'reviewSession', null);
 
   app.get('/api/review/summary', async () => {
@@ -279,9 +282,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.post('/api/review/start', async () => {
     const existing = getSession();
     if (existing && existing.index < existing.queue.length) return existing;
-    const ids = dueIds();
-    // Fisher-Yates. Sorting with a random comparator is biased, and the order must be properly random.
-    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    const ids = dueIds(); // oldest review first
     const s: Session = {
       runId: crypto.randomUUID(), index: 0, ratings: {}, notes: {},
       queue: ids.map((id) => { const p = one('SELECT w, h FROM photos WHERE id = ?', id)!; return { id, ar: p.w && p.h ? p.w / p.h : 1.5 }; }),

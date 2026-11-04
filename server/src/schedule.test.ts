@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from './settings.js';
 import { describe, expect, it } from 'vitest';
 import { nextIntervalDays } from './schedule.js';
 
@@ -17,5 +18,15 @@ describe('nextIntervalDays', () => {
   });
   it('is off when adaptive is disabled', () => {
     expect(nextIntervalDays({ ...S, adaptive: false }, [4, 4])).toBe(7);
+  });
+});
+
+describe('the default schedule', () => {
+  it('reviews a photograph four times in about a month: a week between each session, then done', () => {
+    const d = { ...DEFAULT_SETTINGS, adaptive: false };
+    expect(d.sessions).toBe(4);
+    expect(d.intervals).toEqual(['1 week', '1 week', '1 week', '1 week']);
+    expect([0, 1, 2, 3].map((n) => nextIntervalDays(d, Array(n).fill(3)))).toEqual([0, 7, 7, 7]);
+    expect(nextIntervalDays(d, [3, 3, 3, 3])).toBeNull(); // all four sessions done
   });
 });

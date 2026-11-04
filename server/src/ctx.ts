@@ -18,7 +18,7 @@ export type Ctx = {
   shootDto: (s: Row) => Record<string, any>;
   collectionDto: (c: Row) => Record<string, any>;
   tagsOf: (id: number) => Record<string, any>[];
-  ratingAgg: () => Map<number, { n: number; a: number }>;
+  ratingAgg: () => Map<number, { n: number; a: number; d?: string }>;
   ai: ReturnType<typeof createAiWorker>;
   /** Starts the background sync. Resolves when finished. */
   startScan: () => Promise<unknown>;

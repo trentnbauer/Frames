@@ -1,3 +1,5 @@
+import { addDays, intervalDays } from './schedule.js';
+import { loadSettings } from './settings.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -206,7 +208,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
     result.shootName = name;
 
     const insert = db.prepare(`INSERT INTO photos(shoot_id, path, file, hash, title, w, h, file_type, size_bytes, mtime, has_derivs, added_at, next_review_at)
-      VALUES(@shoot_id, @path, @file, @hash, @title, 0, 0, @file_type, @size_bytes, @mtime, 0, @added_at, @added_at)`);
+      VALUES(@shoot_id, @path, @file, @hash, @title, 0, 0, @file_type, @size_bytes, @mtime, 0, @added_at, @next_review_at)`);
 
     for (const f of files) {
       try {
@@ -227,7 +229,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
         const st = fs.statSync(f);
         const id = Number(insert.run({
           shoot_id: result.shootId, path: f, file: path.basename(f), hash, title: titleFromFile(f),
-          file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(),
+          file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(), next_review_at: addDays(now, intervalDays(loadSettings(db).intervals[0])).toISOString(),
         }).lastInsertRowid);
         const x = await exif(f);
         readInto(db, id, x, f);

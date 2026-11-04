@@ -43,6 +43,7 @@ describe('search', () => {
     expect((await get('/api/photos?q=a%25b')).photos).toHaveLength(0);
   });
   it('applies the rating filter before the row limit', async () => {
+    db.prepare("UPDATE photos SET next_review_at = '2000-01-01T00:00:00Z'").run();
     await send('POST', '/api/review/start', {});
     const s = await get('/api/review/session');
     await send('POST', '/api/review/rate', { photoId: s.queue[0].id, rating: 5 });
@@ -53,14 +54,23 @@ describe('search', () => {
 });
 
 describe('review order', () => {
-  it('is a real shuffle: every position gets every photo over many runs', async () => {
-    const firsts = new Set<number>();
-    for (let i = 0; i < 40; i++) {
-      await send('DELETE', '/api/review/session');
-      db.prepare("UPDATE photos SET next_review_at = '2000-01-01T00:00:00Z' WHERE id IN (1,2,3)").run();
-      firsts.add((await send('POST', '/api/review/start', {})).queue[0].id);
-    }
-    expect(firsts.size).toBe(3);
+  it('shows the photograph reviewed longest ago first; one never reviewed counts from when it was added', async () => {
+    await send('DELETE', '/api/review/session');
+    const earlier = db.prepare('SELECT * FROM reviews').all() as any[]; // set aside what other tests left, put back at the end
+    db.prepare('DELETE FROM reviews').run();
+    db.prepare("UPDATE photos SET next_review_at = '2000-01-01T00:00:00Z', archived = 0 WHERE id IN (1,2,3)").run();
+    db.prepare("UPDATE photos SET added_at = ? WHERE id = ?").run('2020-01-01T00:00:00.000Z', 3);
+    db.prepare("UPDATE photos SET added_at = ? WHERE id = ?").run('2021-01-01T00:00:00.000Z', 1);
+    db.prepare("UPDATE photos SET added_at = ? WHERE id = ?").run('2022-01-01T00:00:00.000Z', 2);
+    const order = async () => { await send('DELETE', '/api/review/session'); return (await send('POST', '/api/review/start', {})).queue.map((q: any) => q.id).filter((id: number) => [1, 2, 3].includes(id)); };
+    expect(await order()).toEqual([3, 1, 2]); // by when they were added: nobody has reviewed them
+    // Photograph 3 was reviewed most recently (2023): it goes to the back. Photograph 1 was reviewed in 2019, but it was added later, so only the review counts.
+    db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (3, 1, 'x', '2023-01-01T00:00:00.000Z', 3), (1, 1, 'y', '2019-06-01T00:00:00.000Z', 3)").run();
+    expect(await order()).toEqual([1, 2, 3]);
+    expect((await get('/api/photos/3')).lastReviewedAt).toBe('2023-01-01T00:00:00.000Z');
+    expect((await get('/api/photos/2')).lastReviewedAt).toBe('2022-01-01T00:00:00.000Z'); // never reviewed: counted from when it was added
+    db.prepare('DELETE FROM reviews').run();
+    for (const r of earlier) db.prepare('INSERT INTO reviews(id, photo_id, session, run_id, date, rating, note) VALUES (?, ?, ?, ?, ?, ?, ?)').run(r.id, r.photo_id, r.session, r.run_id, r.date, r.rating, r.note);
     await send('DELETE', '/api/review/session');
   });
 });
