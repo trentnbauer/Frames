@@ -216,7 +216,7 @@ describe('pre-filling from the environment', () => {
 
 describe('Frames sets up the tunnel through the Cloudflare API', () => {
   const ACCOUNT = 'b'.repeat(32), TUNNEL_TOKEN = Buffer.from(JSON.stringify({ a: 'acct', t: 'tunnel', s: 'secret' })).toString('base64');
-  const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0 };
+  const cf = { tunnels: new Map<string, string>(), dns: [] as { id: string; zone: string; name: string; content: string; type: string }[], routes: [] as any[], calls: [] as string[], seq: 0, apps: [] as any[], policies: [] as any[] };
   let srv: http.Server, base = '', e: Env, A: ReturnType<typeof api>;
   const runs = () => (fs.existsSync(path.join(e.tmp, 'runs.log')) ? fs.readFileSync(path.join(e.tmp, 'runs.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const settle = () => new Promise((r) => setTimeout(r, 400));
@@ -227,6 +227,17 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
         const url = new URL(req.url!, 'http://x'); const j = body ? JSON.parse(body) : {}; let m: RegExpExecArray | null;
         cf.calls.push(`${req.method} ${url.pathname}`);
         const ok = (result: unknown) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ success: true, result })); };
+        if ((m = /\/access\/apps\/([^/]+)\/policies/.exec(url.pathname))) {
+          if (req.method === 'GET') return ok(cf.policies.filter((x) => x.app === m![1]));
+          cf.policies.push({ id: `p${++cf.seq}`, app: m[1], ...j }); return ok({});
+        }
+        if (/\/access\/apps(\/[^/]+)?$/.test(url.pathname)) {
+          if (req.method === 'GET') return ok(cf.apps);
+          if (req.method === 'DELETE') { cf.apps = cf.apps.filter((x) => x.id !== url.pathname.split('/').pop()); return ok({}); }
+          const id = url.pathname.split('/').pop()!;
+          const a = { id: id === 'apps' ? `a${++cf.seq}` : id, aud: 'aud', ...j };
+          cf.apps = [...cf.apps.filter((x) => x.id !== a.id), a]; return ok(a);
+        }
         if (url.pathname === '/zones') return ok([{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'example.org' }]);
         if (/\/cfd_tunnel$/.test(url.pathname) && req.method === 'GET') return ok([...cf.tunnels].filter(([, n]) => n === url.searchParams.get('name')).map(([id, name]) => ({ id, name })));
         if (/\/cfd_tunnel$/.test(url.pathname)) { const id = `tun-${++cf.seq}`; cf.tunnels.set(id, j.name); return ok({ id }); }
@@ -281,6 +292,19 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     await A.put('/api/tunnel', { portfolios: false });
     expect(cf.dns.map((d) => d.name)).toEqual(['app.example.org']);
     expect(cf.routes.map((x) => x.hostname)).toEqual(['app.example.org', undefined]);
+  });
+  it('lets the share links and the portfolio paths through Cloudflare Access, and every portfolio address in full', async () => {
+    await A.put('/api/tunnel', { portfolios: true });
+    await A.put('/api/portfolio', { host: 'gallery3.example.org' });
+    await settle();
+    const uris = (name: string) => cf.apps.find((a) => a.name === name)?.destinations.map((d: any) => d.uri).sort();
+    expect(uris('Frames public paths')).toEqual(expect.arrayContaining(['app.example.org/s/*', 'app.example.org/api/s/*', 'app.example.org/portfolio', 'app.example.org/portfolio/*']));
+    expect(uris('Frames portfolio addresses')).toEqual(['gallery3.example.org']);
+    for (const a of cf.apps) expect(cf.policies.find((p) => p.app === a.id)).toMatchObject({ decision: 'bypass' });
+    expect((await A.get('/api/tunnel')).body.accessNote).toBe(null);
+    expect((await A.get('/api/portfolio')).body.dnsTarget).toBe('app.example.org'); // what a portfolio address's DNS points at
+    await A.put('/api/tunnel', { portfolios: false });
+    expect(cf.apps.find((a) => a.name === 'Frames portfolio addresses')).toBeUndefined(); // nothing left to list: removed
   });
   it('never touches a DNS record it did not make, and shows Cloudflare’s reason when it cannot', async () => {
     cf.dns.push({ id: 'mine', zone: 'z1', name: 'other.example.com', content: 'x', type: 'CNAME' });

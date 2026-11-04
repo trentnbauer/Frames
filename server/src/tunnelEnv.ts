@@ -97,7 +97,7 @@ export async function applyEnvTunnel(env: EnvTunnel, d: ApplyDeps): Promise<EnvS
       const mainName = `Frames (${env.appHost})`, bypassName = `Frames public paths (${env.appHost})`;
       const main = await cf.saveAccessApp(find(apps.main, mainName)?.id ?? null, { name: mainName, destinations: [env.appHost], session: '24h' });
       await cf.saveAccessPolicy(main.id, { name: 'Frames: allowed emails', decision: 'allow', emails: env.emails });
-      const bypass = await cf.saveAccessApp(find(apps.bypass, bypassName)?.id ?? null, { name: bypassName, destinations: PUBLIC_DESTINATIONS.map((p) => env.appHost + p), session: '24h' });
+      const bypass = await cf.saveAccessApp(find(apps.bypass, bypassName)?.id ?? null, { name: bypassName, destinations: [...PUBLIC_DESTINATIONS.map((p) => env.appHost + p), ...(env.portfolioHost ? [env.portfolioHost] : [])], session: '24h' });
       await cf.saveAccessPolicy(bypass.id, { name: 'Frames: public paths', decision: 'bypass' });
       apps.main = main.id; apps.bypass = bypass.id; aud = main.aud;
       setSetting(sys, ACCESS_KEY, { appHost: env.appHost, aud, authDomain, emails: env.emails } satisfies AccessState);

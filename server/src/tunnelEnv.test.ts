@@ -140,7 +140,7 @@ describe('making Cloudflare match', () => {
     expect(main.policies).toHaveLength(1);
     expect(main.policies[0]).toMatchObject({ decision: 'allow', include: [{ email: { email: 'me@example.com' } }] });
     const bypass = cf.apps.find((a) => a.name === 'Frames public paths (frames.example.com)')!;
-    expect(bypass.destinations).toEqual(PUBLIC_DESTINATIONS.map((p) => `frames.example.com${p}`));
+    expect(bypass.destinations).toEqual([...PUBLIC_DESTINATIONS.map((p) => `frames.example.com${p}`), 'gallery.example.com']); // the portfolio address, in full
     expect(bypass.destinations).toEqual(expect.arrayContaining(['frames.example.com/s/*', 'frames.example.com/portfolio', 'frames.example.com/portfolio/*', 'frames.example.com/api/s/*']));
     expect(bypass.policies[0]).toMatchObject({ decision: 'bypass', include: [{ everyone: {} }] });
     // The login was made before any route or DNS record that publishes the app.
