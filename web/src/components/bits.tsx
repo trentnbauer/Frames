@@ -110,7 +110,7 @@ export function BottomNav({ onSearch, onNew }: { onSearch: () => void; onNew: ()
 }
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
-export function Justified({ photos, h = 190, onPick, captions, picked, onTick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
+export function Justified({ photos, h = 190, onPick, captions, badges, picked, onTick }: { photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; badges?: (p: PhotoLite) => string | undefined; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
   return (
     <div className="just">
       {photos.map((p) => {
@@ -118,7 +118,8 @@ export function Justified({ photos, h = 190, onPick, captions, picked, onTick }:
         const st = { flex: `${p.ar} ${p.ar} ${p.ar * h}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1 };
         const cap = captions?.(p);
         const on = !!picked?.has(p.id);
-        const inner = <><Img p={p} />{cap && <em className="cap">{cap}</em>}{onTick && <b className="tick">{on ? '✓' : ''}</b>}</>;
+        const badge = badges?.(p);
+        const inner = <><Img p={p} />{cap && <em className="cap">{cap}</em>}{badge && <span className="badge">{badge}</span>}{onTick && <b className="tick">{on ? '✓' : ''}</b>}</>;
         if (onTick) return <button key={p.id} className={on ? 'picked' : ''} aria-pressed={on} style={{ ...st, position: 'relative' }} onClick={() => onTick(p)} aria-label={`Select ${p.title}`}>{inner}</button>;
         return onPick ? (
           <button key={p.id} style={{ ...st, position: 'relative' }} onClick={() => onPick(p)} aria-label={p.title}>{inner}</button>
