@@ -1,5 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { getSecret, setSecret } from './ai.js';
 import { loadAccess, PUBLIC_DESTINATIONS } from './access.js';
@@ -32,6 +35,23 @@ const DEFAULTS: TunnelCfg = { enabled: false, portfolios: false, mode: 'token', 
 export const loadTunnel = (db: DB): TunnelCfg => ({ ...DEFAULTS, ...getSetting<Partial<TunnelCfg>>(db, 'tunnel', {}) });
 const saveTunnel = (db: DB, c: TunnelCfg) => setSetting(db, 'tunnel', c);
 
+const servicePort = () => Number(process.env.PORT ?? 3000);
+
+/**
+ * The routes cloudflared serves, as its own config file: one rule per address from Settings (the App URL, and each person's portfolio
+ * address when Portfolios is ticked), all pointing at this server, then a final rule that answers 404 for anything else. A tunnel that
+ * is "locally managed" (its routes cannot be edited in the dashboard) reads exactly this; a tunnel managed in the dashboard ignores it.
+ */
+export function buildIngress(sys: DB, port = servicePort()): string {
+  const rules = wantedHostnames(sys).map((h) => `  - hostname: ${h.hostname}\n    service: http://localhost:${port}`);
+  return `ingress:\n${[...rules, '  - service: http_status:404'].join('\n')}\n`;
+}
+
+/** The tunnel's id is inside its token (base64 JSON: account, tunnel, secret). Only the id is read, and only if it looks like one. */
+export function tunnelIdOf(token: string): string {
+  try { const t = (JSON.parse(Buffer.from(token.trim(), 'base64').toString('utf8')) as { t?: unknown }).t; return typeof t === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) ? t.toLowerCase() : ''; } catch { return ''; }
+}
+
 export type TunnelStatus = { state: 'stopped' | 'starting' | 'connected' | 'error'; error: string | null; since: string | null; restarts: number };
 
 const freePort = () => new Promise<number>((resolve, reject) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => resolve(p)); }); s.on('error', reject); });
@@ -40,6 +60,7 @@ const freePort = () => new Promise<number>((resolve, reject) => { const s = net.
 export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: number[] } = {}) {
   const bin = () => opts.bin ?? process.env.CLOUDFLARED_BIN ?? 'cloudflared';
   const backoff = opts.backoffMs ?? [2000, 4000, 8000, 16000, 32000, 60000];
+  let configFile = '', lastConfig = '';
   let child: ChildProcess | null = null, wanted = false, timer: NodeJS.Timeout | null = null, poll: NodeJS.Timeout | null = null, port = 0, startedAt = 0;
   const logs: string[] = [];
   const status: TunnelStatus = { state: 'stopped', error: null, since: null, restarts: 0 };
@@ -59,9 +80,15 @@ export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: num
     port = await freePort();
     // The token goes in the environment, not the command line, so it never shows in a process list.
     const env = { PATH: process.env.PATH ?? '', HOME: '/tmp', TUNNEL_TOKEN: token };
+    // Its routes: written fresh each time it starts, into the temporary folder (nothing in it is secret: the token is in the environment).
+    try {
+      configFile ||= path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'frames-cloudflared-')), 'config.yml');
+      lastConfig = buildIngress(db);
+      fs.writeFileSync(configFile, lastConfig);
+    } catch (e) { return fail(`Could not write the tunnel's routes: ${(e as Error).message}`); }
     startedAt = Date.now();
     let c: ChildProcess;
-    try { c = spawn(bin(), ['tunnel', '--no-autoupdate', '--metrics', `127.0.0.1:${port}`, 'run'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { c = spawn(bin(), ['tunnel', '--config', configFile, '--no-autoupdate', '--metrics', `127.0.0.1:${port}`, 'run'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { return fail(`Could not start cloudflared: ${(e as Error).message}`); }
     child = c;
     c.stdout?.on('data', (d) => log(String(d), token));
@@ -101,6 +128,8 @@ export function createTunnelRunner(db: DB, opts: { bin?: string; backoffMs?: num
       set('stopped');
     },
     restart() { void this.stop().then(() => this.start()); },
+    /** The addresses may have changed: restart with the new routes, but only if the routes really are different. */
+    refresh() { if (wanted && child && buildIngress(db) !== lastConfig) this.restart(); },
   };
 }
 export type TunnelRunner = ReturnType<typeof createTunnelRunner>;
@@ -131,6 +160,8 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
+      // A locally managed tunnel has its routes written by Frames, so the one step left is a DNS record per address, pointing at the tunnel.
+      dns: tunnelIdOf(getSecret(db, 'cloudflare:tunnelToken')) ? hostnames.map((h) => ({ name: h.hostname, target: `${tunnelIdOf(getSecret(db, 'cloudflare:tunnelToken'))}.cfargotunnel.com` })) : [],
       // The whole app is on the internet and Frames itself asks for no sign-in: fine if Cloudflare protects it, so it is a warning, not a block.
       appOpen: hostnames.some((h) => h.kind === 'app') && !x.isProtected() && !c.env,
       // For an environment-managed tunnel: who Cloudflare Access lets in, what it leaves public, and the last problem.
@@ -138,6 +169,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     };
   };
 
+  x.tunnelRefresh = () => runner.refresh();
   app.get('/api/tunnel', async () => dto(loadTunnel(db)));
   app.get('/api/tunnel/logs', async () => ({ lines: runner.logs.slice(-100) }));
 
@@ -164,7 +196,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       n.enabled = b.enabled;
     }
     saveTunnel(db, n);
-    if (n.enabled) { if (b.enabled === true || b.tunnelToken) runner.restart(); } else if (cur.enabled) void runner.stop();
+    if (n.enabled) { if (b.enabled === true || b.tunnelToken) runner.restart(); else runner.refresh(); } else if (cur.enabled) void runner.stop();
     return dto(n);
   });
 
