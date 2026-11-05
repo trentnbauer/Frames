@@ -6,7 +6,7 @@ import { Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
 import { HumanCheck } from '../components/HumanCheck';
-import { arrange, photosOf, type Layout, type Print } from '../layout';
+import { WALL_BG, arrange, photosOf, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
 
@@ -182,7 +182,7 @@ export function SharePage() {
             </div>
           )}
           {wallPrints.length > 0 && (
-            <div style={{ background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <Wall prints={viewPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
             </div>
           )}

@@ -13,7 +13,7 @@ const pct = (v: number) => `${v}%`;
 export type Pic = { id: number; title: string; w: number; h: number; ar: number };
 
 /** The wall, drawn to scale: each print at its size, with its frame and mount, and the photographs in it. */
-export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
+export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, warn, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
   prints: Print[]; mode: Mode; editing: boolean; sel: number; photos: Map<number, Pic>; over: number | null; locked: boolean;
   /** A share link's token, when the pictures are served through it (a guest's page). */
   share?: string;
@@ -21,6 +21,8 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   compact?: boolean;
   /** Use the whole width there is (a phone), only held back so that a tall wall is not taller than the screen. */
   fill?: boolean;
+  /** Print index -> a short warning drawn in its label ("294 PPI"). */
+  warn?: Record<number, string>;
   onSelect: (i: number) => void; onEdit: (i: number) => void; onMoved: (prints: Print[]) => void;
   onOver: (i: number | null) => void; onDropPhoto: (i: number, pid: number) => void;
 }) {
@@ -85,7 +87,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
                 );
               })}
             </div>
-            <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', whiteSpace: 'nowrap', font: `400 10.5px ${mono}`, color: on ? '#efede8' : '#8f8c86' }}>{label}</div>
+            <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', whiteSpace: 'nowrap', font: `400 10.5px ${mono}`, color: on ? '#efede8' : '#8f8c86' }}>{label}{warn?.[i] && <span style={{ color: 'oklch(0.78 0.11 35)' }}> · ⚠ {warn[i]}</span>}</div>
             {editing && !locked && <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onEdit(i); }} aria-label="Edit print" style={{ position: 'absolute', top: 6, right: 6, zIndex: 1, borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 500, background: 'rgba(13,13,13,.78)', color: '#efede8', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.25)', cursor: 'pointer' }}>Edit</button>}
           </div>
         );
@@ -95,13 +97,13 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
 }
 
 /** A print's own settings: size, which way round, one photograph or two, poster or framed (and the frame). */
-export function PrintModal({ prints, index, count, onChange, onApplyAll, onDelete, onClose }: {
-  prints: Print[]; index: number; count: number;
+export function PrintModal({ prints, index, count, ppi = 300, onChange, onApplyAll, onDelete, onClose }: {
+  prints: Print[]; index: number; count: number; ppi?: number;
   onChange: (fn: (q: Print) => void) => void; onApplyAll: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const sp = prints[index];
   if (!sp) return null;
-  const [nw, nh] = sp.orientation === 'portrait' ? pxOf(sp.size) : [...pxOf(sp.size)].reverse();
+  const [nw, nh] = sp.orientation === 'portrait' ? pxOf(sp.size, ppi) : [...pxOf(sp.size, ppi)].reverse();
   const [pw, ph] = or(sp.size, sp.orientation), fr = sp.frame;
   const [fw, fh] = fr ? or(fr.size, sp.orientation) : [pw, ph];
   const sx = Math.round((fw - pw) / 2), sy = Math.round((fh - ph) / 2);
@@ -121,7 +123,7 @@ export function PrintModal({ prints, index, count, onChange, onApplyAll, onDelet
         {group('Print size', (
           <>
             {GROUPS.map(([g, ks]) => <div key={g} style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 6 }}>{ks.map((k) => <button key={k} aria-pressed={sp.size === k} onClick={() => onChange((q) => { q.size = k; if (q.frame && !fits(q.frame.size, k)) q.frame.size = nextUp(k); })} style={{ padding: '6px 10px', borderRadius: 8, fontSize: 12.5, ...opt(sp.size === k) }}>{k}</button>)}</div>)}
-            <div style={{ font: `400 11.5px ${mono}`, color: '#8f8c86', marginTop: 4 }}>{pw} × {ph} mm · needs {nw} × {nh} px</div>
+            <div style={{ font: `400 11.5px ${mono}`, color: '#8f8c86', marginTop: 4 }}>{pw} × {ph} mm · needs {nw} × {nh} px at {ppi} PPI</div>
           </>
         ))}
         <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
@@ -157,8 +159,8 @@ export function PrintModal({ prints, index, count, onChange, onApplyAll, onDelet
 }
 
 /** What to buy for a finished composition: frames with their mount boards, posters, and the prints to order. */
-export function ShoppingList({ prints }: { prints: Print[] }) {
-  const list = shoppingList(prints);
+export function ShoppingList({ prints, ppi = 300 }: { prints: Print[]; ppi?: number }) {
+  const list = shoppingList(prints, ppi);
   const [copied, setCopied] = useState(false);
   const copy = () => { try { void navigator.clipboard.writeText(list.text); } catch { /* the clipboard needs https */ } setCopied(true); setTimeout(() => setCopied(false), 1600); };
   const row = { padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 13 } as const;

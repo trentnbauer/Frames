@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrange, cellOf, chosenIn, findPhoto, place, unplace, dims, photosOf, fits, frameOf, fromPreset, GAP, MOULD, nextUp, PRESETS, printsSummary, problem, rectsIn, shoppingList, type Print } from './layout';
+import { arrange, cellOf, chosenIn, findPhoto, place, unplace, dims, photosOf, fits, frameOf, fromPreset, GAP, MOULD, nextUp, PRESETS, lowRes, ppiOf, printsSummary, problem, rectsIn, shoppingList, type Print } from './layout';
 
 const pr = (o: Partial<Print> = {}): Print => ({ id: 1, size: 'A4', orientation: 'portrait', frame: null, photoId: null, stack: false, photoId2: null, x: 0, y: 0, ...o });
 
@@ -38,12 +38,29 @@ describe('wall geometry', () => {
 });
 
 describe('does a photograph suit a print', () => {
-  it('refuses the wrong way round, and too few pixels at 300 PPI, with the reason', () => {
+  it('refuses only the wrong way round, with the reason', () => {
     expect(problem({ w: 6000, h: 4000 }, pr({ orientation: 'portrait' }))).toBe('Landscape. This print is portrait.');
     expect(problem({ w: 4000, h: 6000 }, pr({ orientation: 'landscape' }))).toBe('Portrait. This print is landscape.');
-    expect(problem({ w: 2400, h: 3600 }, pr({ size: 'A3', orientation: 'portrait' }))).toBe('2400 × 3600 px. A3 at 300 PPI needs 3508 × 4961.');
-    expect(problem({ w: 4000, h: 6000 }, pr({ size: 'A3', orientation: 'portrait' }))).toBeNull();
+    expect(problem({ w: 2400, h: 3600 }, pr({ size: 'A3', orientation: 'portrait' }))).toBeNull(); // too few pixels is a warning, not a refusal
     expect(problem(null, pr())).toBeNull();
+  });
+  it('warns, rather than refuses, when there are fewer pixels than the sharpness wanted, and says how many pixels per inch it will be', () => {
+    expect(lowRes({ w: 2400, h: 3600 }, pr({ size: 'A3', orientation: 'portrait' }))).toBe('2400 × 3600 px is 205 PPI in A3, below the 300 wanted. It may look soft.');
+    expect(ppiOf({ w: 2400, h: 3600 }, pr({ size: 'A3', orientation: 'portrait' }))).toBe(205);
+    expect(lowRes({ w: 4000, h: 6000 }, pr({ size: 'A3', orientation: 'portrait' }))).toBeNull();
+    // the case from real use: 2433 × 3601 px in A4 is 294 PPI, just under 300
+    expect(ppiOf({ w: 2433, h: 3601 }, pr({ size: 'A4', orientation: 'portrait' }))).toBe(294);
+    expect(lowRes({ w: 2433, h: 3601 }, pr({ size: 'A4', orientation: 'portrait' }))).toMatch(/294 PPI in A4, below the 300 wanted/);
+    expect(lowRes({ w: 2433, h: 3601 }, pr({ size: 'A4', orientation: 'portrait' }), 240)).toBeNull(); // fine at the sharpness wanted
+    expect(lowRes({ w: 0, h: 0 }, pr())).toBeNull(); // size not known: nothing to say
+  });
+  it('places a photograph below the sharpness wanted, with a warning', () => {
+    const prints = [pr({ size: 'A4', orientation: 'portrait' })];
+    const r = place(prints, 0, 7, () => ({ w: 2433, h: 3601 }));
+    expect(r.prints?.[0].photoId).toBe(7);
+    expect(r.warn).toMatch(/294 PPI/);
+    expect(place(prints, 0, 7, () => ({ w: 2433, h: 3601 }), 240).warn).toBe('');
+    expect(place(prints, 0, 7, () => ({ w: 3601, h: 2433 })).prints).toBeNull(); // the wrong way round is still refused
   });
 });
 
@@ -61,8 +78,8 @@ describe('stacking two photographs in one print', () => {
     expect(problem({ w: 6000, h: 4000 }, landscape)).toMatch(/takes two portrait photographs side by side/);
   });
   it('checks the pixels against half the print, so a stack asks for fewer pixels than a whole print', () => {
-    expect(problem({ w: 2480, h: 1754 }, pr({ size: 'A4', orientation: 'portrait', stack: true }))).toBeNull(); // 210 × 148.5 mm at 300 PPI
-    expect(problem({ w: 2000, h: 1400 }, pr({ size: 'A4', orientation: 'portrait', stack: true }))).toMatch(/^2000 × 1400 px\. Half of A4 at 300 PPI needs 2480 × 1754/);
+    expect(lowRes({ w: 2480, h: 1754 }, pr({ size: 'A4', orientation: 'portrait', stack: true }))).toBeNull(); // 210 × 148.5 mm at 300 PPI
+    expect(lowRes({ w: 2000, h: 1400 }, pr({ size: 'A4', orientation: 'portrait', stack: true }))).toMatch(/^2000 × 1400 px is 239 PPI in half of A4, below the 300 wanted/);
   });
   it('lists the photographs a print holds, and the second only when stacked', () => {
     expect(photosOf(pr({ photoId: 4 }))).toEqual([4]);
@@ -101,7 +118,9 @@ describe('putting photographs in prints', () => {
   it('puts a photograph that fits in, and refuses one that does not, saying why', () => {
     expect(place([land(), land({ id: 2 })], 0, 1, dims).prints![0].photoId).toBe(1);
     expect(place([land()], 0, 3, dims)).toMatchObject({ prints: null, note: 'Portrait. This print is landscape.' });
-    expect(place([land()], 0, 4, dims).note).toMatch(/px\. A4 at 300 PPI needs/);
+    const tiny = place([land()], 0, 4, dims); // 300 × 200 px is far too few, but that is a warning, not a refusal
+    expect(tiny.prints![0].photoId).toBe(4);
+    expect(tiny.warn).toMatch(/300 × 200 px is 24 PPI in A4, below the 300 wanted/);
   });
   it('moving a photograph to another print swaps with what was there, when that fits where it goes', () => {
     const r = place([land({ photoId: 1 }), land({ id: 2, photoId: 2 })], 1, 1, dims).prints!;

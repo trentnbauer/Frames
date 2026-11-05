@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { arrange, printsSummary, type Mode, type Print } from '../layout';
+import { WALL_BG, arrange, printsSummary, type Mode, type Print } from '../layout';
 import { PrintModal, Wall, type Pic } from './CompositionWall';
 import { usePhone } from '../pages/ShareMobile';
 
@@ -45,7 +45,7 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, reviewer,
           <button onClick={() => setEditing(!editing)} aria-pressed={editing} style={pill(editing)}>{editing ? 'Moving prints' : 'Move prints'}</button>
           <span className="muted" style={{ fontSize: 12.5, marginLeft: 'auto' }}>{printsSummary(wall)}</span>
         </div>
-        <div style={{ background: '#0d0d0d', borderRadius: 8, padding: '24px 24px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
+        <div style={{ background: WALL_BG, borderRadius: 8, padding: '24px 24px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
           <Wall compact={phone} prints={wall} mode={mode} editing={editing} sel={sel} photos={photos} over={null} locked={false} share={token} onSelect={setSel} onEdit={(i) => { setSel(i); setOpen(true); }} onMoved={(ps) => set(ps, 'free')} onOver={() => undefined} onDropPhoto={() => undefined} />
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 12px' }}>Click a print to select it, then <b>Edit</b> on it for its size, orientation and frame. Drawn to scale.</p>

@@ -14,7 +14,9 @@ export const MAX_PRINTS = 12;
 export type Frame = { size: string; mat: string; color: string };
 /** A print holds one photograph, or (stack) two: two landscape photographs one above the other make a portrait print, two portrait ones side by side make a landscape one. */
 export type Print = { id: number; size: string; orientation: 'portrait' | 'landscape'; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
-export type Layout = { mode: (typeof MODES)[number]; prints: Print[] };
+/** `ppi` is the sharpness the photographer wants (pixels per inch at print size); a photograph with fewer is still allowed, with a warning. Absent means 300. */
+export type Layout = { mode: (typeof MODES)[number]; prints: Print[]; ppi?: number };
+export const PPI_MIN = 72, PPI_MAX = 600;
 
 /** Whether paper `frame` is at least as big as paper `print` (in both sides). */
 export const fits = (frame: string, print: string) => !!PAPER[frame] && !!PAPER[print] && PAPER[frame][0] >= PAPER[print][0] && PAPER[frame][1] >= PAPER[print][1];
@@ -24,7 +26,7 @@ const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) 
 /** A layout from untrusted input: null if it is not one. Each photograph can be in one print only, and only if it belongs to the composition. */
 export function parseLayout(raw: unknown, members: Set<number>): Layout | null {
   if (!raw || typeof raw !== 'object') return null;
-  const r = raw as { mode?: unknown; prints?: unknown };
+  const r = raw as { mode?: unknown; prints?: unknown; ppi?: unknown };
   if (!Array.isArray(r.prints) || r.prints.length === 0 || r.prints.length > MAX_PRINTS) return null;
   const used = new Set<number>();
   const prints: Print[] = [];
@@ -52,7 +54,8 @@ export function parseLayout(raw: unknown, members: Set<number>): Layout | null {
   // Two prints must not share an id.
   const ids = new Set<number>();
   for (const p of prints) { while (ids.has(p.id)) p.id++; ids.add(p.id); }
-  return { mode: (MODES as readonly string[]).includes(String(r.mode)) ? (r.mode as Layout['mode']) : 'row', prints };
+  const ppi = typeof r.ppi === 'number' && Number.isFinite(r.ppi) && r.ppi >= PPI_MIN && r.ppi <= PPI_MAX && Math.round(r.ppi) !== 300 ? Math.round(r.ppi) : undefined;
+  return { mode: (MODES as readonly string[]).includes(String(r.mode)) ? (r.mode as Layout['mode']) : 'row', prints, ...(ppi ? { ppi } : {}) };
 }
 
 /** The layout an older composition (a print size, a number of prints, chosen photographs) has, until it is edited. */
@@ -74,7 +77,7 @@ export function targetOf(layout: Layout): { count: number; size: 'A4' | 'A3' | '
   const top = [...sizes].sort((a, b) => b[1] - a[1] || area(b[0]) - area(a[0]))[0]?.[0] ?? 'A3';
   const o = new Set(layout.prints.map((p) => p.orientation));
   const std = top === 'A4' || top === 'A3' || top === 'A2';
-  return { count: layout.prints.length, size: std ? (top as 'A4' | 'A3' | 'A2') : 'custom', ...(std ? {} : { widthMm: PAPER[top][0], heightMm: PAPER[top][1] }), orientation: o.size === 1 ? [...o][0] : 'any', ppi: 300 };
+  return { count: layout.prints.length, size: std ? (top as 'A4' | 'A3' | 'A2') : 'custom', ...(std ? {} : { widthMm: PAPER[top][0], heightMm: PAPER[top][1] }), orientation: o.size === 1 ? [...o][0] : 'any', ppi: layout.ppi ?? 300 };
 }
 
 export const chosenOf = (layout: Layout): number[] => layout.prints.flatMap((p) => [p.photoId, p.photoId2]).filter((x): x is number => x !== null);
