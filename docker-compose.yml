@@ -36,11 +36,14 @@ services:
       ACCESS_EMAILS: ${ACCESS_EMAILS:-}
       PORTFOLIO_HOSTNAME: ${PORTFOLIO_HOSTNAME:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}
+      BACKUP_DIR: /backups
     volumes:
       # Your photographs. Read-only: Frames never writes to them.
       - ${PHOTOS_DIR:-./photos}:/library:ro
       # Database and generated previews. Back this up.
       - frames-data:/data
+      # The daily whole-server backup is written here, and Settings, Backup restores from it. Keep it somewhere other than the data volume.
+      - ${BACKUPS_DIR:-./backups}:/backups
     # Hardening: nothing in the container needs to write outside /data and /tmp.
     read_only: true
     tmpfs:

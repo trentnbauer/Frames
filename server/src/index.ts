@@ -1,3 +1,4 @@
+import { applyPendingRestore, startServerBackup } from './serverBackup.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildApp } from './app.js';
@@ -20,6 +21,9 @@ const authDisabled = envBool('AUTH_DISABLE', false);
 try { fs.mkdirSync(dataDir, { recursive: true }); fs.accessSync(dataDir, fs.constants.W_OK); } catch (e) {
   console.error(`CANNOT WRITE TO THE DATA FOLDER ${dataDir} (${(e as NodeJS.ErrnoException).code}). Frames runs as an unprivileged user (uid ${process.getuid?.()}): the folder or volume must be writable by it. For a bind mount: chown it to that user. For a named volume that was created by something else (for example as root): remove it or fix its ownership.`);
 }
+const restored = applyPendingRestore(dataDir); // a restore chosen in Settings, Backup is applied before anything opens a database
+if (restored) console.log(`Restored the backup chosen in Settings. The databases it replaced are in ${restored}`);
+const backupDir = path.resolve(process.env.BACKUP_DIR || path.join(dataDir, 'backups', 'server'));
 const db = openDb(dataDir);
 const check = integrity(db);
 if (check !== 'ok') console.error(`DATABASE PROBLEM: ${check}. Restore from a backup in ${path.join(dataDir, 'backups')} (see the README).`);
@@ -41,10 +45,13 @@ const app = buildApp(db, {
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB) || undefined,
   authPassword, authUser: process.env.AUTH_USER || 'frames',
   // Public host names (for example frames.example.com) when a reverse proxy rewrites the Host header.
+  backupDir,
   allowedHosts: (process.env.ALLOWED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
 });
 const frames = (app as any).frames as { sys: DB; tenants: { all(): { db: DB; cfg: { dataDir: string } }[] } };
-startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: t.cfg.dataDir })), { db: frames.sys, dataDir: path.join(dataDir, 'system') }]);
+startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: t.cfg.dataDir })), { db: frames.sys, dataDir: path.join(dataDir, 'system'), system: true }]);
+startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), backupDir);
+(frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authDisabled ? 'DISABLED' : [authPassword && 'password', oauthEnabled(frames.sys) && 'oauth'].filter(Boolean).join('+') || 'OFF'})`);
   if (authDisabled) console.warn('AUTH_DISABLE=true: ALL sign-in is switched off inside Frames. Anyone who can reach this port can use Frames, so something else must protect it (Cloudflare Access, a VPN, a firewall).');

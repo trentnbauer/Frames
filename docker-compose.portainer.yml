@@ -15,6 +15,7 @@ services:
       ## Settings, Env file exports every setting and secret as one file for this stack. It sets ALLOW_ENV_EXPORT=false so it cannot be downloaded twice.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      BACKUP_DIR: /backups
       ## Cloudflare tunnel, run by Frames itself (no separate tunnel container). Leave these empty to run without it.
       ## Easiest: make a tunnel at https://dash.cloudflare.com/?to=/:account/tunnels and set TUNNEL_TOKEN (README, Cloudflare tunnel has the steps)
       ## Or let Frames set it up and put a login in front of the app: the API token (https://dash.cloudflare.com/profile/api-tokens) needs Account > Cloudflare Tunnel: Edit, Account > Access: Apps and Policies: Edit, Zone > DNS: Edit, Zone > Zone: Read
@@ -28,6 +29,7 @@ services:
     volumes:
       - library:/library
       - data:/data
+      - backups:/backups ##The daily whole-server backup, and what Settings, Backup restores from
     tmpfs:
       - /tmp
     cap_drop:
@@ -37,4 +39,5 @@ services:
 
 volumes:
   data:
+  backups:
   library:
