@@ -86,9 +86,10 @@ const OIDC = { id: 'fake', type: 'oidc', name: 'Fake ID', clientId: 'frames-app'
 const GH = { id: 'ghlike', type: 'oauth2', name: 'GH-like', clientId: 'gh-client', authUrl: '', tokenUrl: '', userUrl: '', emailsUrl: '', clientSecret: 'right-secret' };
 
 /** A full browser sign-in: start, visit the provider, come back to the app. Returns the app's last answer. */
-async function signIn(id: string, who: Who, opts: { test?: boolean; returnTo?: string } = {}) {
+async function signIn(id: string, who: Who, opts: { test?: boolean; returnTo?: string; guest?: boolean } = {}) {
   fake.who = who;
-  const start = await call('GET', `/auth/login/${id}${opts.test ? '?test=1' : ''}${opts.returnTo ? `${opts.test ? '&' : '?'}returnTo=${encodeURIComponent(opts.returnTo)}` : ''}`);
+  const q = [opts.test && 'test=1', opts.guest && 'guest=1', opts.returnTo && `returnTo=${encodeURIComponent(opts.returnTo)}`].filter(Boolean).join('&');
+  const start = await call('GET', `/auth/login/${id}${q ? `?${q}` : ''}`);
   if (start.statusCode !== 302) return start;
   const there = await fetch(start.headers.location as string, { redirect: 'manual' });
   const back = new URL(there.headers.get('location')!);
@@ -278,6 +279,30 @@ describe('with sign-in on', () => {
       expect((await call('GET', '/api/auth/config', undefined, sess)).json().allow).toContain('@family.test'); // kept
       await call('PUT', '/api/auth/config', { open: false }, sess);
       expect((await signIn('fake', { sub: 'open2', email: 'another@elsewhere.test', verified: true })).statusCode).toBe(403);
+    });
+    it('lets someone who came from a share link make a guest account without being on the list, and nothing more', async () => {
+      const c = (await call('POST', '/api/collections', { name: 'For a guest' }, sess)).json();
+      const token = (await call('POST', '/api/shares', { kind: 'collection', id: c.id, allowReview: true }, sess)).json().token;
+      const page = (await call('GET', `/api/s/${token}`)).json();
+      expect(page.signIn.map((p: any) => p.id)).toContain('fake'); // the page can offer an account
+      expect(page.viewer).toBeNull();
+      const stranger = { sub: 'sl1', email: 'guestperson@nowhere.test', verified: true };
+      expect((await signIn('fake', stranger)).statusCode).toBe(403); // the ordinary way in is still the list
+      expect((await signIn('fake', stranger, { guest: true, returnTo: '/library' })).statusCode).toBe(403); // only from a share link
+      const r = await signIn('fake', stranger, { guest: true, returnTo: `/s/${token}` });
+      expect(r.statusCode).toBe(302);
+      expect(r.headers.location).toBe(`/s/${token}`);
+      const h = sessionHeader(r);
+      expect((await call('GET', '/api/me', undefined, h)).json()).toMatchObject({ role: 'guest', user: { email: 'guestperson@nowhere.test' } });
+      expect((await call('GET', '/api/photos', undefined, h)).statusCode).toBe(403);
+      expect((await call('GET', `/api/s/${token}`, undefined, h)).json().viewer).toMatchObject({ name: expect.any(String), role: 'guest' }); // greeted by name
+      expect((await call('GET', '/api/guest/links', undefined, h)).json().links).toHaveLength(1);
+      // a member who was taken off the list cannot use the share-link door to get back in
+      const m = { sub: 'sl2', email: 'former@family.test', verified: true };
+      expect((await signIn('fake', m)).statusCode).toBe(302); // on the list through @family.test
+      await call('PUT', '/api/auth/config', { allow: ['owner@example.test'] }, sess);
+      expect((await signIn('fake', m, { guest: true, returnTo: `/s/${token}` })).statusCode).toBe(403);
+      await call('PUT', '/api/auth/config', { allow: ['owner@example.test', '@family.test'] }, sess);
     });
     it('with ALLOW_SIGNUPS off, an allowed newcomer gets no account, but people who already have one still sign in', async () => {
       env.cfg.allowSignups = false;
