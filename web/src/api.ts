@@ -28,4 +28,10 @@ export function useApi<T>(path: string | null) {
 }
 
 /** A photo's image. On a share page the guest's own link token is used instead of the login. */
-export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => (share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`);
+/**
+ * The address of a photograph's picture. The `r` is the version of how pictures are kept: older versions let a browser keep a picture for a day
+ * under its address alone, so after an upgrade a browser could still hold another photograph's picture under the same number. Changing this number
+ * makes every browser fetch fresh ones once (the server now checks them every time, so it is only needed for pictures kept before that).
+ */
+const IMG_REV = 2;
+export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;

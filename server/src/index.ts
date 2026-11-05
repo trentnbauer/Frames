@@ -1,4 +1,5 @@
 import { applyPendingRestore, startServerBackup } from './serverBackup.js';
+import { startDerivativeCheck } from './derivCheck.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildApp } from './app.js';
@@ -50,6 +51,7 @@ const app = buildApp(db, {
 });
 const frames = (app as any).frames as { sys: DB; tenants: { all(): { db: DB; cfg: { dataDir: string } }[] } };
 startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: t.cfg.dataDir })), { db: frames.sys, dataDir: path.join(dataDir, 'system'), system: true }]);
+startDerivativeCheck(() => frames.tenants.all() as any);
 startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), backupDir);
 (frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {

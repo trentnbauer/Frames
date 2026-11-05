@@ -19,6 +19,8 @@ beforeAll(async () => {
   setSetting(frames().sys, 'auth', { enabled: false, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['a@x.test'], publicUrl: '', testedBy: null });
   setSetting(frames().sys, 'tunnel', { appUrl: 'https://frames.example.org' });
   await env.app.inject({ method: 'POST', url: '/api/collections', payload: { name: 'Kept in the backup' } });
+  env.db.prepare("INSERT INTO shoots(id, name, imported_at) VALUES(1, 's', '2026-01-01')").run();
+  env.db.prepare("INSERT INTO photos(id, shoot_id, path, file, hash, title, file_type, size_bytes, added_at, has_derivs, dhash) VALUES(1, 1, 'a.jpg', 'a.jpg', 'h', 'a', 'jpg', 1, '2026-01-01', 1, '0000000000000000')").run();
   const name = await writeServerArchive(frames(), scratch);
   archive = path.join(scratch, name!);
 });
@@ -61,11 +63,15 @@ describe('restoring', () => {
     setSetting(sys, 'auth', { enabled: true, providers: [{ id: 'mine', type: 'github', name: 'GitHub', clientId: 'y' }], allow: [], publicUrl: '', testedBy: null });
     sys.close();
     fs.writeFileSync(path.join(data, 'frames.db'), 'old library');
+    fs.mkdirSync(path.join(data, 'derivatives', '1'), { recursive: true }); fs.writeFileSync(path.join(data, 'derivatives', '1', 'thumb.jpg'), 'a picture of some other photograph 1');
     const staged = stageRestore(archive, data);
     expect(staged.parts).toContain('system.db');
     expect(applyPendingRestore(data)).toMatch(/before-restore-/);
     const lib = new Database(path.join(data, 'frames.db'), { readonly: true });
     expect((lib.prepare('SELECT name FROM collections').all() as any[]).map((r) => r.name)).toContain('Kept in the backup');
+    // the previews on disk belonged to the database that was replaced, and a number could now mean another photograph: they go, and are made again
+    expect((lib.prepare('SELECT has_derivs, dhash FROM photos WHERE id = 1').get() as any)).toEqual({ has_derivs: 0, dhash: null });
+    expect(fs.existsSync(path.join(data, 'derivatives'))).toBe(false);
     lib.close();
     const back = new Database(path.join(data, 'system.db'), { readonly: true });
     const rows = back.prepare("SELECT value FROM settings WHERE key = 'auth'").all() as any[];

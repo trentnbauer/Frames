@@ -5,6 +5,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
+import { serveDerivative } from '../imageServe.js';
 import { humanCookie, verifyToken } from '../turnstile.js';
 import { FRAME_COLOURS, parseLayout } from '../layout.js';
 
@@ -200,8 +201,10 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const id = num(req.params.id);
     if (!r.photoIds.includes(id)) return notFound(rep); // only this link's own photographs
     const f = derivPath(x.cfg, id, kind);
-    if (!fs.existsSync(f)) return notFound(rep, 'No preview available');
-    return noindex(rep).header('Cache-Control', 'private, max-age=3600').type('image/jpeg').send(fs.createReadStream(f));
+    const row = one('SELECT hash FROM photos WHERE id = ?', id);
+    if (!row || !fs.existsSync(f)) return notFound(rep, 'No preview available');
+    noindex(rep);
+    return serveDerivative(req, rep, f, String(row.hash), kind);
   };
   app.get('/api/s/:token/photos/:id/thumb', image('thumb'));
   app.get('/api/s/:token/photos/:id/preview', image('preview'));

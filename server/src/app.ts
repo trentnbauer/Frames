@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
+import { serveDerivative } from './imageServe.js';
 import { createAuth, isAuthPath, sessionUser } from './auth.js';
 import { active as turnstileOn, anyActive, isHuman } from './turnstile.js';
 import { applyEnvConfig } from './envConfig.js';
@@ -313,8 +314,9 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const sendImage = (kind: 'thumb' | 'preview') => async (req: any, rep: any) => {
     const id = num(req.params.id);
     const f = derivPath(cfg, id, kind);
-    if (!fs.existsSync(f)) return notFound(rep, 'No preview available');
-    return rep.header('Cache-Control', 'private, max-age=86400').type('image/jpeg').send(fs.createReadStream(f));
+    const row = one('SELECT hash FROM photos WHERE id = ?', id); // a derivative with no photograph behind it is never sent
+    if (!row || !fs.existsSync(f)) return notFound(rep, 'No preview available');
+    return serveDerivative(req, rep, f, String(row.hash), kind);
   };
   app.get('/api/photos/:id/thumb', sendImage('thumb'));
   app.get('/api/photos/:id/preview', sendImage('preview'));
