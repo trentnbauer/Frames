@@ -31,7 +31,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 # The app runs as the unprivileged "node" user, so it must own the data folder
 # (a fresh named volume copies this ownership).
-RUN mkdir -p /data /library && chown node:node /data
+RUN mkdir -p /data /library /backups && chown node:node /data /backups
 USER node
 WORKDIR /app/server
 EXPOSE 3000

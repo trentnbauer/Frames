@@ -293,7 +293,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return pw === 'limited' ? { ok: false, limited: true } : { ok: false };
   }
 
-  const PAGE = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Frames</title><style>
+  const PAGE = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/icon.svg"><title>Sign in · Frames</title><style>
   body{margin:0;background:#0d0d0d;color:#efede8;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
   main{width:min(380px,calc(100vw - 48px))}h1{font:400 44px/1 Georgia,serif;margin:0 0 8px}p{color:#a8a59f;margin:0 0 22px}
   a.b,button.b{display:block;width:100%;border:0;font:inherit;cursor:pointer;text-align:center;padding:12px 18px;border-radius:999px;background:#efede8;color:#0d0d0d;text-decoration:none;font-weight:500;margin-bottom:10px}
