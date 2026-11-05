@@ -30,9 +30,16 @@ export function SharePage() {
   // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
   const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else setAsking(() => then); };
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
+  const [over, setOver] = useState<number | null>(null); // the print a candidate is being dragged over
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
   const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
   const [sugErr, setSugErr] = useState('');
+  // The guest's version of the composition: photographs swapped in and frame colours changed. It lives here, on this page, and is shown on the
+  // wall straight away; nothing reaches the photographer until "Send back" (and what was sent can be changed and sent again).
+  const [frames, setFrames] = useState<Record<number, string>>({}); // print id -> the frame colour this guest picked
+  const [sentSnap, setSentSnap] = useState('{"m":{},"f":{}}'); // the version last sent
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [relayout, setRelayout] = useState(false); // the layout suggestion box
   const [relayoutSent, setRelayoutSent] = useState(false);
   const cancelled = useRef(false);
@@ -48,9 +55,14 @@ export function SharePage() {
     }).catch(() => setGone('Could not load this link'));
   }, [token, tries]);
 
+  // Escape backs out of whatever is on top, even from a comment box (which the other keys ignore): the name box, the swap list, then the photograph.
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (asking) setAsking(null); else if (picking !== null) setPicking(null); else if (look !== null) setLook(null); };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, [asking, picking, look]);
   useKey((e) => {
     if (look === null || !d) return;
-    if (e.key === 'Escape') setLook(null);
     if (e.key === 'ArrowLeft') setLook((look + d.photos.length - 1) % d.photos.length);
     if (e.key === 'ArrowRight') setLook((look + 1) % d.photos.length);
   }, [look, d]);
@@ -84,22 +96,52 @@ export function SharePage() {
   const prints = (d.chosenIds ?? []).map((id) => photos.find((p) => p.id === id)).filter((p): p is (typeof photos)[number] => !!p);
   const others = photos.filter((p) => !(d.chosenIds ?? []).includes(p.id));
   const showPrints = d.kind === 'collection' && prints.length > 0;
-  const suggest = async (forId: number, photoId: number | null) => {
-    setSugErr('');
-    const r = await fetch(`/api/s/${token}/suggest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ forId, photoId, reviewer }) });
-    if (!r.ok) { setSugErr((await r.json().catch(() => ({}))).error ?? 'Could not save that'); return; }
-    setMine((m) => { const c = { ...m }; if (photoId === null) delete c[forId]; else c[forId] = photoId; return c; });
+  // Putting a candidate in a print (or taking it back out) only changes this guest's version.
+  const swap = (forId: number, photoId: number | null) => {
+    setSugErr(''); setSendNote(null);
+    setMine((m) => { const c: Record<number, number> = {}; for (const [k, v] of Object.entries(m)) if (v !== photoId) c[Number(k)] = v; if (photoId !== null) c[forId] = photoId; else delete c[forId]; return c; }); // one candidate goes in one print
     setPicking(null);
   };
+  const setFrame = (printId: number, colour: string | null) => { setSendNote(null); setFrames((f) => { const c = { ...f }; if (colour === null) delete c[printId]; else c[printId] = colour; return c; }); };
+  const changes = Object.keys(mine).length + Object.keys(frames).length;
+  const draftNow = JSON.stringify({ m: mine, f: frames });
+  const dirty = draftNow !== sentSnap;
+  const discard = () => { const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string> }; setMine(was.m); setFrames(was.f); setSendNote(null); };
+  // Sends what differs from the last send, one suggestion for each, under the guest's name.
+  const sendBack = () => withName(async (name) => {
+    setSending(true); setSendNote(null);
+    const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string> };
+    const errs: string[] = [];
+    const post = async (path: string, body: object) => { const r = await fetch(`/api/s/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, reviewer: name }) }); if (!r.ok) errs.push((await r.json().catch(() => ({}))).error ?? 'Could not save that'); };
+    for (const k of new Set([...Object.keys(was.m), ...Object.keys(mine)])) { const now = mine[Number(k)] ?? null; if (now !== (was.m[Number(k)] ?? null)) await post('suggest', { forId: Number(k), photoId: now }); }
+    for (const k of new Set([...Object.keys(was.f), ...Object.keys(frames)])) { const now = frames[Number(k)] ?? null; if (now !== (was.f[Number(k)] ?? null)) await post('frame', { printId: Number(k), color: now }); }
+    setSending(false);
+    if (errs.length) setSendNote({ ok: false, text: errs[0] }); else { setSentSnap(draftNow); setSendNote({ ok: true, text: 'Sent. Thank you.' }); }
+  });
   const wallPrints: Print[] = d.layout ? (d.layout.mode === 'free' ? d.layout.prints : arrange(d.layout.prints, d.layout.mode)) : [];
   const count = prints.length;
+  // The guest's version, as drawn: swapped photographs in their prints (and the ones they replaced back among the candidates), their frame colours.
+  const swapped = new Set(Object.values(mine));
+  const viewPrints: Print[] = wallPrints.map((pr) => {
+    const swapOf = (id: number | null) => (id !== null && mine[id] !== undefined ? mine[id] : id);
+    return { ...pr, photoId: swapOf(pr.photoId), photoId2: swapOf(pr.photoId2), frame: pr.frame && frames[pr.id] ? { ...pr.frame, color: frames[pr.id] } : pr.frame };
+  });
+  const viewOthers = [...others.filter((o) => !swapped.has(o.id)), ...Object.keys(mine).map((k) => photos.find((x) => x.id === Number(k))).filter((x): x is (typeof photos)[number] => !!x)];
+  // A candidate dropped on a print takes its place. A photograph that was in a print can only go back to its own print (the photographer chose it for the wall).
+  const dropOn = (i: number, pid: number) => {
+    const orig = photosOf(wallPrints[i])[0];
+    if (orig === undefined) return;
+    if (mine[pid] !== undefined) { if (pid === orig) swap(orig, null); else setSugErr('That photograph was in another print. Drag it back onto that print, or drop a different candidate here.'); return; }
+    if (wallPrints.some((q) => photosOf(q).includes(pid))) { setSugErr('That photograph is already in a print.'); return; }
+    setSugErr(''); swap(orig, pid);
+  };
   const wallPhotos = new Map(photos.map((p) => [p.id, { id: p.id, title: p.title, w: 0, h: 0, ar: p.ar }]));
 
   if (phone) {
     return (
       <>
-        <ShareMobile token={token} d={d} photos={photos} wallPrints={wallPrints} others={showPrints ? others : []} reviewer={reviewer} withName={withName} changeName={() => setAsking(() => () => undefined)}
-          mine={mine} suggest={suggest} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
+        <ShareMobile token={token} d={d} photos={photos} wallPrints={wallPrints} reviewer={reviewer} withName={withName} changeName={() => setAsking(() => () => undefined)}
+          mine={mine} frames={frames} others={viewOthers} swap={swap} setFrame={setFrame} changes={changes} dirty={dirty} sending={sending} sendNote={sendNote} sendBack={sendBack} discard={discard} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
           openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
         {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
         {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
@@ -131,11 +173,20 @@ export function SharePage() {
             {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
           </div>
           {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
-          {wallPrints.length > 0 && (
-            <div style={{ background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-              <Wall prints={wallPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={null} locked share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
+          {d.allowReview && (dirty || sendNote) && (
+            <div role="status" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', fontSize: 13 }}>
+              {dirty && <span>You have changed {changes} {changes === 1 ? 'thing' : 'things'} on the wall. Nothing is sent until you send it back.</span>}
+              {dirty && <button className="pill primary" onClick={sendBack} disabled={sending}>{sending ? 'Sending…' : 'Send back to the photographer'}</button>}
+              {dirty && <button className="t2" onClick={discard}>Discard</button>}
+              {sendNote && <span className={sendNote.ok ? 'muted' : 'reason'} role={sendNote.ok ? 'status' : 'alert'}>{sendNote.text}</span>}
             </div>
           )}
+          {wallPrints.length > 0 && (
+            <div style={{ background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <Wall prints={viewPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
+            </div>
+          )}
+          {d.allowReview && viewOthers.length > 0 && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 16px' }}>Drag a photograph from the candidates onto a print to try it there.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
             {wallPrints.flatMap((pr, n) => photosOf(pr).map((pid) => ({ pr, n, p: photos.find((x) => x.id === pid) })).filter((x) => !!x.p)).map(({ n, p }) => {
               const sug = mine[p!.id] !== undefined ? photos.find((x) => x.id === mine[p!.id]) : null;
@@ -143,20 +194,20 @@ export function SharePage() {
                 <div key={p!.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5 }}>
                   <button onClick={() => setLook(photos.indexOf(p!))} aria-label={`Open ${p!.title}`}><img src={imgUrl(p!.id, 'thumb', token)} alt="" style={{ height: 40, borderRadius: 3, display: 'block' }} /></button>
                   <span className="muted">Print {n + 1} · {p!.title}</span>
-                  {d.allowReview && others.length > 0 && (sug ? (
-                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">You suggested this instead</span><button className="t2" onClick={() => suggest(p!.id, null)}>Undo</button></span>
+                  {d.allowReview && viewOthers.length > 0 && (sug ? (
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">In your version instead</span><button className="t2" onClick={() => swap(p!.id, null)}>Undo</button></span>
                   ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p!.id))}>Suggest another</button>)}
                 </div>
               );
             })}
           </div>
           {sugErr && <p className="reason" role="alert">{sugErr}</p>}
-          {others.length > 0 && <div className="label" style={{ marginBottom: 12 }}>Other candidates</div>}
+          {viewOthers.length > 0 && <div className="label" style={{ marginBottom: 12 }}>Other candidates</div>}
         </>
       )}
       <div className="just">
-        {(showPrints ? others : photos).map((p) => (
-          <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`}><Img p={p} /></button>
+        {(showPrints ? viewOthers : photos).map((p) => (
+          <button key={p.id} draggable={d.allowReview && showPrints} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(p.id)); e.dataTransfer.effectAllowed = 'move'; }} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`}><Img p={p} /></button>
         ))}
         <i />
       </div>
@@ -169,7 +220,7 @@ export function SharePage() {
             <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>Suggest another</h2>
             <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
             <div className="just">
-              {others.map((p) => <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 140}px`, aspectRatio: String(p.ar) }} onClick={() => suggest(picking, p.id)} aria-label={`Suggest ${p.title}`}><Img p={p} /></button>)}
+              {others.filter((o) => !swapped.has(o.id) || mine[picking] === o.id).map((p) => <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 140}px`, aspectRatio: String(p.ar) }} onClick={() => swap(picking, p.id)} aria-label={`Suggest ${p.title}`}><Img p={p} /></button>)}
               <i />
             </div>
           </div>
@@ -208,7 +259,7 @@ function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: str
   };
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      <textarea aria-label={placeholder} className="area" rows={2} maxLength={1000} placeholder={placeholder} value={text} onChange={(e) => { setText(e.target.value); if (state === 'sent') setState('idle'); }} onKeyDown={(e) => e.stopPropagation()} style={{ flex: 1, minWidth: 240, maxWidth: 520 }} />
+      <textarea aria-label={placeholder} className="area" rows={2} maxLength={1000} placeholder={placeholder} value={text} onChange={(e) => { setText(e.target.value); if (state === 'sent') setState('idle'); }} onKeyDown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }} style={{ flex: 1, minWidth: 240, maxWidth: 520 }} />
       <button className="pill" onClick={send} disabled={!text.trim() || state === 'sending'}>Send</button>
       {state === 'sent' && <span className="muted" role="status" style={{ fontSize: 12.5, alignSelf: 'center' }}>Sent. Only the person who shared this will see it.</span>}
       {state === 'error' && <span className="reason" role="alert" style={{ fontSize: 12.5, alignSelf: 'center' }}>{err}</span>}

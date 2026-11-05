@@ -1,4 +1,3 @@
-import { signupsOn } from '../users.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
@@ -191,7 +190,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, layout: r.layout ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, expiresAt: r.share.expires_at, photos,
       // Who is looking, if they are signed in, and how a visitor could make an account (a guest one) instead of only giving a name.
       viewer: ((req as any).shareViewer as { name: string; role: string } | null) ? { name: (req as any).shareViewer.name, role: (req as any).shareViewer.role } : null,
-      signIn: (() => { const a = loadAuth(x.sys); return a.enabled && signupsOn(x.sys, x.cfg.allowSignups !== false) ? a.providers.filter((p) => p.type !== 'cloudflare').map((p) => ({ id: p.id, name: p.name })) : []; })() };
+      signIn: (() => { const a = loadAuth(x.sys); return a.enabled ? a.providers.filter((p) => p.type !== 'cloudflare').map((p) => ({ id: p.id, name: p.name })) : []; })() };
   });
 
   const image = (kind: 'thumb' | 'preview') => async (req: any, rep: any) => {
