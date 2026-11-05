@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { attachKey, type DB } from './db.js';
+import { attachKey, getSetting, type DB } from './db.js';
 
 /**
  * The system database: who the people are, their sign-in sessions, and instance-wide settings (sign-in providers, the
  * tunnel). Each person's photographs, reviews and collections live in their own database, see tenants.ts.
  */
-export type Role = 'admin' | 'member';
+export type Role = 'admin' | 'member' | 'guest';
 export type User = { id: number; provider: string; sub: string; email: string; name: string; role: Role; folder: string; disabled: boolean; invited: boolean; created: string };
 export type Who = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
 
@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS identities (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   provider TEXT NOT NULL, sub TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, UNIQUE (provider, sub)
 );
+-- Share links a guest has opened while signed in: their "Shared with you" list. token names the owner, see routes/share.ts.
+CREATE TABLE IF NOT EXISTS guest_links (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', seen TEXT NOT NULL,
+  PRIMARY KEY (user_id, token)
+);
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 `;
 
@@ -46,7 +51,7 @@ export function openSystemDb(dataDir: string): DB {
 }
 
 type Row = Record<string, any>;
-const toUser = (r: Row): User => ({ id: r.id, provider: r.provider, sub: r.sub, email: r.email, name: r.name, role: r.role === 'admin' ? 'admin' : 'member', folder: r.folder, disabled: !!r.disabled, invited: r.provider === 'invite', created: r.created });
+const toUser = (r: Row): User => ({ id: r.id, provider: r.provider, sub: r.sub, email: r.email, name: r.name, role: r.role === 'admin' ? 'admin' : r.role === 'guest' ? 'guest' : 'member', folder: r.folder, disabled: !!r.disabled, invited: r.provider === 'invite', created: r.created });
 
 /** Until someone signs in, the owner is a placeholder ('local'): the password, or no sign-in at all, is "the owner". */
 export function ensureOwner(sys: DB): User {
@@ -127,12 +132,12 @@ export function resolveUser(sys: DB, who: Who, allowSignups: boolean): User | nu
     }
   }
   if (!u) {
-    // The first person to sign in becomes the administrator (the owner of the library that already exists); everyone after is a member.
+    // The first person to sign in becomes the administrator (the owner of the library that already exists); everyone after gets the default role (a member unless the administrator chose guest).
     if (bindOwner(sys, who)) u = getUser(sys, OWNER_ID);
   }
   if (!u) {
     if (!allowSignups) return null;
-    const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES(?, ?, ?, ?, 'member', ?, ?)").run(who.provider, who.sub, who.email, who.name, uniqueFolder(sys, who.email, who.name), now).lastInsertRowid);
+    const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES(?, ?, ?, ?, ?, ?, ?)").run(who.provider, who.sub, who.email, who.name, getSetting<{ defaultRole?: string }>(sys, 'instance', {}).defaultRole === 'guest' ? 'guest' : 'member', uniqueFolder(sys, who.email, who.name), now).lastInsertRowid);
     u = getUser(sys, id);
   }
   if (!u || u.disabled) return null;
