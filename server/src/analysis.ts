@@ -39,7 +39,7 @@ export function colorName(r: number, g: number, b: number): string {
 const hex = (r: number, g: number, b: number) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
 
 /** 64-bit difference hash as 16 hex characters. Near-identical images differ in only a few bits. */
-async function dHash(input: Buffer | string): Promise<string> {
+export async function dHash(input: Buffer | string): Promise<string> {
   const px = await sharp(input, { failOn: 'none' }).rotate().resize(9, 8, { fit: 'fill' }).greyscale().raw().toBuffer();
   let bits = '';
   for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits += px[y * 9 + x] > px[y * 9 + x + 1] ? '1' : '0';

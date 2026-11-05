@@ -140,6 +140,7 @@ export function applyPendingRestore(dataDir: string): string | null {
       }
       fs.copyFileSync(path.join(pend, name), dest);
       if (name === 'system.db') keepSettings(dest, path.join(keep, 'system.db'));
+      else forgetPreviews(dest);
     }
     fs.rmSync(pend, { recursive: true, force: true });
     return keep;
@@ -159,4 +160,14 @@ function keepSettings(restored: string, old: string) {
     c.exec(`ATTACH DATABASE '${old.replace(/'/g, "''")}' AS old`);
     c.exec('DELETE FROM settings; INSERT INTO settings SELECT key, value FROM old.settings; DELETE FROM sessions;');
   } finally { c.close(); }
+}
+
+/**
+ * The previews on disk were made for the database that has just been replaced, under its photograph numbers, and a restored database can
+ * number its photographs differently. They are removed and the photographs marked for rebuilding, so no number can show another picture.
+ */
+function forgetPreviews(libraryDb: string) {
+  fs.rmSync(path.join(path.dirname(libraryDb), 'derivatives'), { recursive: true, force: true });
+  const c = new Database(libraryDb);
+  try { c.prepare('UPDATE photos SET has_derivs = 0, dhash = NULL').run(); } finally { c.close(); }
 }

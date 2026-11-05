@@ -9,6 +9,7 @@ import { loadAuth } from './auth.js';
 import { remoteOriginal } from './cloud.js';
 import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
+import { serveDerivative } from './imageServe.js';
 import { avatarPath, displayNameOf } from './routes/profile.js';
 
 /**
@@ -186,7 +187,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     }
     const f = await portfolioJpeg(id);
     if (!f) return notFound(rep);
-    return rep.header('Cache-Control', cache).type('image/jpeg').send(fs.createReadStream(f));
+    return serveDerivative(req, rep, f, String(one('SELECT hash FROM photos WHERE id = ?', id)?.hash ?? id), 'portfolio', 'public');
   });
 
   // ---------- the owner's settings (behind the sign-in) ----------
