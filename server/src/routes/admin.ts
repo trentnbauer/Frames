@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionCookie } from '../auth.js';
+import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, type DB } from '../db.js';
 import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
@@ -147,13 +147,32 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
 
   // The env file: every saved setting, secrets included, as one download for the stack. It is allowed only while ALLOW_ENV_EXPORT is
   // true, and the file it makes sets that to false, so once it is in use the secrets cannot be downloaded again.
+  // Off by default, and an administrator's own switch (Settings, Env file). Turning it on needs a sign-in made in the last few minutes, so
+  // someone at an unattended screen cannot switch it on. ALLOW_ENV_EXPORT=false (which the file sets) locks it off whatever the switch says.
+  const FRESH_SIGN_IN_MS = 5 * 60_000;
+  const envExportOn = () => !!getSetting<{ envExport?: boolean }>(sys, 'instance', {}).envExport;
   const envStatus = () => ({
-    allowed: x.cfg.allowEnvExport !== false,
+    allowed: x.cfg.allowEnvExport !== false && envExportOn(),
+    enabled: envExportOn(),
+    lockedByEnv: x.cfg.allowEnvExport === false,
     loaded: envConfigLoaded(),
     settings: { system: Object.keys(snapshot(sys)).length, owner: 0 }, // only the server's settings are written to the file
     version: x.cfg.version ?? 'dev',
   });
   app.get('/api/admin/env', async () => envStatus());
+  app.put('/api/admin/env/export-enabled', async (req, rep) => {
+    const on = ((req.body ?? {}) as Row).on;
+    if (typeof on !== 'boolean') return rep.code(400).send({ error: 'on must be true or false' });
+    if (on) {
+      if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is locked off by ALLOW_ENV_EXPORT=false in this stack\'s environment (the exported file sets it). Set it to true there and restart to export again.' });
+      // Signed in as a person: it must be a sign-in from the last few minutes. With a shared password, or no sign-in at all, there is no one to ask again.
+      const age = (req as any).authVia === 'session' ? sessionAgeMs(sys, req) : 0;
+      if (age === null || age > FRESH_SIGN_IN_MS) return rep.code(401).send({ error: 'Sign in again to turn on the env file export.', reauth: true });
+      console.warn(`env file export switched on by administrator ${me(req).id}`);
+    }
+    setSetting(sys, 'instance', { ...getSetting<Record<string, unknown>>(sys, 'instance', {}), envExport: on });
+    return envStatus();
+  });
   // What the saved settings would write to the file, against what this container was actually started with. Names and verdicts only:
   // a value, a secret above all, is never sent.
   app.get('/api/admin/env/compare', async () => {
@@ -175,6 +194,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };
   });
   app.get('/api/admin/env/export', async (req, rep) => {
+    if (!envExportOn() && x.cfg.allowEnvExport !== false) return rep.code(403).send({ error: 'Export is switched off. Turn it on in Settings, Env file (you will be asked to sign in again).' });
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });
     console.warn(`env file exported by administrator ${me(req).id}`);
     return rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.env"').header('Cache-Control', 'no-store')

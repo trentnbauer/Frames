@@ -111,6 +111,13 @@ export function sessionUser(sys: DB, req: FastifyRequest): User | null {
   if (Date.now() - new Date(s.last_seen).getTime() > 86_400_000) sys.prepare('UPDATE sessions SET last_seen = ?, expires = ? WHERE id = ?').run(new Date().toISOString(), new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString(), id);
   return user;
 }
+/** How long ago the signed-in session of this request began (null if there is none): a fresh sign-in is a new session. */
+export function sessionAgeMs(sys: DB, req: FastifyRequest): number | null {
+  const t = cookieOf(req, SESSION_COOKIE);
+  if (!t) return null;
+  const s = sys.prepare('SELECT created FROM sessions WHERE id = ?').get(hash(t)) as { created: string } | undefined;
+  return s ? Date.now() - new Date(s.created).getTime() : null;
+}
 export const endSession = (sys: DB, req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); if (t) sys.prepare('DELETE FROM sessions WHERE id = ?').run(hash(t)); };
 export const endAllSessions = (sys: DB) => sys.prepare('DELETE FROM sessions').run().changes;
 

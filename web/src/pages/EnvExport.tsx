@@ -1,9 +1,11 @@
-import { useApi } from '../api';
+import { useEffect, useState } from 'react';
+import { api, useApi } from '../api';
+import { useStore } from '../store';
 
 type Row = { name: string; secret: boolean; status: 'same' | 'differs' | 'app only' | 'env only'; env?: string; app?: string };
 type Compare = { rows: Row[]; counts: { same: number; differs: number; appOnly: number; envOnly: number } };
 
-type Info = { allowed: boolean; loaded: { system: boolean; owner: boolean }; settings: { system: number; owner: number }; version: string };
+type Info = { allowed: boolean; enabled: boolean; lockedByEnv: boolean; loaded: { system: boolean; owner: boolean }; settings: { system: number; owner: number }; version: string };
 
 /**
  * Set Frames up in the app with next to no variables, then take everything away as one env file for the stack: the settings,
@@ -13,6 +15,25 @@ type Info = { allowed: boolean; loaded: { system: boolean; owner: boolean }; set
 export function EnvExport() {
   const d = useApi<Info>('/admin/env');
   const cmp = useApi<Compare>('/admin/env/compare');
+  const { me } = useStore();
+  const [err, setErr] = useState('');
+  // Turning the export on needs a sign-in made just now: if the server asks, go through the sign-in again and come back here to finish.
+  const turn = async (on: boolean) => {
+    setErr('');
+    try { await api('/admin/env/export-enabled', { method: 'PUT', body: { on } }); d.reload(); cmp.reload(); }
+    catch (e) {
+      const m = (e as Error).message;
+      if (on && /Sign in again/.test(m) && me?.user) window.location.assign(`/auth/login/${encodeURIComponent(me.user.provider)}?returnTo=${encodeURIComponent('/settings?section=env-file&enableExport=1')}`);
+      else setErr(m);
+    }
+  };
+  useEffect(() => {
+    // Back from signing in again: finish turning it on.
+    if (new URLSearchParams(window.location.search).get('enableExport') === '1') {
+      const u = new URL(window.location.href); u.searchParams.delete('enableExport'); window.history.replaceState(null, '', u.toString());
+      void turn(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d.data) return <p className="empty">Loading…</p>;
   const i = d.data;
   const loaded = i.loaded.system || i.loaded.owner;
@@ -22,13 +43,20 @@ export function EnvExport() {
 
       <div className="field">
         <h3>Download</h3>
-        {i.allowed ? (
+        <div className="toggle" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+          <div>
+            <b style={{ fontWeight: 500 }}>Allow exporting the env file</b>
+            <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>Off by default. The file holds every secret, so the export stays off until you turn it on, and turning it on asks you to sign in again.</p>
+          </div>
+          <button className={'sw' + (i.enabled && !i.lockedByEnv ? ' on' : '')} role="switch" aria-checked={i.enabled && !i.lockedByEnv} aria-label="Allow exporting the env file" disabled={i.lockedByEnv} onClick={() => turn(!i.enabled)} />
+        </div>
+        {err && <p className="reason" role="alert">{err}</p>}
+        {i.lockedByEnv && <div className="banner" role="status"><span>Export is locked off by <span className="mono">ALLOW_ENV_EXPORT=false</span> in this stack's environment, which is what the exported file sets, so the secrets cannot be downloaded again. To export again, set it to <span className="mono">true</span> there and restart.</span></div>}
+        {i.allowed && (
           <>
-            <p>{i.settings.system + i.settings.owner} saved server settings will be written to the file: sign-in, the tunnel, the privacy page, cloud storage providers and the AIs for everyone. The file switches the export off again (<span className="mono">ALLOW_ENV_EXPORT=false</span>), so once you use it the secrets cannot be downloaded a second time.</p>
+            <p>{i.settings.system + i.settings.owner} saved server settings will be written to the file: sign-in, the tunnel, the privacy page, cloud storage providers and the AIs for everyone. The file switches the export off again (<span className="mono">ALLOW_ENV_EXPORT=false</span>) once it is in use, so the secrets cannot be downloaded a second time.</p>
             <a className="pill primary" href="/api/admin/env/export" download="frames.env">Download frames.env</a>
           </>
-        ) : (
-          <div className="banner" role="status"><span>Export is switched off (<span className="mono">ALLOW_ENV_EXPORT=false</span>). That is what the exported file sets, so the secrets cannot be downloaded again. To export again, set it to <span className="mono">true</span> in your env file and restart Frames.</span></div>
         )}
       </div>
 
