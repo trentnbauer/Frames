@@ -31,7 +31,7 @@ export function SharePage() {
   const cancelled = useRef(false);
 
   useEffect(() => {
-    document.title = 'Shared photographs';
+    document.title = 'Frames | Shared photographs';
     fetch(`/api/s/${token}`).then(async (r) => (r.ok ? setD(await r.json()) : setGone((await r.json().catch(() => ({}))).error ?? 'This link is not available'))).catch(() => setGone('Could not load this link'));
   }, [token]);
 
@@ -42,6 +42,7 @@ export function SharePage() {
     if (e.key === 'ArrowRight') setLook((look + 1) % d.photos.length);
   }, [look, d]);
 
+  useEffect(() => { if (d?.name) document.title = `Frames | ${d.name}`; }, [d?.name]);
   if (gone) return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>This link isn’t available.</h1><p className="t2">{gone}. Ask whoever sent it for a new one.</p></Shell>;
   if (!d) return <Shell><p className="muted">Loading…</p></Shell>;
   const photos = d.photos.map((p) => ({ ...p, share: token }));

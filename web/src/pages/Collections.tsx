@@ -4,7 +4,7 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
 import { PrintModal, ShoppingList, Wall } from '../components/CompositionWall';
-import { Header, Img, Justified, Loading } from '../components/bits';
+import { Header, Img, Justified, Loading, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
 
@@ -176,6 +176,7 @@ export function CollectionDetail() {
   const cancelled = useRef(false);
 
   const c = coll.data;
+  useTitle(c?.name ?? 'Composition');
   const byId = new Map((lib.data?.photos ?? []).map((p) => [p.id, p]));
   // The prints, from the server, kept here while they are edited. A layout that is not a free one is laid out again whenever it changes.
   useEffect(() => { if (c) { setMode(c.layout.mode); setLay(c.layout.prints); } }, [c?.layout]); // eslint-disable-line react-hooks/exhaustive-deps

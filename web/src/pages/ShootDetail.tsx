@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
-import { Header, Img, Loading, useField } from '../components/bits';
+import { Header, Img, Loading, useField, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
 import { AddToComposition } from '../components/AddToComposition';
@@ -32,6 +32,7 @@ export function ShootDetail() {
   const all = useApi<Shoot[]>('/shoots');
   const photos = useApi<{ photos: PhotoLite[] }>(`/photos?shoot=${id}&order=oldest`);
   const s0 = shoot.data;
+  useTitle(s0?.name ?? 'Photoshoot');
   // Each field follows the server only when its own value changes, so a refresh never wipes text typed in another.
   const [name, setName] = useField(s0?.name ?? '', s0?.id);
   const [place, setPlace] = useField(s0?.place ?? '', s0?.id);
