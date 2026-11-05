@@ -12,12 +12,14 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
+import { Profile } from './Profile';
 
-type Sec = 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Sign-in methods' | 'Your data'
+type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Sign-in methods' | 'Your data'
   | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
 
 // One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
 const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
+  { title: 'You', items: ['Profile'] },
   { title: 'Your library', items: ['Reviews', 'Tags & subjects', 'Metadata & XMP'] },
   { title: 'Connections', items: ['AI', 'Cloud sync', 'Portfolio'] },
   { title: 'Your account', items: ['Sign-in methods', 'Your data'] },
@@ -30,6 +32,7 @@ const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
 /** What each section is called on screen (the others are called what they are named here). */
 const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
 const DESC: Record<Sec, string> = {
+  Profile: 'Your display name and picture, shown at the top of the page and on your portfolio.',
   Reviews: 'How often each photograph comes back for a rating.',
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
@@ -50,6 +53,7 @@ const DESC: Record<Sec, string> = {
 };
 /** The headings inside each section, so the finder can find a setting and not only a section. */
 const HEADINGS: Partial<Record<Sec, string[]>> = {
+  Profile: ['Display picture', 'Display name'],
   Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
   'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
   'Metadata & XMP': ['Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
@@ -87,7 +91,7 @@ function Toggle({ on, onChange, label, hint, locked }: { on: boolean; onChange: 
 export function SettingsPage() {
   const q0 = new URLSearchParams(window.location.search);
   // Coming back from a test sign-in or a cloud sign-in lands here with ?access=… or ?cloud=…, so open that section.
-  const [sec, setSec] = useState<Sec>(() => fromSlug(q0.get('section')) ?? (q0.has('access') ? 'Access' : q0.has('cloud') ? 'Cloud sync' : 'Reviews'));
+  const [sec, setSec] = useState<Sec>(() => fromSlug(q0.get('section')) ?? (q0.has('access') ? 'Access' : q0.has('cloud') ? 'Cloud sync' : 'Profile'));
   const [find, setFind] = useState('');
   const { settings: s, setSettings, me } = useStore();
   const isAdmin = me?.role === 'admin';
@@ -97,7 +101,7 @@ export function SettingsPage() {
   const go = (x: Sec) => { setSec(x); setErr(''); setFind(''); const u = new URL(window.location.href); u.searchParams.set('section', slug(x)); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); };
   if (!s) return <div className="page"><Header /><Loading /></div>;
   const allowed = (x: Sec) => !ADMIN_SET.has(x) || isAdmin;
-  const shown = allowed(sec) ? sec : 'Reviews';
+  const shown = allowed(sec) ? sec : 'Profile';
   const needle = find.trim().toLowerCase();
   const results = needle
     ? ALL.filter(allowed).flatMap((x) => {
@@ -153,6 +157,7 @@ export function SettingsPage() {
           <div style={{ height: 12 }} />
           {me?.envConfig && shown !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
+          {shown === 'Profile' && <Profile />}
           {shown === 'Reviews' && <Reviews s={s} save={save} />}
           {shown === 'AI' && <AiSettings />}
           {shown === 'Shared AI' && <AiSettings server />}
