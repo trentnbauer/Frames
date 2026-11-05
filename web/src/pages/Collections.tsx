@@ -151,6 +151,7 @@ export function CollectionDetail() {
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
   const guestComments = useApi<{ comments: { id: number; by: string; photoId: number | null; photoTitle: string | null; body: string; at: string }[] }>(`/collections/${id}/comments`);
   const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
+  const frameIdeas = useApi<{ suggestions: { printId: number; color: string; by: string[] }[] }>(`/collections/${id}/frame-suggestions`);
   const layoutIdeas = useApi<{ suggestions: { id: number; by: string; note: string | null; at: string; layout: { mode: Mode; prints: Print[] } }[] }>(`/collections/${id}/layout-suggestions`);
   const [editing, setEditing] = useState(false); // moving prints about and changing sizes and frames
   const [editW, setEditW] = useState(false);
@@ -461,6 +462,24 @@ export function CollectionDetail() {
                   <div>{cm.body}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {(frameIdeas.data?.suggestions ?? []).length > 0 && !printed && (
+            <div>{heading('Frame suggestions')}
+              {frameIdeas.data!.suggestions.map((g) => {
+                const at = prints.findIndex((q) => q.id === g.printId);
+                if (at < 0 || !prints[at].frame) return null;
+                const clear = async () => { await api(`/collections/${c.id}/frame-suggestions?printId=${g.printId}&color=${g.color}`, { method: 'DELETE' }); frameIdeas.reload(); };
+                return (
+                  <div key={`${g.printId}-${g.color}`} style={{ marginBottom: 14 }}>
+                    <div style={{ marginBottom: 6 }}>{g.by.join(', ')} {g.by.length === 1 ? 'suggests' : 'suggest'} a <b style={{ fontWeight: 500, color: '#efede8' }}>{g.color}</b> frame for print {at + 1}, instead of {prints[at].frame!.color}.</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={async () => { await saveLayout(prints.map((q) => (q.id === g.printId && q.frame ? { ...q, frame: { ...q.frame, color: g.color } } : q))); await clear(); }} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '6px 12px', fontSize: 12.5 }}>Use {g.color}</button>
+                      <button onClick={clear} style={{ borderRadius: 999, padding: '6px 12px', fontSize: 12.5, boxShadow: ring }}>Dismiss</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           {(layoutIdeas.data?.suggestions ?? []).length > 0 && !printed && (

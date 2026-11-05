@@ -6,7 +6,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
-import { parseLayout } from '../layout.js';
+import { FRAME_COLOURS, parseLayout } from '../layout.js';
 
 /**
  * Share links: a public address (/s/<token>) for one collection or one photoshoot, so someone without a login
@@ -115,6 +115,25 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return notFound(rep);
     const rows = all("SELECT l.id, l.reviewer, l.layout, l.note, l.ts FROM share_layouts l JOIN shares s ON s.id = l.share_id WHERE s.kind = 'collection' AND s.target_id = ? ORDER BY l.ts DESC", id);
     return { suggestions: rows.map((r) => ({ id: r.id, by: r.reviewer, note: r.note, at: r.ts, layout: JSON.parse(r.layout) })) };
+  });
+  // Frame colours guests suggested, grouped by print and colour; only those that still differ from the print's frame today.
+  app.get('/api/collections/:id/frame-suggestions', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const col = one('SELECT * FROM collections WHERE id = ?', id);
+    if (!col) return notFound(rep);
+    const prints = (col ? x.collectionDto(col).layout?.prints : null) as { id: number; frame: { color: string } | null }[] ?? [];
+    const rows = all("SELECT f.print_id, f.color, f.reviewer FROM share_frames f JOIN shares s ON s.id = f.share_id WHERE s.kind = 'collection' AND s.target_id = ? ORDER BY f.ts", id);
+    const g = new Map<string, { printId: number; color: string; by: string[] }>();
+    for (const r of rows) {
+      const p = prints.find((q) => q.id === r.print_id);
+      if (!p?.frame || p.frame.color === r.color) continue;
+      (g.get(`${r.print_id}/${r.color}`) ?? g.set(`${r.print_id}/${r.color}`, { printId: r.print_id, color: r.color, by: [] }).get(`${r.print_id}/${r.color}`)!).by.push(r.reviewer);
+    }
+    return { suggestions: [...g.values()].sort((a, b) => b.by.length - a.by.length) };
+  });
+  app.delete('/api/collections/:id/frame-suggestions', async (req) => {
+    const q = req.query as Row, id = num((req.params as Row).id);
+    return { removed: db.prepare("DELETE FROM share_frames WHERE print_id = ? AND color = ? AND share_id IN (SELECT id FROM shares WHERE kind = 'collection' AND target_id = ?)").run(num(q.printId), String(q.color ?? ''), id).changes };
   });
   app.delete('/api/collections/:id/layout-suggestions/:sid', async (req) => {
     const q = req.params as Row;
@@ -262,6 +281,26 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_layouts(share_id, reviewer, layout, note, ts) VALUES(?, ?, ?, ?, ?) ON CONFLICT(share_id, reviewer) DO UPDATE SET layout = excluded.layout, note = excluded.note, ts = excluded.ts')
       .run(r.share.id, reviewer, JSON.stringify(layout), note, new Date().toISOString());
+    return { ok: true };
+  });
+
+  // A guest suggests another colour for one print's frame. One per person per print; null takes it back. Kept apart until the photographer applies it.
+  app.post('/api/s/:token/frame', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'review')) return;
+    const r = resolve((req.params as Row).token, req, rep);
+    if (!r) return;
+    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    const b = (req.body ?? {}) as Row;
+    const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
+    const printId = num(b.printId);
+    const print = ((r.layout as { prints?: { id: number; frame: { color: string } | null }[] } | undefined)?.prints ?? []).find((p) => p.id === printId);
+    if (!print?.frame) return rep.code(400).send({ error: 'That print has no frame' });
+    if (b.color === null) { db.prepare('DELETE FROM share_frames WHERE share_id = ? AND reviewer = ? AND print_id = ?').run(r.share.id, reviewer, printId); return { ok: true }; }
+    if (typeof b.color !== 'string' || !(FRAME_COLOURS as readonly string[]).includes(b.color) || b.color === 'none') return rep.code(400).send({ error: 'Choose a frame colour' });
+    if ((one('SELECT COUNT(*) n FROM share_frames WHERE share_id = ?', r.share.id) as Row).n >= 2000) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
+    db.prepare('INSERT INTO share_frames(share_id, reviewer, print_id, color, ts) VALUES(?, ?, ?, ?, ?) ON CONFLICT(share_id, reviewer, print_id) DO UPDATE SET color = excluded.color, ts = excluded.ts')
+      .run(r.share.id, reviewer, printId, b.color, new Date().toISOString());
     return { ok: true };
   });
 

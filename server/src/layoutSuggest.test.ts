@@ -62,3 +62,32 @@ describe('layout suggestions from a guest', () => {
     expect((await call('GET', `/api/collections/${colId}/layout-suggestions`)).body.suggestions).toEqual([]);
   });
 });
+
+describe('frame colour suggestions from a guest', () => {
+  let tk: string, cid: number;
+  beforeAll(async () => {
+    cid = (await call('POST', '/api/collections', { name: 'Frames', layout: { mode: 'row', prints: [print(1, 'A3', { frame: { size: 'A2', mat: 'white', color: 'black' } }), print(2, 'A4')] } })).body.id;
+    tk = (await call('POST', '/api/shares', { kind: 'collection', id: cid, allowReview: true })).body.token;
+  });
+  it('are grouped for the photographer, and only while they differ from the frame today', async () => {
+    expect((await call('POST', `/api/s/${tk}/frame`, { reviewer: 'Ann', printId: 1, color: 'oak' })).status).toBe(200);
+    expect((await call('POST', `/api/s/${tk}/frame`, { reviewer: 'Bob', printId: 1, color: 'oak' })).status).toBe(200);
+    expect((await call('POST', `/api/s/${tk}/frame`, { reviewer: 'Cy', printId: 1, color: 'black' })).status).toBe(200); // same as now: not shown
+    const list = (await call('GET', `/api/collections/${cid}/frame-suggestions`)).body.suggestions;
+    expect(list).toEqual([{ printId: 1, color: 'oak', by: ['Ann', 'Bob'] }]);
+    expect((await call('GET', `/api/collections/${colId}/frame-suggestions`)).body.suggestions).toEqual([]); // another composition
+  });
+  it('can be taken back, and are refused when they make no sense', async () => {
+    await call('POST', `/api/s/${tk}/frame`, { reviewer: 'Bob', printId: 1, color: null });
+    expect((await call('GET', `/api/collections/${cid}/frame-suggestions`)).body.suggestions[0].by).toEqual(['Ann']);
+    for (const b of [{ printId: 2, color: 'oak' }, { printId: 9, color: 'oak' }, { printId: 1, color: 'neon' }, { printId: 1, color: 'none' }, { printId: 1, color: 4 }]) {
+      expect((await call('POST', `/api/s/${tk}/frame`, { reviewer: 'Ann', ...b })).status, JSON.stringify(b)).toBe(400); // print 2 has no frame
+    }
+    expect((await call('GET', `/api/collections/${cid}/frame-suggestions`)).body.suggestions[0].by).toEqual(['Ann']); // nothing wiped
+    expect((await call('POST', `/api/s/${shut}/frame`, { reviewer: 'Ann', printId: 1, color: 'oak' })).status).toBe(403);
+  });
+  it('can be dismissed by the photographer', async () => {
+    expect((await call('DELETE', `/api/collections/${cid}/frame-suggestions?printId=1&color=oak`)).body.removed).toBe(1);
+    expect((await call('GET', `/api/collections/${cid}/frame-suggestions`)).body.suggestions).toEqual([]);
+  });
+});

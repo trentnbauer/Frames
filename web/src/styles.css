@@ -267,3 +267,23 @@ textarea.area { background: var(--surface); border-radius: 8px; padding: 8px 10p
 .just .badge { position: absolute; right: 6px; bottom: 6px; font-size: 10.5px; background: rgba(0,0,0,.62); padding: 2px 7px; border-radius: 999px; }
 .selbar { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin: 16px 0; border-radius: 12px; background: var(--surface, #1d1d1f); border: 1px solid rgba(255,255,255,.12); }
 .selbar.float { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 25; background: #1e1e1d; border: 0; border-radius: 14px; padding: 12px 12px 12px 20px; margin: 0; flex-wrap: wrap; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 12px 30px rgba(0,0,0,.5); font-size: 13px; max-width: calc(100vw - 20px); }
+
+/* The share page on a phone. Held upright it is one column; held sideways the wall stays put on the left and the rest scrolls on the right. */
+.sm-bar { left: 0; }
+.sm-lb { flex-direction: column; }
+.sm-lbp { width: auto; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .sm-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+  .sm-left h1 { font-size: 28px !important; }
+  .sm-meta { display: none; }
+  .sm-bar { left: calc(100% * 1.15 / 2.15); }
+  .sm-lb { flex-direction: row; }
+  .sm-lbp { width: 340px; overflow-y: auto; }
+}
+/* Sheets that are centred on a desktop come up from the bottom on a phone; the layout editor fills the screen. */
+@media (max-width: 700px) {
+  .sheet-root { align-items: flex-end !important; padding: 0 !important; }
+  .sheet { width: 100% !important; border-radius: 20px 20px 0 0 !important; max-height: 88vh !important; padding: 18px 20px 30px !important; }
+  .lay-root { padding: 0 !important; align-items: stretch !important; }
+  .lay-box { width: 100% !important; max-height: none !important; height: 100% !important; border-radius: 0 !important; padding: 16px 16px 28px !important; }
+}
