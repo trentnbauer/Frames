@@ -13,6 +13,7 @@ export function AiSettings({ server = false }: { server?: boolean }) {
   const base = server ? '/admin/ai' : '/ai'; // the administrator's list for everyone, or your own
   const d = useApi<Data>(`${base}/sources`);
   const status = useApi<Status>('/ai/status');
+  const everything = (status.data?.done ?? 0) + (status.data?.pending ?? 0) + (status.data?.failed ?? 0);
   const { setSettings } = useStore();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const one = useOne();
@@ -52,7 +53,14 @@ export function AiSettings({ server = false }: { server?: boolean }) {
           <h3>Analysis</h3>
           <p>{status.data.done} analysed · {status.data.pending} waiting{status.data.failed > 0 && ` · ${status.data.failed} failed`}{status.data.running && ` · working (${status.data.done}/${status.data.total})`}</p>
           {status.data.lastError && <p className="reason">{status.data.lastError}</p>}
-          <button className="pill" disabled={status.data.running} onClick={async () => { await api('/ai/run?retry=1', { method: 'POST', body: {} }); setTimeout(status.reload, 500); }}>{status.data.running ? 'Analysing…' : status.data.failed ? 'Retry failed and continue' : 'Analyse now'}</button>
+          <div className="form">
+            <button className="pill" disabled={status.data.running} onClick={async () => { await api('/ai/run?retry=1', { method: 'POST', body: {} }); setTimeout(status.reload, 500); }}>{status.data.running ? 'Analysing…' : status.data.failed ? 'Retry failed and continue' : 'Analyse now'}</button>
+            <button className="pill" disabled={status.data.running} onClick={async () => {
+              if (!window.confirm(`Analyse every photograph again (${everything} of them)?\n\nThe AI looks at each one afresh, which takes a while and, on a paid service, costs one request per photograph. Descriptions and suggestions are replaced as each is redone. Tags you have accepted or rejected are kept.`)) return;
+              try { await api('/ai/run?all=1', { method: 'POST', body: {} }); } catch (e) { window.alert((e as Error).message); }
+              setTimeout(status.reload, 500);
+            }}>Re-analyse the whole library</button>
+          </div>
         </div>
       )}
     </>

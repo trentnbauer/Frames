@@ -187,6 +187,25 @@ describe('local provider', () => {
     expect(again.done).toBe(2);
     expect((await photos()).every((p) => p.aiStatus === 'done')).toBe(true);
   });
+  it('can be asked to look at the whole library again, which keeps what was accepted', async () => {
+    const all = (await photos()) as any[];
+    expect(all.every((p) => p.aiStatus === 'done')).toBe(true);
+    const first = all[0];
+    env.db.prepare("UPDATE tags SET accepted = 1 WHERE photo_id = ? AND source = 'ai' AND kind = 'tag'").run(first.id); // the person accepted these
+    const accepted = (env.db.prepare("SELECT name FROM tags WHERE photo_id = ? AND accepted = 1 AND source = 'ai'").all(first.id) as any[]).map((r) => r.name);
+    expect(accepted.length).toBeGreaterThan(0);
+    const chats = seen.chat;
+    const r = (await A.raw('POST', '/api/ai/run?all=1&wait=1', {})).body;
+    expect(seen.chat - chats).toBe(all.length); // one look per photograph, not only the waiting ones
+    expect(r.done).toBe(all.length);
+    expect((await photos()).every((p: any) => p.aiStatus === 'done')).toBe(true);
+    const still = (env.db.prepare("SELECT name FROM tags WHERE photo_id = ? AND accepted = 1 AND source = 'ai'").all(first.id) as any[]).map((r) => r.name);
+    expect(still).toEqual(expect.arrayContaining(accepted));
+    // an ordinary run afterwards has nothing left to do
+    const none = seen.chat;
+    await A.raw('POST', '/api/ai/run?wait=1', {});
+    expect(seen.chat).toBe(none);
+  });
   it('switching AI off stops all calls and hides suggestions from search', async () => {
     await A.put('/api/ai/active', { id: '' });
     const before = seen.chat + seen.embed;

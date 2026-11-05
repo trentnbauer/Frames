@@ -300,6 +300,11 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.post('/api/ai/run', async (req, rep) => {
     if (!aiConfig(db)) return rep.code(400).send({ error: 'AI is off or not fully set up' });
     if ((req.query as Row).retry === '1') db.prepare("UPDATE photos SET ai_attempts = 0 WHERE ai_status = 'error'").run();
+    // Everything again: every photograph goes back to waiting. Suggestions and descriptions are replaced as each is redone; tags already accepted or rejected are kept.
+    if ((req.query as Row).all === '1') {
+      if (x.ai.state.running) return rep.code(409).send({ error: 'Analysis is already running. Wait for it to finish, then start it again.' });
+      db.prepare('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE has_derivs = 1 AND missing = 0').run();
+    }
     const p = x.ai.run();
     if ((req.query as Row).wait === '1') { await p; return aiStatus(); }
     return rep.code(202).send({ started: true });
