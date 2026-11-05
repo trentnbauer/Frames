@@ -15,6 +15,7 @@ services:
       ## Settings, Env file exports every setting and secret as one file for this stack. It sets ALLOW_ENV_EXPORT=false so it cannot be downloaded twice.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      TURNSTILE_DISABLE: ${TURNSTILE_DISABLE:-}
       BACKUP_DIR: /backups
       ## Cloudflare tunnel, run by Frames itself (no separate tunnel container). Leave these empty to run without it.
       ## Easiest: make a tunnel at https://dash.cloudflare.com/?to=/:account/tunnels and set TUNNEL_TOKEN (README, Cloudflare tunnel has the steps)

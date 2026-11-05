@@ -268,15 +268,11 @@ textarea.area { background: var(--surface); border-radius: 8px; padding: 8px 10p
 .selbar { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin: 16px 0; border-radius: 12px; background: var(--surface, #1d1d1f); border: 1px solid rgba(255,255,255,.12); }
 .selbar.float { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 25; background: #1e1e1d; border: 0; border-radius: 14px; padding: 12px 12px 12px 20px; margin: 0; flex-wrap: wrap; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 12px 30px rgba(0,0,0,.5); font-size: 13px; max-width: calc(100vw - 20px); }
 
-/* The share page on a phone. Held upright it is one column; held sideways the wall stays put on the left and the rest scrolls on the right. */
+/* The share page on a phone is one column, held either way up: the wall spans the width of the screen. Only the lightbox puts the photograph and its controls side by side when the screen is short. */
 .sm-bar { left: 0; }
 .sm-lb { flex-direction: column; }
 .sm-lbp { width: auto; }
 @media (orientation: landscape) and (max-height: 520px) {
-  .sm-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
-  .sm-left h1 { font-size: 28px !important; }
-  .sm-meta { display: none; }
-  .sm-bar { left: calc(100% * 1.15 / 2.15); }
   .sm-lb { flex-direction: row; }
   .sm-lbp { width: 340px; overflow-y: auto; }
 }

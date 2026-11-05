@@ -150,14 +150,14 @@ export function ShareMobile(p: Props) {
               <span style={eyebrow}>{wallPrints.length === 1 ? 'The print' : `The ${wallPrints.length} prints`}</span>
               <span style={{ font: `400 11.5px ${mono}`, color: '#8f8c86' }}>{metres(f.w)} × {metres(f.h)} m</span>
             </div>
-            <div style={{ position: 'relative', margin: '0 12px', background: '#161615', borderRadius: 12, padding: '18px 14px 52px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', margin: 0, background: '#161615', padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {canReview && d.layout && (
                 <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a layout again' : 'Suggest a different layout'}</button>
                   {p.layoutSent && <span role="status" style={{ fontSize: 12, color: '#8f8c86' }}>Sent. Thank you.</span>}
                 </div>
               )}
-              <Wall compact prints={shown} mode="free" editing={false} sel={over ?? -1} photos={wallPhotos} over={over} locked share={token} onSelect={openPrint} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
+              <Wall compact fill prints={shown} mode="free" editing={false} sel={over ?? -1} photos={wallPhotos} over={over} locked share={token} onSelect={openPrint} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 20px 0', fontSize: 12, color: '#6f6c67' }}>
               <span>Tap a print to look closer{canReview ? ', rate it or swap it' : ''}.</span>
