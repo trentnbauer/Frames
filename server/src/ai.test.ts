@@ -161,6 +161,16 @@ describe('local provider', () => {
     // 'Harbour' matches the existing 'harbour' (any case); 'made up', a tag nobody has and a colour that is not one are dropped.
     expect(r.picks).toEqual({ subjects: ['harbour'], tags: [], colours: ['blue'] });
   });
+  it('re-checks one photograph now and says what is new', async () => {
+    const h = (await photos()).find((p) => p.file === 'harbour.jpg');
+    env.db.prepare("DELETE FROM tags WHERE photo_id = ? AND source = 'ai'").run(h.id);
+    env.db.prepare('UPDATE photos SET ai_json = NULL, ai_status = NULL WHERE id = ?').run(h.id);
+    const r = (await A.post(`/api/photos/${h.id}/recheck`)).body;
+    expect(r.ai).toBe(true);
+    expect(r.added.length).toBeGreaterThan(0); // suggestions that were not there before
+    expect(r.descriptionChanged).toBe(true);
+    expect(((await A.get(`/api/photos/${h.id}`)).body.tags as any[]).some((t) => !t.accepted && t.source === 'ai')).toBe(true); // they wait for a yes
+  });
   it('uses AI embeddings for "similar photos" when they exist', async () => {
     const h = (await photos()).find((p) => p.file === 'harbour.jpg');
     expect((await A.get(`/api/photos/${h.id}/similar`)).body).toHaveLength(2);

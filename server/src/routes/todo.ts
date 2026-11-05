@@ -12,7 +12,31 @@ const SAMPLE = 24;
  * colours not read yet, and a cloud account that needs reconnecting. Nothing here changes anything.
  */
 export function registerTodo(app: FastifyInstance, x: Ctx) {
-  const { db, all } = x;
+  const { db, all, one, num } = x;
+
+  /**
+   * What each photograph still needs, for the one-at-a-time view: its subjects and tags (a suggestion to approve, or none yet), its place,
+   * and its description (an AI one to approve; a missing one is only asked for on a photograph that is on the list for something else, so
+   * a library full of undescribed photographs does not become a to-do list of thousands). Newest first.
+   */
+  type Need = { tags: boolean; place: boolean; desc: boolean };
+  const needs = (): { id: number; need: Need }[] => {
+    const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status,
+      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.source = 'ai' AND t.accepted = 0) AS pend,
+      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) AS hasSubject,
+      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1) AS hasTag
+      FROM photos p WHERE p.missing = 0 ORDER BY p.id DESC`) as Row[];
+    const out: { id: number; need: Need }[] = [];
+    for (const r of rows) {
+      const tags = !!r.pend || !r.hasSubject || !r.hasTag;
+      const place = !String(r.place ?? '').trim();
+      let aiDesc = false;
+      if (r.description === '' && r.ai_status === 'done' && r.ai_json) { try { const a = JSON.parse(r.ai_json as string); aiDesc = !!a.description && !a.descriptionRejected; } catch { /* unreadable */ } }
+      const desc = aiDesc || ((tags || place) && r.description === '');
+      if (tags || place || desc) out.push({ id: r.id as number, need: { tags, place, desc } });
+    }
+    return out;
+  };
 
   const todo = (): TodoItem[] => {
     const items: TodoItem[] = [];
@@ -34,6 +58,8 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) ORDER BY p.id DESC"));
     add('tags', 'Add a tag', 'No tags yet.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1) ORDER BY p.id DESC"));
+    add('place', 'Name the place', 'No place yet, so these cannot be found by location.',
+      ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.place) = '' ORDER BY p.id DESC"));
     add('colours', 'Colours not read yet', 'The dominant colours are read from the preview, so these cannot be found by colour yet. A scan fills them in.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND (p.palette IS NULL OR p.palette = '' OR p.palette = '[]') ORDER BY p.id DESC"));
 
@@ -64,6 +90,24 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
 
   app.get('/api/todo', async () => {
     const items = todo();
-    return { total: items.reduce((n, i) => n + i.count, 0), kinds: items.length, items };
+    // "Things" are counted per photograph (its tags, its place, its description each once), the way the one-at-a-time view counts them, plus accounts to reconnect.
+    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0);
+    return { total: things, kinds: items.length, items };
   });
+
+  // The one-at-a-time list: each photograph that needs something, and what.
+  app.get('/api/todo/walk', async () => {
+    const list = needs().slice(0, 2000);
+    const info = (id: number) => one('SELECT p.id, p.title, p.w, p.h, sh.name AS shoot, sh.place AS shootPlace FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id = ?', id) as Row;
+    const photos = list.map((n) => { const p = info(n.id); return { id: n.id, title: p.title as string, ar: p.w && p.h ? (p.w as number) / (p.h as number) : 1.5, shoot: p.shoot as string, shootPlace: p.shootPlace as string, need: n.need }; });
+    return { photos, things: photos.reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) };
+  });
+
+  // "Re-check with AI": look at this photograph now and say what is new.
+  app.post('/api/photos/:id/recheck', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM photos WHERE id = ? AND missing = 0', id)) return rep.code(404).send({ error: 'Not found' });
+    return x.ai.analyse(id);
+  });
+
 }
