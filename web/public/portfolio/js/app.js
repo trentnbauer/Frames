@@ -109,6 +109,17 @@
     const name = config.photographerName || 'Your Name Here';
     document.title = `${name} — Photography`;
     document.getElementById('photographer-name').textContent = name;
+    // The photographer's profile picture, if they set one, shown beside the name.
+    const nameEl = document.getElementById('photographer-name');
+    if (config.avatar && !document.getElementById('photographer-avatar')) {
+      const img = document.createElement('img');
+      img.id = 'photographer-avatar';
+      img.src = config.avatar;
+      img.alt = '';
+      img.width = img.height = 72;
+      img.style.cssText = 'border-radius:50%;object-fit:cover;display:block;margin:0 0 14px';
+      nameEl.parentNode.insertBefore(img, nameEl);
+    }
 
     const taglineEl = document.getElementById('tagline');
     taglineEl.textContent = config.tagline || '';

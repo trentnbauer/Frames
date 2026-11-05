@@ -18,6 +18,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
+import { registerProfile } from './routes/profile.js';
 import { registerInsights } from './routes/insights.js';
 import { registerTodo } from './routes/todo.js';
 import { createAccessGate } from './access.js';
@@ -511,6 +512,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
+  registerProfile(app, ctx);
   registerCloud(app, ctx);
   registerAdmin(app, ctx);
   registerPrivacy(app, ctx);

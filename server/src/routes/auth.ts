@@ -4,6 +4,8 @@ import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAll
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
+import fs from 'node:fs';
+import { avatarPath, displayNameOf } from './profile.js';
 import { bindOwner, identitiesOf, linkIdentity, resolveUser, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -123,6 +125,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     return {
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
+      displayName: displayNameOf(x.db), hasAvatar: fs.existsSync(avatarPath(x.cfg.dataDir)),
       id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: cfg.allowSignups !== false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
     };
   });

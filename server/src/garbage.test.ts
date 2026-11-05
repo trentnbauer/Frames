@@ -23,7 +23,7 @@ afterAll(() => { env.app.close(); cleanup(env); });
 
 const BIG = 'x'.repeat(200_000);
 const VALUES: unknown[] = [null, true, false, 0, -1, 1e308, NaN, '', ' ', 'a', BIG, [], [null], ['a'], {}, { a: 1 }, { toString: 1 }, '__proto__', '../etc/passwd', '<script>', '\u0000', 'https://', 'javascript:alert(1)'];
-const KEYS = ['name', 'type', 'host', 'enabled', 'email', 'role', 'folder', 'disabled', 'key', 'clearKey', 'model', 'endpoint', 'embedModel', 'ack', 'id', 'sessions', 'intervals', 'adaptive', 'aiActive', 'publicUrl', 'allow', 'providers', 'appUrl', 'portfolios', 'tunnelToken', 'intervalMin', 'folderId', 'clientId', 'clientSecret', 'operator', 'contact', 'extra', 'collectionId', 'social', 'order', 'fullSize', 'confirm', 'photographerName', 'accentColor', 'tagline', 'captions', 'xmpWriteBack', 'archiveSuggest'];
+const KEYS = ['name', 'type', 'host', 'enabled', 'email', 'role', 'folder', 'disabled', 'key', 'clearKey', 'model', 'endpoint', 'embedModel', 'ack', 'id', 'sessions', 'intervals', 'adaptive', 'aiActive', 'publicUrl', 'allow', 'providers', 'appUrl', 'portfolios', 'tunnelToken', 'intervalMin', 'folderId', 'clientId', 'clientSecret', 'operator', 'contact', 'extra', 'collectionId', 'social', 'order', 'fullSize', 'confirm', 'photographerName', 'displayName', 'image', 'accentColor', 'tagline', 'captions', 'xmpWriteBack', 'archiveSuggest'];
 
 // Every route the server defines, read from the source so a new route is covered without anyone remembering to add it here.
 const ROUTES: [string, string][] = [];
