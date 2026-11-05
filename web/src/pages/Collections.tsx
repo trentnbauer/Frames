@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
-import { checkTarget, parseTarget, printRatio, requiredPx, type Collection, type PhotoLite, type Target } from '../data';
+import type { Collection, PhotoLite } from '../data';
+import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
+import { PrintModal, ShoppingList, Wall } from '../components/CompositionWall';
 import { Header, Img, Justified, Loading } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
@@ -23,9 +25,9 @@ const lightBtn = { background: '#efede8', color: '#0d0d0d', fontWeight: 500, bor
 const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
 const fmt = (n: number | null) => (n === null ? '–' : n.toFixed(1));
 const thumb = (id: number) => imgUrl(id, 'thumb');
-const sizeName = (t: Target) => (t.size === 'custom' ? `${t.widthMm}×${t.heightMm} mm` : t.size === 'none' ? 'pixels only' : t.size);
-const targetShort = (t: Target) => `${t.count} × ${sizeName(t)}`;
-const targetLabel = (t: Target) => [t.count > 1 ? `${t.count} ×` : '', sizeName(t), t.orientation !== 'any' ? t.orientation : '', `${t.ppi} PPI`].filter(Boolean).join(' ');
+/** "3 × A3", "A2 + 2 × A5": what a composition is made of, for its card. */
+const printsShort = (c: Collection) => { const m = new Map<string, number>(); c.layout.prints.forEach((p) => m.set(p.size, (m.get(p.size) || 0) + 1)); return [...m].map(([k, n]) => (n > 1 ? `${n} × ${printSize(k)}` : printSize(k))).join(' + '); };
+const isFull = (prints: Print[]) => prints.length > 0 && prints.every((p) => photosOf(p).length === (p.stack ? 2 : 1));
 const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** The cover of a composition card: only the photographs chosen for the prints, laid out by how many there are. */
@@ -41,19 +43,19 @@ export function CompCover({ c }: { c: Collection }) {
   );
 }
 
-function Card({ c }: { c: Collection }) {
-  const t = c.target;
-  const full = !!t && c.chosenIds.length >= t.count;
+export function Card({ c }: { c: Collection }) {
+  const full = isFull(c.layout.prints);
+  const n = c.layout.prints.length, held = chosenIn(c.layout.prints).length, slots = c.layout.prints.reduce((k, p) => k + (p.stack ? 2 : 1), 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <CompCover c={c} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
         <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
-        <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{t ? targetShort(t) : 'No target'}</span>
+        <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{printsShort(c)}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 3, margin: '8px 0 6px' }}>
-        {t && Array.from({ length: Math.min(t.count, 12) }, (_, i) => <i key={i} style={{ width: 10, height: 14, display: 'inline-block', background: i < c.chosenIds.length ? '#efede8' : 'transparent', boxShadow: i < c.chosenIds.length ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />)}
-        <span style={{ fontSize: 12, color: '#8f8c86', marginLeft: t ? 6 : 0 }}>{!t ? `${c.photoIds.length} photographs` : full ? 'Ready to export' : `${c.chosenIds.length} of ${t.count} chosen · ${c.photoIds.length} candidates`}</span>
+        {c.layout.prints.slice(0, 12).map((p, i) => { const on = photosOf(p).length === (p.stack ? 2 : 1); return <i key={i} style={{ width: 10, height: 14, display: 'inline-block', background: on ? '#efede8' : 'transparent', boxShadow: on ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />; })}
+        <span style={{ fontSize: 12, color: '#8f8c86', marginLeft: 6 }}>{full ? 'Ready to export' : `${held} of ${slots} chosen · ${c.photoIds.length} candidates`}</span>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
         <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 16px', fontSize: 13, fontWeight: 500, background: full ? '#efede8' : 'rgba(255,255,255,.08)', color: full ? '#0d0d0d' : '#efede8' }}>{full ? 'Export for print' : 'Continue picking'}</Link>
@@ -126,7 +128,7 @@ export function Collections() {
             <Link key={c.id} to={`/collections/${c.id}`} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 18, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,.08)', textAlign: 'left' }}>
               <span style={{ display: 'flex', gap: 3, height: 40 }}>{c.chosenIds.slice(0, 6).map((id) => <img key={id} src={thumb(id)} alt="" style={{ height: '100%', aspectRatio: String(byId.get(id)?.ar ?? 1.5), objectFit: 'cover', borderRadius: 2, display: 'block' }} />)}</span>
               <span style={{ font: `400 20px ${serif}` }}>{c.name}</span>
-              <span style={{ fontSize: 12.5, color: '#a8a59f' }}>{c.target ? targetShort(c.target) : ''}</span>
+              <span style={{ fontSize: 12.5, color: '#a8a59f' }}>{printsShort(c)}</span>
               <span style={{ font: `400 12px ${mono}`, color: '#8f8c86' }}>{dayOf(c.printedAt!)}</span>
             </Link>
           ))}
@@ -149,7 +151,13 @@ export function CollectionDetail() {
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
   const guestComments = useApi<{ comments: { id: number; by: string; photoId: number | null; photoTitle: string | null; body: string; at: string }[] }>(`/collections/${id}/comments`);
   const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(false); // moving prints about and changing sizes and frames
+  const [editW, setEditW] = useState(false);
+  const [lay, setLay] = useState<Print[] | null>(null);
+  const [mode, setMode] = useState<Mode>('row');
+  const [selPrint, setSelPrint] = useState(0);
+  const [printModal, setPrintModal] = useState(false);
+  const [note, setNote] = useState('');
   const [qs] = useSearchParams();
   const [adding, setAdding] = useState(qs.get('add') === '1'); // a new, empty composition opens with the photographs to choose from
   const [tab, setTab] = useState<'ranked' | 'face'>('ranked');
@@ -161,7 +169,6 @@ export function CollectionDetail() {
   const [fTag, setFTag] = useState<string[]>([]);
   const [pick, setPick] = useState<Set<number>>(new Set());
   const [over, setOver] = useState<number | null>(null);
-  const [dropNote, setDropNote] = useState('');
   const subjects = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=subject' : null);
   const tagList = useApi<{ name: string; n: number }[]>(adding ? '/tags?kind=tag' : null);
   const filt = new URLSearchParams(); if (fSub.length) filt.set('subject', fSub.join(',')); if (fTag.length) filt.set('tag', fTag.join(','));
@@ -170,11 +177,17 @@ export function CollectionDetail() {
 
   const c = coll.data;
   const byId = new Map((lib.data?.photos ?? []).map((p) => [p.id, p]));
-  const target = c?.target ?? null;
+  // The prints, from the server, kept here while they are edited. A layout that is not a free one is laid out again whenever it changes.
+  useEffect(() => { if (c) { setMode(c.layout.mode); setLay(c.layout.prints); } }, [c?.layout]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prints: Print[] = lay ?? c?.layout.prints ?? [];
+  const wallPrints = mode === 'free' ? prints : arrange(prints, mode);
+  const firstEmpty = wallPrints.findIndex((p) => photosOf(p).length < (p.stack ? 2 : 1));
+  const sel = Math.min(editing ? selPrint : Math.max(0, firstEmpty), Math.max(0, prints.length - 1));
+  const sp = wallPrints[sel];
   const rk = ranking.data;
   const rankOf = new Map((rk?.items ?? []).map((r, i) => [r.id, { ...r, rank: i + 1 }]));
   const order = c ? [...c.photoIds].sort((a, b) => (rankOf.get(a)?.rank ?? 1e9) - (rankOf.get(b)?.rank ?? 1e9)) : [];
-  const problemOf = (pid: number) => { const p = byId.get(pid); return p && target ? checkTarget(p, target).problem : null; };
+  const problemOf = (pid: number) => { const p = byId.get(pid); return p && sp ? printProblem(p, sp) : null; };
   const pool = c ? order.filter((pid) => !c.chosenIds.includes(pid) && !problemOf(pid)).slice(0, 6) : [];
   const state: Fo = fo ?? { champ: pool[0], next: 1, round: 1, done: pool.length < 2 };
 
@@ -192,45 +205,44 @@ export function CollectionDetail() {
   const save = async (patch: Record<string, unknown>) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: patch })); reload(); };
   // Takes a photograph out of this composition (it stays in the library, and any print slot it held is freed).
   const removeFromComp = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' })); reload(); };
-  // A guest's suggestion: swap it into the print it was for (in the same slot), or put it aside.
+  // Saves the prints (laid out as they are shown) and what they hold. The server keeps the chosen photographs in print order.
+  const saveLayout = async (ps: Print[], m: Mode = mode) => {
+    const laid = m === 'free' ? ps : arrange(ps, m);
+    setLay(laid); setMode(m);
+    coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: m, prints: laid } } })); reload();
+  };
+  // A guest's suggestion: swap it into the print it was for (in the same place), or put it aside.
   const useSuggestion = async (forId: number, photoId: number) => {
-    const next = c.chosenIds.map((x) => (x === forId ? photoId : x));
     await api(`/collections/${c.id}/suggestions?forId=${forId}&photoId=${photoId}`, { method: 'DELETE' });
-    await save({ chosenIds: next, order: [...next, ...c.photoIds.filter((x) => !next.includes(x))] });
+    await saveLayout(prints.map((p) => ({ ...p, photoId: p.photoId === forId ? photoId : p.photoId, photoId2: p.photoId2 === forId ? photoId : p.photoId2 })));
   };
   const dismissSuggestion = async (forId: number, photoId: number) => { await api(`/collections/${c.id}/suggestions?forId=${forId}&photoId=${photoId}`, { method: 'DELETE' }); suggestions.reload(); };
   const addPhoto = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' })); reload(); };
-  const req = target ? requiredPx(target) : null;
-  const chosen = c.chosenIds.map((pid) => byId.get(pid)).filter((p): p is PhotoLite => !!p);
-  const count = target?.count ?? 0;
-  const full = !!target && c.chosenIds.length >= count;
+  const chosen = chosenIn(prints).map((pid) => byId.get(pid)).filter((p): p is PhotoLite => !!p);
+  const slotCount = prints.reduce((n, p) => n + (p.stack ? 2 : 1), 0);
+  const full = isFull(prints);
   const tooSmall = order.filter((pid) => problemOf(pid)).length;
   const unrated = order.filter((pid) => !rankOf.get(pid)?.mineN).length;
+  const photoOf = (pid: number) => { const p = byId.get(pid); return p ? { w: p.w, h: p.h } : undefined; };
 
-  // Dragging a candidate (or a print) onto a print slot: it takes that place; one already there goes back to the candidates,
-  // or swaps if it came from another slot. The chosen photographs are also put first, in slot order, so the order survives.
-  const dropOn = (slot: number, pid: number) => {
-    if (!target || printed) return;
-    setOver(null); setDropNote('');
-    const bad = problemOf(pid);
-    if (bad) { setDropNote(`${byId.get(pid)?.title ?? 'That photograph'} cannot go in a print: ${bad}`); return; }
-    const chosenNow = [...c.chosenIds];
-    const from = chosenNow.indexOf(pid);
-    let next: number[];
-    if (from >= 0) {
-      next = [...chosenNow];
-      const to = Math.min(slot, next.length - 1);
-      [next[from], next[to]] = [next[to], next[from]];
-    } else if (slot < chosenNow.length) { next = [...chosenNow]; next[slot] = pid; }
-    else if (chosenNow.length < count) next = [...chosenNow, pid];
-    else return;
-    save({ chosenIds: next, order: [...next, ...c.photoIds.filter((x) => !next.includes(x))] });
+  // A candidate onto a print (dragged, or clicked while that print is the one chosen): it takes that place, and one already
+  // in another print swaps with what was there. One that does not fit is refused with the reason.
+  const assign = (i: number, pid: number) => {
+    if (printed) return;
+    const r = place(wallPrints, i, pid, photoOf);
+    if (!r.prints) { setNote(`${byId.get(pid)?.title ?? 'That photograph'} can’t go in print ${i + 1}. ${r.note}`); return; }
+    setNote(''); void saveLayout(r.prints);
   };
   const toggle = (pid: number) => {
-    if (!target || printed) return;
-    const on = c.chosenIds.includes(pid);
-    if (!on && (c.chosenIds.length >= count || problemOf(pid))) return;
-    save({ chosenIds: on ? c.chosenIds.filter((x) => x !== pid) : [...c.chosenIds, pid] });
+    if (printed) return;
+    if (findPhoto(wallPrints, pid)) { setNote(''); void saveLayout(unplace(wallPrints, pid)); } else assign(sel, pid);
+  };
+  // Changes the selected print; photographs that no longer suit it are kept, with a note saying so.
+  const editSel = (fn: (q: Print) => void) => {
+    const ps = wallPrints.map((p, k) => { if (k !== sel) return p; const q = { ...p, frame: p.frame ? { ...p.frame } : null }; fn(q); if (!q.stack) q.photoId2 = null; return q; });
+    const bad = photosOf(ps[sel]).map((pid) => ({ pid, why: printProblem(byId.get(pid), ps[sel]) })).find((x) => x.why);
+    setNote(bad ? `${byId.get(bad.pid)?.title ?? 'A photograph'} no longer fits print ${sel + 1}: ${bad.why}` : '');
+    void saveLayout(ps);
   };
   function pickSide(side: 0 | 1) {
     if (state.done || pool.length < 2) return;
@@ -263,12 +275,9 @@ export function CollectionDetail() {
   const candidates = ((fSub.length || fTag.length ? found.data?.photos : lib.data?.photos) ?? []).filter((p) => !c.photoIds.includes(p.id));
   const addPicked = async () => { let last = c; for (const pid of pick) last = await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'PUT' }); coll.set(last); setPick(new Set()); reload(); };
   const ins = insights.data;
-  // Each slot is drawn in the shape of the print: portrait when the target is, and capped so a tall slot does not fill the screen.
-  const slotRatio = (pid?: number) => printRatio(target ?? parseTarget({ size: 'none', orientation: 'any', ppi: 300, count: 1 })!, pid ? byId.get(pid) : null);
-  const tall = !!target && (target.orientation === 'portrait' || (target.orientation === 'any' && chosen.some((p) => p.h > p.w)));
-  const slotsMax = count * (tall ? 300 : 420) + (count - 1) * 16;
-  const exportLabel = printed ? 'Printed' : full ? `Export ${count} for print` : target ? `Choose ${count - c.chosenIds.length} more to export` : 'Add a target to export';
+  const exportLabel = printed ? `Export ${slotCount} again` : full ? `Export ${slotCount} and mark as done` : `Choose ${slotCount - chosenIn(prints).length} more to export`;
   const canExport = full && !printed;
+  const live = frameOf(wallPrints, 0);
   const w = rk?.weight ?? 35;
   const fa = byId.get(state.champ), fb = byId.get(pool[state.next]) ?? fa;
   const heading = (t: string) => <h3 style={{ font: `400 19px/1.2 ${serif}`, margin: '0 0 8px', color: '#efede8' }}>{t}</h3>;
@@ -288,30 +297,28 @@ export function CollectionDetail() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {printed && <div style={{ ...eyebrow, color: '#a8a59f', marginBottom: 8 }}>Printed · {dayOf(c.printedAt!)}</div>}
+          {printed && <div style={{ ...eyebrow, color: '#a8a59f', marginBottom: 8 }}>Done · {dayOf(c.printedAt!)}</div>}
           <input className="serif inline" aria-label="Composition name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 52, lineHeight: 1 }} />
           <input aria-label="Theme" className="t2 inline" placeholder="Add a theme" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ fontSize: 13.5, marginTop: 8 }} />
         </div>
         <div style={{ textAlign: 'right' }}>
-          <button onClick={() => (canExport || printed) && setExporting(printed ? 'printed' : 'ready')} disabled={!canExport && !printed} style={{ background: canExport ? '#efede8' : 'rgba(255,255,255,.08)', color: canExport ? '#0d0d0d' : '#8f8c86', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>{exportLabel}</button>
-          <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 8 }}>{printed ? 'In the Printed archive' : `Originals · in print order${target && target.size !== 'none' ? ` · ${target.size === 'custom' ? 'custom size' : target.size} checked` : ''}`}</div>
+          <button onClick={() => (canExport || printed) && setExporting(printed ? 'printed' : 'ready')} disabled={!canExport && !printed} style={{ background: canExport ? '#efede8' : 'rgba(255,255,255,.08)', color: canExport ? '#0d0d0d' : printed ? '#efede8' : '#8f8c86', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>{exportLabel}</button>
+          <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 8, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <span>{printed ? 'Done · the shopping list is below' : 'Originals · in print order · each size checked'}</span>
+            {printed && <button onClick={async () => { await save({ printed: false }); }} style={{ color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Reopen</button>}
+          </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,.08)', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 0', margin: '22px 0 24px', fontSize: 13.5 }}>
-        <span style={eyebrow}>Target</span>
-        {target ? (
-          <>
-            <span><b style={{ fontWeight: 500 }}>{targetLabel(target)}</b>{req && <>, so at least <b style={{ fontWeight: 500 }}>{req[0]} × {req[1]} px</b> each</>}</span>
-            <span style={{ color: '#8f8c86' }}>{c.chosenIds.length} of {count} chosen · {c.photoIds.length} candidates{tooSmall > 0 ? ` · ${tooSmall} too small` : ''}</span>
-          </>
-        ) : <span style={{ color: '#8f8c86' }}>No target yet. Set the number of prints and the size to rank and check candidates.</span>}
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 16, color: '#a8a59f' }}>
-          <span>Ranking: yours {100 - w}% · guests {w}%</span>
-          <button onClick={() => setEditing(!editing)}>{target ? 'Change target' : 'Add target'}</button>
+        <span style={eyebrow}>Prints</span>
+        <span><b style={{ fontWeight: 500 }}>{printsSummary(wallPrints)}</b>, <b style={{ fontWeight: 500 }}>{metres(live.w)} × {metres(live.h)} m</b> on the wall</span>
+        <span style={{ color: '#8f8c86' }}>{chosenIn(prints).length} of {slotCount} chosen · {c.photoIds.length} candidates</span>
+        <span style={{ marginLeft: 'auto', color: '#a8a59f', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+          Ranking: yours {100 - w}% · guests {w}%
+          {editW ? <input type="number" min={0} max={60} step={5} aria-label="Guests’ share of the ranking" defaultValue={w} onBlur={async (e) => { const n = Math.round(Number(e.target.value)); setEditW(false); if (n >= 0 && n <= 60 && n !== w) { await api('/collections/guest-weight', { method: 'PUT', body: { weight: n } }); ranking.reload(); } }} autoFocus style={{ width: 64, borderRadius: 6, padding: '2px 6px' }} /> : <button onClick={() => setEditW(true)} style={{ fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 3 }}>Change</button>}
         </span>
       </div>
-      {editing && <TargetForm t={target} weight={w} onChange={(t) => save({ target: t })} onWeight={async (v) => { await api('/collections/guest-weight', { method: 'PUT', body: { weight: v } }); ranking.reload(); }} onClear={() => { save({ target: null }); setEditing(false); }} />}
 
       {adding && (
         <div style={{ marginBottom: 32 }}>
@@ -338,31 +345,29 @@ export function CollectionDetail() {
         </div>
       )}
 
-      {target && (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count},minmax(0,1fr))`, gap: 16, marginBottom: 32, maxWidth: `min(100%, ${slotsMax}px)` }}>
-          {Array.from({ length: count }, (_, i) => {
-            const p = byId.get(c.chosenIds[i]);
-            return (
-              <div key={i}>
-                <div data-slot={i + 1}
-                  onDragOver={(e) => { if (!printed) { e.preventDefault(); setOver(i); } }} onDragLeave={() => setOver((o) => (o === i ? null : o))}
-                  onDrop={(e) => { e.preventDefault(); const pid = Number(e.dataTransfer.getData('text/plain')); if (pid) dropOn(i, pid); }}
-                  style={{ aspectRatio: String(slotRatio(c.chosenIds[i])), borderRadius: 8, background: over === i ? '#1e1e1d' : '#161615', position: 'relative', overflow: 'hidden', boxShadow: over === i ? 'inset 0 0 0 2px #efede8' : p ? 'inset 0 0 0 1px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {p ? <img src={imgUrl(p.id, 'preview')} alt={p.title} draggable={!printed} onDragStart={(e) => e.dataTransfer.setData('text/plain', String(p.id))} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain', cursor: printed ? 'default' : 'grab' }} />
-                    : <span style={{ fontSize: 12.5, color: '#6f6c67', textAlign: 'center', padding: '0 16px' }}>Print {i + 1}<br />Drag one here, or choose from the ranking below</span>}
-                  <span style={{ position: 'absolute', top: 8, left: 10, font: `italic 400 20px ${serif}`, color: '#efede8', textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>{i + 1}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, color: '#8f8c86', minHeight: 18 }}>
-                  <span>{p ? `${p.title} · ${fmt(rankOf.get(p.id)?.score ?? null)}` : ''}</span>
-                  {p && !printed && <button onClick={() => toggle(p.id)} style={{ color: '#6f6c67' }}>remove</button>}
-                </div>
-              </div>
-            );
-          })}
+      <div style={{ marginBottom: 40 }}>
+        <div style={{ position: 'relative', background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
+          {!printed && <button onClick={() => { setEditing(!editing); setSelPrint(0); }} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 500, background: editing ? '#efede8' : 'rgba(13,13,13,.6)', color: editing ? '#0d0d0d' : '#efede8', boxShadow: editing ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{editing ? 'Done' : 'Edit layout'}</button>}
+          {editing && !printed && (
+            <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {([['row', 'Row'], ['grid', 'Grid'], ['feature', 'Feature']] as const).map(([k, l]) => <button key={k} aria-pressed={mode === k} onClick={() => saveLayout(prints, k)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: mode === k ? '#efede8' : 'transparent', color: mode === k ? '#0d0d0d' : '#efede8', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{l}</button>)}
+              <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,.12)', margin: '0 4px' }} />
+              <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>+ Add a print</button>
+            </div>
+          )}
+          <Wall prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
         </div>
-      )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#6f6c67', marginTop: 8 }}>
+          <span>{editing ? 'Drawn to scale. Drag a print to move it, or use Edit on a print to change its size and frame.' : 'Drawn to scale. Drag a candidate onto a print, or use Edit layout to move prints and change sizes and frames.'}</span>
+          <span style={{ fontFamily: mono }}>1 square = 10 cm</span>
+        </div>
+        {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
+      </div>
+      {printed && <ShoppingList prints={wallPrints} />}
+      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} onChange={editSel}
+        onApplyAll={() => { const f = wallPrints[sel].frame; void saveLayout(wallPrints.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : p.size === f.size ? p.size : f.size } : null }))); }}
+        onDelete={() => { if (wallPrints.length <= 1) return; setPrintModal(false); setSelPrint(0); void saveLayout(wallPrints.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setPrintModal(false)} />}
 
-      {dropNote && <div className="reason" role="status" style={{ marginBottom: 12, fontSize: 13 }}>{dropNote}</div>}
       {c.photoIds.length === 0 && !adding && <div className="empty">This composition is empty. Use Add photos, or Add to composition on a photograph.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: 40 }}>
         <div>
@@ -379,11 +384,12 @@ export function CollectionDetail() {
               {order.map((pid, i) => {
                 const p = byId.get(pid); const r = rankOf.get(pid);
                 if (!p) return null;
-                const prob = problemOf(pid); const on = c.chosenIds.includes(pid);
-                const slot = c.chosenIds.indexOf(pid) + 1;
+                const at = findPhoto(wallPrints, pid); const on = !!at;
+                const prob = on ? null : problemOf(pid);
+                const slot = at ? at.index + 1 : 0;
                 return (
                   <div key={pid} style={{ position: 'relative' }}>
-                    <button draggable={!printed && !!target} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: '#161615', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
+                    <button draggable={!printed} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: '#161615', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
                       <img src={imgUrl(pid, 'thumb')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
                       <span style={{ position: 'absolute', top: 6, left: 8, font: `500 11px ${mono}`, background: 'rgba(0,0,0,.62)', padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
                       {on && <span style={{ position: 'absolute', top: 6, right: printed ? 8 : 36, fontSize: 11, background: '#efede8', color: '#0d0d0d', fontWeight: 500, padding: '2px 8px', borderRadius: 999 }}>Print {slot}</span>}
@@ -504,7 +510,7 @@ export function CollectionDetail() {
             {exporting !== 'printed' ? (
               <>
                 <h2 style={{ font: `400 30px ${serif}`, margin: '0 0 6px' }}>Export for print</h2>
-                <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>{target ? targetLabel(target) : ''}. Untouched originals, numbered in print order.</p>
+                <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>{printsSummary(wallPrints)}. Untouched originals, numbered in print order (a stacked print’s two photographs are two files, never joined).</p>
                 {chosen.map((p, i) => (
                   <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto', gap: 14, alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(255,255,255,.08)' }}>
                     <img src={thumb(p.id)} alt="" style={{ width: 64, height: 44, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
@@ -516,15 +522,15 @@ export function CollectionDetail() {
                 {exporting === 'downloaded' && (
                   <div style={{ marginTop: 18, background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '14px 18px' }}>
                     <div style={{ fontSize: 13.5, marginBottom: 4 }}>Downloads started · {dl?.total ?? chosen.length} files sent to your browser, in order.{dl && dl.skipped > 0 ? ` ${dl.skipped} could not be included because the original file is missing.` : ''}</div>
-                    <div style={{ fontSize: 12.5, color: '#8f8c86', marginBottom: 12 }}>Once they're at the lab, mark this composition as printed. It moves to the Printed archive.</div>
-                    <button onClick={async () => { await save({ printed: true }); setExporting('printed'); }} style={{ ...lightBtn, padding: '11px 20px', fontSize: 14 }}>Mark as printed</button>
+                    <div style={{ fontSize: 12.5, color: '#8f8c86', marginBottom: 12 }}>Once they're at the lab, mark this composition as done. It moves to the Printed archive and its shopping list shows.</div>
+                    <button onClick={async () => { await save({ printed: true }); setExporting('printed'); }} style={{ ...lightBtn, padding: '11px 20px', fontSize: 14 }}>Mark as done</button>
                   </div>
                 )}
               </>
             ) : (
               <>
-                <h2 style={{ font: `400 36px ${serif}`, margin: '0 0 8px' }}>Printed.</h2>
-                <p style={{ fontSize: 13.5, color: '#a8a59f', margin: '0 0 20px' }}>{c.name} is in the Printed archive. Its photographs stay in your library and can join other compositions.</p>
+                <h2 style={{ font: `400 36px ${serif}`, margin: '0 0 8px' }}>Done.</h2>
+                <p style={{ fontSize: 13.5, color: '#a8a59f', margin: '0 0 20px' }}>{c.name} is in the Printed archive, with its shopping list. Its photographs stay in your library and can join other compositions.</p>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => nav('/collections')} style={{ ...lightBtn, padding: '11px 20px', fontSize: 14 }}>Back to compositions</button>
                   <button onClick={() => { setExporting(null); openNew(); }} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: ring }}>Start another</button>
@@ -535,30 +541,6 @@ export function CollectionDetail() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function TargetForm({ t, weight, onChange, onWeight, onClear }: { t: Target | null; weight: number; onChange: (t: Target) => void; onWeight: (w: number) => void; onClear: () => void }) {
-  const v = t ?? parseTarget({ size: 'A3', orientation: 'any', ppi: 300, count: 1 })!;
-  const num = (s: string) => (s === '' ? undefined : Number(s));
-  const upd = (p: Partial<Target>) => onChange({ ...v, ...p } as Target);
-  return (
-    <div className="form" style={{ marginBottom: 24 }}>
-      <label>Prints <input type="number" min={1} value={v.count} onChange={(e) => upd({ count: Math.max(1, Number(e.target.value) || 1) })} /></label>
-      <label>Print size <select value={v.size} onChange={(e) => upd({ size: e.target.value as Target['size'] })}><option value="none">No print size</option><option>A4</option><option>A3</option><option>A2</option><option value="custom">Custom (mm)</option></select></label>
-      {v.size === 'custom' && <>
-        <label>Width mm <input type="number" min={10} value={v.widthMm ?? ''} onChange={(e) => upd({ widthMm: num(e.target.value) })} /></label>
-        <label>Height mm <input type="number" min={10} value={v.heightMm ?? ''} onChange={(e) => upd({ heightMm: num(e.target.value) })} /></label>
-      </>}
-      <label>PPI <input type="number" min={72} max={1200} value={v.ppi} onChange={(e) => upd({ ppi: Math.max(72, Number(e.target.value) || 300) })} /></label>
-      <label>Orientation <select value={v.orientation} onChange={(e) => upd({ orientation: e.target.value as Target['orientation'] })}><option value="any">either</option><option value="portrait">portrait</option><option value="landscape">landscape</option></select></label>
-      <label>Min width px <input type="number" min={0} value={v.minWidth ?? ''} onChange={(e) => upd({ minWidth: num(e.target.value) })} /></label>
-      <label>Min height px <input type="number" min={0} value={v.minHeight ?? ''} onChange={(e) => upd({ minHeight: num(e.target.value) })} /></label>
-      <label>Aspect ratio <input key={v.aspect ?? ''} defaultValue={v.aspect ?? ''} placeholder="3:2" style={{ width: 70 }} aria-label="Aspect ratio" onBlur={(e) => e.target.value !== (v.aspect ?? '') && upd({ aspect: e.target.value || undefined })} /></label>
-      {v.aspect && <label><select aria-label="Aspect ratio is" value={v.aspectMode ?? 'preferred'} onChange={(e) => upd({ aspectMode: e.target.value as 'preferred' | 'required' })}><option value="preferred">preferred</option><option value="required">required</option></select></label>}
-      <label>Guests’ share of the ranking % <input type="number" min={0} max={60} step={5} aria-label="Guests’ share of the ranking" defaultValue={weight} key={weight} onBlur={(e) => { const n = Math.round(Number(e.target.value)); if (n >= 0 && n <= 60 && n !== weight) onWeight(n); }} style={{ width: 70 }} /></label>
-      {t && <button className="t2" onClick={onClear}>No target</button>}
     </div>
   );
 }

@@ -211,6 +211,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS share_comments_share ON share_comments(share_id);
     `);
   },
+  // 14: a composition's layout: the prints on the wall, each with its own size, orientation, frame and place (null: derived from the older target).
+  (db) => {
+    addColumn(db, 'collections', 'layout', 'TEXT');
+  },
 ];
 
 export function migrate(db: DB) {

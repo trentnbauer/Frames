@@ -13,6 +13,7 @@ import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
 import { parseTarget } from './target.js';
+import { chosenOf, deriveLayout, parseLayout, targetOf, type Layout } from './layout.js';
 import { addDays, nextIntervalDays } from './schedule.js';
 import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
@@ -187,9 +188,32 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
     return { id: s.id, name: s.name, source: s.source, place: s.place, ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
+  /** The layout stored for a composition, or null (older compositions have none until they are edited). */
+  const storedLayout = (c: Row, members: Set<number>): Layout | null => { if (!c.layout) return null; try { return parseLayout(JSON.parse(c.layout), members); } catch { return null; } };
+  /** Keeps the chosen photographs (and their order) in step with the prints that hold them. */
+  const syncChosen = (id: number, layout: Layout) => {
+    const chosen = chosenOf(layout);
+    const rows = db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ? ORDER BY pos').all(id) as Row[];
+    const rest = rows.map((r) => r.photo_id as number).filter((p) => !chosen.includes(p));
+    db.transaction(() => {
+      db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ?').run(id);
+      [...chosen, ...rest].forEach((pid, i) => db.prepare('UPDATE collection_photos SET pos = ?, chosen = ? WHERE collection_id = ? AND photo_id = ?').run(i, i < chosen.length ? 1 : 0, id, pid));
+    })();
+  };
+  const saveLayout = (id: number, layout: Layout) => { db.prepare('UPDATE collections SET layout = ? WHERE id = ?').run(JSON.stringify(layout), id); syncChosen(id, layout); };
   const collectionDto = (c: Row) => {
     const rows = db.prepare('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos').all(c.id) as Row[];
-    return { id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', target: c.target ? JSON.parse(c.target) : null, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), printedAt: c.printed_at ?? null };
+    const members = new Set(rows.map((r) => r.photo_id as number));
+    const stored = storedLayout(c, members);
+    const oldChosen = rows.filter((r) => r.chosen).map((r) => r.photo_id as number);
+    const portrait = (pid: number) => { const p = one('SELECT w, h FROM photos WHERE id = ?', pid); return p && p.w && p.h ? p.h > p.w : null; };
+    const layout = stored ?? deriveLayout(c.target ? JSON.parse(c.target) : null, oldChosen, portrait);
+    return {
+      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '',
+      target: stored ? targetOf(stored) : c.target ? JSON.parse(c.target) : null,
+      layout, layoutSaved: !!stored,
+      photoIds: rows.map((r) => r.photo_id), chosenIds: stored ? chosenOf(stored) : oldChosen, printedAt: c.printed_at ?? null,
+    };
   };
 
   const notFound = (rep: any, what = 'Not found') => rep.code(404).send({ error: what });
@@ -366,6 +390,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const id = Number(db.prepare('INSERT INTO collections(name, description, theme, target) VALUES(?, ?, ?, ?)').run(name.slice(0, 120), String(b.description ?? '').slice(0, 1000), String(b.theme ?? '').slice(0, 120), b.target ? JSON.stringify(parseTarget(b.target)) : null).lastInsertRowid);
     // A suggested set arrives with its photographs.
     (Array.isArray(b.photoIds) ? b.photoIds : []).slice(0, 500).forEach((pid: unknown, i: number) => db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) SELECT ?, id, ? FROM photos WHERE id = ?').run(id, i, num(pid)));
+    if (b.layout) {
+      const members = new Set((db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ?').all(id) as Row[]).map((r) => r.photo_id as number));
+      const l = parseLayout(b.layout, members);
+      if (!l) { db.prepare('DELETE FROM collections WHERE id = ?').run(id); return rep.code(400).send({ error: 'That layout is not valid' }); }
+      saveLayout(id, l);
+    }
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
   app.get('/api/collections/:id', async (req, rep) => {
@@ -381,6 +411,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (typeof b.theme === 'string') db.prepare('UPDATE collections SET theme = ? WHERE id = ?').run(b.theme.slice(0, 120), id);
     // Printed: done and archived. Reopening clears it.
     if (typeof b.printed === 'boolean') db.prepare('UPDATE collections SET printed_at = ? WHERE id = ?').run(b.printed ? new Date().toISOString() : null, id);
+    const memberSet = () => new Set((db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ?').all(id) as Row[]).map((r) => r.photo_id as number));
+    if ('layout' in b) {
+      const l = parseLayout(b.layout, memberSet());
+      if (!l) return rep.code(400).send({ error: 'That layout is not valid' });
+      saveLayout(id, l);
+    }
     if ('target' in b) {
       const t = b.target ? parseTarget(b.target) : null;
       db.prepare('UPDATE collections SET target = ? WHERE id = ?').run(t ? JSON.stringify(t) : null, id);
@@ -388,11 +424,21 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       const keep = t ? t.count : 0;
       const chosen = db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ? AND chosen = 1 ORDER BY pos').all(id) as Row[];
       chosen.slice(keep).forEach((r) => db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ? AND photo_id = ?').run(id, r.photo_id));
+      // A composition that has a layout follows the target it is given: that many prints, the first ones keeping their photographs.
+      const cur = storedLayout(one('SELECT * FROM collections WHERE id = ?', id)!, memberSet());
+      if (cur && t && !('layout' in b)) saveLayout(id, deriveLayout(t, chosenOf(cur), () => null));
     }
     if (Array.isArray(b.order)) b.order.forEach((pid: number, i: number) => db.prepare('UPDATE collection_photos SET pos = ? WHERE collection_id = ? AND photo_id = ?').run(i, id, num(pid)));
-    if (Array.isArray(b.chosenIds)) {
-      db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ?').run(id);
-      for (const pid of b.chosenIds) db.prepare('UPDATE collection_photos SET chosen = 1 WHERE collection_id = ? AND photo_id = ?').run(id, num(pid));
+    if (Array.isArray(b.chosenIds) && !('layout' in b)) {
+      const cur = storedLayout(one('SELECT * FROM collections WHERE id = ?', id)!, memberSet());
+      if (cur) {
+        // With a layout, the chosen photographs are what the prints hold: print i gets the i-th one.
+        const want = (b.chosenIds as unknown[]).map((v) => num(v)).filter((v) => memberSet().has(v));
+        saveLayout(id, { ...cur, prints: cur.prints.map((p, i) => ({ ...p, photoId: want[i] ?? null, photoId2: p.photoId2 !== null && !want.includes(p.photoId2) ? p.photoId2 : null })) });
+      } else {
+        db.prepare('UPDATE collection_photos SET chosen = 0 WHERE collection_id = ?').run(id);
+        for (const pid of b.chosenIds) db.prepare('UPDATE collection_photos SET chosen = 1 WHERE collection_id = ? AND photo_id = ?').run(id, num(pid));
+      }
     }
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
@@ -408,6 +454,10 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const { id, photoId } = req.params as Row;
     if (!one('SELECT 1 x FROM collections WHERE id = ?', num(id))) return notFound(rep);
     db.prepare('DELETE FROM collection_photos WHERE collection_id = ? AND photo_id = ?').run(num(id), num(photoId));
+    // A print that held it is left empty.
+    const row = one('SELECT * FROM collections WHERE id = ?', num(id))!;
+    const cur = storedLayout(row, new Set((db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ?').all(num(id)) as Row[]).map((r) => r.photo_id as number).concat(num(photoId))));
+    if (cur && cur.prints.some((p) => p.photoId === num(photoId) || p.photoId2 === num(photoId))) saveLayout(num(id), { ...cur, prints: cur.prints.map((p) => ({ ...p, photoId: p.photoId === num(photoId) ? null : p.photoId, photoId2: p.photoId2 === num(photoId) ? null : p.photoId2 })) });
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', num(id))!);
   });
 

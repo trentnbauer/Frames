@@ -4,7 +4,7 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { Header } from '../components/bits';
-import { CompCover } from './Collections';
+import { Card } from './Collections';
 
 type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: PhotoLite[] };
 
@@ -32,7 +32,7 @@ export function Today() {
     nav(`/collections/${c.id}`);
   };
   const begin = () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review');
-  const active = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && c.target).slice(0, 3);
+  const active = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && !c.printedAt).slice(0, 3);
   const recent = [...(shoots.data ?? [])].filter((x) => x.count > 0).slice(0, 8);
 
   if (s && s.total === 0) {
@@ -102,27 +102,7 @@ export function Today() {
             <Link to="/collections" style={{ fontSize: 13, color: '#a8a59f' }}>All compositions →</Link>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px', marginBottom: 56 }}>
-            {active.map((c) => {
-              const t = c.target!;
-              const full = c.chosenIds.length >= t.count;
-              return (
-                <div key={c.id} style={{ display: 'flex', flexDirection: 'column' }}>
-<CompCover c={c} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
-                    <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
-                    <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{t.count} × {t.size === 'custom' ? 'custom' : t.size === 'none' ? 'pixels' : t.size}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, margin: '8px 0 6px' }}>
-                    {Array.from({ length: Math.min(t.count, 12) }, (_, i) => <i key={i} style={{ width: 10, height: 14, display: 'inline-block', background: i < c.chosenIds.length ? '#efede8' : 'transparent', boxShadow: i < c.chosenIds.length ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />)}
-                    <span style={{ fontSize: 12, color: '#8f8c86', marginLeft: 6 }}>{full ? 'Ready to export' : `${c.chosenIds.length} of ${t.count} chosen · ${c.photoIds.length} candidates`}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                    <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 16px', fontSize: 13, fontWeight: 500, background: full ? '#efede8' : 'rgba(255,255,255,.08)', color: full ? '#0d0d0d' : '#efede8' }}>{full ? 'Export for print' : 'Continue picking'}</Link>
-                    <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 14px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>Open</Link>
-                  </div>
-                </div>
-              );
-            })}
+            {active.map((c) => <Card key={c.id} c={c} />)}
           </div>
         </>
       )}
