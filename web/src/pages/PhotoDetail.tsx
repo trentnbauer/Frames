@@ -26,6 +26,7 @@ export function PhotoDetail() {
   const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
   const colls = useApi<Collection[]>('/collections');
   const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
+  const comments = useApi<{ comments: { id: number; by: string; body: string; at: string }[] }>(`/photos/${id}/comments`);
   const [msg, setMsg] = useState('');
   // Opened from the To do list: Previous and Next walk what still needs doing, not the whole library.
   const [qs] = useSearchParams();
@@ -144,6 +145,12 @@ export function PhotoDetail() {
             {p.xmpRating && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Rated {p.xmpRating}/5 in another app (not counted as a review).</div>}
           </div>
 
+          {(comments.data?.comments ?? []).length > 0 && (
+            <div>
+              <div style={eyebrow}>Guest comments</div>
+              {comments.data!.comments.map((c) => <div key={c.id} style={{ marginBottom: 8, fontSize: 13 }}><span style={{ color: '#a8a59f' }}>{c.by}</span> · {c.body}</div>)}
+            </div>
+          )}
           <div>
             <div style={eyebrow}>Compositions</div>
             {(colls.data ?? []).filter((c) => !c.printedAt || inComp(c)).map((c) => (

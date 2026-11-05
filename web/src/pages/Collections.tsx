@@ -147,6 +147,7 @@ export function CollectionDetail() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const insights = useApi<Insights>(`/collections/${id}/insights`);
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
+  const guestComments = useApi<{ comments: { id: number; by: string; photoId: number | null; photoTitle: string | null; body: string; at: string }[] }>(`/collections/${id}/comments`);
   const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
   const [editing, setEditing] = useState(false);
   const [qs] = useSearchParams();
@@ -444,6 +445,16 @@ export function CollectionDetail() {
             <div style={{ marginBottom: 10 }}>{rk && rk.guests > 0 ? `${rk.guests} ${rk.guests === 1 ? 'guest' : 'guests'} rated these photographs. Their scores count for ${w}% of the ranking.` : 'No one has rated these yet. Send a link and their scores feed the ranking.'}</div>
             <button onClick={() => setSharing(true)} style={{ borderRadius: 999, padding: '8px 14px', fontSize: 13, boxShadow: ring, color: '#efede8' }}>{rk && rk.guests > 0 ? 'Ask more people' : 'Share for review'}</button>
           </div>
+          {(guestComments.data?.comments ?? []).length > 0 && (
+            <div>{heading('Guest comments')}
+              {guestComments.data!.comments.slice(0, 12).map((cm) => (
+                <div key={cm.id} style={{ marginBottom: 10 }}>
+                  <div style={{ color: '#efede8' }}>{cm.by} <span style={{ color: '#6f6c67' }}>· {cm.photoId ? <Link className="t2" to={`/photo/${cm.photoId}`}>{cm.photoTitle ?? 'a photograph'}</Link> : 'the whole set'}</span></div>
+                  <div>{cm.body}</div>
+                </div>
+              ))}
+            </div>
+          )}
           {(suggestions.data?.suggestions ?? []).length > 0 && !printed && (
             <div>{heading('Guest suggestions')}
               {suggestions.data!.suggestions.map((g) => (

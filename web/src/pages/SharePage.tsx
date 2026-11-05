@@ -130,16 +130,44 @@ export function SharePage() {
           </div>
         </div>
       )}
+      {d.allowReview && (
+        <div style={{ marginTop: 32 }}>
+          <div className="label" style={{ marginBottom: 8 }}>A comment for the person who shared this</div>
+          <CommentBox token={token} reviewer={reviewer} photoId={null} placeholder="Say what you think of the whole set…" />
+        </div>
+      )}
       {look !== null && (
         <div className="review-screen" role="dialog" aria-label="Photograph">
           <div className="counter">{look + 1} <span>/ {photos.length}</span></div>
           <button className="esc" onClick={() => setLook(null)}>Close</button>
           <div className="photo"><Fit p={photos[look]} /></div>
+          {d.allowReview && <div style={{ position: 'absolute', bottom: 24, left: 56, right: 56, display: 'flex', justifyContent: 'center' }}><CommentBox key={photos[look].id} token={token} reviewer={reviewer} photoId={photos[look].id} placeholder="Comment on this photograph…" /></div>}
           <button className="lbnav" style={{ left: 12 }} aria-label="Previous" onClick={() => setLook((look + photos.length - 1) % photos.length)}>‹</button>
           <button className="lbnav" style={{ right: 12 }} aria-label="Next" onClick={() => setLook((look + 1) % photos.length)}>›</button>
         </div>
       )}
     </Shell>
+  );
+}
+
+/** A comment for the photographer. Guests cannot read comments back (theirs or anyone's): it is sent, and that is all. */
+function CommentBox({ token, reviewer, photoId, placeholder }: { token: string; reviewer: string; photoId: number | null; placeholder: string }) {
+  const [text, setText] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [err, setErr] = useState('');
+  const send = async () => {
+    if (!text.trim() || state === 'sending') return;
+    setState('sending'); setErr('');
+    const r = await fetch(`/api/s/${token}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoId, body: text, reviewer }) });
+    if (r.ok) { setText(''); setState('sent'); } else { setErr((await r.json().catch(() => ({}))).error ?? 'Could not send that'); setState('error'); }
+  };
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <textarea aria-label={placeholder} className="area" rows={2} maxLength={1000} placeholder={placeholder} value={text} onChange={(e) => { setText(e.target.value); if (state === 'sent') setState('idle'); }} onKeyDown={(e) => e.stopPropagation()} style={{ flex: 1, minWidth: 240, maxWidth: 520 }} />
+      <button className="pill" onClick={send} disabled={!text.trim() || state === 'sending'}>Send</button>
+      {state === 'sent' && <span className="muted" role="status" style={{ fontSize: 12.5, alignSelf: 'center' }}>Sent. Only the person who shared this will see it.</span>}
+      {state === 'error' && <span className="reason" role="alert" style={{ fontSize: 12.5, alignSelf: 'center' }}>{err}</span>}
+    </div>
   );
 }
 

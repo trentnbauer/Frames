@@ -83,6 +83,29 @@ describe('ranking a composition', () => {
     expect((await A.get(`/api/collections/${compId}/suggestions`)).body.suggestions).toEqual([]);
   });
 
+  it('lets a guest comment on the link or a photograph, for the photographer only', async () => {
+    const shareId = (await A.get('/api/shares?kind=collection&id=' + compId)).body.find((l: any) => l.token === token).id;
+    const say = (payload: object) => env.app.inject({ method: 'POST', url: `/api/s/${token}/comment`, payload });
+    expect((await say({ body: 'Lovely set', reviewer: 'Ana' })).statusCode).toBe(200);
+    expect((await say({ body: ' warmer please ', photoId: ids[1], reviewer: 'Sam' })).statusCode).toBe(200);
+    expect((await say({ body: '   ', reviewer: 'Sam' })).statusCode).toBe(400); // nothing written
+    expect((await say({ body: 'x', photoId: 99999 })).statusCode).toBe(400); // not on this link
+    const mine = (await A.get(`/api/shares/${shareId}/comments`)).body.comments as any[];
+    expect(mine.map((c) => [c.by, c.photoId, c.body])).toEqual(expect.arrayContaining([['Ana', null, 'Lovely set'], ['Sam', ids[1], 'warmer please']]));
+    expect((await A.get(`/api/collections/${compId}/comments`)).body.comments.length).toBe(mine.length);
+    expect((await A.get(`/api/photos/${ids[1]}/comments`)).body.comments.map((c: any) => c.body)).toEqual(['warmer please']);
+    // a guest cannot read any of it: the guest side has no way to list comments
+    expect((await env.app.inject(`/api/s/${token}/comments`)).statusCode).toBe(404);
+    expect(JSON.stringify((await env.app.inject(`/api/s/${token}`)).json())).not.toMatch(/warmer|Lovely/);
+    expect((await A.del(`/api/comments/${mine[0].id}`)).body.removed).toBe(1);
+    expect((await A.get(`/api/shares/9999/comments`)).status).toBe(404);
+  });
+
+  it('refuses comments when the link does not allow review', async () => {
+    const closed = (await A.post('/api/shares', { kind: 'collection', id: compId, allowReview: false })).body.token;
+    expect((await env.app.inject({ method: 'POST', url: `/api/s/${closed}/comment`, payload: { body: 'hi' } })).statusCode).toBe(403);
+  });
+
   it('refuses suggestions when the link does not allow review', async () => {
     const closed = (await A.post('/api/shares', { kind: 'collection', id: compId, allowReview: false })).body.token;
     expect((await env.app.inject({ method: 'POST', url: `/api/s/${closed}/suggest`, payload: { forId: ids[0], photoId: ids[1] } })).statusCode).toBe(403);
