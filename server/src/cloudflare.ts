@@ -15,7 +15,8 @@ export type AccessApp = { id: string; name: string; aud: string };
 export type AccessPolicy = { id: string; name: string };
 /** The shape of an Access application Frames asks for: one or more public paths (host/path/*) behind one policy. */
 export type AccessAppBody = { name: string; destinations: string[]; session: string };
-export type AccessPolicyBody = { name: string; decision: 'allow' | 'bypass'; emails?: string[]; domains?: string[] };
+/** `replaces` names an earlier policy of ours on the same application to change in place (renamed), so switching between allow and bypass never leaves two. */
+export type AccessPolicyBody = { name: string; decision: 'allow' | 'bypass'; emails?: string[]; domains?: string[]; replaces?: string };
 
 export function cloudflare(token: string, accountId: string, base = process.env.CLOUDFLARE_API_BASE || 'https://api.cloudflare.com/client/v4') {
   async function call<T = any>(method: string, path: string, body?: unknown): Promise<T> {
@@ -98,7 +99,7 @@ export function cloudflare(token: string, accountId: string, base = process.env.
     async saveAccessPolicy(appId: string, b: AccessPolicyBody): Promise<void> {
       const body = { name: b.name, decision: b.decision, include: b.decision === 'bypass' ? [{ everyone: {} }] : [...(b.emails ?? []).map((email) => ({ email: { email } })), ...(b.domains ?? []).map((domain) => ({ email_domain: { domain } }))] };
       const existing = await call<AccessPolicy[]>('GET', `${acct}/access/apps/${appId}/policies`);
-      const mine = existing.find((p) => p.name === b.name);
+      const mine = existing.find((p) => p.name === b.name) ?? (b.replaces ? existing.find((p) => p.name === b.replaces) : undefined);
       if (mine) await call('PUT', `${acct}/access/apps/${appId}/policies/${mine.id}`, body);
       else await call('POST', `${acct}/access/apps/${appId}/policies`, body);
     },

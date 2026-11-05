@@ -69,7 +69,7 @@ const HEADINGS: Partial<Record<Sec, string[]>> = {
   'Env file': ['Download', 'Using it', 'Status'],
   'Shared AI': ['AIs for everyone on this server'],
   'Cloud services': ['Client ID', 'Client secret', 'Redirect address'],
-  'Cloudflare tunnel': ['Run the tunnel', 'API token', 'Account ID', 'Addresses', 'App URL', 'Portfolios', 'Protect the App URL with Cloudflare Access', 'What Frames sets up', 'The tunnel log'],
+  'Cloudflare tunnel': ['Run the tunnel', 'API token', 'Account ID', 'Addresses', 'App URL', 'Portfolios', 'Who can reach the App URL', 'Invitation only', 'Open to everyone', 'What Frames sets up', 'The tunnel log'],
 };
 const ALL: Sec[] = [...YOUR_GROUPS, ...ADMIN_GROUPS].flatMap((g) => g.items).concat('About');
 const ADMIN_SET = new Set<Sec>(ADMIN_GROUPS.flatMap((g) => g.items));

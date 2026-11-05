@@ -245,6 +245,7 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
         const ok = (result: unknown) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ success: true, result })); };
         if ((m = /\/access\/apps\/([^/]+)\/policies/.exec(url.pathname))) {
           if (req.method === 'GET') return ok(cf.policies.filter((x) => x.app === m![1]));
+          if (req.method === 'PUT') { const id = url.pathname.split('/').pop(); cf.policies = cf.policies.map((x) => (x.id === id ? { id, app: m![1], ...j } : x)); return ok({}); }
           cf.policies.push({ id: `p${++cf.seq}`, app: m[1], ...j }); return ok({});
         }
         if (/\/access\/apps(\/[^/]+)?$/.test(url.pathname)) {
@@ -341,7 +342,17 @@ describe('Frames sets up the tunnel through the Cloudflare API', () => {
     expect(shown[0]).toMatchObject({ addresses: ['app.example.org'], who: ['alice@x.test', '@family.test'] });
     expect(shown[1].addresses).toEqual(expect.arrayContaining(['app.example.org/s/*', 'app.example.org/portfolio/*']));
     await A.put('/api/tunnel', { protect: false });
-    expect(cf.apps.find((a) => a.name === 'Frames (app.example.org)')).toBeUndefined(); // un-ticking removes what it made
+    // Turning it off opens the address (policy: bypass, in place of the allow policy) rather than deleting the application.
+    const main2 = cf.apps.find((a) => a.name === 'Frames (app.example.org)');
+    expect(main2).toBeDefined();
+    expect(cf.policies.filter((p) => p.app === main2.id)).toHaveLength(1);
+    expect(cf.policies.find((p) => p.app === main2.id)).toMatchObject({ name: 'Frames: public', decision: 'bypass', include: [{ everyone: {} }] });
+    expect((await A.get('/api/tunnel')).body.accessApps.map((a: any) => `${a.decision}:${a.name}`)).toContain('bypass:Frames (app.example.org)');
+    await A.put('/api/tunnel', { protect: true }); // and turning it back on puts the allow policy back, in the same place
+    await settle();
+    expect(cf.policies.filter((p) => p.app === main2.id)).toHaveLength(1);
+    expect(cf.policies.find((p) => p.app === main2.id)).toMatchObject({ name: 'Frames: allowed people', decision: 'allow' });
+    await A.put('/api/tunnel', { protect: false });
   });
   it('still puts the Access login in place when the team domain cannot be read, and says which permission is missing', async () => {
     cf.orgDenied = true;

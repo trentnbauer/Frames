@@ -1,3 +1,4 @@
+import { signupsOn } from './users.js';
 import type { FastifyInstance } from 'fastify';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting } from './db.js';
@@ -76,7 +77,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
 }
 
 export function registerPrivacy(app: FastifyInstance, x: Ctx) {
-  app.get('/privacy', async (_req, rep) => rep.type('text/html').header('Cache-Control', 'no-cache').send(renderPrivacy(x.sys, { signups: x.cfg.allowSignups !== false })));
+  app.get('/privacy', async (_req, rep) => rep.type('text/html').header('Cache-Control', 'no-cache').send(renderPrivacy(x.sys, { signups: signupsOn(x.sys, x.cfg.allowSignups !== false) })));
 
   // Administrators fill in who runs the server. Plain text only, length-limited.
   app.get('/api/admin/privacy', async () => loadPrivacy(x.sys));

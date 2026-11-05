@@ -105,14 +105,22 @@ export function TunnelSettings() {
           <input type="checkbox" aria-label="Portfolios" checked={t.config.portfolios} onChange={(e) => save({ portfolios: e.target.checked })} />
           <span><b>Portfolios</b>: also serve each person’s portfolio through this tunnel. A portfolio address shows only that person’s public portfolio, nothing else.</span>
         </label>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14 }}>
-          <input type="checkbox" aria-label="Protect with Cloudflare Access" checked={t.protect} disabled={t.protectForced} onChange={(e) => save({ protect: e.target.checked })} />
-          <span><b>Protect the App URL with Cloudflare Access</b>: Frames sets up the Access login for you, lets in the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on the allowed list under Settings, Sign-in & access (emails and whole domains), adds <i>Cloudflare Access</i> as a sign-in method and leaves the share links and portfolio public. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After it is set up, use <b>Test sign-in</b> under Settings, Sign-in & access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</span>
-        </label>
+        <div style={{ marginTop: 14 }}>
+          <b>Who can reach the App URL</b>
+          <div role="radiogroup" aria-label="Who can reach the App URL" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, maxWidth: 620 }}>
+            {([[true, 'Invitation only', <>Cloudflare Access checks everyone against the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on your allowed list (Settings, Sign-in & access) before Frames even loads.</>], [false, 'Open to everyone', <>Cloudflare lets everyone through to Frames. If Frames’ own sign-in is on, it still asks people to sign in.</>]] as const).map(([on, name, hint]) => (
+              <button key={name} role="radio" aria-checked={t.protect === on} aria-label={name} disabled={t.protectForced && !on} onClick={() => t.protect !== on && save({ protect: on })}
+                style={{ textAlign: 'left', padding: '10px 14px', borderRadius: 10, boxShadow: `inset 0 0 0 1px ${t.protect === on ? 'var(--text)' : 'var(--outline)'}`, background: t.protect === on ? 'rgba(255,255,255,.05)' : 'transparent', opacity: t.protectForced && !on ? 0.5 : 1 }}>
+                <b>{name}</b><br /><span className="muted" style={{ fontSize: 13 }}>{hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: 13, maxWidth: 620, margin: '8px 0 0' }}>Either way, share links and portfolios stay public. Invitation only also adds <i>Cloudflare Access</i> as a sign-in method; choosing Open to everyone leaves the Access application in Cloudflare with a public (bypass) policy rather than deleting it. Needs the API token to have <i>Access: Apps and Policies, Edit</i> and, to add the sign-in method, <i>Access: Organizations, Identity Providers, and Groups, Read</i>. After Invitation only is set up, use <b>Test sign-in</b> under Settings, Sign-in & access (through the App URL) and turn on <b>Require sign-in</b> to sign people in from their Access login.</p>
+        </div>
         {t.protectForced && (
           <p style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 0 24px', fontSize: 12.5, color: 'var(--muted)', maxWidth: 600 }}>
             <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" style={{ color: 'var(--faint)' }}><rect x="0.5" y="5" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" /><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" /></svg>
-            Required while only people on the allowed list can sign in. Set Sign-in & access to “Anyone who signs in” to turn it on or off yourself.
+            Invitation only is required while only people on the allowed list can sign in. Set Sign-in & access to “Anyone who signs in” to choose yourself.
             <a href="/settings?section=access" style={{ textDecoration: 'underline' }}>Change who is allowed in</a>
           </p>
         )}
