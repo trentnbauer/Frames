@@ -13,12 +13,14 @@ const pct = (v: number) => `${v}%`;
 export type Pic = { id: number; title: string; w: number; h: number; ar: number };
 
 /** The wall, drawn to scale: each print at its size, with its frame and mount, and the photographs in it. */
-export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
+export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
   prints: Print[]; mode: Mode; editing: boolean; sel: number; photos: Map<number, Pic>; over: number | null; locked: boolean;
   /** A share link's token, when the pictures are served through it (a guest's page). */
   share?: string;
   /** Short labels under the prints ("1 · A3"), for a narrow screen. */
   compact?: boolean;
+  /** Use the whole width there is (a phone), only held back so that a tall wall is not taller than the screen. */
+  fill?: boolean;
   onSelect: (i: number) => void; onEdit: (i: number) => void; onMoved: (prints: Print[]) => void;
   onOver: (i: number | null) => void; onDropPhoto: (i: number, pid: number) => void;
 }) {
@@ -57,7 +59,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
 
   const cell = (100 / f.W) * 100, cellH = (100 / f.H) * 100;
   return (
-    <div ref={ref} style={{ position: 'relative', width: `min(100%, calc(430px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }} data-mode={mode}>
+    <div ref={ref} style={{ position: 'relative', width: fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(430px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }} data-mode={mode}>
       {shown.map((p, i) => {
         const [W, H] = dims(p), on = editing && i === sel, isOver = over === i;
         const [pw, phh] = or(p.size, p.orientation), fm = mouldOf(p);
