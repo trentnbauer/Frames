@@ -98,6 +98,22 @@ export async function parseQuery(c: AiCfg, q: string): Promise<ParsedQuery | nul
   } catch { return null; }
 }
 
+export type FilterPicks = { subjects: string[]; tags: string[]; colours: string[] };
+/**
+ * Which of the library's own subjects, tags and colours fit a composition's name? The model is shown the names that exist and may
+ * only pick from them: anything it makes up is dropped. Null if it cannot answer or AI is off.
+ */
+export async function suggestFilters(c: AiCfg, title: string, known: { subjects: string[]; tags: string[]; colours: string[] }): Promise<FilterPicks | null> {
+  try {
+    const a = await askJson(c, `A photographer is making a composition (a set of prints) called "${title.replace(/"/g, "'").slice(0, 120)}". Choose which of the photographer's existing subjects, tags and colours describe the photographs it should contain. Answer with JSON only, in exactly this shape: {"subjects": [], "tags": [], "colours": []}. Choose only from these lists, copying names exactly, and choose nothing that does not clearly fit.\nSubjects: ${JSON.stringify(known.subjects)}\nTags: ${JSON.stringify(known.tags)}\nColours: ${JSON.stringify(known.colours)}`);
+    const only = (v: unknown, allowed: string[]) => {
+      const set = new Map(allowed.map((n) => [n.toLowerCase(), n]));
+      return [...new Set((Array.isArray(v) ? v : []).map((n) => set.get(String(n).trim().toLowerCase())).filter((n): n is string => !!n))].slice(0, 12);
+    };
+    return { subjects: only(a?.subjects, known.subjects), tags: only(a?.tags, known.tags), colours: only(a?.colours, known.colours) };
+  } catch { return null; }
+}
+
 export async function ping(c: AiCfg): Promise<{ ok: boolean; detail: string }> {
   try {
     const a = await askJson(c, 'Answer with JSON only: {"ok": true}');

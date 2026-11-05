@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { fuzzyNames } from '../fuzzy';
+import { useStore } from '../store';
 import type { NewCompositionStart } from '../ui';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
@@ -52,6 +53,10 @@ function PickField({ kind, title, items, chosen, fromName, onAdd, onRemove }: { 
  */
 export function NewComposition({ start, onClose }: { start: NewCompositionStart; onClose: () => void }) {
   const nav = useNavigate();
+  const { settings } = useStore();
+  const aiOn = !!settings && settings.ai !== 'off';
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState('');
   const [name, setName] = useState(start.name ?? '');
   const [count, setCount] = useState(3);
   const [size, setSize] = useState<'A4' | 'A3' | 'A2'>('A3');
@@ -72,6 +77,21 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const add = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: [...m[k], n] })); setDismissed((d) => d.filter((x) => x !== `${k}:${n}`)); };
   const remove = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: m[k].filter((x) => x !== n) })); setDismissed((d) => [...d, `${k}:${n}`]); };
 
+  // The AI reads the name and picks from the subjects, tags and colours the library already has.
+  const askAi = async () => {
+    if (!name.trim() || aiBusy) return;
+    setAiBusy(true); setAiMsg('');
+    try {
+      const r = await api<{ ai: boolean; picks: Record<Kind, string[]> | null }>('/ai/suggest-filters', { body: { name } });
+      if (!r.picks) { setAiMsg(r.ai ? 'The AI could not answer just now. Try again.' : 'AI is off. Turn it on in Settings, Your AI.'); return; }
+      let n = 0;
+      for (const k of ['subject', 'tag', 'colour'] as Kind[]) {
+        const picked = r.picks[`${k}s` as unknown as Kind] ?? [];
+        for (const nm of picked) if (!chosen(k).includes(nm)) { add(k, nm); n++; }
+      }
+      setAiMsg(n ? `The AI added ${n}. Take any away with ✕.` : 'The AI found nothing more that fits.');
+    } catch (e) { setAiMsg((e as Error).message); } finally { setAiBusy(false); }
+  };
   const [found, setFound] = useState<number[]>([]);
   const [looking, setLooking] = useState(false);
   const queries = [...chosen('subject').map((n) => `subject=${encodeURIComponent(n)}`), ...chosen('tag').map((n) => `tag=${encodeURIComponent(n)}`), ...chosen('colour').map((n) => `colour=${encodeURIComponent(n)}`)];
@@ -111,6 +131,12 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
           {(['A4', 'A3', 'A2'] as const).map((v) => <button key={v} aria-pressed={size === v} onClick={() => setSize(v)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, ...opt(size === v) }}>{v}</button>)}
         </div>
+        {aiOn && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-8px 0 16px', flexWrap: 'wrap' }}>
+            <button onClick={askAi} disabled={!name.trim() || aiBusy} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 13, boxShadow: ring, opacity: name.trim() ? 1 : 0.5 }}>{aiBusy ? 'Asking the AI…' : '✨ Find with AI'}</button>
+            <span style={{ fontSize: 12.5, color: '#8f8c86' }} role="status">{aiMsg || 'Reads the name and picks subjects, tags and colours you already have.'}</span>
+          </div>
+        )}
         <PickField kind="subject" title="Subjects to look for (optional)" items={known.subject} chosen={chosen('subject')} fromName={auto.subject} onAdd={(n) => add('subject', n)} onRemove={(n) => remove('subject', n)} />
         <PickField kind="tag" title="Tags to look for (optional)" items={known.tag} chosen={chosen('tag')} fromName={auto.tag} onAdd={(n) => add('tag', n)} onRemove={(n) => remove('tag', n)} />
         <PickField kind="colour" title="Colours to look for (optional)" items={known.colour} chosen={chosen('colour')} fromName={auto.colour} onAdd={(n) => add('colour', n)} onRemove={(n) => remove('colour', n)} />
