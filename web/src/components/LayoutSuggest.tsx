@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { arrange, printsSummary, type Mode, type Print } from '../layout';
 import { PrintModal, Wall, type Pic } from './CompositionWall';
+import { usePhone } from '../pages/ShareMobile';
 
 const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
 
@@ -11,6 +12,7 @@ const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
 export function LayoutSuggest({ token, start, mode: startMode, photos, reviewer, onClose, onSent }: {
   token: string; start: Print[]; mode: Mode; photos: Map<number, Pic>; reviewer: string; onClose: () => void; onSent: () => void;
 }) {
+  const phone = usePhone();
   const [prints, setPrints] = useState<Print[]>(start);
   const [mode, setMode] = useState<Mode>(startMode);
   const [sel, setSel] = useState(0);
@@ -30,8 +32,8 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, reviewer,
   };
   const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: ring });
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <section role="dialog" aria-label="Suggest a different layout" style={{ background: '#161615', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+    <div className="lay-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <section className="lay-box" role="dialog" aria-label="Suggest a different layout" style={{ background: '#161615', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 4px' }}>Suggest a different layout</h2>
           <button className="t2" onClick={onClose}>Close</button>
@@ -44,7 +46,7 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, reviewer,
           <span className="muted" style={{ fontSize: 12.5, marginLeft: 'auto' }}>{printsSummary(wall)}</span>
         </div>
         <div style={{ background: '#0d0d0d', borderRadius: 8, padding: '24px 24px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
-          <Wall prints={wall} mode={mode} editing={editing} sel={sel} photos={photos} over={null} locked={false} share={token} onSelect={setSel} onEdit={(i) => { setSel(i); setOpen(true); }} onMoved={(ps) => set(ps, 'free')} onOver={() => undefined} onDropPhoto={() => undefined} />
+          <Wall compact={phone} prints={wall} mode={mode} editing={editing} sel={sel} photos={photos} over={null} locked={false} share={token} onSelect={setSel} onEdit={(i) => { setSel(i); setOpen(true); }} onMoved={(ps) => set(ps, 'free')} onOver={() => undefined} onDropPhoto={() => undefined} />
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 12px' }}>Click a print to select it, then <b>Edit</b> on it for its size, orientation and frame. Drawn to scale.</p>
         <textarea aria-label="Note with your suggestion" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Say why (optional)" rows={2} style={{ width: '100%', marginBottom: 12 }} />

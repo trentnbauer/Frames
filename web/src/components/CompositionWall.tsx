@@ -13,10 +13,12 @@ const pct = (v: number) => `${v}%`;
 export type Pic = { id: number; title: string; w: number; h: number; ar: number };
 
 /** The wall, drawn to scale: each print at its size, with its frame and mount, and the photographs in it. */
-export function Wall({ prints, mode, editing, sel, photos, over, locked, share, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
+export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
   prints: Print[]; mode: Mode; editing: boolean; sel: number; photos: Map<number, Pic>; over: number | null; locked: boolean;
   /** A share link's token, when the pictures are served through it (a guest's page). */
   share?: string;
+  /** Short labels under the prints ("1 · A3"), for a narrow screen. */
+  compact?: boolean;
   onSelect: (i: number) => void; onEdit: (i: number) => void; onMoved: (prints: Print[]) => void;
   onOver: (i: number | null) => void; onDropPhoto: (i: number, pid: number) => void;
 }) {
@@ -63,12 +65,12 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
         const held = [p.photoId, p.stack ? p.photoId2 : null];
         const cells = p.stack ? 2 : 1;
         const empty = held.slice(0, cells).every((x) => x === null);
-        const label = `${i + 1} · ${sizeName(p.size)} ${p.orientation}${p.stack ? ' · two stacked' : ''} · ${p.frame ? (p.frame.size === p.size ? 'framed' : `in ${sizeName(p.frame.size)} frame`) : 'poster'}`;
+        const label = compact ? `${i + 1} · ${sizeName(p.size)}` : `${i + 1} · ${sizeName(p.size)} ${p.orientation}${p.stack ? ' · two stacked' : ''} · ${p.frame ? (p.frame.size === p.size ? 'framed' : `in ${sizeName(p.frame.size)} frame`) : 'poster'}`;
         return (
           <div key={p.id} data-print={i + 1}
             onPointerDown={(e) => down(i, e)} onDragOver={(e) => { if (!locked) { e.preventDefault(); onOver(i); } }} onDragLeave={() => onOver(null)}
             onDrop={(e) => { e.preventDefault(); onOver(null); const pid = Number(e.dataTransfer.getData('text/plain')); if (pid && !locked) onDropPhoto(i, pid); }}
-            style={{ position: 'absolute', ...rects[i], background: p.frame && p.frame.color !== 'none' ? FRAMES[p.frame.color] : 'transparent', boxShadow: p.frame || !empty ? '0 6px 18px rgba(0,0,0,.45)' : 'none', outline: isOver ? '2px dashed #efede8' : on ? '2px solid #efede8' : 'none', outlineOffset: 4, cursor: editing && !locked ? 'grab' : 'default', touchAction: 'none', userSelect: 'none' }}>
+            style={{ position: 'absolute', ...rects[i], background: p.frame && p.frame.color !== 'none' ? FRAMES[p.frame.color] : 'transparent', boxShadow: p.frame || !empty ? '0 6px 18px rgba(0,0,0,.45)' : 'none', outline: isOver ? '2px dashed #efede8' : on ? '2px solid #efede8' : 'none', outlineOffset: 4, cursor: editing && !locked ? 'grab' : 'default', touchAction: editing && !locked ? 'none' : 'auto', userSelect: 'none' }}>
             {p.frame && <div style={{ position: 'absolute', left: pct((fm / W) * 100), top: pct((fm / H) * 100), width: pct((fw / W) * 100), height: pct((fh / H) * 100), background: MATS[p.frame.mat], boxShadow: 'inset 0 1px 3px rgba(0,0,0,.35)' }} />}
             <div style={{ position: 'absolute', left: pct(((fm + (fw - pw) / 2) / W) * 100), top: pct(((fm + (fh - phh) / 2) / H) * 100), width: pct((pw / W) * 100), height: pct((phh / H) * 100), background: empty ? '#1e1e1d' : '#f4f2ec', boxShadow: empty ? 'inset 0 0 0 1px rgba(255,255,255,.2)' : 'none', display: 'flex', flexDirection: p.orientation === 'portrait' ? 'column' : 'row', gap: p.stack ? '1.2%' : 0 }}>
               {held.slice(0, cells).map((pid, k) => {
@@ -105,8 +107,8 @@ export function PrintModal({ prints, index, count, onChange, onApplyAll, onDelet
   const sw = (hex: string, on: boolean, label: string, pick: () => void) => <button key={label} onClick={pick} title={label} aria-label={label} aria-pressed={on} style={{ width: 24, height: 24, borderRadius: '50%', background: hex, boxShadow: on ? '0 0 0 2px #0d0d0d, 0 0 0 4px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.18)' }} />;
   const group = (t: string, children: React.ReactNode) => <div><div style={{ ...eyebrow, marginBottom: 8 }}>{t}</div>{children}</div>;
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div role="dialog" aria-label="Print settings" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 480, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="sheet-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="sheet" role="dialog" aria-label="Print settings" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 480, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <div style={eyebrow}>Print {index + 1} of {count}</div>

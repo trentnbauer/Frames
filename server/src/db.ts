@@ -225,6 +225,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       );
     `);
   },
+  // 16: a guest of a share link can suggest another colour for a print's frame.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS share_frames (
+        id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+        reviewer TEXT NOT NULL DEFAULT '', print_id INTEGER NOT NULL, color TEXT NOT NULL, ts TEXT NOT NULL,
+        UNIQUE (share_id, reviewer, print_id)
+      );
+    `);
+  },
 ];
 
 export function migrate(db: DB) {

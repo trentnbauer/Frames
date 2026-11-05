@@ -4,6 +4,7 @@ import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
 import { Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
+import { ShareMobile, usePhone } from './ShareMobile';
 import { arrange, photosOf, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
@@ -32,6 +33,7 @@ export function SharePage() {
   const [relayout, setRelayout] = useState(false); // the layout suggestion box
   const [relayoutSent, setRelayoutSent] = useState(false);
   const cancelled = useRef(false);
+  const phone = usePhone(); // a phone gets its own layout, below
 
   useEffect(() => {
     document.title = 'Frames | Shared photographs';
@@ -80,6 +82,18 @@ export function SharePage() {
   const wallPrints: Print[] = d.layout ? (d.layout.mode === 'free' ? d.layout.prints : arrange(d.layout.prints, d.layout.mode)) : [];
   const count = prints.length;
   const wallPhotos = new Map(photos.map((p) => [p.id, { id: p.id, title: p.title, w: 0, h: 0, ar: p.ar }]));
+
+  if (phone) {
+    return (
+      <>
+        <ShareMobile token={token} d={d} photos={photos} wallPrints={wallPrints} others={showPrints ? others : []} reviewer={reviewer} withName={withName} changeName={() => setAsking(() => () => undefined)}
+          mine={mine} suggest={suggest} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
+          openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
+        {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
+        {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+      </>
+    );
+  }
 
   if (view === 'review') return <GuestReview token={token} photos={photos} reviewer={reviewer} onDone={() => setView('grid')} />;
 
