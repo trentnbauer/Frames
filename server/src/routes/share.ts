@@ -6,6 +6,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
+import { parseLayout } from '../layout.js';
 
 /**
  * Share links: a public address (/s/<token>) for one collection or one photoshoot, so someone without a login
@@ -107,6 +108,18 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     return { comments: commentRows('c.photo_id = ?', id) };
   });
   app.delete('/api/comments/:id', async (req) => ({ removed: db.prepare('DELETE FROM share_comments WHERE id = ?').run(num((req.params as Row).id)).changes }));
+
+  // The layouts guests suggested for a composition, newest first. Applying one is the photographer's PATCH of the layout; this only lists and clears.
+  app.get('/api/collections/:id/layout-suggestions', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return notFound(rep);
+    const rows = all("SELECT l.id, l.reviewer, l.layout, l.note, l.ts FROM share_layouts l JOIN shares s ON s.id = l.share_id WHERE s.kind = 'collection' AND s.target_id = ? ORDER BY l.ts DESC", id);
+    return { suggestions: rows.map((r) => ({ id: r.id, by: r.reviewer, note: r.note, at: r.ts, layout: JSON.parse(r.layout) })) };
+  });
+  app.delete('/api/collections/:id/layout-suggestions/:sid', async (req) => {
+    const q = req.params as Row;
+    return { removed: db.prepare("DELETE FROM share_layouts WHERE id = ? AND share_id IN (SELECT id FROM shares WHERE kind = 'collection' AND target_id = ?)").run(num(q.sid), num(q.id)).changes };
+  });
 
   // Who has looked at a link and what each person did: how many photographs they rated, how many suggestions they made, and when.
   app.get('/api/shares/:id/guests', async (req, rep) => {
@@ -225,6 +238,30 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if ((one('SELECT COUNT(*) n FROM share_suggestions WHERE share_id = ?', r.share.id) as Row).n >= MAX_SUGGESTIONS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
+    return { ok: true };
+  });
+
+  // A guest suggests a different layout: other sizes, frames, more or fewer prints. It is kept apart from the composition and carries no photographs
+  // (the photographer's stay where they are when it is applied). One per person per link; sending null takes it back.
+  const MAX_LAYOUTS = 500;
+  app.post('/api/s/:token/layout', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'review')) return;
+    const r = resolve((req.params as Row).token, req, rep);
+    if (!r) return;
+    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    if (r.share.kind !== 'collection') return rep.code(400).send({ error: 'Only a composition has a layout' });
+    const b = (req.body ?? {}) as Row;
+    const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
+    if (b.layout === null) { db.prepare('DELETE FROM share_layouts WHERE share_id = ? AND reviewer = ?').run(r.share.id, reviewer); return { ok: true }; }
+    const raw = b.layout as { mode?: unknown; prints?: unknown } | undefined;
+    const bare = raw && Array.isArray(raw.prints) ? { mode: raw.mode, prints: raw.prints.map((p) => (p && typeof p === 'object' ? { ...(p as object), photoId: null, photoId2: null } : p)) } : null;
+    const layout = bare ? parseLayout(bare, new Set()) : null;
+    if (!layout) return rep.code(400).send({ error: 'That is not a layout we can use' }); // checked first, so a bad request never wipes an earlier good one
+    if (!one('SELECT 1 x FROM share_layouts WHERE share_id = ? AND reviewer = ?', r.share.id, reviewer) && (one('SELECT COUNT(*) n FROM share_layouts WHERE share_id = ?', r.share.id) as Row).n >= MAX_LAYOUTS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
+    const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
+    db.prepare('INSERT INTO share_layouts(share_id, reviewer, layout, note, ts) VALUES(?, ?, ?, ?, ?) ON CONFLICT(share_id, reviewer) DO UPDATE SET layout = excluded.layout, note = excluded.note, ts = excluded.ts')
+      .run(r.share.id, reviewer, JSON.stringify(layout), note, new Date().toISOString());
     return { ok: true };
   });
 

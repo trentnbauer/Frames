@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
 import { Wall } from '../components/CompositionWall';
+import { LayoutSuggest } from '../components/LayoutSuggest';
 import { arrange, photosOf, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
@@ -28,6 +29,8 @@ export function SharePage() {
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
   const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
   const [sugErr, setSugErr] = useState('');
+  const [relayout, setRelayout] = useState(false); // the layout suggestion box
+  const [relayoutSent, setRelayoutSent] = useState(false);
   const cancelled = useRef(false);
 
   useEffect(() => {
@@ -97,7 +100,11 @@ export function SharePage() {
       </div>
       {showPrints && (
         <>
-          <div className="label" style={{ marginBottom: 12 }}>The {count === 1 ? 'print' : `${count} prints`}</div>
+          <div className="label" style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', gap: 14 }}>The {count === 1 ? 'print' : `${count} prints`}
+            {d.allowReview && d.layout && <button className="t2" style={{ textDecoration: 'underline', textTransform: 'none', letterSpacing: 0 }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Suggest a different layout again' : 'Suggest a different layout'}</button>}
+            {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
+          </div>
+          {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
           {wallPrints.length > 0 && (
             <div style={{ background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
               <Wall prints={wallPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={null} locked share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
