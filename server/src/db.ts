@@ -197,6 +197,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       CREATE INDEX IF NOT EXISTS share_suggestions_share ON share_suggestions(share_id);
     `);
   },
+  // 12: a photoshoot can carry subjects and tags that apply to every photograph in it (alongside its place).
+  (db) => {
+    addColumn(db, 'shoots', 'shared', "TEXT NOT NULL DEFAULT '{}'");
+  },
 ];
 
 export function migrate(db: DB) {
