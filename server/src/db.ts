@@ -215,6 +215,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'collections', 'layout', 'TEXT');
   },
+  // 15: a guest of a share link can suggest a different layout (sizes, frames, more or fewer prints). Kept apart from the composition until the photographer applies it.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS share_layouts (
+        id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+        reviewer TEXT NOT NULL DEFAULT '', layout TEXT NOT NULL, note TEXT, ts TEXT NOT NULL,
+        UNIQUE (share_id, reviewer)
+      );
+    `);
+  },
 ];
 
 export function migrate(db: DB) {

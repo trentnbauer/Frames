@@ -151,6 +151,7 @@ export function CollectionDetail() {
   const ranking = useApi<Ranking>(`/collections/${id}/ranking`);
   const guestComments = useApi<{ comments: { id: number; by: string; photoId: number | null; photoTitle: string | null; body: string; at: string }[] }>(`/collections/${id}/comments`);
   const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
+  const layoutIdeas = useApi<{ suggestions: { id: number; by: string; note: string | null; at: string; layout: { mode: Mode; prints: Print[] } }[] }>(`/collections/${id}/layout-suggestions`);
   const [editing, setEditing] = useState(false); // moving prints about and changing sizes and frames
   const [editW, setEditW] = useState(false);
   const [lay, setLay] = useState<Print[] | null>(null);
@@ -460,6 +461,27 @@ export function CollectionDetail() {
                   <div>{cm.body}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {(layoutIdeas.data?.suggestions ?? []).length > 0 && !printed && (
+            <div>{heading('Layout suggestions')}
+              {layoutIdeas.data!.suggestions.map((g) => {
+                // The suggestion is only the prints; the photographs already placed stay with the prints that keep their number, and any that no longer fit are taken out.
+                const merged = g.layout.prints.map((p) => { const cur = prints.find((q) => q.id === p.id); return { ...p, photoId: cur?.photoId ?? null, photoId2: p.stack ? cur?.photoId2 ?? null : null }; });
+                const out = merged.flatMap((p) => photosOf(p).map((pid) => ({ p, pid, why: printProblem(byId.get(pid), p) }))).filter((x) => x.why);
+                const kept = merged.map((p) => ({ ...p, photoId: out.some((x) => x.p === p && x.pid === p.photoId) ? null : p.photoId, photoId2: out.some((x) => x.p === p && x.pid === p.photoId2) ? null : p.photoId2 }));
+                const lost = chosenIn(prints).length - chosenIn(kept).length;
+                return (
+                  <div key={g.id} style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 4 }}>{g.by} suggests <b style={{ fontWeight: 500, color: '#efede8' }}>{printsSummary(g.layout.prints)}</b>{g.note && <> · “{g.note}”</>}</div>
+                    <div style={{ color: '#6f6c67', marginBottom: 6 }}>Now: {printsSummary(prints)}.{lost > 0 && ` Applying it takes ${lost} ${lost === 1 ? 'photograph' : 'photographs'} out of ${lost === 1 ? 'its' : 'their'} print${lost === 1 ? '' : 's'}: ${lost === 1 ? 'it does' : 'they do'} not fit.`}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={async () => { await saveLayout(kept, g.layout.mode); await api(`/collections/${c.id}/layout-suggestions/${g.id}`, { method: 'DELETE' }); layoutIdeas.reload(); }} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '6px 12px', fontSize: 12.5 }}>Use this layout</button>
+                      <button onClick={async () => { await api(`/collections/${c.id}/layout-suggestions/${g.id}`, { method: 'DELETE' }); layoutIdeas.reload(); }} style={{ borderRadius: 999, padding: '6px 12px', fontSize: 12.5, boxShadow: ring }}>Dismiss</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           {(suggestions.data?.suggestions ?? []).length > 0 && !printed && (
