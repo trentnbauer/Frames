@@ -7,7 +7,9 @@ import { getSetting, setSetting, type DB } from '../db.js';
 import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
-import { scrubCopy, tarOf } from '../backup.js';
+import { pipeline } from 'node:stream/promises';
+import { tarOf } from '../backup.js';
+import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
 
@@ -121,16 +123,37 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   // ---------- the whole server's backup ----------
   // The server's own database (people, sign-in, the tunnel) and every person's library database, as one archive. Keys, secrets and
   // sign-in sessions are taken out of every copy, as for a single library. Photographs are not in it: back those up as you already do.
+  const backupDir = () => x.cfg.backupDir ?? path.join(x.tenants.owner().cfg.dataDir, 'backups', 'server');
   app.get('/api/admin/backup', async (_req, rep) => {
-    const dir = path.join(x.tenants.owner().cfg.dataDir, 'backups');
-    fs.mkdirSync(dir, { recursive: true });
-    const stamp = new Date().toISOString().slice(0, 10), made: { name: string; file: string }[] = [];
-    const snap = async (name: string, db: DB) => { const f = path.join(dir, `server-${Date.now()}-${made.length}.db`); await db.backup(f); scrubCopy(f); made.push({ name, file: f }); };
-    await snap('system.db', sys);
-    for (const t of x.tenants.all()) await snap(`library-${t.user.id}-${(t.user.folder || t.user.name || 'owner').replace(/[^A-Za-z0-9._-]/g, '_')}.db`, t.db);
-    const cleanup = () => { for (const m of made) fs.rmSync(m.file, { force: true }); };
-    rep.raw.on('close', cleanup);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const made = await serverParts({ sys, tenants: x.tenants as any }, path.join(x.tenants.owner().cfg.dataDir, 'backups'));
+    rep.raw.on('close', () => { for (const m of made) fs.rmSync(m.file, { force: true }); });
     return rep.header('Content-Type', 'application/x-tar').header('Content-Disposition', `attachment; filename="frames-server-backup-${stamp}.tar"`).header('Cache-Control', 'no-store').send(tarOf(made));
+  });
+  // Restore: the archive is checked and put aside; it is applied when Frames next starts (see serverBackup.ts). The photographs are not touched.
+  const dataDirOf = () => x.tenants.owner().cfg.dataDir;
+  const stage = (rep: any, file: string) => {
+    try { const r = stageRestore(file, dataDirOf()); return { staged: true, ...r }; } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+  };
+  app.get('/api/admin/restore', async () => ({ dir: backupDir(), archives: archivesIn(backupDir()), pending: pendingRestore(dataDirOf()), canRestart: !!(app as any).frames.restart }));
+  app.post('/api/admin/restore', async (req, rep) => {
+    const name = String(((req.body ?? {}) as Row).name ?? '');
+    if (!archivesIn(backupDir()).some((a) => a.name === name)) return x.notFound(rep);
+    return stage(rep, path.join(backupDir(), name));
+  });
+  app.post('/api/admin/restore/upload', async (req, rep) => {
+    let part: any;
+    try { part = await (req as any).file?.(); } catch { part = null; } // not a file upload at all
+    if (!part) return rep.code(400).send({ error: 'Choose a backup file.' });
+    const tmp = path.join(dataDirOf(), `upload-${Date.now()}.tar`);
+    try { await pipeline(part.file, fs.createWriteStream(tmp)); return stage(rep, tmp); } finally { fs.rmSync(tmp, { force: true }); }
+  });
+  app.delete('/api/admin/restore', async () => { cancelRestore(dataDirOf()); return { ok: true }; });
+  app.post('/api/admin/restart', async (_req, rep) => {
+    const restart = (app as any).frames.restart as (() => void) | undefined;
+    if (!restart) return rep.code(409).send({ error: 'This server cannot restart itself. Restart it yourself and the restore is applied.' });
+    setImmediate(restart);
+    return { ok: true };
   });
   app.get('/api/admin/backup/list', async () => {
     const out: { name: string; whose: string; bytes: number }[] = [];

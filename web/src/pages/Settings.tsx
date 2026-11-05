@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
@@ -354,26 +354,69 @@ function Metadata({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pr
   );
 }
 
+type RestoreInfo = { dir: string; archives: { name: string; bytes: number; at: string }[]; pending: { at: string; parts: string[] } | null; canRestart: boolean };
+
+/** Restoring the people and libraries from a server backup. It is checked and put aside, and applied when Frames next starts. */
+function Restore() {
+  const r = useApi<RestoreInfo>('/admin/restore');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  const done = (x: { parts: string[]; people: number }) => { setMsg({ ok: true, text: `Checked: ${x.people} ${x.people === 1 ? 'person' : 'people'} and ${x.parts.length - 1} ${x.parts.length === 2 ? 'library' : 'libraries'}. It is applied the next time Frames starts.` }); r.reload(); };
+  const run = async (fn: () => Promise<{ parts: string[]; people: number }>) => { setMsg(null); setBusy(true); try { done(await fn()); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); };
+  const upload = async (f: File) => {
+    const body = new FormData(); body.append('file', f);
+    const res = await fetch('/api/admin/restore/upload', { method: 'POST', body });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error ?? 'That did not work.');
+    return j;
+  };
+  const restart = async () => { setMsg(null); try { await api('/admin/restart', { method: 'POST' }); setMsg({ ok: true, text: 'Restarting. Reload this page in a few seconds and sign in again.' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
+  return (
+    <div className="field">
+      <h3>Restore</h3>
+      <p>Put the people and libraries from a server backup back: reviews, tags, compositions and each person’s own settings. The server’s own settings (sign-in providers, the tunnel, shared AIs and keys) are <b>not</b> in a backup and <b>not</b> changed: they come from your env file (Settings, Env file) or what is set here now. Photographs are not touched. Everyone is signed out and signs in again, and the databases being replaced are kept in <span className="mono">backups/before-restore-…</span> in the data folder.</p>
+      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
+      {r.data?.pending && (
+        <div className="banner" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>A restore is ready ({r.data.pending.parts.length - 1} {r.data.pending.parts.length === 2 ? 'library' : 'libraries'}). Frames applies it when it next starts.</span>
+          {r.data.canRestart && <button className="pill primary" onClick={() => { if (window.confirm('Restart Frames now and apply the restore? Everyone is signed out.')) void restart(); }}>Restart Frames now</button>}
+          <button className="pill" onClick={async () => { await api('/admin/restore', { method: 'DELETE' }); setMsg(null); r.reload(); }}>Cancel the restore</button>
+        </div>
+      )}
+      <div className="form">
+        <input ref={file} type="file" accept=".tar,application/x-tar" aria-label="Choose a server backup file" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void run(() => upload(f)); }} />
+        <button className="pill" disabled={busy} onClick={() => file.current?.click()}>Restore from a file…</button>
+      </div>
+      <p className="muted" style={{ fontSize: 12.5 }}>A file you downloaded above. Or put it in <span className="mono">{r.data?.dir ?? 'the backups folder'}</span> and pick it here:</p>
+      {r.data?.archives.length === 0 && <p className="muted">No server backups in that folder yet. One is made a day (the last seven kept).</p>}
+      {r.data?.archives.map((a) => (
+        <div className="row" key={a.name}>
+          <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
+          <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name}? It is checked first and applied the next time Frames starts.`)) void run(() => api('/admin/restore', { body: { name: a.name } })); }}>Restore this</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Backup() {
   const list = useApi<{ name: string; whose: string; bytes: number }[]>('/admin/backup/list');
   return (
     <>
       <div className="field">
         <h3>Back up the whole server</h3>
-        <p>One archive with the server’s own database (people, sign-in, the tunnel) and every person’s library database (reviews, tags, compositions, settings). Photographs are not in it: back those up the way you already do. Keys, secrets and sign-in sessions are taken out of every copy, so it is safe to keep.</p>
+        <p>One archive with the people (who has an account, their roles and folders) and every person’s library database (reviews, tags, compositions, settings). Photographs are not in it: back those up the way you already do. The server’s own settings (sign-in providers, the tunnel, shared AIs and keys) are left out, as are sign-in sessions: they belong in your env file, so a backup holds user data only.</p>
         <a className="pill primary" href="/api/admin/backup" download>Download a server backup</a>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Each person can also download their own library under Settings, Your data.</p>
       </div>
       <div className="field">
         <h3>Automatic backups</h3>
-        <p>One a day for each library, the last seven kept, in each library’s <span className="mono">backups</span> directory in the data folder.</p>
+        <p>One a day for each library, the last seven kept, in each library’s <span className="mono">backups</span> directory in the data folder. Also one whole-server archive a day (the last seven kept) in the backups folder, which is the <span className="mono">/backups</span> mount in the compose file.</p>
         {list.data?.length === 0 && <p className="muted">None yet. The first is made shortly after start-up.</p>}
         {list.data?.map((b) => <div className="row" key={b.whose + b.name}><span><span className="mono">{b.name}</span> <span className="muted">{b.whose}</span></span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
       </div>
-      <div className="field">
-        <h3>Restore</h3>
-        <p>Stop Frames, replace <span className="mono">system.db</span> and a library’s <span className="mono">frames.db</span> in the data folder (<span className="mono">users/&lt;number&gt;/</span> for everyone but the first administrator) with the copies from a backup, delete any <span className="mono">-wal</span> and <span className="mono">-shm</span> files next to them, and start Frames. A restored copy has no keys or sign-in sessions: enter the keys again and sign in.</p>
-      </div>
+      <Restore />
     </>
   );
 }

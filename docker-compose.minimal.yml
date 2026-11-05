@@ -15,6 +15,9 @@ services:
     volumes:
       - ./photos:/library:ro
       - frames-data:/data
+      - ./backups:/backups # the daily whole-server backup, and what Settings, Backup restores from
+    environment:
+      BACKUP_DIR: /backups
     # Present once you have exported your settings; absent on the first run. It wins over what the app has saved.
     env_file:
       - path: frames.env

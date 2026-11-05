@@ -31,11 +31,13 @@ export function tarOf(files: { name: string; file: string }[]): Readable {
  * A backup is a copy anyone with the file can read, so it must not carry keys or logins:
  * the AI key, OAuth client secrets, and sign-in sessions (restoring those would sign people back in).
  */
-export function scrubCopy(file: string) {
+export function scrubCopy(file: string, system = false) {
   const c = new Database(file);
   try {
     c.prepare("DELETE FROM settings WHERE key LIKE 'secret:%'").run();
     c.prepare('DELETE FROM sessions').run();
+    // The server's own settings (sign-in providers, the tunnel, shared AIs, the privacy page) are env data, not user data: they are not in a backup.
+    if (system) c.prepare('DELETE FROM settings').run();
     c.exec('VACUUM');
   } finally { c.close(); }
 }
@@ -46,23 +48,23 @@ export function integrity(db: DB): string {
 }
 
 /** One snapshot per day, the last seven kept. Uses SQLite's online backup, so it is safe while the app is running. */
-export async function dailyBackup(db: DB, dataDir: string, now = new Date()): Promise<string | null> {
+export async function dailyBackup(db: DB, dataDir: string, now = new Date(), system = false): Promise<string | null> {
   const dir = path.join(dataDir, 'backups');
   fs.mkdirSync(dir, { recursive: true });
   const name = `auto-${now.toISOString().slice(0, 10)}.db`;
   const file = path.join(dir, name);
   if (fs.existsSync(file)) return null;
   await db.backup(file + '.partial');
-  scrubCopy(file + '.partial');
+  scrubCopy(file + '.partial', system);
   fs.renameSync(file + '.partial', file); // a half-written file is never mistaken for a backup
   for (const old of fs.readdirSync(dir).filter((n) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort().reverse().slice(KEEP)) fs.rmSync(path.join(dir, old), { force: true });
   return name;
 }
 
 /** Daily backups for every library that exists, and for the system database (people and sign-in settings). */
-export function startAutoBackup(targets: () => { db: DB; dataDir: string }[]) {
+export function startAutoBackup(targets: () => { db: DB; dataDir: string; system?: boolean }[]) {
   const run = () => {
-    try { for (const t of targets()) dailyBackup(t.db, t.dataDir).catch((e) => console.error('Backup failed', e)); } catch (e) { console.error('Backup could not start', e); }
+    try { for (const t of targets()) dailyBackup(t.db, t.dataDir, new Date(), t.system).catch((e) => console.error('Backup failed', e)); } catch (e) { console.error('Backup could not start', e); }
   };
   setTimeout(run, 10_000).unref();
   setInterval(run, 6 * 3600_000).unref(); // checks every six hours, writes at most one per day
