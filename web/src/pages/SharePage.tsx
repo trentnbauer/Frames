@@ -8,7 +8,7 @@ import type { Target } from '../target';
 import { imgUrl } from '../api';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[] };
+type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -18,7 +18,8 @@ export function SharePage() {
   const [view, setView] = useState<'grid' | 'review'>('grid');
   const [look, setLook] = useState<number | null>(null);
   const nameKey = `frames-guest-name-${token}`;
-  const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem(nameKey) ?? ''; } catch { return ''; } });
+  const [typed, setReviewer] = useState(() => { try { return localStorage.getItem(nameKey) ?? ''; } catch { return ''; } });
+  const reviewer = d?.viewer?.name ?? typed; // someone signed in is known by their account's name
   const [asking, setAsking] = useState<null | ((name: string) => void)>(null); // the name box, and what to do once there is a name
   const setName = (n: string) => { setReviewer(n); try { localStorage.setItem(nameKey, n); } catch { /* the name is only remembered for next time */ } };
   // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
@@ -88,7 +89,7 @@ export function SharePage() {
         {d.allowReview && (
           <>
             <button className="pill primary" onClick={() => withName(() => setView('review'))}>Review these</button>
-            {reviewer.trim() && <span className="muted" style={{ fontSize: 13 }}>as {reviewer.trim()} · <button className="t2" style={{ textDecoration: 'underline' }} onClick={() => setAsking(() => () => undefined)}>change</button></span>}
+            {reviewer.trim() && <span className="muted" style={{ fontSize: 13 }}>as {reviewer.trim()}{!d.viewer && <> · <button className="t2" style={{ textDecoration: 'underline' }} onClick={() => setAsking(() => () => undefined)}>change</button></>}</span>}
           </>
         )}
         {d.allowDownload && <button className={'pill' + (d.allowReview ? '' : ' primary')} onClick={download} disabled={!!dl && !dl.ready}>Download files</button>}
@@ -127,7 +128,7 @@ export function SharePage() {
         <i />
       </div>
       {asking && (
-        <NameBox initial={reviewer} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
+        <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -183,7 +184,7 @@ function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: str
 }
 
 /** "What should we call you?": a name the photographer will see next to what this person rates and suggests. */
-function NameBox({ initial, onDone, onCancel }: { initial: string; onDone: (n: string) => void; onCancel: () => void }) {
+function NameBox({ initial, token, signIn, onDone, onCancel }: { initial: string; token: string; signIn: { id: string; name: string }[]; onDone: (n: string) => void; onCancel: () => void }) {
   const [n, setN] = useState(initial);
   const ok = n.trim().length > 0;
   return (
@@ -194,8 +195,16 @@ function NameBox({ initial, onDone, onCancel }: { initial: string; onDone: (n: s
         <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" className="namebox" style={{ width: '100%', marginBottom: 16 }} />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="pill" onClick={onCancel}>Cancel</button>
-          <button className="pill primary" disabled={!ok}>Continue</button>
+          <button className="pill primary" disabled={!ok}>Continue with this name</button>
         </div>
+        {signIn.length > 0 && (
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,.08)' }}>
+            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {signIn.map((p) => <a key={p.id} className="pill" href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

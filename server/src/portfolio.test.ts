@@ -76,7 +76,7 @@ describe('the public site', () => {
   it('serves the page and its config', async () => {
     expect((await get('/portfolio/')).body).toContain('Portfolio page');
     expect((await get('/portfolio')).statusCode).toBe(302);
-    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
+    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
     expect((await get('/portfolio/gear.md')).body).toBe('# Gear\n- Leica');
     expect((await get('/portfolio/css/style.css')).statusCode).toBe(200);
   });

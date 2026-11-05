@@ -18,6 +18,7 @@ import { addDays, nextIntervalDays } from './schedule.js';
 import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
+import { registerProfile } from './routes/profile.js';
 import { registerInsights } from './routes/insights.js';
 import { registerTodo } from './routes/todo.js';
 import { createAccessGate } from './access.js';
@@ -111,6 +112,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       // A guest who opens a link while signed in finds it again in their "Shared with you" list.
       if (m && req.method === 'GET' && !req.url.includes('/', req.url.indexOf(m[1]) + m[1].length) && auth.oauthOn()) {
         const g = sessionUser(sys, req), t = shareTenant(m[1]);
+        r.shareViewer = g; // the share page greets an account by name and skips asking it for one
         const s = g?.role === 'guest' && t ? t.db.prepare('SELECT kind, target_id, label FROM shares WHERE token = ?').get(m[1]) as { kind: string; target_id: number; label: string } | undefined : undefined;
         if (g && s) {
           const name = (t!.db.prepare(`SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`).get(s.target_id) as { name: string } | undefined)?.name ?? '';
@@ -510,6 +512,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
+  registerProfile(app, ctx);
   registerCloud(app, ctx);
   registerAdmin(app, ctx);
   registerPrivacy(app, ctx);

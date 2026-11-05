@@ -4,6 +4,8 @@ import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAll
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
+import fs from 'node:fs';
+import { avatarPath, displayNameOf } from './profile.js';
 import { bindOwner, identitiesOf, linkIdentity, resolveUser, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -31,7 +33,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (!p || !loadAuth(db).providers.length) return rep.code(404).type('text/html').send(auth.messagePage('Not set up', 'That sign-in method is not set up.'));
     const q = req.query as Row;
     try {
-      return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo) }));
+      return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) }));
     } catch (e) {
       console.error('sign-in start failed', (e as Error).message);
       return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Settings, Sign-in & access.'));
@@ -50,7 +52,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     const { who, flow } = done;
     const conf = loadAuth(db);
-    const allowed = !!conf.open || isAllowed(who, conf.allow); // open: anyone who signs in is let in
+    const listed = !!conf.open || isAllowed(who, conf.allow); // open: anyone who signs in is let in
+    // Someone who came from a share link to make a guest account needs no place on the list; that lets in a guest and no one else (checked below).
+    const allowed = listed || !!flow.guest;
     if (flow.linkUser) {
       // Someone signed in is adding this account to themselves. The flow was started by their own session, so it is theirs to finish.
       return rep.redirect(`/settings?section=sign-in-methods&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
@@ -65,7 +69,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       bindOwner(db, who); // the person doing the test from Settings is the owner of the library that already exists
     }
     // Being on the list lets someone in; ALLOW_SIGNUPS decides whether a first-time visitor gets an account of their own.
-    const user = resolveUser(db, who, cfg.allowSignups !== false);
+    const user = resolveUser(db, who, cfg.allowSignups !== false, !listed);
+    if (user && !listed && user.role !== 'guest') return rep.code(403).type('text/html').send(auth.messagePage('Not on the list', `${who.email || 'That account'} is not allowed to use this Frames. Ask the owner to add it.`));
     if (!user) {
       console.warn(`account refused: ${who.provider}:${who.sub}`);
       return rep.code(403).type('text/html').send(auth.messagePage('No account', 'New accounts are turned off here, or this account has been switched off. Ask the owner to add you.'));
@@ -120,6 +125,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     return {
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
+      displayName: displayNameOf(x.db), hasAvatar: fs.existsSync(avatarPath(x.cfg.dataDir)),
       id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: cfg.allowSignups !== false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
     };
   });

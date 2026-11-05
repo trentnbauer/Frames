@@ -9,6 +9,7 @@ import { loadAuth } from './auth.js';
 import { remoteOriginal } from './cloud.js';
 import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
+import { avatarPath, displayNameOf } from './routes/profile.js';
 
 /**
  * The public portfolio website, served by Frames from a collection you choose.
@@ -60,7 +61,7 @@ const BROWSER_TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': '
 /** The exact addresses that anyone may fetch, whatever the host. Nothing else of the app is reachable this way. */
 export const isPortfolioPath = (url: string): boolean => {
   const p = url.split('?')[0];
-  return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|css\/style\.css|js\/app\.js|images\/manifest\.json|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
+  return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|avatar\.jpg|css\/style\.css|js\/app\.js|images\/manifest\.json|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
 };
 
 /** "2026-Autumn-KonicaAutoS2-FujiC200-R01-0024" gives camera "Konica Auto S 2" and film "Fuji C 200". Same rule as the old build. */
@@ -134,7 +135,14 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   });
   app.get('/portfolio/config.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
-    return open(rep).send({ photographerName: c.photographerName, tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
+    // The name and picture are the person's profile (Settings, Profile); a name typed here by an older version is used only until they set one.
+    return open(rep).send({ photographerName: displayNameOf(db) || c.photographerName, avatar: fs.existsSync(avatarPath(cfg.dataDir)) ? 'avatar.jpg' : '', tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
+  });
+  app.get('/portfolio/avatar.jpg', async (_req, rep) => {
+    if (!live(rep)) return;
+    const f = avatarPath(cfg.dataDir);
+    if (!fs.existsSync(f)) return notFound(rep);
+    return open(rep).type('image/jpeg').send(fs.readFileSync(f));
   });
   app.get('/portfolio/gear.md', async (_req, rep) => {
     const c = live(rep); if (!c) return;

@@ -12,6 +12,7 @@ type Data = { config: Cfg; status: { photoCount: number; collection: { id: numbe
 /** The public portfolio website: what it shows, who it is for, and how it looks. */
 export function PortfolioSettings() {
   const d = useApi<Data>('/portfolio');
+  const prof = useApi<{ displayName: string; hasAvatar: boolean }>('/profile');
   const [f, setF] = useState<Cfg | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { me } = useStore();
@@ -58,13 +59,16 @@ export function PortfolioSettings() {
       <div className="field">
         <h3>The site</h3>
         <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520 }}>
-          <label>Your name <input aria-label="Photographer name" value={f.photographerName} onChange={(e) => set({ photographerName: e.target.value })} /></label>
+          <div aria-label="Your name and picture, from your profile" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {prof.data?.hasAvatar && <img src="/api/profile/avatar" alt="" width={44} height={44} style={{ borderRadius: '50%', objectFit: 'cover' }} />}
+            <span><b>{prof.data?.displayName || f.photographerName || 'No name yet'}</b><br /><span className="muted" style={{ fontSize: 12.5 }}>Your name and picture come from your profile and cannot be changed here. <a className="t2" style={{ textDecoration: 'underline' }} href="/settings?section=profile">Change them in your profile</a>.</span></span>
+          </div>
           <label>Tagline <input aria-label="Tagline" value={f.tagline} placeholder="Film photographer from…" onChange={(e) => set({ tagline: e.target.value })} /></label>
           <label>Accent colour <input aria-label="Accent colour" value={f.accentColor} placeholder="coral, #d2691e or oklch(0.58 0.13 35)" onChange={(e) => set({ accentColor: e.target.value })} /></label>
           <label>Footer text <input aria-label="Footer text" value={f.footer} placeholder="Blank hides the footer" onChange={(e) => set({ footer: e.target.value })} /></label>
         </div>
         <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={f.captions} onChange={(e) => save({ captions: e.target.checked })} /> Show the camera and film under a photo that is opened</label>
-        <div style={{ marginTop: 12 }}><button className="pill primary" onClick={() => save({ photographerName: f.photographerName, tagline: f.tagline, accentColor: f.accentColor, footer: f.footer })}>Save the site details</button></div>
+        <div style={{ marginTop: 12 }}><button className="pill primary" onClick={() => save({ tagline: f.tagline, accentColor: f.accentColor, footer: f.footer })}>Save the site details</button></div>
       </div>
 
       <div className="field">
