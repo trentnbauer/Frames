@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, imgUrl, useApi } from '../api';
 import { RATINGS, fmtCoord, fmtDate, requiredPx, type Collection, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { PAPER_MM } from '../target';
-import { Header, Img, Loading, Swatches, useField, useKey } from '../components/bits';
+import { Header, Img, Loading, Swatches, useField, useKey, useTitle } from '../components/bits';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 
@@ -20,6 +20,7 @@ export function PhotoDetail() {
   const { openNew } = useUi();
   const { settings, refreshSummary } = useStore();
   const photo = useApi<PhotoFull>(`/photos/${id}`);
+  useTitle(photo.data?.title ?? 'Photograph');
   const shoots = useApi<Shoot[]>('/shoots');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);

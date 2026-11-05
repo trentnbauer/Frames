@@ -24,6 +24,13 @@ import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
 import { useStore } from './store';
 
+const PAGE_NAMES: Record<string, string> = {
+  '/': 'Today', '/library': 'Library', '/review': 'Review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
+  '/collections': 'Compositions', '/for-you': 'For you', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
+};
+/** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
+const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
+
 function Shell() {
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState<NewCompositionStart | null>(null);
@@ -31,6 +38,7 @@ function Shell() {
   const loc = useLocation();
   const nav = useNavigate();
   const inReview = loc.pathname === '/review';
+  useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `Frames | ${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']}` : 'Frames'; }, [loc.pathname]);
   // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
   useEffect(() => {
     if (loc.pathname !== '/') return;

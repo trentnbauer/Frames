@@ -4,6 +4,11 @@ import { imgUrl } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 
+/** The browser tab says where you are: "Frames | Library". With no name it is just "Frames". */
+export function useTitle(name?: string | null) {
+  useEffect(() => { document.title = name?.trim() ? `Frames | ${name.trim()}` : 'Frames'; }, [name]);
+}
+
 type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean; share?: string };
 
 /** The photo preview, or a grey striped stand-in when no preview exists (for example a RAW with no embedded JPEG). */
