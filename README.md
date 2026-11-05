@@ -72,7 +72,7 @@ Two layers. The **stack variables** are set in `.env` (or in Portainer's stack f
 | `TRUST_PROXY` | `false` | `true` when Frames sits behind a reverse proxy, so share links rate-limit each visitor rather than the proxy. |
 | `MAX_UPLOAD_MB` | `2048` | Largest single uploaded photo, in MB. |
 | `TURNSTILE_DISABLE` | `false` | `true` switches the Cloudflare Turnstile bot check off (sign-in page and share links), whatever the settings say. The way back in if a wrong site key stops the check from showing. |
-| `BACKUP_DIR` | `<data>/backups/server` | Where the daily whole-server backup is written and where Settings, Backup restores from. The compose files set it to `/backups`, a mount from `BACKUPS_DIR` on the host (default `./backups`). |
+| `BACKUP_DIR` | `<data>/backups/server` | Where the daily whole-server backup is written and where Settings, Backup restores from. The compose files set it to `/backups`, a mount from `BACKUPS_DIR` on the host (default `./backups`). Frames runs as an unprivileged user (uid 1000), so a bind-mounted or older volume must be writable by it (`chown 1000:1000`); a volume created fresh from the image already is. If it is not, the log says so once. |
 
 **Set by the image itself** (change only if you run Frames without the supplied compose files)
 

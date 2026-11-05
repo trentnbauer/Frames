@@ -250,6 +250,10 @@ describe('with sign-in on', () => {
   });
 
   describe('who gets in', () => {
+    it('gives the sign-in and privacy pages the site icon, which is served without signing in', async () => {
+      for (const page of ['/auth/signin', '/privacy']) expect((await call('GET', page)).body, page).toContain('<link rel="icon" type="image/svg+xml" href="/icon.svg">');
+      expect((await call('GET', '/icon.svg')).statusCode).not.toBe(401); // no web folder in a test, so 404; what matters is that it is not behind the sign-in
+    });
     it('turns away an account that is not on the list, with no session', async () => {
       const r = await signIn('fake', { sub: 'x9', email: 'mallory@evil.test', verified: true });
       expect(r.statusCode).toBe(403);

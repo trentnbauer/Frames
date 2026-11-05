@@ -26,7 +26,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
   const tunnel = loadTunnel(sys).enabled;
   const who = info.operator ? `<strong>${esc(info.operator)}</strong>` : 'the person who runs this server';
   const contact = info.contact ? `You can reach them at ${esc(info.contact)}.` : 'Ask them directly: no contact address has been set up yet.';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Privacy · Frames</title><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><link rel="icon" type="image/svg+xml" href="/icon.svg"><title>Privacy · Frames</title><style>
   body{margin:0;background:#0d0d0d;color:#d8d5cf;font:16px/1.65 system-ui,sans-serif}
   main{max-width:720px;margin:0 auto;padding:48px 24px 80px}h1{font:400 44px/1.1 Georgia,serif;color:#efede8;margin:0 0 6px}
   h2{font:400 22px/1.3 Georgia,serif;color:#efede8;margin:34px 0 6px}p,li{margin:0 0 12px}ul{padding-left:22px;margin:0 0 12px}a{color:#efede8}

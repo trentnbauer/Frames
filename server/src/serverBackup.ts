@@ -44,7 +44,15 @@ export async function writeServerArchive(src: Source, dir: string, now = new Dat
 }
 
 export function startServerBackup(src: () => Source, dir: string) {
-  const run = () => { writeServerArchive(src(), dir).catch((e) => console.error('Server backup failed', e)); };
+  let told = false;
+  const run = () => {
+    writeServerArchive(src(), dir).catch((e: NodeJS.ErrnoException) => {
+      if (e.code === 'EACCES' || e.code === 'EROFS') {
+        if (!told) console.error(`Server backup cannot write to ${dir} (${e.code}). Frames runs as an unprivileged user (uid ${process.getuid?.() ?? '?'}): give it that folder (chown it to that user, for a bind mount or a volume that something else created), or point BACKUP_DIR somewhere it can write.`);
+        told = true;
+      } else console.error('Server backup failed', e);
+    });
+  };
   setTimeout(run, 30_000).unref();
   setInterval(run, 6 * 3600_000).unref(); // checks every six hours, writes at most one a day
 }
