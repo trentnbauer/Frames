@@ -21,6 +21,8 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
   const [copied, setCopied] = useState<number | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const results = useApi<GuestReviews>(open ? `/shares/${open}/reviews` : null);
+  const [who, setWho] = useState<number | null>(null);
+  const guests = useApi<{ guests: { name: string; rated: number; avg: number | null; suggested: number; last: string }[] }>(who ? `/shares/${who}/guests` : null);
 
   const create = async () => {
     setErr('');
@@ -75,10 +77,21 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
             </span>
             <span style={{ display: 'flex', gap: 14, fontSize: 12.5, flex: 'none' }} className="t2">
               {l.status === 'active' && <button onClick={() => copy(l)}>{copied === l.id ? 'Copied' : 'Copy link'}</button>}
+              {l.allowReview && <button onClick={() => setWho(who === l.id ? null : l.id)}>{who === l.id ? 'Hide guests' : 'See guests'}</button>}
               {l.allowReview && <button onClick={() => setOpen(open === l.id ? null : l.id)}>{open === l.id ? 'Hide ratings' : 'See ratings'}</button>}
               {l.status === 'active' && <button onClick={() => off(l)}>Turn off</button>}
             </span>
           </div>
+          {who === l.id && (
+            <div className="guestres">
+              {guests.data?.guests.length === 0 && <span className="muted">No one has rated or suggested anything yet.</span>}
+              {guests.data?.guests.map((g) => (
+                <div key={g.name} style={{ marginBottom: 6 }}>
+                  <b>{g.name}</b> <span className="muted">· rated {g.rated}{g.avg !== null ? ` (average ${g.avg.toFixed(1)})` : ''}{g.suggested > 0 ? ` · suggested ${g.suggested}` : ''} · {fmtDate(g.last, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {open === l.id && (
             <div className="guestres">
               {results.data?.length === 0 && <span className="muted">No ratings yet.</span>}
