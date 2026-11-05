@@ -23,8 +23,20 @@ export const setSecret = (db: DB, name: string, v: string) => setSetting(db, `se
 
 export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, loadSettings(db).aiActive);
 
-const clean = (v: unknown, max = 12): string[] =>
-  (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : []).map((s) => String(s).toLowerCase().replace(/[^\p{L}\p{N} '-]/gu, '').trim()).filter((s) => s && s.length <= 40).slice(0, max);
+/**
+ * Tags and subjects from the model: a list, or text separated by commas, semicolons or new lines. Some models run the whole list together
+ * ("dog sign signpost forest nature"); a single entry of four or more words is a list, not a name, so it is split into its words.
+ * (A name of up to three words, like "golden hour", is kept whole.)
+ */
+export const splitNames = (v: unknown): string[] => {
+  const parts = Array.isArray(v) ? v.map(String) : typeof v === 'string' ? v.split(/[,;\n]/) : [];
+  return parts.flatMap((s) => { const t = s.trim(); return t.split(/\s+/).length >= 4 ? t.split(/\s+/) : [t]; });
+};
+const clean = (v: unknown, max = 12): string[] => {
+  const seen = new Set<string>();
+  for (const s of splitNames(v)) { const n = s.toLowerCase().replace(/[^\p{L}\p{N} '-]/gu, '').trim(); if (n && n.length <= 40) seen.add(n); }
+  return [...seen].slice(0, max);
+};
 const text = (v: unknown, max = 600) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /** OpenAI-style services keep their API under a path. A bare host means /v1; an address that already has a path is used as given. */

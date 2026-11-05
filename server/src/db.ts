@@ -235,6 +235,14 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       );
     `);
   },
+  // 17: tags the AI ran together into one ("dog sign signpost forest nature") become one tag each. Only AI suggestions of four or more words are touched.
+  (db) => {
+    const rows = db.prepare("SELECT photo_id, name, accepted, kind FROM tags WHERE source = 'ai' AND (LENGTH(name) - LENGTH(REPLACE(name, ' ', ''))) >= 3").all() as { photo_id: number; name: string; accepted: number; kind: string }[];
+    for (const r of rows) {
+      db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(r.photo_id, r.name);
+      for (const w of new Set(r.name.split(/\s+/).filter((x) => x && x.length <= 40))) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'ai', ?, ?)").run(r.photo_id, w, r.accepted, r.kind);
+    }
+  },
 ];
 
 export function migrate(db: DB) {
