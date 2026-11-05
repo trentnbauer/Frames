@@ -14,7 +14,7 @@ import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
 
-type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Sign-in methods' | 'Your data'
+type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
   | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
 
 // One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
@@ -22,7 +22,7 @@ const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
   { title: 'You', items: ['Profile'] },
   { title: 'Your library', items: ['Reviews', 'Tags & subjects', 'Metadata & XMP'] },
   { title: 'Connections', items: ['AI', 'Cloud sync', 'Portfolio'] },
-  { title: 'Your account', items: ['Sign-in methods', 'Your data'] },
+  { title: 'Your account', items: ['Your data'] },
 ];
 const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
   { title: 'People & sign-in', items: ['People', 'Access'] },
@@ -32,14 +32,13 @@ const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
 /** What each section is called on screen (the others are called what they are named here). */
 const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
 const DESC: Record<Sec, string> = {
-  Profile: 'Your display name and picture, shown at the top of the page and on your portfolio.',
+  Profile: 'Your display name and picture, and the ways you can sign in as you.',
   Reviews: 'How often each photograph comes back for a rating.',
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
   AI: 'The AI that describes and tags your own photographs.',
   'Cloud sync': 'Folders from your cloud accounts that Frames keeps in your library.'.replace('Frames', 'Frames'),
   Portfolio: 'Your public site: which photos, how it looks and its address.',
-  'Sign-in methods': 'The account you are signed in to Frames with.',
   'Your data': 'What Frames keeps about your library, and how to back it up or delete it.',
   People: 'Who has a library on this server, and the privacy page they see.',
   Access: 'Whether sign-in is required, which providers are offered and who is allowed in.',
@@ -53,14 +52,13 @@ const DESC: Record<Sec, string> = {
 };
 /** The headings inside each section, so the finder can find a setting and not only a section. */
 const HEADINGS: Partial<Record<Sec, string[]>> = {
-  Profile: ['Display picture', 'Display name'],
+  Profile: ['Display picture', 'Display name', 'Signed in as', 'Ways to sign in as you'],
   Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
   'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
   'Metadata & XMP': ['Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
   AI: ['Your AIs', 'Add an AI', 'Analysis'],
   'Cloud sync': ['Your connected folders', 'Connect an account', 'Dropbox', 'Google Drive', 'OneDrive'],
   Portfolio: ['Publish the portfolio', 'Which photos', 'The site', 'Its own web address', 'What a visitor gets when they open a photo'],
-  'Sign-in methods': ['Signed in as'],
   'Your data': ['What is kept', 'Back up my data', 'Previews', 'Delete my data'],
   People: ['Add someone', 'Privacy page', 'Roles'],
   Access: ['Require sign-in', 'Providers', 'Who is allowed in', 'Public address'],
@@ -76,7 +74,7 @@ const ADMIN_SET = new Set<Sec>(ADMIN_GROUPS.flatMap((g) => g.items));
 const groupOf = (s: Sec) => [...YOUR_GROUPS, ...ADMIN_GROUPS].find((g) => g.items.includes(s))?.title;
 const nameOf = (s: Sec) => LABEL[s] ?? s;
 const slug = (s: Sec) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const fromSlug = (v: string | null): Sec | null => ALL.find((s) => slug(s) === v) ?? null;
+const fromSlug = (v: string | null): Sec | null => (v === 'sign-in-methods' ? 'Profile' : ALL.find((s) => slug(s) === v) ?? null); // the old address of the sign-in methods page
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint, locked }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string; locked?: string }) {
@@ -168,7 +166,6 @@ export function SettingsPage() {
           {shown === 'Cloudflare tunnel' && <TunnelSettings />}
           {shown === 'People' && <People />}
           {shown === 'Env file' && <EnvExport />}
-          {shown === 'Sign-in methods' && <SignInMethods />}
           {shown === 'Your data' && <YourData />}
           {shown === 'Access' && <Access />}
           {shown === 'Tags & subjects' && <Vocabulary />}
@@ -431,38 +428,3 @@ function About() {
   );
 }
 
-/** Who you are signed in as, and with what, and other accounts that can sign in as you. */
-function SignInMethods() {
-  const { me } = useStore();
-  const linked = useApi<{ identities: { id: number; provider: string; email: string; primary: boolean }[]; providers: { id: string; type: string }[] }>(me?.user ? '/me/identities' : null);
-  const result = new URLSearchParams(window.location.search).get('linked');
-  const said: Record<string, string> = { ok: 'Added. You can now sign in with that account too.', same: 'That account was already yours.', taken: 'That account already belongs to someone else, so it was not added.', notallowed: 'That account is not allowed to use this Frames, so it was not added. Ask the administrator.' };
-  const list = linked.data?.identities ?? [];
-  const mine = new Set(list.map((i) => i.provider));
-  const more = (linked.data?.providers ?? []).filter((p) => !mine.has(p.id));
-  return (
-    <div className="field">
-      <h3>Signed in as</h3>
-      {me?.user
-        ? <>
-            <div className="row"><span><b>{me.user.name || me.user.email}</b> <span className="muted">{me.user.email}</span></span><span className="faint">signed in with {me.user.provider} · {me.role === 'admin' ? 'administrator' : 'member'}</span></div>
-            <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Your library folder is <span className="mono">{me.user.folder || 'the main folder'}</span>. The administrator decides which ways of signing in are offered, under Sign-in &amp; access.</p>
-            <h3 style={{ marginTop: 20 }}>Ways to sign in as you</h3>
-            {result && said[result] && <p role="status" className={result === 'ok' || result === 'same' ? 'muted' : 'reason'} style={{ fontSize: 13 }}>{said[result]}</p>}
-            {list.map((i) => (
-              <div className="row" key={`${i.provider}-${i.id}`}>
-                <span><b>{i.provider}</b> <span className="muted">{i.email}</span></span>
-                {i.primary ? <span className="faint">the one you started with</span> : <button className="t2" onClick={async () => { if (window.confirm(`Stop signing in with ${i.provider}?\n\nYou can still sign in with your other accounts, and your library is not touched.`)) { await api(`/me/identities/${i.id}`, { method: 'DELETE' }); linked.reload(); } }}>Remove</button>}
-              </div>
-            ))}
-            {more.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                {more.map((p) => <a key={p.id} className="pill" href={`/auth/link/${p.id}`}>Add {p.id}</a>)}
-              </div>
-            )}
-            <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Add another account and you reach this same library whichever you sign in with. An account that already has its own library cannot be added.</p>
-          </>
-        : <p className="muted">Sign-in is off on this server, so there is no account to show: everyone who can reach Frames uses it as its owner.</p>}
-    </div>
-  );
-}

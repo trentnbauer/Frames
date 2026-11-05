@@ -64,7 +64,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const allowed = listed || !!flow.guest;
     if (flow.linkUser) {
       // Someone signed in is adding this account to themselves. The flow was started by their own session, so it is theirs to finish.
-      return rep.redirect(`/settings?section=sign-in-methods&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
+      return rep.redirect(`/settings?section=profile&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
     }
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
