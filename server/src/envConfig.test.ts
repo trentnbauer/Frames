@@ -195,6 +195,26 @@ describe('comparing what is saved with what the container was started with', () 
   });
 });
 
+describe('the export switch', () => {
+  it('is off by default, and only an exact true or false changes it', async () => {
+    const a = mk(); const A = api(a);
+    expect((await A.get('/api/admin/env')).body).toMatchObject({ enabled: false, allowed: false, lockedByEnv: false });
+    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+    expect((await A.put('/api/admin/env/export-enabled', { on: 'yes' })).status).toBe(400);
+    expect((await A.put('/api/admin/env/export-enabled', { on: true })).body).toMatchObject({ enabled: true, allowed: true });
+    expect((await A.get('/api/admin/env/export')).status).toBe(200);
+    expect((await A.put('/api/admin/env/export-enabled', { on: false })).body).toMatchObject({ enabled: false, allowed: false });
+    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+  });
+  it('cannot be turned on while ALLOW_ENV_EXPORT=false locks it', async () => {
+    const a = mk({ allowEnvExport: false }); const A = api(a);
+    expect((await A.get('/api/admin/env')).body).toMatchObject({ lockedByEnv: true, allowed: false });
+    const r = await A.put('/api/admin/env/export-enabled', { on: true });
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/ALLOW_ENV_EXPORT/);
+  });
+});
+
 describe('export, import, and the block', () => {
   it('moves a configured server (shared AIs, keys, the tunnel token, the privacy page) to a fresh one, and then refuses a second export', async () => {
     // 1. Set up with no variables at all, through the app.
@@ -202,7 +222,9 @@ describe('export, import, and the block', () => {
     await A.post('/api/admin/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm1', embedModel: 'e1', ack: true, key: SECRET });
     await A.put('/api/tunnel', { apiToken: SECRET + '-tunnel', accountId: 'c'.repeat(32), appUrl: 'https://frames.example.com' });
     await A.put('/api/admin/privacy', { operator: 'Studio', contact: 'hi@example.test' });
-    // 2. Export: allowed (the default), and an attachment that is never cached.
+    // 2. Export is off by default; turned on from the Env file page, it is an attachment that is never cached.
+    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+    expect((await A.put('/api/admin/env/export-enabled', { on: true })).body).toMatchObject({ enabled: true, allowed: true });
     const r = await A.raw('GET', '/api/admin/env/export');
     expect(r.status).toBe(200);
     expect(String(r.headers['content-disposition'])).toContain('frames.env');
@@ -228,6 +250,7 @@ describe('export, import, and the block', () => {
   it('changes made in the app after import last only until restart: the env file wins again', async () => {
     const a = mk(); const A = api(a);
     await A.put('/api/admin/privacy', { operator: 'From the file' });
+    await A.put('/api/admin/env/export-enabled', { on: true });
     const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
     useVars(vars);
     const b = mk(); const B = api(b);
@@ -239,7 +262,10 @@ describe('export, import, and the block', () => {
   it('is for administrators only, and not reachable without signing in', async () => {
     const e = mk({ authUser: 'me', authPassword: 'pw' });
     expect((await e.app.inject('/api/admin/env/export')).statusCode).toBe(401);
-    expect((await e.app.inject({ url: '/api/admin/env/export', headers: { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') } })).statusCode).toBe(200);
+    const basic = { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') };
+    expect((await e.app.inject({ method: 'PUT', url: '/api/admin/env/export-enabled', payload: { on: true } })).statusCode).toBe(401); // the switch needs the login too
+    expect((await e.app.inject({ method: 'PUT', url: '/api/admin/env/export-enabled', payload: { on: true }, headers: basic })).statusCode).toBe(200); // a shared password has no one to ask again
+    expect((await e.app.inject({ url: '/api/admin/env/export', headers: basic })).statusCode).toBe(200);
   });
 });
 
@@ -257,6 +283,7 @@ describe('several AIs in the export', () => {
     // The owner's own AI is theirs, not the server's: it is not in the file.
     await A.post('/api/ai/sources', { type: 'ollama', name: 'Only mine', endpoint: 'http://localhost:11434', model: 'mine', embedModel: '' });
 
+    await A.put('/api/admin/env/export-enabled', { on: true });
     const text = Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString();
     expect(text).toContain(KEYS.claude);
     expect(text).toContain(KEYS.gemini);
@@ -280,6 +307,7 @@ describe('several AIs in the export', () => {
   it('the file wins over AIs added in the app since, at the next start', async () => {
     const a = mk(); const A = api(a);
     await post(A, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
+    await A.put('/api/admin/env/export-enabled', { on: true });
     useVars(parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString()));
     const b = mk(); const B = api(b);
     await post(B, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });

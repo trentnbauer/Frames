@@ -521,6 +521,23 @@ describe('backups never carry keys or logins', () => {
   });
 });
 
+describe('turning on the env file export needs a fresh sign-in', () => {
+  it('accepts a sign-in made just now, and asks to sign in again once it is older', async () => {
+    const sys = (env.app as any).frames.sys;
+    expect((await call('PUT', '/api/admin/env/export-enabled', { on: true }, sess)).statusCode).toBe(200); // the session was made moments ago
+    await call('PUT', '/api/admin/env/export-enabled', { on: false }, sess);
+    sys.prepare('UPDATE sessions SET created = ?').run(new Date(Date.now() - 10 * 60_000).toISOString()); // ten minutes old
+    const r = await call('PUT', '/api/admin/env/export-enabled', { on: true }, sess);
+    expect(r.statusCode).toBe(401);
+    expect(r.json()).toMatchObject({ reauth: true });
+    expect((await call('PUT', '/api/admin/env/export-enabled', { on: false }, sess)).statusCode).toBe(200); // turning it off never needs it
+    // signing in again makes a new session, which is fresh
+    const again = sessionHeader(await signIn('fake', { sub: 'u1', email: 'owner@example.test', verified: true, name: 'Owner' }));
+    expect((await call('PUT', '/api/admin/env/export-enabled', { on: true }, again)).statusCode).toBe(200);
+    await call('PUT', '/api/admin/env/export-enabled', { on: false }, again);
+  });
+});
+
 describe('linking another way to sign in to the same person', () => {
   /** A signed-in person adds an account from another provider: through the provider once, and back. */
   async function link(id: string, who: Who, headers: Record<string, string>) {
