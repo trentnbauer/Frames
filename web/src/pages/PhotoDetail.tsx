@@ -161,7 +161,7 @@ export function PhotoDetail() {
                   : <button onClick={() => toggleComp(c)} style={{ flex: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, background: inComp(c) ? '#efede8' : 'transparent', color: inComp(c) ? '#0d0d0d' : '#efede8', boxShadow: ring }}>{inComp(c) ? 'Added ✓' : 'Add'}</button>}
               </div>
             ))}
-            <button onClick={() => openNew({ name: `${shoot?.name ?? p.title} prints`, photoIds: [p.id, ...mates.map((x) => x.id)] })} style={{ marginTop: 12, width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Start a composition with this</button>
+            <button onClick={() => openNew({ name: p.title, photoIds: [p.id] })} style={{ marginTop: 12, width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Start a composition with this</button>
           </div>
 
           <div>
