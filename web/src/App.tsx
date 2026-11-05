@@ -38,7 +38,7 @@ function Shell() {
   const loc = useLocation();
   const nav = useNavigate();
   const inReview = loc.pathname === '/review';
-  useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `Frames | ${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']}` : 'Frames'; }, [loc.pathname]);
+  useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']} · Frames` : 'Frames'; }, [loc.pathname]);
   // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
   useEffect(() => {
     if (loc.pathname !== '/') return;
