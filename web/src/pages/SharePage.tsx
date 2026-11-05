@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
-import { printRatio, type Target } from '../target';
+import { Wall } from '../components/CompositionWall';
+import { arrange, photosOf, type Layout, type Print } from '../layout';
+import type { Target } from '../target';
 import { imgUrl } from '../api';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[] };
+type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[] };
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -70,8 +72,9 @@ export function SharePage() {
     setMine((m) => { const c = { ...m }; if (photoId === null) delete c[forId]; else c[forId] = photoId; return c; });
     setPicking(null);
   };
+  const wallPrints: Print[] = d.layout ? (d.layout.mode === 'free' ? d.layout.prints : arrange(d.layout.prints, d.layout.mode)) : [];
   const count = prints.length;
-  const tall = !!d.target && (d.target.orientation === 'portrait' || (d.target.orientation === 'any' && prints.some((p) => p.ar < 1)));
+  const wallPhotos = new Map(photos.map((p) => [p.id, { id: p.id, title: p.title, w: 0, h: 0, ar: p.ar }]));
 
   if (view === 'review') return <GuestReview token={token} photos={photos} reviewer={reviewer} onDone={() => setView('grid')} />;
 
@@ -93,22 +96,21 @@ export function SharePage() {
       {showPrints && (
         <>
           <div className="label" style={{ marginBottom: 12 }}>The {count === 1 ? 'print' : `${count} prints`}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${count},minmax(0,1fr))`, gap: 16, marginBottom: 32, maxWidth: `min(100%, ${count * (tall ? 300 : 420) + (count - 1) * 16}px)` }}>
-            {prints.map((p, n) => {
-              const sug = mine[p.id] !== undefined ? photos.find((x) => x.id === mine[p.id]) : null;
+          {wallPrints.length > 0 && (
+            <div style={{ background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <Wall prints={wallPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={null} locked share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+            {wallPrints.flatMap((pr, n) => photosOf(pr).map((pid) => ({ pr, n, p: photos.find((x) => x.id === pid) })).filter((x) => !!x.p)).map(({ n, p }) => {
+              const sug = mine[p!.id] !== undefined ? photos.find((x) => x.id === mine[p!.id]) : null;
               return (
-                <div key={p.id}>
-                  <button onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`} style={{ display: 'flex', width: '100%', aspectRatio: String(d.target ? printRatio(d.target, p.ar ? { w: p.ar, h: 1 } : null) : p.ar), borderRadius: 8, background: '#161615', position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 0 0 1px #efede8', alignItems: 'center', justifyContent: 'center' }}>
-                    <img src={imgUrl(p.id, 'preview', token)} alt={p.title} style={{ position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain' }} />
-                    <span style={{ position: 'absolute', top: 8, left: 10, font: "italic 400 20px 'Instrument Serif',serif", textShadow: '0 1px 6px rgba(0,0,0,.6)' }}>{n + 1}</span>
-                  </button>
-                  {d.allowReview && others.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12.5 }}>
-                      {sug ? (
-                        <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">You suggested this instead</span><button className="t2" onClick={() => suggest(p.id, null)}>Undo</button></span>
-                      ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p.id))}>Suggest another</button>}
-                    </div>
-                  )}
+                <div key={p!.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5 }}>
+                  <button onClick={() => setLook(photos.indexOf(p!))} aria-label={`Open ${p!.title}`}><img src={imgUrl(p!.id, 'thumb', token)} alt="" style={{ height: 40, borderRadius: 3, display: 'block' }} /></button>
+                  <span className="muted">Print {n + 1} · {p!.title}</span>
+                  {d.allowReview && others.length > 0 && (sug ? (
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">You suggested this instead</span><button className="t2" onClick={() => suggest(p!.id, null)}>Undo</button></span>
+                  ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p!.id))}>Suggest another</button>)}
                 </div>
               );
             })}

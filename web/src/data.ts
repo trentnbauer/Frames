@@ -24,7 +24,7 @@ export type Shoot = {
   /** Subjects and tags the shoot gives to every photograph in it. */
   subjects: string[]; tags: string[];
 };
-export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null };
+export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean };
 
 export const RATINGS = [
   { value: 1, emoji: '😐', label: 'meh' },
