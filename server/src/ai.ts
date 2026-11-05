@@ -184,5 +184,15 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     } finally { state.running = false; }
     return state;
   }
-  return { state, run };
+  /** Looks at one photograph now (not in the background) and says which suggestions are new. */
+  async function analyse(id: number): Promise<{ ai: boolean; added: string[]; descriptionChanged: boolean; error?: string }> {
+    const c = aiConfig(db);
+    if (!c) return { ai: false, added: [], descriptionChanged: false };
+    const sugg = () => new Set((db.prepare("SELECT name FROM tags WHERE photo_id = ? AND accepted = 0 AND source = 'ai'").all(id) as { name: string }[]).map((r) => r.name));
+    const desc = () => { try { return String(JSON.parse((db.prepare('SELECT ai_json FROM photos WHERE id = ?').get(id) as { ai_json: string | null }).ai_json ?? '{}').description ?? ''); } catch { return ''; } };
+    const before = sugg(), was = desc();
+    try { await one(c, id); } catch (e) { return { ai: true, added: [], descriptionChanged: false, error: e instanceof Error ? e.message : 'The AI could not look at this photograph' }; }
+    return { ai: true, added: [...sugg()].filter((n) => !before.has(n)), descriptionChanged: desc() !== was };
+  }
+  return { state, run, analyse };
 }
