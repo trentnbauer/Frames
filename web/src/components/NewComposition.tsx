@@ -72,7 +72,10 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   // What the title points to, less what has been taken away.
   const auto = useMemo(() => {
     const out = {} as Record<Kind, string[]>;
-    for (const k of ['subject', 'tag', 'colour'] as Kind[]) out[k] = fuzzyNames(name, known[k].map((i) => i.name)).filter((n) => !dismissed.includes(`${k}:${n}`));
+    // Photographs handed over (opened from one photograph, a photoshoot, a search...) are the whole starting set: a name that happens to match
+    // a subject, tag or colour must not pull in every photograph that has it. Matching from the name is for compositions started from nothing.
+    const given = (start.photoIds?.length ?? 0) > 0;
+    for (const k of ['subject', 'tag', 'colour'] as Kind[]) out[k] = given ? [] : fuzzyNames(name, known[k].map((i) => i.name)).filter((n) => !dismissed.includes(`${k}:${n}`));
     return out;
   }, [name, dismissed.join('|'), subjects.data, tags.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const chosen = (k: Kind) => [...new Set([...auto[k], ...manual[k]])];
