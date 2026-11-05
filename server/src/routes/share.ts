@@ -86,6 +86,26 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     db.prepare('UPDATE shares SET revoked = 1 WHERE id = ?').run(id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });
+  // The photographer's side: what guests wrote on one link, on a composition (all its links) or on one photograph (every link it is in).
+  const commentRows = (where: string, ...args: unknown[]) => all(`SELECT c.id, c.reviewer, c.photo_id, c.body, c.ts, p.title FROM share_comments c LEFT JOIN photos p ON p.id = c.photo_id WHERE ${where} ORDER BY c.ts DESC LIMIT 500`, ...args)
+    .map((r) => ({ id: r.id as number, by: r.reviewer as string, photoId: r.photo_id as number | null, photoTitle: (r.title as string | null) ?? null, body: r.body as string, at: r.ts as string }));
+  app.get('/api/shares/:id/comments', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
+    return { comments: commentRows('c.share_id = ?', id) };
+  });
+  app.get('/api/collections/:id/comments', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return notFound(rep);
+    return { comments: commentRows("c.share_id IN (SELECT id FROM shares WHERE kind = 'collection' AND target_id = ?)", id) };
+  });
+  app.get('/api/photos/:id/comments', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
+    return { comments: commentRows('c.photo_id = ?', id) };
+  });
+  app.delete('/api/comments/:id', async (req) => ({ removed: db.prepare('DELETE FROM share_comments WHERE id = ?').run(num((req.params as Row).id)).changes }));
+
   // Who has looked at a link and what each person did: how many photographs they rated, how many suggestions they made, and when.
   app.get('/api/shares/:id/guests', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -200,6 +220,25 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if ((one('SELECT COUNT(*) n FROM share_suggestions WHERE share_id = ?', r.share.id) as Row).n >= MAX_SUGGESTIONS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
+    return { ok: true };
+  });
+
+  // A guest's comment, on the whole link or on one photograph. Guests never see comments (their own or anyone's): they are for the photographer.
+  const MAX_COMMENTS = 2000;
+  app.post('/api/s/:token/comment', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'review')) return;
+    const r = resolve((req.params as Row).token, req, rep);
+    if (!r) return;
+    if (!r.share.allow_review) return rep.code(403).send({ error: 'Comments are not allowed on this link' });
+    const b = (req.body ?? {}) as Row;
+    const body = typeof b.body === 'string' ? b.body.trim().slice(0, 1000) : '';
+    if (!body) return rep.code(400).send({ error: 'Write a comment first' });
+    const photoId = b.photoId === null || b.photoId === undefined ? null : num(b.photoId);
+    if (photoId !== null && !r.photoIds.includes(photoId)) return rep.code(400).send({ error: 'That photograph is not on this link' });
+    if ((one('SELECT COUNT(*) n FROM share_comments WHERE share_id = ?', r.share.id) as Row).n >= MAX_COMMENTS) return rep.code(429).send({ error: 'This link has reached its comment limit' });
+    const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
+    db.prepare('INSERT INTO share_comments(share_id, reviewer, photo_id, body, ts) VALUES(?, ?, ?, ?, ?)').run(r.share.id, reviewer, photoId, body, new Date().toISOString());
     return { ok: true };
   });
 

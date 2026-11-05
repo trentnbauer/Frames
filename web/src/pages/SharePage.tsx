@@ -17,10 +17,10 @@ export function SharePage() {
   const [look, setLook] = useState<number | null>(null);
   const nameKey = `frames-guest-name-${token}`;
   const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem(nameKey) ?? ''; } catch { return ''; } });
-  const [asking, setAsking] = useState<null | (() => void)>(null); // the name box, and what to do once there is a name
+  const [asking, setAsking] = useState<null | ((name: string) => void)>(null); // the name box, and what to do once there is a name
   const setName = (n: string) => { setReviewer(n); try { localStorage.setItem(nameKey, n); } catch { /* the name is only remembered for next time */ } };
   // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
-  const withName = (then: () => void) => { if (reviewer.trim()) then(); else setAsking(() => then); };
+  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else setAsking(() => then); };
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
   const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
@@ -124,7 +124,7 @@ export function SharePage() {
         <i />
       </div>
       {asking && (
-        <NameBox initial={reviewer} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(); }} />
+        <NameBox initial={reviewer} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -138,16 +138,44 @@ export function SharePage() {
           </div>
         </div>
       )}
+      {d.allowReview && (
+        <div style={{ marginTop: 32 }}>
+          <div className="label" style={{ marginBottom: 8 }}>A comment for the person who shared this</div>
+          <CommentBox token={token} reviewer={reviewer} photoId={null} placeholder="Say what you think of the whole set…" ask={withName} />
+        </div>
+      )}
       {look !== null && (
         <div className="review-screen" role="dialog" aria-label="Photograph">
           <div className="counter">{look + 1} <span>/ {photos.length}</span></div>
           <button className="esc" onClick={() => setLook(null)}>Close</button>
           <div className="photo"><Fit p={photos[look]} /></div>
+          {d.allowReview && <div style={{ position: 'absolute', bottom: 24, left: 56, right: 56, display: 'flex', justifyContent: 'center' }}><CommentBox key={photos[look].id} token={token} reviewer={reviewer} photoId={photos[look].id} placeholder="Comment on this photograph…" ask={withName} /></div>}
           <button className="lbnav" style={{ left: 12 }} aria-label="Previous" onClick={() => setLook((look + photos.length - 1) % photos.length)}>‹</button>
           <button className="lbnav" style={{ right: 12 }} aria-label="Next" onClick={() => setLook((look + 1) % photos.length)}>›</button>
         </div>
       )}
     </Shell>
+  );
+}
+
+/** A comment for the photographer. Guests cannot read comments back (theirs or anyone's): it is sent, and that is all. */
+function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: string; reviewer: string; photoId: number | null; placeholder: string; ask: (then: (name: string) => void) => void }) {
+  const [text, setText] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [err, setErr] = useState('');
+  const send = () => { if (text.trim() && state !== 'sending') ask((name) => void post(name)); }; // comments are made under a name too
+  const post = async (name: string) => {
+    setState('sending'); setErr('');
+    const r = await fetch(`/api/s/${token}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoId, body: text, reviewer: name }) });
+    if (r.ok) { setText(''); setState('sent'); } else { setErr((await r.json().catch(() => ({}))).error ?? 'Could not send that'); setState('error'); }
+  };
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <textarea aria-label={placeholder} className="area" rows={2} maxLength={1000} placeholder={placeholder} value={text} onChange={(e) => { setText(e.target.value); if (state === 'sent') setState('idle'); }} onKeyDown={(e) => e.stopPropagation()} style={{ flex: 1, minWidth: 240, maxWidth: 520 }} />
+      <button className="pill" onClick={send} disabled={!text.trim() || state === 'sending'}>Send</button>
+      {state === 'sent' && <span className="muted" role="status" style={{ fontSize: 12.5, alignSelf: 'center' }}>Sent. Only the person who shared this will see it.</span>}
+      {state === 'error' && <span className="reason" role="alert" style={{ fontSize: 12.5, alignSelf: 'center' }}>{err}</span>}
+    </div>
   );
 }
 

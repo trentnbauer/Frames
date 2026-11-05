@@ -21,6 +21,8 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
   const [copied, setCopied] = useState<number | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const results = useApi<GuestReviews>(open ? `/shares/${open}/reviews` : null);
+  const [talk, setTalk] = useState<number | null>(null);
+  const comments = useApi<{ comments: { id: number; by: string; photoTitle: string | null; body: string; at: string }[] }>(talk ? `/shares/${talk}/comments` : null);
   const [who, setWho] = useState<number | null>(null);
   const guests = useApi<{ guests: { name: string; rated: number; avg: number | null; suggested: number; last: string }[] }>(who ? `/shares/${who}/guests` : null);
 
@@ -77,11 +79,23 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
             </span>
             <span style={{ display: 'flex', gap: 14, fontSize: 12.5, flex: 'none' }} className="t2">
               {l.status === 'active' && <button onClick={() => copy(l)}>{copied === l.id ? 'Copied' : 'Copy link'}</button>}
+              {l.allowReview && <button onClick={() => setTalk(talk === l.id ? null : l.id)}>{talk === l.id ? 'Hide comments' : 'See comments'}</button>}
               {l.allowReview && <button onClick={() => setWho(who === l.id ? null : l.id)}>{who === l.id ? 'Hide guests' : 'See guests'}</button>}
               {l.allowReview && <button onClick={() => setOpen(open === l.id ? null : l.id)}>{open === l.id ? 'Hide ratings' : 'See ratings'}</button>}
               {l.status === 'active' && <button onClick={() => off(l)}>Turn off</button>}
             </span>
           </div>
+          {talk === l.id && (
+            <div className="guestres">
+              {comments.data?.comments.length === 0 && <span className="muted">No comments yet.</span>}
+              {comments.data?.comments.map((c) => (
+                <div key={c.id} style={{ marginBottom: 8 }}>
+                  <b>{c.by}</b> <span className="muted">· {c.photoTitle ?? 'the whole set'} · {fmtDate(c.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  <div style={{ fontSize: 13.5 }}>{c.body}</div>
+                </div>
+              ))}
+            </div>
+          )}
           {who === l.id && (
             <div className="guestres">
               {guests.data?.guests.length === 0 && <span className="muted">No one has rated or suggested anything yet.</span>}

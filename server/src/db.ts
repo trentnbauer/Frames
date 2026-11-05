@@ -201,6 +201,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'shoots', 'shared', "TEXT NOT NULL DEFAULT '{}'");
   },
+  // 13: a guest of a share link can leave a comment, on the whole link or on one photograph. Only the photographer sees them.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS share_comments (
+        id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+        reviewer TEXT NOT NULL DEFAULT '', photo_id INTEGER REFERENCES photos(id) ON DELETE CASCADE, body TEXT NOT NULL, ts TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS share_comments_share ON share_comments(share_id);
+    `);
+  },
 ];
 
 export function migrate(db: DB) {
