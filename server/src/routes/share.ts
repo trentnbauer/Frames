@@ -6,6 +6,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
+import { humanCookie, verifyToken } from '../turnstile.js';
 import { FRAME_COLOURS, parseLayout } from '../layout.js';
 
 /**
@@ -257,6 +258,16 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if ((one('SELECT COUNT(*) n FROM share_suggestions WHERE share_id = ?', r.share.id) as Row).n >= MAX_SUGGESTIONS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
+    return { ok: true };
+  });
+
+  // Passing the Turnstile check for share links: the answer is checked with Cloudflare and, if good, a signed cookie says so for a while.
+  app.post('/api/s/:token/human', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'lookup')) return;
+    const v = await verifyToken(x.sys, ((req.body ?? {}) as Row).token, req.ip, x.cfg.turnstileUrl);
+    if (v === 'bad') return rep.code(400).send({ error: 'That check did not pass. Try again.' });
+    rep.header('Set-Cookie', humanCookie(x.sys, req.protocol === 'https' || String(req.headers['x-forwarded-proto'] ?? '') === 'https'));
     return { ok: true };
   });
 

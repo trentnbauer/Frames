@@ -5,6 +5,7 @@ import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
 import fs from 'node:fs';
+import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { bindOwner, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User } from '../users.js';
 
@@ -25,13 +26,19 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   };
 
   // ---------- public: the sign-in pages ----------
-  app.get('/auth/signin', async (req, rep) => rep.type('text/html').send(auth.signinPage(String((req.query as Row).e ?? '').slice(0, 200) || undefined)));
+  app.get('/auth/signin', async (req, rep) => { const q = req.query as Row; return rep.type('text/html').send(auth.signinPage(String(q.e ?? '').slice(0, 200) || undefined, { returnTo: safeReturn(q.returnTo) === '/' ? undefined : safeReturn(q.returnTo), guest: q.guest === '1' })); });
 
   app.get('/auth/login/:id', async (req, rep) => {
     if (tooMany(req.ip)) return rep.code(429).type('text/html').send(auth.messagePage('Slow down', 'Too many sign-in attempts. Try again in a minute.'));
     const p = loadAuth(db).providers.find((v) => v.id === (req.params as Row).id);
     if (!p || !loadAuth(db).providers.length) return rep.code(404).type('text/html').send(auth.messagePage('Not set up', 'That sign-in method is not set up.'));
     const q = req.query as Row;
+    // The Turnstile check, when it is on for sign-in: a person who has passed it (the cookie) or who brings its answer gets through. The test
+    // sign-in an administrator starts from Settings is exempt, so the check can never get in the way of setting sign-in up.
+    if (turnstileOn(db, 'signin') && q.test !== '1' && !isHuman(db, req)) {
+      const v = await verifyToken(db, q['cf-turnstile-response'], req.ip, cfg.turnstileUrl);
+      if (v === 'bad') return rep.redirect(`/auth/signin?e=${encodeURIComponent('Please complete the check to show you are a person, then choose how to sign in.')}${q.returnTo ? `&returnTo=${encodeURIComponent(safeReturn(q.returnTo))}` : ''}${q.guest === '1' ? '&guest=1' : ''}`);
+    }
     try {
       return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) }));
     } catch (e) {

@@ -7,6 +7,7 @@ import { getSecret, setSecret } from './ai.js';
 import type { AppCfg } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { getUser, OWNER_ID, type User } from './users.js';
+import { active } from './turnstile.js';
 
 /**
  * Optional sign-in through OAuth providers (design doc section 2.9).
@@ -295,13 +296,20 @@ export function createAuth(db: DB, cfg: AppCfg) {
   const PAGE = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Frames</title><style>
   body{margin:0;background:#0d0d0d;color:#efede8;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
   main{width:min(380px,calc(100vw - 48px))}h1{font:400 44px/1 Georgia,serif;margin:0 0 8px}p{color:#a8a59f;margin:0 0 22px}
-  a.b{display:block;text-align:center;padding:12px 18px;border-radius:999px;background:#efede8;color:#0d0d0d;text-decoration:none;font-weight:500;margin-bottom:10px}
+  a.b,button.b{display:block;width:100%;border:0;font:inherit;cursor:pointer;text-align:center;padding:12px 18px;border-radius:999px;background:#efede8;color:#0d0d0d;text-decoration:none;font-weight:500;margin-bottom:10px}
   a.l{color:#8f8c86;font-size:13px}.e{color:#e79a82;background:rgba(231,140,120,.1);border-radius:10px;padding:10px 14px;margin-bottom:18px}</style></head><body><main>${body}</main></body></html>`;
 
-  function signinPage(message?: string): string {
+  function signinPage(message?: string, opts: { returnTo?: string; guest?: boolean } = {}): string {
     const a = loadAuth(db);
+    const t = active(db, 'signin');
+    // With the Turnstile check on, the buttons submit a form that carries the check's answer; without it they are plain links.
+    const buttons = t
+      ? `<form method="get" action="/auth/login/${esc(a.providers[0]?.id ?? '')}">${opts.returnTo ? `<input type="hidden" name="returnTo" value="${esc(opts.returnTo)}">` : ''}${opts.guest ? '<input type="hidden" name="guest" value="1">' : ''}
+        <div class="cf-turnstile" data-sitekey="${esc(t.siteKey)}" data-theme="dark" style="margin-bottom:14px"></div>
+        ${a.providers.map((p) => `<button class="b" type="submit" formaction="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</button>`).join('')}</form><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
+      : a.providers.map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('');
     return PAGE(`<h1>Frames</h1><p>Sign in to continue.</p>${message ? `<div class="e" role="alert">${esc(message)}</div>` : ''}
-      ${a.providers.map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('')}
+      ${buttons}
       ${cfg.authPassword ? '<a class="l" href="/auth/password">Use the shared password instead</a>' : ''}<p style="margin-top:26px;font-size:13px"><a class="l" href="/privacy">Privacy</a></p>`);
   }
   const messagePage = (title: string, text: string) => PAGE(`<h1>${esc(title)}</h1><p>${esc(text)}</p><a class="l" href="/auth/signin">Back to sign in</a>`);

@@ -5,6 +5,7 @@ import { Fit, Img, Mark, useKey } from '../components/bits';
 import { Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
+import { HumanCheck } from '../components/HumanCheck';
 import { arrange, photosOf, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
@@ -17,6 +18,8 @@ export function SharePage() {
   const { token = '' } = useParams();
   const [d, setD] = useState<Shared | null>(null);
   const [gone, setGone] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<string | null>(null); // the Turnstile site key, when the link asks to be shown a person is here
+  const [tries, setTries] = useState(0);
   const [view, setView] = useState<'grid' | 'review'>('grid');
   const [look, setLook] = useState<number | null>(null);
   const nameKey = `frames-guest-name-${token}`;
@@ -37,8 +40,13 @@ export function SharePage() {
 
   useEffect(() => {
     document.title = 'Frames | Shared photographs';
-    fetch(`/api/s/${token}`).then(async (r) => (r.ok ? setD(await r.json()) : setGone((await r.json().catch(() => ({}))).error ?? 'This link is not available'))).catch(() => setGone('Could not load this link'));
-  }, [token]);
+    fetch(`/api/s/${token}`).then(async (r) => {
+      if (r.ok) { setChallenge(null); return setD(await r.json()); }
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 403 && j.challenge?.siteKey) return setChallenge(j.challenge.siteKey);
+      setGone(j.error ?? 'This link is not available');
+    }).catch(() => setGone('Could not load this link'));
+  }, [token, tries]);
 
   useKey((e) => {
     if (look === null || !d) return;
@@ -49,6 +57,10 @@ export function SharePage() {
 
   useEffect(() => { if (d?.name) document.title = `Frames | ${d.name}`; }, [d?.name]);
   if (gone) return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>This link isn’t available.</h1><p className="t2">{gone}. Ask whoever sent it for a new one.</p></Shell>;
+  if (challenge) {
+    const pass = async (t: string) => { const r = await fetch(`/api/s/${token}/human`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) }); if (r.ok) setTries((n) => n + 1); };
+    return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>One moment.</h1><p className="t2" style={{ marginBottom: 22 }}>Please show that you are a person to open this link.</p><HumanCheck siteKey={challenge} onToken={(t) => void pass(t)} /></Shell>;
+  }
   if (!d) return <Shell><p className="muted">Loading…</p></Shell>;
   const photos = d.photos.map((p) => ({ ...p, share: token }));
 
