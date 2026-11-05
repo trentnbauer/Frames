@@ -15,7 +15,12 @@ export function SharePage() {
   const [gone, setGone] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'review'>('grid');
   const [look, setLook] = useState<number | null>(null);
-  const [reviewer, setReviewer] = useState('');
+  const nameKey = `frames-guest-name-${token}`;
+  const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem(nameKey) ?? ''; } catch { return ''; } });
+  const [asking, setAsking] = useState<null | ((name: string) => void)>(null); // the name box, and what to do once there is a name
+  const setName = (n: string) => { setReviewer(n); try { localStorage.setItem(nameKey, n); } catch { /* the name is only remembered for next time */ } };
+  // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
+  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else setAsking(() => then); };
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
   const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
@@ -78,8 +83,8 @@ export function SharePage() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
         {d.allowReview && (
           <>
-            <input className="namebox" aria-label="Your name" placeholder="Your name (optional)" value={reviewer} maxLength={60} onChange={(e) => setReviewer(e.target.value)} />
-            <button className="pill primary" onClick={() => setView('review')}>Review these</button>
+            <button className="pill primary" onClick={() => withName(() => setView('review'))}>Review these</button>
+            {reviewer.trim() && <span className="muted" style={{ fontSize: 13 }}>as {reviewer.trim()} · <button className="t2" style={{ textDecoration: 'underline' }} onClick={() => setAsking(() => () => undefined)}>change</button></span>}
           </>
         )}
         {d.allowDownload && <button className={'pill' + (d.allowReview ? '' : ' primary')} onClick={download} disabled={!!dl && !dl.ready}>Download files</button>}
@@ -101,7 +106,7 @@ export function SharePage() {
                     <div style={{ marginTop: 8, fontSize: 12.5 }}>
                       {sug ? (
                         <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">You suggested this instead</span><button className="t2" onClick={() => suggest(p.id, null)}>Undo</button></span>
-                      ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => setPicking(p.id)}>Suggest another</button>}
+                      ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p.id))}>Suggest another</button>}
                     </div>
                   )}
                 </div>
@@ -118,6 +123,9 @@ export function SharePage() {
         ))}
         <i />
       </div>
+      {asking && (
+        <NameBox initial={reviewer} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
+      )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div role="dialog" aria-label="Suggest another" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
@@ -133,7 +141,7 @@ export function SharePage() {
       {d.allowReview && (
         <div style={{ marginTop: 32 }}>
           <div className="label" style={{ marginBottom: 8 }}>A comment for the person who shared this</div>
-          <CommentBox token={token} reviewer={reviewer} photoId={null} placeholder="Say what you think of the whole set…" />
+          <CommentBox token={token} reviewer={reviewer} photoId={null} placeholder="Say what you think of the whole set…" ask={withName} />
         </div>
       )}
       {look !== null && (
@@ -141,7 +149,7 @@ export function SharePage() {
           <div className="counter">{look + 1} <span>/ {photos.length}</span></div>
           <button className="esc" onClick={() => setLook(null)}>Close</button>
           <div className="photo"><Fit p={photos[look]} /></div>
-          {d.allowReview && <div style={{ position: 'absolute', bottom: 24, left: 56, right: 56, display: 'flex', justifyContent: 'center' }}><CommentBox key={photos[look].id} token={token} reviewer={reviewer} photoId={photos[look].id} placeholder="Comment on this photograph…" /></div>}
+          {d.allowReview && <div style={{ position: 'absolute', bottom: 24, left: 56, right: 56, display: 'flex', justifyContent: 'center' }}><CommentBox key={photos[look].id} token={token} reviewer={reviewer} photoId={photos[look].id} placeholder="Comment on this photograph…" ask={withName} /></div>}
           <button className="lbnav" style={{ left: 12 }} aria-label="Previous" onClick={() => setLook((look + photos.length - 1) % photos.length)}>‹</button>
           <button className="lbnav" style={{ right: 12 }} aria-label="Next" onClick={() => setLook((look + 1) % photos.length)}>›</button>
         </div>
@@ -151,14 +159,14 @@ export function SharePage() {
 }
 
 /** A comment for the photographer. Guests cannot read comments back (theirs or anyone's): it is sent, and that is all. */
-function CommentBox({ token, reviewer, photoId, placeholder }: { token: string; reviewer: string; photoId: number | null; placeholder: string }) {
+function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: string; reviewer: string; photoId: number | null; placeholder: string; ask: (then: (name: string) => void) => void }) {
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [err, setErr] = useState('');
-  const send = async () => {
-    if (!text.trim() || state === 'sending') return;
+  const send = () => { if (text.trim() && state !== 'sending') ask((name) => void post(name)); }; // comments are made under a name too
+  const post = async (name: string) => {
     setState('sending'); setErr('');
-    const r = await fetch(`/api/s/${token}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoId, body: text, reviewer }) });
+    const r = await fetch(`/api/s/${token}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoId, body: text, reviewer: name }) });
     if (r.ok) { setText(''); setState('sent'); } else { setErr((await r.json().catch(() => ({}))).error ?? 'Could not send that'); setState('error'); }
   };
   return (
@@ -167,6 +175,25 @@ function CommentBox({ token, reviewer, photoId, placeholder }: { token: string; 
       <button className="pill" onClick={send} disabled={!text.trim() || state === 'sending'}>Send</button>
       {state === 'sent' && <span className="muted" role="status" style={{ fontSize: 12.5, alignSelf: 'center' }}>Sent. Only the person who shared this will see it.</span>}
       {state === 'error' && <span className="reason" role="alert" style={{ fontSize: 12.5, alignSelf: 'center' }}>{err}</span>}
+    </div>
+  );
+}
+
+/** "What should we call you?": a name the photographer will see next to what this person rates and suggests. */
+function NameBox({ initial, onDone, onCancel }: { initial: string; onDone: (n: string) => void; onCancel: () => void }) {
+  const [n, setN] = useState(initial);
+  const ok = n.trim().length > 0;
+  return (
+    <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: '#161615', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+        <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>What should we call you?</h2>
+        <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
+        <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" className="namebox" style={{ width: '100%', marginBottom: 16 }} />
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" className="pill" onClick={onCancel}>Cancel</button>
+          <button className="pill primary" disabled={!ok}>Continue</button>
+        </div>
+      </form>
     </div>
   );
 }
