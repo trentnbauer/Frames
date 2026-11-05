@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
+import { SignInMethods } from './SignInMethods';
 
 type P = { displayName: string; hasAvatar: boolean; signedInAs: string };
 
@@ -64,6 +65,7 @@ export function Profile() {
           <button className="pill primary" disabled={name.trim() === p.data.displayName} onClick={() => run(() => api('/profile', { method: 'PUT', body: { displayName: name } }), 'Name saved.')}>Save</button>
         </div>
       </div>
+      <SignInMethods />
     </>
   );
 }
