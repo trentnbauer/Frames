@@ -8,6 +8,8 @@ import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
+import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
+import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
 import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
@@ -163,6 +165,19 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       for (const n of fs.readdirSync(dir).filter((f) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(f))) out.push({ name: n, whose: t.user.name || t.user.email || `person ${t.user.id}`, bytes: fs.statSync(path.join(dir, n)).size });
     }
     return out.sort((a, b) => b.name.localeCompare(a.name));
+  });
+
+  // Cloudflare Turnstile for the sign-in page and share links. The secret key is write-only: it is never sent back, only whether one is set.
+  const turnstile = () => { const c = loadTurnstile(sys); return { enabled: c.enabled, siteKey: c.siteKey, signin: c.signin, shares: c.shares, hasSecret: hasSecret(sys), disabledByEnv: envBool('TURNSTILE_DISABLE', false) }; };
+  app.get('/api/admin/turnstile', async () => turnstile());
+  app.put('/api/admin/turnstile', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    for (const k of ['siteKey', 'secret']) if (b[k] !== undefined && typeof b[k] !== 'string') return rep.code(400).send({ error: 'Keys must be text.' });
+    const next = { ...loadTurnstile(sys), ...(typeof b.siteKey === 'string' ? { siteKey: b.siteKey.trim() } : {}), ...(typeof b.enabled === 'boolean' ? { enabled: b.enabled } : {}) };
+    // Switching it on needs both keys: a check with no way to pass would lock everyone out.
+    if (next.enabled && (!next.siteKey || !(hasSecret(sys) || (typeof b.secret === 'string' && b.secret.trim())))) return rep.code(400).send({ error: 'Enter the site key and the secret key from Cloudflare first.' });
+    saveTurnstile(sys, { enabled: typeof b.enabled === 'boolean' ? b.enabled : undefined, siteKey: typeof b.siteKey === 'string' ? b.siteKey : undefined, signin: typeof b.signin === 'boolean' ? b.signin : undefined, shares: typeof b.shares === 'boolean' ? b.shares : undefined, secret: typeof b.secret === 'string' ? b.secret : undefined });
+    return turnstile();
   });
 
   // ---------- administrators ----------

@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
 import { createAuth, isAuthPath, sessionUser } from './auth.js';
+import { active as turnstileOn, anyActive, isHuman } from './turnstile.js';
 import { applyEnvConfig } from './envConfig.js';
 import { createTenants, migrateLegacy, tenantProxy, type Tenant } from './tenants.js';
 import { openSystemDb } from './users.js';
@@ -39,6 +40,7 @@ const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.leng
 const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 
 // Fonts come from Google Fonts. Everything else must be same-origin.
+const CSP_TS = (c: string) => c.replace("script-src 'self'", "script-src 'self' https://challenges.cloudflare.com").replace("connect-src 'self'", "connect-src 'self' https://challenges.cloudflare.com") + '; frame-src https://challenges.cloudflare.com';
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin|cloud\/client)(\/|\?|$)/;
@@ -109,6 +111,9 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       const m = SHARE_URL.exec(req.url);
       // An unknown link still goes to the owner's library, so the share routes give their usual answer and count the wrong guess.
       if (m) r.tenant = shareTenant(m[1]) ?? tenants.owner();
+      // Share links can ask for the Turnstile check: the data, pictures and actions behind a link need the check passed (or a signed-in account).
+      const ts = m && req.url.startsWith('/api/s/') && !/^\/api\/s\/[^/?]+\/human(\?|$)/.test(req.url) ? turnstileOn(sys, 'shares') : null;
+      if (ts && !isHuman(sys, req) && !sessionUser(sys, req)) return rep.code(403).send({ error: 'Please confirm you are a person to open this link.', challenge: { siteKey: ts.siteKey } });
       // A guest who opens a link while signed in finds it again in their "Shared with you" list.
       if (m && req.method === 'GET' && !req.url.includes('/', req.url.indexOf(m[1]) + m[1].length) && auth.oauthOn()) {
         const g = sessionUser(sys, req), t = shareTenant(m[1]);
@@ -143,7 +148,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.addHook('onRequest', (req, _rep, done) => { const t = (req as any).tenant as Tenant | null; if (t) tenants.enter(t, done); else done(); });
   app.addHook('onSend', async (req, rep) => {
     if (/^\/(api\/)?s\//.test(req.url)) rep.header('X-Robots-Tag', 'noindex, nofollow'); // share pages are never for search engines
-    rep.header('Content-Security-Policy', CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY').header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    rep.header('Content-Security-Policy', anyActive(sys) ? CSP_TS(CSP) : CSP).header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer').header('X-Frame-Options', 'DENY').header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
   // Never echo internal errors (SQL, file paths) to the client.
   app.setErrorHandler((e, _req, rep) => {

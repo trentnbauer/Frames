@@ -192,6 +192,8 @@ export function Access() {
         )}
       </div>
 
+      <Turnstile />
+
       <div className="field">
         <h3>Who is allowed in</h3>
         <div role="radiogroup" aria-label="Who is allowed in" style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', marginBottom: 14 }}>
@@ -256,5 +258,40 @@ export function Access() {
         <p style={{ margin: 0 }}>Set <span className="mono">AUTH_DISABLE=true</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</p>
       </div>
     </>
+  );
+}
+
+type TsInfo = { enabled: boolean; siteKey: string; signin: boolean; shares: boolean; hasSecret: boolean; disabledByEnv: boolean };
+
+/** Cloudflare Turnstile: a check that a person, not a script, is using the sign-in page or opening a share link. */
+function Turnstile() {
+  const t = useApi<TsInfo>('/admin/turnstile');
+  const [site, setSite] = useState('');
+  const [secret, setSecret] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { if (t.data) setSite(t.data.siteKey); }, [t.data?.siteKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!t.data) return null;
+  const d = t.data;
+  const save = async (body: Record<string, unknown>, ok: string) => { setMsg(null); try { await api('/admin/turnstile', { method: 'PUT', body }); setSecret(''); setMsg({ ok: true, text: ok }); t.reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
+  return (
+    <div className="field">
+      <h3>Bot check (Cloudflare Turnstile)</h3>
+      <p>Ask people to pass a short check, run by Cloudflare, before they can sign in or open a share link. It is a second line behind sign-in and the unguessable link. Create a widget in the Cloudflare dashboard (Turnstile) for this address and paste its two keys here.</p>
+      {d.disabledByEnv && <div className="banner" role="alert"><span className="reason">Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.</span></div>}
+      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
+      <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520 }}>
+        <label>Site key <input aria-label="Turnstile site key" value={site} onChange={(e) => setSite(e.target.value)} placeholder="0x4AAAAAAA…" /></label>
+        <label>Secret key <input aria-label="Turnstile secret key" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={d.hasSecret ? 'Set. Type to replace it.' : '0x4AAAAAAA…'} /></label>
+        <div><button className="pill" onClick={() => save({ siteKey: site, secret }, 'Keys saved.')} disabled={!site.trim() && !secret.trim()}>Save keys</button></div>
+      </div>
+      <label className="check" style={{ marginTop: 14 }}><input type="checkbox" aria-label="Use the bot check" checked={d.enabled} onChange={(e) => save({ enabled: e.target.checked, siteKey: site, secret }, e.target.checked ? 'The bot check is on.' : 'The bot check is off.')} /> Use the bot check</label>
+      {d.enabled && (
+        <div style={{ marginLeft: 24 }}>
+          <label className="check"><input type="checkbox" aria-label="Check on the sign-in page" checked={d.signin} onChange={(e) => save({ signin: e.target.checked }, 'Saved.')} /> On the sign-in page</label>
+          <label className="check"><input type="checkbox" aria-label="Check on share links" checked={d.shares} onChange={(e) => save({ shares: e.target.checked }, 'Saved.')} /> On share links (a signed-in person is not asked)</label>
+        </div>
+      )}
+      <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out. A wrong site key cannot be detected, and would stop the check showing: if that happens, start Frames with TURNSTILE_DISABLE=true and correct the keys. The secret key is never shown again.</p>
+    </div>
   );
 }
