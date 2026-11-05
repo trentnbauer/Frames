@@ -4,7 +4,7 @@ import { api, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { fuzzyNames } from '../fuzzy';
 import { useStore } from '../store';
-import { arrange, area, fits, frameOf, fromPreset, GROUPS, metres, newPrintId, PAPER, PRESETS, printsSummary, rectsIn, sizeName, type Mode, type Print } from '../layout';
+import { WALL_BG, arrange, area, fits, frameOf, fromPreset, GROUPS, metres, newPrintId, PAPER, PRESETS, printsSummary, rectsIn, sizeName, type Mode, type Print } from '../layout';
 import type { NewCompositionStart } from '../ui';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
@@ -163,7 +163,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
           ))}
         </div>
         {prints.length < 6 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: '#a8a59f', marginBottom: 14 }}>+ Add a print</button>}
-        <div style={{ background: '#0d0d0d', borderRadius: 8, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 20, position: 'relative' }} aria-label="Layout preview">
+        <div style={{ background: WALL_BG, borderRadius: 8, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 20, position: 'relative' }} aria-label="Layout preview">
           <div style={{ position: 'relative', width: `min(100%, ${Math.round((98 * wall.W) / wall.H)}px)`, aspectRatio: String(wall.W / wall.H) }}>
             {rectsIn(laid, wall).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: '#efede8', opacity: 0.85 }} />)}
           </div>

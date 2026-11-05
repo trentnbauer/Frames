@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RATINGS, fmtDate } from '../data';
 import { Mark } from '../components/bits';
 import { Wall, type Pic } from '../components/CompositionWall';
-import { PAD, frameOf, metres, photosOf, type Layout, type Print } from '../layout';
+import { PAD, WALL_BG, frameOf, metres, photosOf, type Layout, type Print } from '../layout';
 import { imgUrl } from '../api';
 
 export type SharedPhoto = { id: number; title: string; ar: number; n: number };
@@ -153,7 +153,7 @@ export function ShareMobile(p: Props) {
               <span style={eyebrow}>{wallPrints.length === 1 ? 'The print' : `The ${wallPrints.length} prints`}</span>
               <span style={{ font: `400 11.5px ${mono}`, color: '#8f8c86' }}>{metres(f.w)} × {metres(f.h)} m</span>
             </div>
-            <div style={{ position: 'relative', margin: 0, background: '#161615', padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', margin: 0, background: WALL_BG, padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {canReview && d.layout && (
                 <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a layout again' : 'Suggest a different layout'}</button>

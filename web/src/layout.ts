@@ -18,10 +18,15 @@ export type Orientation = 'portrait' | 'landscape';
 /** A print holds one photograph, or (stack) two: two landscape photographs one above the other make a portrait print, two portrait ones side by side make a landscape one. */
 export type Print = { id: number; size: string; orientation: Orientation; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
 export type Mode = 'row' | 'grid' | 'feature' | 'free';
-export type Layout = { mode: Mode; prints: Print[] };
+export type Layout = { mode: Mode; prints: Print[]; /** The sharpness wanted, in pixels per inch (300 when absent). A photograph below it is allowed, with a warning. */ ppi?: number };
 type Photo = { w: number; h: number };
 
-export const pxOf = (k: string): [number, number] => { const [a, b] = PAPER[k]; return [Math.round((a / 25.4) * 300), Math.round((b / 25.4) * 300)]; };
+/** The colour of the wall the prints hang on: light enough that a black frame stands out from it. */
+export const WALL_BG = '#33322f';
+export const DEFAULT_PPI = 300;
+/** The sharpness choices: pixels per inch at print size. 300 is print-quality; far-viewed large prints are fine with less. */
+export const PPI_CHOICES = [300, 240, 200, 150, 100, 72];
+export const pxOf = (k: string, ppi = DEFAULT_PPI): [number, number] => { const [a, b] = PAPER[k]; return [Math.round((a / 25.4) * ppi), Math.round((b / 25.4) * ppi)]; };
 /** A print's width and height as hung (portrait: short side across). */
 export const or = (size: string, o: Orientation): [number, number] => { const [s, l] = PAPER[size]; return o === 'portrait' ? [s, l] : [l, s]; };
 export const mouldOf = (p: Print) => (p.frame && p.frame.color !== 'none' ? MOULD : 0);
@@ -80,7 +85,7 @@ export const photosOf = (p: Print): number[] => [p.photoId, p.stack ? p.photoId2
 /** The size of the space one photograph fills, in mm: the whole print, or half of it when stacked (the top and bottom of a portrait print, the left and right of a landscape one). */
 export const cellOf = (p: Print): [number, number] => { const [w, h] = or(p.size, p.orientation); return p.stack ? (p.orientation === 'portrait' ? [w, h / 2] : [w / 2, h]) : [w, h]; };
 
-/** Why this photograph does not suit this print, or null: the wrong way round, or too few pixels for 300 PPI at this size. */
+/** Why this photograph cannot go in this print, or null: it is the wrong way round. (Too few pixels is not a reason to refuse: see lowRes.) */
 export function problem(photo: Photo | null | undefined, print: Print | null | undefined): string | null {
   if (!photo || !print) return null;
   const portrait = photo.h > photo.w;
@@ -92,11 +97,23 @@ export function problem(photo: Photo | null | undefined, print: Print | null | u
     if (print.orientation === 'portrait' && !portrait) return 'Landscape. This print is portrait.';
     if (print.orientation === 'landscape' && portrait) return 'Portrait. This print is landscape.';
   }
-  const px = (mm: number) => Math.round((mm / 25.4) * 300);
-  const [short, long] = [Math.min(cw, ch), Math.max(cw, ch)].map(px);
-  const [nw, nh] = portrait ? [short, long] : [long, short];
-  if (photo.w < nw || photo.h < nh) return `${photo.w} × ${photo.h} px. ${print.stack ? 'Half of ' : ''}${sizeName(print.size)} at 300 PPI needs ${nw} × ${nh}.`;
   return null;
+}
+
+/** The pixels per inch this photograph would print at in this print (the space it fills: the whole print, or half when stacked), or null when its size is not known. */
+export function ppiOf(photo: Photo | null | undefined, print: Print | null | undefined): number | null {
+  if (!photo || !print || !photo.w || !photo.h) return null;
+  const [cw, ch] = cellOf(print), portrait = photo.h > photo.w;
+  const [shortMm, longMm] = [Math.min(cw, ch), Math.max(cw, ch)];
+  const [wMm, hMm] = portrait ? [shortMm, longMm] : [longMm, shortMm];
+  return Math.round(Math.min(photo.w / (wMm / 25.4), photo.h / (hMm / 25.4)));
+}
+
+/** A warning when this photograph has fewer pixels than `target` PPI asks for at this size, else null. It can still be used. */
+export function lowRes(photo: Photo | null | undefined, print: Print | null | undefined, target = DEFAULT_PPI): string | null {
+  const ppi = ppiOf(photo, print);
+  if (ppi === null || !photo || !print || ppi >= target) return null;
+  return `${photo.w} × ${photo.h} px is ${ppi} PPI ${print.stack ? 'in half of ' : 'in '}${sizeName(print.size)}, below the ${target} wanted. It may look soft.`;
 }
 
 export const PRESETS: { key: string; label: string; mode: Mode; prints: [string, Orientation, string | null][] }[] = [
@@ -111,7 +128,7 @@ export const newPrintId = () => uid++;
 export const fromPreset = (pr: (typeof PRESETS)[number]): Print[] => pr.prints.map(([size, orientation, f], i) => ({ id: i + 1, size, orientation, frame: f ? { size: f, mat: 'white', color: 'black' } : null, photoId: null, stack: false, photoId2: null, x: 0, y: 0 }));
 
 /** What to buy for these prints: the frames (and their mount boards), and the prints to order. */
-export function shoppingList(prints: Print[]) {
+export function shoppingList(prints: Print[], ppi = DEFAULT_PPI) {
   const fr = new Map<string, number>(), pr = new Map<string, number>();
   prints.forEach((p) => {
     pr.set(p.size, (pr.get(p.size) || 0) + 1);
@@ -125,7 +142,7 @@ export function shoppingList(prints: Print[]) {
     return { qty: `${q} ×`, title: `${sizeName(fs)} frame, ${color}`, detail: mount, size: `${fw + 2 * MOULD} × ${fh + 2 * MOULD} mm outside`, swatch: FRAMES[color] ?? 'transparent' };
   });
   const posters = prints.filter((p) => !p.frame).length;
-  const printsList = [...pr].map(([k, q]) => ({ qty: `${q} ×`, title: `${sizeName(k)} print`, detail: `${PAPER[k].join(' × ')} mm · ${pxOf(k).join(' × ')} px at 300 PPI` }));
+  const printsList = [...pr].map(([k, q]) => ({ qty: `${q} ×`, title: `${sizeName(k)} print`, detail: `${PAPER[k].join(' × ')} mm · ${pxOf(k, ppi).join(' × ')} px at ${ppi} PPI` }));
   const text = ['Frames to buy', ...frames.map((f) => `${f.qty} ${f.title} (${f.size}). ${f.detail}`), ...(posters ? [`${posters} × poster hanging (no frame)`] : []), '', 'Prints to order', ...printsList.map((p) => `${p.qty} ${p.title}, ${p.detail}`)].join('\n');
   return { frames, posters, printsList, text };
 }
@@ -149,15 +166,16 @@ const clonePrint = (p: Print): Print => ({ ...p, frame: p.frame ? { ...p.frame }
  * Puts photograph `pid` in print `i`. One already in another print swaps places with whatever was in the way (if that fits where it
  * goes, else that place is left empty). Returns the new prints, or null prints with the reason it does not fit.
  */
-export function place(prints: Print[], i: number, pid: number, photo: Dims): { prints: Print[] | null; note: string } {
+export function place(prints: Print[], i: number, pid: number, photo: Dims, ppi = DEFAULT_PPI): { prints: Print[] | null; note: string; warn: string } {
   const target = prints[i];
-  if (!target) return { prints: null, note: '' };
+  if (!target) return { prints: null, note: '', warn: '' };
   const bad = problem(photo(pid), target);
-  if (bad) return { prints: null, note: bad };
+  if (bad) return { prints: null, note: bad, warn: '' };
+  const warn = lowRes(photo(pid), target, ppi) ?? ''; // too few pixels is allowed, with a warning
   const out = prints.map(clonePrint);
   const slot = slotFor(out[i]);
   const from = findPhoto(out, pid);
-  if (from && from.index === i && from.slot === slot) return { prints: out, note: '' };
+  if (from && from.index === i && from.slot === slot) return { prints: out, note: '', warn };
   const was = getAt(out[i], slot);
   setAt(out[i], slot, pid);
   if (from) {
@@ -165,7 +183,7 @@ export function place(prints: Print[], i: number, pid: number, photo: Dims): { p
     const back = was !== null && !problem(photo(was), out[from.index]) ? was : null;
     setAt(out[from.index], from.slot, back);
   }
-  return { prints: out, note: '' };
+  return { prints: out, note: '', warn };
 }
 /** Takes a photograph out of whichever print holds it. */
 export const unplace = (prints: Print[], pid: number): Print[] => prints.map((p) => ({ ...clonePrint(p), photoId: p.photoId === pid ? null : p.photoId, photoId2: p.photoId2 === pid ? null : p.photoId2 }));

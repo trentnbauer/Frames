@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
-import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
+import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, WALL_BG, lowRes, ppiOf, PPI_CHOICES, DEFAULT_PPI, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
 import { PrintModal, ShoppingList, Wall } from '../components/CompositionWall';
 import { Header, Img, Justified, Loading, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
@@ -190,7 +190,12 @@ export function CollectionDetail() {
   const rk = ranking.data;
   const rankOf = new Map((rk?.items ?? []).map((r, i) => [r.id, { ...r, rank: i + 1 }]));
   const order = c ? [...c.photoIds].sort((a, b) => (rankOf.get(a)?.rank ?? 1e9) - (rankOf.get(b)?.rank ?? 1e9)) : [];
+  const ppi = c?.layout.ppi ?? DEFAULT_PPI; // the sharpness wanted; a photograph below it is allowed, with a warning
   const problemOf = (pid: number) => { const p = byId.get(pid); return p && sp ? printProblem(p, sp) : null; };
+  const warns: Record<number, string> = {};
+  wallPrints.forEach((pr, i) => { const low = photosOf(pr).map((pid) => ppiOf(byId.get(pid), pr)).filter((n): n is number => n !== null && n < ppi); if (low.length) warns[i] = `${Math.min(...low)} PPI`; });
+  const lowCount = Object.keys(warns).length;
+  const lowOf = (pid: number) => { const p = byId.get(pid); return p && sp ? lowRes(p, sp, ppi) : null; };
   const pool = c ? order.filter((pid) => !c.chosenIds.includes(pid) && !problemOf(pid)).slice(0, 6) : [];
   const state: Fo = fo ?? { champ: pool[0], next: 1, round: 1, done: pool.length < 2 };
 
@@ -209,10 +214,10 @@ export function CollectionDetail() {
   // Takes a photograph out of this composition (it stays in the library, and any print slot it held is freed).
   const removeFromComp = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' })); reload(); };
   // Saves the prints (laid out as they are shown) and what they hold. The server keeps the chosen photographs in print order.
-  const saveLayout = async (ps: Print[], m: Mode = mode) => {
+  const saveLayout = async (ps: Print[], m: Mode = mode, nextPpi: number = ppi) => {
     const laid = m === 'free' ? ps : arrange(ps, m);
     setLay(laid); setMode(m);
-    coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: m, prints: laid } } })); reload();
+    coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: m, prints: laid, ppi: nextPpi } } })); reload();
   };
   // A guest's suggestion: swap it into the print it was for (in the same place), or put it aside.
   const useSuggestion = async (forId: number, photoId: number) => {
@@ -232,9 +237,9 @@ export function CollectionDetail() {
   // in another print swaps with what was there. One that does not fit is refused with the reason.
   const assign = (i: number, pid: number) => {
     if (printed) return;
-    const r = place(wallPrints, i, pid, photoOf);
+    const r = place(wallPrints, i, pid, photoOf, ppi);
     if (!r.prints) { setNote(`${byId.get(pid)?.title ?? 'That photograph'} can’t go in print ${i + 1}. ${r.note}`); return; }
-    setNote(''); void saveLayout(r.prints);
+    setNote(r.warn ? `⚠ ${byId.get(pid)?.title ?? 'That photograph'} is in print ${i + 1}, but ${r.warn}` : ''); void saveLayout(r.prints);
   };
   const toggle = (pid: number) => {
     if (printed) return;
@@ -244,7 +249,8 @@ export function CollectionDetail() {
   const editSel = (fn: (q: Print) => void) => {
     const ps = wallPrints.map((p, k) => { if (k !== sel) return p; const q = { ...p, frame: p.frame ? { ...p.frame } : null }; fn(q); if (!q.stack) q.photoId2 = null; return q; });
     const bad = photosOf(ps[sel]).map((pid) => ({ pid, why: printProblem(byId.get(pid), ps[sel]) })).find((x) => x.why);
-    setNote(bad ? `${byId.get(bad.pid)?.title ?? 'A photograph'} no longer fits print ${sel + 1}: ${bad.why}` : '');
+    const low = photosOf(ps[sel]).map((pid) => ({ pid, why: lowRes(byId.get(pid), ps[sel], ppi) })).find((x) => x.why);
+    setNote(bad ? `${byId.get(bad.pid)?.title ?? 'A photograph'} no longer fits print ${sel + 1}: ${bad.why}` : low ? `⚠ ${byId.get(low.pid)?.title ?? 'A photograph'} in print ${sel + 1}: ${low.why}` : '');
     void saveLayout(ps);
   };
   function pickSide(side: 0 | 1) {
@@ -317,6 +323,12 @@ export function CollectionDetail() {
         <span style={eyebrow}>Prints</span>
         <span><b style={{ fontWeight: 500 }}>{printsSummary(wallPrints)}</b>, <b style={{ fontWeight: 500 }}>{metres(live.w)} × {metres(live.h)} m</b> on the wall</span>
         <span style={{ color: '#8f8c86' }}>{chosenIn(prints).length} of {slotCount} chosen · {c.photoIds.length} candidates</span>
+        <label style={{ color: '#a8a59f', display: 'flex', gap: 8, alignItems: 'center' }}>Sharpness wanted
+          <select aria-label="Sharpness wanted, in pixels per inch" value={ppi} disabled={printed} onChange={(e) => void saveLayout(wallPrints, mode, Number(e.target.value))} style={{ background: 'transparent', color: 'inherit', borderRadius: 6, padding: '2px 6px', boxShadow: ring }}>
+            {[...new Set([...PPI_CHOICES, ppi])].sort((a, b) => b - a).map((n) => <option key={n} value={n} style={{ color: '#000' }}>{n} PPI{n === 300 ? ' (print quality)' : ''}</option>)}
+          </select>
+        </label>
+        {lowCount > 0 && <span role="status" style={{ color: 'oklch(0.78 0.11 35)' }}>⚠ {lowCount} {lowCount === 1 ? 'print has' : 'prints have'} a photograph below {ppi} PPI</span>}
         <span style={{ marginLeft: 'auto', color: '#a8a59f', display: 'flex', gap: 10, alignItems: 'baseline' }}>
           Ranking: yours {100 - w}% · guests {w}%
           {editW ? <input type="number" min={0} max={60} step={5} aria-label="Guests’ share of the ranking" defaultValue={w} onBlur={async (e) => { const n = Math.round(Number(e.target.value)); setEditW(false); if (n >= 0 && n <= 60 && n !== w) { await api('/collections/guest-weight', { method: 'PUT', body: { weight: n } }); ranking.reload(); } }} autoFocus style={{ width: 64, borderRadius: 6, padding: '2px 6px' }} /> : <button onClick={() => setEditW(true)} style={{ fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 3 }}>Change</button>}
@@ -349,7 +361,7 @@ export function CollectionDetail() {
       )}
 
       <div style={{ marginBottom: 40 }}>
-        <div style={{ position: 'relative', background: '#161615', borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
+        <div style={{ position: 'relative', background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
           {!printed && <button onClick={() => { setEditing(!editing); setSelPrint(0); }} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 500, background: editing ? '#efede8' : 'rgba(13,13,13,.6)', color: editing ? '#0d0d0d' : '#efede8', boxShadow: editing ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{editing ? 'Done' : 'Edit layout'}</button>}
           {editing && !printed && (
             <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -358,7 +370,7 @@ export function CollectionDetail() {
               <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>+ Add a print</button>
             </div>
           )}
-          <Wall prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
+          <Wall warn={warns} prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#6f6c67', marginTop: 8 }}>
           <span>{editing ? 'Drawn to scale. Drag a print to move it, or use Edit on a print to change its size and frame.' : 'Drawn to scale. Drag a candidate onto a print, or use Edit layout to move prints and change sizes and frames.'}</span>
@@ -366,8 +378,8 @@ export function CollectionDetail() {
         </div>
         {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
       </div>
-      {printed && <ShoppingList prints={wallPrints} />}
-      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} onChange={editSel}
+      {printed && <ShoppingList prints={wallPrints} ppi={ppi} />}
+      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} onChange={editSel}
         onApplyAll={() => { const f = wallPrints[sel].frame; void saveLayout(wallPrints.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : p.size === f.size ? p.size : f.size } : null }))); }}
         onDelete={() => { if (wallPrints.length <= 1) return; setPrintModal(false); setSelPrint(0); void saveLayout(wallPrints.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setPrintModal(false)} />}
 
@@ -389,6 +401,7 @@ export function CollectionDetail() {
                 if (!p) return null;
                 const at = findPhoto(wallPrints, pid); const on = !!at;
                 const prob = on ? null : problemOf(pid);
+                const low = at ? lowRes(p, wallPrints[at.index], ppi) : prob ? null : lowOf(pid);
                 const slot = at ? at.index + 1 : 0;
                 return (
                   <div key={pid} style={{ position: 'relative' }}>
@@ -404,6 +417,7 @@ export function CollectionDetail() {
                     </div>
                     <div style={{ height: 3, background: 'rgba(255,255,255,.08)', borderRadius: 2, marginTop: 6 }}><i style={{ display: 'block', height: '100%', width: `${Math.round(((r?.score ?? 0) / 5) * 100)}%`, background: '#a8a59f', borderRadius: 2 }} /></div>
                     {prob && <div style={{ fontSize: 12, color: 'oklch(0.78 0.11 35)', marginTop: 6, lineHeight: 1.35 }}>{prob}</div>}
+                    {low && <div role="note" style={{ fontSize: 12, color: 'oklch(0.78 0.11 35)', marginTop: 6, lineHeight: 1.35 }}>⚠ {low}</div>}
                   </div>
                 );
               })}
@@ -553,11 +567,12 @@ export function CollectionDetail() {
               <>
                 <h2 style={{ font: `400 30px ${serif}`, margin: '0 0 6px' }}>Export for print</h2>
                 <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>{printsSummary(wallPrints)}. Untouched originals, numbered in print order (a stacked print’s two photographs are two files, never joined).</p>
+                {lowCount > 0 && <p role="note" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', margin: '0 0 14px' }}>⚠ {lowCount} {lowCount === 1 ? 'print has' : 'prints have'} a photograph with fewer pixels than {ppi} PPI asks for at its size, marked below. They may look soft; the lab or print shop can tell you whether that is acceptable.</p>}
                 {chosen.map((p, i) => (
                   <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto', gap: 14, alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(255,255,255,.08)' }}>
                     <img src={thumb(p.id)} alt="" style={{ width: 64, height: 44, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
                     <span style={{ font: `400 12.5px ${mono}` }}>{String(i + 1).padStart(String(chosen.length).length, '0')}_{p.file}</span>
-                    <span style={{ fontSize: 12, color: '#8f8c86' }}>{p.w} × {p.h}</span>
+                    <span style={{ fontSize: 12, color: warns[wallPrints.findIndex((q) => photosOf(q).includes(p.id))] ? 'oklch(0.78 0.11 35)' : '#8f8c86' }}>{p.w} × {p.h}{(() => { const at = findPhoto(wallPrints, p.id); const n = at ? ppiOf(p, wallPrints[at.index]) : null; return n !== null && n < ppi ? ` · ⚠ ${n} PPI` : ''; })()}</span>
                   </div>
                 ))}
                 {exporting === 'ready' && <button onClick={download} disabled={dl?.state === 'working'} style={{ ...lightBtn, marginTop: 18, width: '100%', padding: '13px 24px', fontSize: 14.5 }}>{dl?.state === 'working' ? `Downloading ${dl.done} of ${dl.total}…` : `Download ${chosen.length} originals`}</button>}

@@ -12,6 +12,13 @@ describe('layout rules', () => {
     expect(parseLayout({ mode: 'grid', prints: [print()] }, members)).toMatchObject({ mode: 'grid', prints: [{ size: 'A4', orientation: 'portrait' }] });
     for (const bad of [null, 'x', {}, { prints: [] }, { prints: 'a' }, { prints: Array.from({ length: 13 }, () => print()) }, { prints: [print({ size: 'A9' })] }]) expect(parseLayout(bad, members)).toBeNull();
   });
+  it('keeps the sharpness wanted (pixels per inch) when it is sensible, and leaves 300 (the usual) unsaid', () => {
+    expect(parseLayout({ prints: [print()], ppi: 200 }, members)).toMatchObject({ ppi: 200 });
+    expect(parseLayout({ prints: [print()], ppi: 149.6 }, members)).toMatchObject({ ppi: 150 });
+    for (const bad of [300, 10, 5000, 'high', null, NaN]) expect(parseLayout({ prints: [print()], ppi: bad }, members)).not.toHaveProperty('ppi');
+    expect(targetOf(parseLayout({ prints: [print()], ppi: 200 }, members)!).ppi).toBe(200);
+    expect(targetOf(parseLayout({ prints: [print()] }, members)!).ppi).toBe(300);
+  });
   it('puts a photograph in one print only, and only if it belongs to the composition', () => {
     const l = parseLayout({ prints: [print({ id: 1, photoId: 2 }), print({ id: 2, photoId: 2 }), print({ id: 3, photoId: 99 })] }, members)!;
     expect(l.prints.map((p) => p.photoId)).toEqual([2, null, null]);
