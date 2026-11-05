@@ -27,6 +27,8 @@ export type TunnelCfg = {
   portfolios: boolean;
   /** Put the App URL behind Cloudflare Access, letting in the people on the Settings, Sign-in & access list, and sign them in to Frames from it. */
   protect: boolean; protectApplied: boolean;
+  /** The App URL has an Access application whose policy is bypass: it was protected once and was opened up rather than deleted. */
+  appPublic?: boolean;
   /** The person switched the tunnel off themselves: setup keeps it off. Otherwise a tunnel that is set up runs. */
   stopped: boolean; mode: 'token' | 'api'; accountId: string; tunnelName: string; tunnelId: string;
   /** The last problem talking to Cloudflare, and when the last run worked. */
@@ -185,6 +187,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       const appHost = hostOfUrl(loadAuth(sys).publicUrl);
       // The login first: nothing new is published until the App URL is behind it (the same order as the environment setup).
       let protectApplied = c.protectApplied;
+      let appPublic = !!c.appPublic;
       let orgNote: string | null = null;
       if (protectOn(sys)) {
         if (!appHost) throw new Error('Enter the App URL first: it is the address Cloudflare Access protects.');
@@ -197,15 +200,17 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
         catch (e) { orgNote = `The Access login is in place, but Frames cannot read your team domain (${e instanceof CloudflareError ? e.message : (e as Error).message}), so it cannot add Cloudflare Access as a sign-in method yet. Add the token permission Account, Access: Organizations, Identity Providers, and Groups, Read.`; }
         const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost));
         const main = await cf.saveAccessApp(found?.id ?? null, { name: accessAppName(appHost), destinations: [appHost], session: '24h' });
-        await cf.saveAccessPolicy(main.id, { name: 'Frames: allowed people', decision: 'allow', ...people });
+        await cf.saveAccessPolicy(main.id, { name: 'Frames: allowed people', decision: 'allow', replaces: 'Frames: public', ...people });
         // Frames signs people in from what Access vouches for: the matching sign-in provider is kept up to date.
         const a = loadAuth(sys);
         const want: Provider = { id: ACCESS_PROVIDER_ID, type: 'cloudflare', name: 'Cloudflare Access', clientId: '', teamDomain: authDomain, aud: main.aud };
         const have = a.providers.find((p) => p.id === ACCESS_PROVIDER_ID);
         if (authDomain && JSON.stringify(have) !== JSON.stringify(want)) saveAuth(sys, { ...a, providers: [...a.providers.filter((p) => p.id !== ACCESS_PROVIDER_ID), want] });
         protectApplied = true;
+        appPublic = false;
       } else if (c.protectApplied) {
-        if (appHost) { const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost)); if (found) await cf.removeAccessApp(found.id); }
+        // Un-protecting opens the address (policy: bypass) instead of deleting the application, so nothing is left without a policy.
+        if (appHost) { const found = (await cf.accessApps()).find((a) => a.name === accessAppName(appHost)); if (found) { await cf.saveAccessPolicy(found.id, { name: 'Frames: public', decision: 'bypass', replaces: 'Frames: allowed people' }); appPublic = true; } }
         protectApplied = false;
       }
       const id = (await cf.findTunnel(c.tunnelName)) ?? (await cf.createTunnel(c.tunnelName)).id;
@@ -221,7 +226,7 @@ export async function applyTunnel(sys: DB, runner: TunnelRunner, port = Number(p
       catch (e) { accessNote = `The tunnel is set up, but Cloudflare Access could not be told which addresses are public (${e instanceof CloudflareError ? e.message : (e as Error).message}). If you protect these addresses with Access, add the permission Access: Apps and Policies, Edit to the API token.`; }
       // A tunnel that is set up runs by itself, unless the person switched it off.
       const turnOn = !loadTunnel(sys).enabled && !loadTunnel(sys).stopped;
-      saveTunnel(sys, { ...loadTunnel(sys), dns, protectApplied, error: null, accessNote, orgNote, appliedAt: new Date().toISOString(), ...(turnOn ? { enabled: true } : {}) });
+      saveTunnel(sys, { ...loadTunnel(sys), dns, protectApplied, appPublic, error: null, accessNote, orgNote, appliedAt: new Date().toISOString(), ...(turnOn ? { enabled: true } : {}) });
       if (turnOn) runner.start();
       else if (changed && loadTunnel(sys).enabled) runner.restart(); // routes changed in Cloudflare need no restart; a new tunnel does
     } catch (e) {
@@ -242,6 +247,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     const portfolioHosts = hostnames.filter((h) => h.kind === 'portfolio').map((h) => h.hostname);
     return [
       ...(c.protectApplied && appHost ? [{ name: accessAppName(appHost), decision: 'allow' as const, addresses: [appHost], who: [...people.emails, ...people.domains.map((d) => `@${d}`)] }] : []),
+      ...(c.appPublic && !c.protectApplied && appHost ? [{ name: accessAppName(appHost), decision: 'bypass' as const, addresses: [appHost], who: [] as string[] }] : []),
       ...(!c.accessNote && appHost ? [{ name: 'Frames public paths', decision: 'bypass' as const, addresses: PUBLIC_DESTINATIONS.map((d) => appHost + d), who: [] as string[] }] : []),
       ...(!c.accessNote && portfolioHosts.length ? [{ name: 'Frames portfolio addresses', decision: 'bypass' as const, addresses: portfolioHosts, who: [] as string[] }] : []),
     ];

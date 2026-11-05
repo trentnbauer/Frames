@@ -121,6 +121,9 @@ export function invite(sys: DB, email: string, role: Role = 'member'): User {
  * Who is this person? An existing account, an invitation for their verified email, or (if sign-ups are on) a new account.
  * Returns null when they may not have one. Names and email are kept up to date from the provider.
  */
+/** May someone without an account make one? ALLOW_SIGNUPS=false switches it off for good; otherwise the administrator's tick box (Settings, Sign-in & access) decides, on by default. */
+export const signupsOn = (sys: DB, envAllows: boolean): boolean => envAllows && getSetting<{ signups?: boolean }>(sys, 'instance', {}).signups !== false;
+
 export function resolveUser(sys: DB, who: Who, allowSignups: boolean, guestOnly = false): User | null {
   const now = new Date().toISOString();
   let u = findByIdentity(sys, who.provider, who.sub);

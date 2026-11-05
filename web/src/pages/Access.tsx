@@ -56,7 +56,7 @@ function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; ap
       <>Paste the client ID and secret into the boxes above, press <b>Save providers</b>, then <b>Test sign-in</b>.</>,
     ],
     cloudflare: [
-      <>Easiest: tick <b>Protect the App URL with Cloudflare Access</b> under Settings, Cloudflare tunnel. Frames then creates the Access application and adds this method for you, with the team domain and audience tag filled in.</>,
+      <>Easiest: choose <b>Invitation only</b> under <b>Who can reach the App URL</b> in Settings, Cloudflare tunnel. Frames then creates the Access application and adds this method for you, with the team domain and audience tag filled in.</>,
       <>By hand: in {ext('https://one.dash.cloudflare.com/', 'Cloudflare Zero Trust')} open <b>Access, Applications</b>, <b>Add an application</b>, <b>Self-hosted</b>, with {appUrl ? <span className="mono">{appUrl}</span> : 'the address you open Frames at'} as its address, and a policy that allows the people on the list below.</>,
       <>The <b>team domain</b> is under <b>Settings, Custom Pages</b> (it looks like <span className="mono">myteam.cloudflareaccess.com</span>). The <b>Application Audience (AUD) tag</b> is on the application’s <b>Overview</b> tab.</>,
       <>There is no redirect address, client ID or secret: Access signs people in before Frames sees them. Save, then open Frames through the Access-protected address and press <b>Test sign-in</b>.</>,
@@ -88,6 +88,8 @@ export function Access() {
   const one = useOne(); // before the early return below: hooks always run in the same order
   const tunnel = useApi<{ protect: boolean; protectForced: boolean; config: { enabled: boolean }; hostnames: { kind: string }[] }>('/tunnel');
   const { refreshMe, me } = useStore();
+  const inst = useApi<{ signups: boolean; signupsLocked: boolean }>('/admin/instance');
+  const save2 = async (v: boolean) => { try { await api('/admin/instance', { method: 'PUT', body: { signups: v } }); inst.reload(); refreshMe(); setMsg({ ok: true, text: v ? 'New people can make an account again.' : 'New accounts are closed. Existing accounts and people you add by email can still sign in.' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
   const [providers, setProviders] = useState<Provider[]>([]);
   const [allow, setAllow] = useState('');
   const [publicUrl, setPublicUrl] = useState('');
@@ -198,10 +200,15 @@ export function Access() {
               style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, background: c.open === open ? 'var(--text)' : 'transparent', color: c.open === open ? 'var(--bg)' : 'var(--text2)' }}>{label}</button>
           ))}
         </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', maxWidth: 560, margin: '0 0 14px' }}>
+          <input type="checkbox" aria-label="Let new people make an account" checked={!!inst.data?.signups} disabled={!inst.data || inst.data.signupsLocked}
+            onChange={async (e) => { await save2(e.target.checked); }} />
+          <span><b>Let new people make an account</b>: someone who signs in for the first time gets an account and an empty library of their own. Untick it to close the door: only people who already have an account, and people you add by email in Settings, People, can sign in.{inst.data?.signupsLocked && <span className="reason"> Switched off by ALLOW_SIGNUPS=false on this server; remove that setting and restart to change it here.</span>}</span>
+        </label>
         {c.open && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 560, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, color: 'var(--text2)' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)', flex: 'none', marginTop: 7 }} />
-            <span>Open to the public: anyone with an account at one of the providers above can sign in, and gets their own empty library. The list is kept, so switching back restores it.{!me?.signups && ' New accounts are switched off on this server (ALLOW_SIGNUPS=false), so only people who already have one can get in.'}</span>
+            <span>Open to the public: anyone with an account at one of the providers above can sign in, and gets their own empty library. The list is kept, so switching back restores it.{!me?.signups && ' New accounts are switched off (see the box above), so only people who already have one can get in.'}</span>
           </div>
         )}
         {c.open && tunnel.data?.protect && (

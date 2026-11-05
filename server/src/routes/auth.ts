@@ -6,7 +6,7 @@ import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
 import fs from 'node:fs';
 import { avatarPath, displayNameOf } from './profile.js';
-import { bindOwner, identitiesOf, linkIdentity, resolveUser, unlinkIdentity, type User } from '../users.js';
+import { bindOwner, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
@@ -69,7 +69,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       bindOwner(db, who); // the person doing the test from Settings is the owner of the library that already exists
     }
     // Being on the list lets someone in; ALLOW_SIGNUPS decides whether a first-time visitor gets an account of their own.
-    const user = resolveUser(db, who, cfg.allowSignups !== false, !listed);
+    const user = resolveUser(db, who, signupsOn(db, cfg.allowSignups !== false), !listed);
     if (user && !listed && user.role !== 'guest') return rep.code(403).type('text/html').send(auth.messagePage('Not on the list', `${who.email || 'That account'} is not allowed to use this Frames. Ask the owner to add it.`));
     if (!user) {
       console.warn(`account refused: ${who.provider}:${who.sub}`);
@@ -126,7 +126,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
       displayName: displayNameOf(x.db), hasAvatar: fs.existsSync(avatarPath(x.cfg.dataDir)),
-      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: cfg.allowSignups !== false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
+      id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: signupsOn(db, cfg.allowSignups !== false), signupsLocked: cfg.allowSignups === false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
     };
   });
 

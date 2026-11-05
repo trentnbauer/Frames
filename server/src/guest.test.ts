@@ -37,6 +37,15 @@ describe('guests', () => {
     expect((await call('PUT', '/api/admin/instance', admin, { defaultRole: 'nonsense' })).body.defaultRole).toBe('guest'); // ignored
     await call('PUT', '/api/admin/instance', admin, { defaultRole: 'member' });
   });
+  it('lets the administrator close the door to new accounts, and open it again', async () => {
+    expect((await call('GET', '/api/admin/instance', admin)).body).toMatchObject({ signups: true, signupsLocked: false });
+    expect((await call('PUT', '/api/admin/instance', admin, { signups: false })).body.signups).toBe(false);
+    expect((await call('GET', '/api/me', admin)).body.signups).toBe(false);
+    expect((await call('GET', '/api/admin/users', admin)).body.signups).toBe(false);
+    await call('PUT', '/api/admin/instance', admin, { signups: 'no' }); // not a boolean: ignored
+    expect((await call('GET', '/api/admin/instance', admin)).body.signups).toBe(false);
+    expect((await call('PUT', '/api/admin/instance', admin, { signups: true })).body.signups).toBe(true);
+  });
   it('an administrator can add a guest, or change someone to one', async () => {
     const r = await call('POST', '/api/admin/users', admin, { email: 'inv@x.test', role: 'guest' });
     expect(r.body.role).toBe('guest');

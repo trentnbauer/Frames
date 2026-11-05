@@ -24,7 +24,7 @@ export function People() {
   return (
     <>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      <p>Everyone has their own library. A member’s photographs are read from <span className="mono">{root}/&lt;their folder&gt;</span>; they can also upload and use cloud sync. {d.data.signups ? 'New people on the allow-list get an account the first time they sign in.' : 'New accounts are switched off (ALLOW_SIGNUPS): only the people added here, and those who already have one, can sign in.'}</p>
+      <p>Everyone has their own library. A member’s photographs are read from <span className="mono">{root}/&lt;their folder&gt;</span>; they can also upload and use cloud sync. {d.data.signups ? 'New people on the allow-list get an account the first time they sign in.' : 'New accounts are closed (Settings, Sign-in & access, or ALLOW_SIGNUPS): only the people added here, and those who already have one, can sign in.'}</p>
 
       <div className="field">
         <h3>People</h3>
