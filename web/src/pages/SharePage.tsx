@@ -39,7 +39,7 @@ export function SharePage() {
   const phone = usePhone(); // a phone gets its own layout, below
 
   useEffect(() => {
-    document.title = 'Frames | Shared photographs';
+    document.title = 'Shared photographs · Frames';
     fetch(`/api/s/${token}`).then(async (r) => {
       if (r.ok) { setChallenge(null); return setD(await r.json()); }
       const j = await r.json().catch(() => ({}));
@@ -55,7 +55,7 @@ export function SharePage() {
     if (e.key === 'ArrowRight') setLook((look + 1) % d.photos.length);
   }, [look, d]);
 
-  useEffect(() => { if (d?.name) document.title = `Frames | ${d.name}`; }, [d?.name]);
+  useEffect(() => { if (d?.name) document.title = `${d.name} · Frames`; }, [d?.name]);
   if (gone) return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>This link isn’t available.</h1><p className="t2">{gone}. Ask whoever sent it for a new one.</p></Shell>;
   if (challenge) {
     const pass = async (t: string) => { const r = await fetch(`/api/s/${token}/human`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) }); if (r.ok) setTries((n) => n + 1); };

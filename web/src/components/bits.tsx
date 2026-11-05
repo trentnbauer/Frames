@@ -4,9 +4,9 @@ import { imgUrl } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 
-/** The browser tab says where you are: "Frames | Library". With no name it is just "Frames". */
+/** The browser tab says where you are: "Library · Frames", the same as the sign-in page. With no name it is just "Frames". */
 export function useTitle(name?: string | null) {
-  useEffect(() => { document.title = name?.trim() ? `Frames | ${name.trim()}` : 'Frames'; }, [name]);
+  useEffect(() => { document.title = name?.trim() ? `${name.trim()} · Frames` : 'Frames'; }, [name]);
 }
 
 type P = Pick<PhotoLite, 'id' | 'ar'> & { hasImage?: boolean; share?: string };
