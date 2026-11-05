@@ -83,6 +83,19 @@ describe('ranking a composition', () => {
     expect((await A.get(`/api/collections/${compId}/suggestions`)).body.suggestions).toEqual([]);
   });
 
+  it('tells the photographer who did what on a link', async () => {
+    const shareId = (await A.get('/api/shares?kind=collection&id=' + compId)).body.find((l: any) => l.token === token).id;
+    await guest(ids[0], 4, 'Ana');
+    await env.app.inject({ method: 'POST', url: `/api/s/${token}/suggest`, payload: { forId: ids[0], photoId: ids[2], reviewer: 'Ana' } });
+    const g = (await A.get(`/api/shares/${shareId}/guests`)).body.guests as any[];
+    const ana = g.find((x) => x.name === 'Ana');
+    expect(ana).toMatchObject({ rated: expect.any(Number), suggested: 1 });
+    expect(ana.rated).toBeGreaterThanOrEqual(1);
+    expect(g.map((x) => x.name)).toEqual(expect.arrayContaining(['Ana', 'Sam']));
+    expect(JSON.stringify(g)).not.toMatch(/token/);
+    expect((await A.get('/api/shares/9999/guests')).status).toBe(404);
+  });
+
   it('refuses suggestions when the link does not allow review', async () => {
     const closed = (await A.post('/api/shares', { kind: 'collection', id: compId, allowReview: false })).body.token;
     expect((await env.app.inject({ method: 'POST', url: `/api/s/${closed}/suggest`, payload: { forId: ids[0], photoId: ids[1] } })).statusCode).toBe(403);

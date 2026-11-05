@@ -86,6 +86,16 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     db.prepare('UPDATE shares SET revoked = 1 WHERE id = ?').run(id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });
+  // Who has looked at a link and what each person did: how many photographs they rated, how many suggestions they made, and when.
+  app.get('/api/shares/:id/guests', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
+    const by = new Map<string, { name: string; rated: number; avg: number | null; suggested: number; last: string }>();
+    const get = (name: string) => by.get(name) ?? by.set(name, { name, rated: 0, avg: null, suggested: 0, last: '' }).get(name)!;
+    for (const r of all('SELECT reviewer, COUNT(*) n, AVG(rating) a, MAX(ts) t FROM share_reviews WHERE share_id = ? GROUP BY reviewer', id)) { const g = get(r.reviewer); g.rated = r.n; g.avg = r.a; if (r.t > g.last) g.last = r.t; }
+    for (const r of all('SELECT reviewer, COUNT(*) n, MAX(ts) t FROM share_suggestions WHERE share_id = ? GROUP BY reviewer', id)) { const g = get(r.reviewer); g.suggested = r.n; if (r.t > g.last) g.last = r.t; }
+    return { guests: [...by.values()].sort((a, b) => (a.last < b.last ? 1 : -1)) };
+  });
   // What guests thought, per photograph. Kept apart from your own reviews: it never changes your ratings or schedule.
   app.get('/api/shares/:id/reviews', async (req, rep) => {
     const id = num((req.params as Row).id);
