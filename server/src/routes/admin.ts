@@ -108,13 +108,13 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- choices that apply to the whole server ----------
-  type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean };
-  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const }; };
+  type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean; defaultRole?: 'member' | 'guest' };
+  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const }; };
   app.get('/api/admin/instance', async () => instance());
   app.put('/api/admin/instance', async (req) => {
     const b = (req.body ?? {}) as Row;
     const cur = getSetting<Instance>(sys, 'instance', {});
-    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}) });
+    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}) });
     return instance();
   });
 
@@ -207,7 +207,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const email = String(b.email ?? '').trim().toLowerCase();
     if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email)) return rep.code(400).send({ error: 'Enter a valid email address.' });
     if (listUsers(sys).some((u) => u.email.toLowerCase() === email)) return rep.code(409).send({ error: 'That person already has an account.' });
-    const u = invite(sys, email, b.role === 'admin' ? 'admin' : 'member');
+    const u = invite(sys, email, b.role === 'admin' ? 'admin' : b.role === 'guest' ? 'guest' : 'member');
     const conf = loadAuth(sys);
     const already = isAllowed({ provider: '', sub: '', email, emailVerified: true }, conf.allow);
     if (!already) saveAuth(sys, { ...conf, allow: cleanAllow([...conf.allow, email]) });
@@ -221,8 +221,8 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const bad = (error: string) => rep.code(400).send({ error });
     if (b.role !== undefined) {
-      if (b.role !== 'admin' && b.role !== 'member') return bad('Role must be admin or member.');
-      if (u.role === 'admin' && b.role === 'member' && countAdmins(sys) <= 1) return bad('There must be at least one administrator.');
+      if (b.role !== 'admin' && b.role !== 'member' && b.role !== 'guest') return bad('Role must be admin, member or guest.');
+      if (u.role === 'admin' && b.role !== 'admin' && countAdmins(sys) <= 1) return bad('There must be at least one administrator.');
     }
     if (b.disabled === true) {
       if (id === me(req).id) return bad('You cannot switch off your own account.');

@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
-import { createAuth, isAuthPath } from './auth.js';
+import { createAuth, isAuthPath, sessionUser } from './auth.js';
 import { applyEnvConfig } from './envConfig.js';
 import { createTenants, migrateLegacy, tenantProxy, type Tenant } from './tenants.js';
 import { openSystemDb } from './users.js';
@@ -41,6 +41,8 @@ const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin|cloud\/client)(\/|\?|$)/;
+/** The only signed-in addresses a guest may use: who they are, their list of shared links, and the welcome check the app makes. */
+const GUEST_OK = /^\/api\/(me|guest\/links)$/;
 const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
@@ -95,6 +97,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       if (!v.ok) return auth.deny(req, rep, v.limited);
       r.authUser = v.user;
       r.authVia = v.via;
+      // A guest has no library to work in: they sign in to open what was shared with them, and nothing else.
+      if (v.user.role === 'guest' && req.url.startsWith('/api/') && !GUEST_OK.test(req.url.split('?')[0])) return rep.code(403).send({ error: 'A guest account can only open what has been shared with it' });
       if (ADMIN_ONLY.test(req.url) && v.user.role !== 'admin') return rep.code(403).send({ error: 'Only an administrator can do that' });
       r.tenant = tenants.get(v.user.id);
       if (!r.tenant) return rep.code(403).send({ error: 'This account has no library' });
@@ -104,6 +108,15 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       const m = SHARE_URL.exec(req.url);
       // An unknown link still goes to the owner's library, so the share routes give their usual answer and count the wrong guess.
       if (m) r.tenant = shareTenant(m[1]) ?? tenants.owner();
+      // A guest who opens a link while signed in finds it again in their "Shared with you" list.
+      if (m && req.method === 'GET' && !req.url.includes('/', req.url.indexOf(m[1]) + m[1].length) && auth.oauthOn()) {
+        const g = sessionUser(sys, req), t = shareTenant(m[1]);
+        const s = g?.role === 'guest' && t ? t.db.prepare('SELECT kind, target_id, label FROM shares WHERE token = ?').get(m[1]) as { kind: string; target_id: number; label: string } | undefined : undefined;
+        if (g && s) {
+          const name = (t!.db.prepare(`SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`).get(s.target_id) as { name: string } | undefined)?.name ?? '';
+          sys.prepare('INSERT INTO guest_links(user_id, token, label, kind, seen) VALUES(?, ?, ?, ?, ?) ON CONFLICT(user_id, token) DO UPDATE SET label = excluded.label, seen = excluded.seen').run(g.id, m[1], s.label || name, s.kind, new Date().toISOString());
+        }
+      }
     }
     // Block cross-site writes (CSRF). Browsers always send Origin or Sec-Fetch-Site on these; plain API clients send neither.
     if (req.method !== 'GET' && req.method !== 'HEAD') {

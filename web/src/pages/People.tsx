@@ -4,7 +4,7 @@ import { fmtDate } from '../data';
 import { useStore } from '../store';
 import { CardFooter, Destructive, EditRow, MeTag, useOne, type One } from '../components/editcard';
 
-type Person = { id: number; name: string; email: string; provider: string; role: 'admin' | 'member'; folder: string; disabled: boolean; invited: boolean; created: string; photos: number; bytes: number };
+type Person = { id: number; name: string; email: string; provider: string; role: 'admin' | 'member' | 'guest'; folder: string; disabled: boolean; invited: boolean; created: string; photos: number; bytes: number };
 type Data = { users: Person[]; signups: boolean; libraryRoots: string[] };
 const size = (n: number) => (n > 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : n > 1048576 ? `${Math.round(n / 1048576)} MB` : `${Math.ceil(n / 1024)} KB`);
 
@@ -14,8 +14,9 @@ export function People() {
   const one = useOne();
   const { me } = useStore();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const inst = useApi<{ defaultRole: 'member' | 'guest' }>('/admin/instance');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'member' | 'admin'>('member');
+  const [role, setRole] = useState<'member' | 'admin' | 'guest'>('member');
   if (!d.data) return <p className="empty">Loading…</p>;
   const act = async (fn: () => Promise<unknown>, ok?: string) => { setMsg(null); try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } d.reload(); };
   const root = d.data.libraryRoots[0] ?? '/library';
@@ -31,11 +32,19 @@ export function People() {
       </div>
 
       <div className="field">
+        <h3>New accounts</h3>
+        <p>The role of someone who signs in for the first time. A <b>guest</b> has no library: they can only open the compositions and shoots shared with them, review them and suggest changes. You can change anyone’s role above.</p>
+        <div className="form">
+          <select aria-label="Role of new accounts" value={inst.data?.defaultRole ?? 'member'} onChange={async (e) => { await act(() => api('/admin/instance', { method: 'PUT', body: { defaultRole: e.target.value } }), 'Saved.'); inst.reload(); }}><option value="member">Member</option><option value="guest">Guest</option></select>
+        </div>
+      </div>
+
+      <div className="field">
         <h3>Add someone</h3>
         <p>They are also put on the allowed list under Sign-in & access, and their first sign-in with this verified email address claims the account.</p>
         <div className="form">
           <input aria-label="Email address" type="email" style={{ minWidth: 260 }} placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')}><option value="member">Member</option><option value="admin">Administrator</option></select>
+          <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member' | 'guest')}><option value="member">Member</option><option value="guest">Guest</option><option value="admin">Administrator</option></select>
           <button className="pill primary" disabled={!email.includes('@')} onClick={() => act(async () => { const r = await api<{ allowedList: 'added' | 'already' }>('/admin/users', { body: { email, role } }); const mail = email.trim().toLowerCase(); setEmail(''); setMsg({ ok: true, text: r.allowedList === 'added' ? `Added ${mail}, and put them on the allowed list under Sign-in & access.` : `Added ${mail}. They were already on the allowed list under Sign-in & access.` }); })}>Add</button>
         </div>
       </div>
@@ -53,14 +62,14 @@ function Row({ one, u, self, root, act }: { one: One; u: Person; self: boolean; 
     <EditRow id={String(u.id)} one={one} title={u.name || u.email} note={`Added ${fmtDate(u.created, { day: 'numeric', month: 'short', year: 'numeric' })}${u.provider ? ` · signs in with ${u.provider}` : ''}.`} summary={(
       <>
         <b>{u.name || u.email}</b>{self && <MeTag />} {u.email && u.name !== u.email && <span className="muted">{u.email}</span>}{' '}
-        <span className="faint">{u.role === 'admin' ? 'administrator' : 'member'}{u.invited ? ' · not signed in yet' : ''}{u.disabled ? ' · switched off' : ''}</span>{' '}
+        <span className="faint">{u.role === 'admin' ? 'administrator' : u.role}{u.invited ? ' · not signed in yet' : ''}{u.disabled ? ' · switched off' : ''}</span>{' '}
         <span className="faint">· {u.photos} photos · {size(u.bytes)}</span>
       </>
     )}>
       <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520, marginTop: 10 }}>
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The size counts what Frames holds for them, not the photographs in their read-only folder.</p>
         <label>Role{' '}
-          <select aria-label={`${u.email || u.name} role`} value={u.role} onChange={(e) => patch({ role: e.target.value }, 'Saved.')}><option value="member">Member</option><option value="admin">Administrator</option></select>
+          <select aria-label={`${u.email || u.name} role`} value={u.role} onChange={(e) => patch({ role: e.target.value }, 'Saved.')}><option value="member">Member</option><option value="guest">Guest</option><option value="admin">Administrator</option></select>
         </label>
         {u.id !== 1 && (
           <label>Folder{' '}

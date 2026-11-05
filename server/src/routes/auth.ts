@@ -112,6 +112,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   // ---------- behind the sign-in: who am I, and the owner's settings ----------
+  // A guest's "Shared with you": the share links they opened while signed in (see the onRequest hook in app.ts).
+  app.get('/api/guest/links', async (req) => ({ links: db.prepare('SELECT token, label, kind, seen FROM guest_links WHERE user_id = ? ORDER BY seen DESC LIMIT 200').all(((req as any).authUser as User).id) }));
   app.get('/api/me', async (req) => {
     const u = (req as any).authUser as User | null;
     const signedIn = (req as any).authVia === 'session';
