@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
-import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider } from '../auth.js';
+import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
@@ -40,7 +40,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       if (v === 'bad') return rep.redirect(`/auth/signin?e=${encodeURIComponent('Please complete the check to show you are a person, then choose how to sign in.')}${q.returnTo ? `&returnTo=${encodeURIComponent(safeReturn(q.returnTo))}` : ''}${q.guest === '1' ? '&guest=1' : ''}`);
     }
     try {
-      return rep.redirect(await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) }));
+      const to = await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) });
+      // From the sign-in page's form (it brings the Turnstile answer along) a redirect would be refused by the page's form-action policy.
+      if (q['cf-turnstile-response'] !== undefined) return rep.type('text/html').header('Cache-Control', 'no-store').send(handOver(to));
+      return rep.redirect(to);
     } catch (e) {
       console.error('sign-in start failed', (e as Error).message);
       return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider. Check its address in Settings, Sign-in & access.'));

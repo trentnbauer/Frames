@@ -1,6 +1,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { handOver } from './auth.js';
 import { setSetting } from './db.js';
 import { cleanup, makeEnv, type Env } from './testutil.js';
 
@@ -108,6 +109,8 @@ describe('the sign-in page', () => {
     expect(String(wrong.headers.location)).toMatch(/^\/auth\/signin/);
     const good = await call('GET', '/auth/login/g?cf-turnstile-response=good');
     expect(String(good.headers.location ?? '')).not.toMatch(/^\/auth\/signin/); // past the check (the provider itself is not reachable here)
+    // A form started this request, so it must not be answered with a redirect off the site (the page's form-action policy refuses that and the button does nothing).
+    expect(good.status === 302 && /^https?:\/\//.test(String(good.headers.location))).toBe(false);
     const withCookie = await call('POST', `/api/s/${token}/human`, { token: 'good' });
     const viaCookie = await call('GET', '/auth/login/g', undefined, { cookie: cookieOf(withCookie) }); // having passed on a share link is enough
     expect(String(viaCookie.headers.location ?? '')).not.toMatch(/^\/auth\/signin/);
@@ -119,5 +122,14 @@ describe('the sign-in page', () => {
     const page = (await call('GET', '/auth/signin')).body as string;
     expect(page).not.toContain('cf-turnstile');
     expect(page).toContain('href="/auth/login/g"');
+  });
+});
+
+describe('handing the browser on to the sign-in provider', () => {
+  it('is a page that moves on by itself, with the address safely escaped', () => {
+    const page = handOver('https://accounts.example.com/auth?a=1&state="x"<b>');
+    expect(page).toContain('http-equiv="refresh" content="0;url=https://accounts.example.com/auth?a=1&amp;state=&quot;x&quot;&lt;b&gt;"');
+    expect(page).toContain('href="https://accounts.example.com/auth?a=1&amp;state=&quot;x&quot;&lt;b&gt;"'); // and a link for a browser that does not follow it
+    expect(page).not.toContain('<b>');
   });
 });

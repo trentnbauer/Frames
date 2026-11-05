@@ -50,6 +50,12 @@ export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'auth
 const SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const rand = (n = 32) => crypto.randomBytes(n).toString('base64url');
+/**
+ * A page that sends the browser on to `url` by itself. Used when a form (the sign-in buttons next to the Turnstile check) started the request:
+ * the page's content-security-policy lets a form submit only to this site, and the browser applies that to a redirect from a form too, so a
+ * plain redirect to the sign-in provider is refused and the button seems to do nothing. A page that moves on by itself is not a form submission.
+ */
+export const handOver = (url: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${esc(url)}"><title>Signing in · Frames</title></head><body style="margin:0;background:#0d0d0d;color:#a8a59f;font:15px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><p>Taking you to sign in… <a href="${esc(url)}" style="color:#efede8">Continue</a></p></body></html>`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 // ---------- the allow-list ----------
