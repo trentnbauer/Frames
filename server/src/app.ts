@@ -173,6 +173,10 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       return a.descriptionRejected ? { ...a, description: '' } : a;
     } catch { return null; }
   };
+  /** The subjects and tags a photoshoot gives to every photograph in it. */
+  const sharedOf = (s: Row): { subjects: string[]; tags: string[] } => {
+    try { const j = JSON.parse(s.shared || '{}'); return { subjects: Array.isArray(j.subjects) ? j.subjects : [], tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { subjects: [], tags: [] }; }
+  };
   const shootDto = (s: Row) => {
     const st = db.prepare('SELECT COUNT(*) n, MIN(captured_at) a, MAX(captured_at) b, MIN(id) first FROM photos WHERE shoot_id = ?').get(s.id) as Row;
     const sessions = loadSettings(db).sessions;
@@ -181,7 +185,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     // Dates the user typed win; otherwise they come from the photographs' capture times, then the import date.
     const from = s.date_from ?? st.a, to = s.date_to ?? st.b;
     const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
-    return { id: s.id, name: s.name, source: s.source, place: s.place, description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
+    return { id: s.id, name: s.name, source: s.source, place: s.place, ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
   const collectionDto = (c: Row) => {
     const rows = db.prepare('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos').all(c.id) as Row[];

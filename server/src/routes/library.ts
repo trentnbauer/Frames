@@ -40,14 +40,54 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   // ---------- photoshoots ----------
   const validDate = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
 
+  // ---- what a photoshoot passes down to its photographs ----
+  // Place: filled in where a photograph has none of its own (or still has the shoot's old one). Subjects and tags: added to every photograph
+  // as the person's own, marked as coming from the shoot so taking them off the shoot takes back only those. A photograph's own choices stay.
+  const sharedOfShoot = (s: Row): { subjects: string[]; tags: string[] } => {
+    try { const j = JSON.parse(s.shared || '{}'); return { subjects: Array.isArray(j.subjects) ? j.subjects : [], tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { subjects: [], tags: [] }; }
+  };
+  const cleanNames = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).map((n) => String(n).trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 30);
+  const inList = (ids: number[]) => ids.length ? `IN (${ids.map(Number).join(',')})` : 'IN (NULL)';
+  const applyShoot = (shootId: number, only?: number[]) => {
+    const s = one('SELECT * FROM shoots WHERE id = ?', shootId);
+    if (!s) return { photos: 0 };
+    const ids = (only ?? all('SELECT id FROM photos WHERE shoot_id = ?', shootId).map((r) => r.id as number)).filter((i) => !!one('SELECT 1 x FROM photos WHERE id = ? AND shoot_id = ?', i, shootId));
+    if (s.place) db.prepare(`UPDATE photos SET place = ? WHERE place = '' AND id ${inList(ids)}`).run(s.place);
+    const ins = db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'shoot', 1, ?)");
+    const accept = db.prepare("UPDATE tags SET accepted = 1, source = 'shoot', kind = ? WHERE photo_id = ? AND name = ? AND accepted = 0"); // an AI suggestion waiting for a yes
+    const sh = sharedOfShoot(s);
+    db.transaction(() => {
+      for (const id of ids) for (const [names, kind] of [[sh.subjects, 'subject'], [sh.tags, 'tag']] as const) for (const n of names) { ins.run(id, n, kind); accept.run(kind, id, n); }
+    })();
+    return { photos: ids.length };
+  };
+  /** Takes back what a shoot gave to these photographs (its place where it is still the shoot's, its tags that came from it). */
+  const unapplyShoot = (s: Row, ids: number[]) => {
+    if (!ids.length) return;
+    const sh = sharedOfShoot(s);
+    const names = [...sh.subjects, ...sh.tags];
+    if (names.length) db.prepare(`DELETE FROM tags WHERE source = 'shoot' AND name IN (${names.map(() => '?').join(',')}) AND photo_id ${inList(ids)}`).run(...names);
+    if (s.place) db.prepare(`UPDATE photos SET place = '' WHERE place = ? AND id ${inList(ids)}`).run(s.place);
+  };
+  const moveInto = (shootId: number, photoIds: unknown[]) => {
+    const ids = photoIds.slice(0, 5000).map((v) => num(v)).filter((i) => !!one('SELECT 1 x FROM photos WHERE id = ?', i));
+    for (const from of new Set(ids.map((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id as number))) {
+      if (from === shootId) continue;
+      const old = one('SELECT * FROM shoots WHERE id = ?', from);
+      if (old) unapplyShoot(old, ids.filter((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id === from));
+    }
+    for (const i of ids) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(shootId, i);
+    applyShoot(shootId, ids);
+  };
+
   app.post('/api/shoots', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const name = String(b.name ?? '').trim();
     if (!name) return rep.code(400).send({ error: 'name required' });
     const id = Number(db.prepare('INSERT INTO shoots(name, source, place, description, imported_at) VALUES(?, ?, ?, ?, ?)')
       .run(name.slice(0, 120), 'Manual', String(b.place ?? '').slice(0, 120), String(b.description ?? '').slice(0, 1000), new Date().toISOString()).lastInsertRowid);
-    // Optionally start it with photographs (used when accepting a suggested grouping).
-    for (const pid of Array.isArray(b.photoIds) ? b.photoIds : []) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(id, num(pid));
+    // Optionally start it with photographs (used when accepting a suggested grouping, and when moving some into a new shoot).
+    if (Array.isArray(b.photoIds)) moveInto(id, b.photoIds);
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
   });
   app.get('/api/shoots/:id', async (req, rep) => {
@@ -65,7 +105,21 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
     const b = (req.body ?? {}) as Row;
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
-    if (typeof b.place === 'string') db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(b.place.slice(0, 120), id);
+    const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
+    if (typeof b.place === 'string' && b.place.slice(0, 120) !== before.place) {
+      const place = b.place.slice(0, 120);
+      // Photographs that had the shoot's old place (or none) take the new one; a place a photograph has of its own is left.
+      db.prepare("UPDATE photos SET place = ? WHERE shoot_id = ? AND (place = '' OR place = ?)").run(place, id, before.place);
+      db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(place, id);
+    }
+    if ('subjects' in b || 'tags' in b) {
+      const was = sharedOfShoot(before);
+      const now = { subjects: 'subjects' in b ? cleanNames(b.subjects) : was.subjects, tags: 'tags' in b ? cleanNames(b.tags) : was.tags };
+      const gone = [...was.subjects.filter((n) => !now.subjects.includes(n)), ...was.tags.filter((n) => !now.tags.includes(n))];
+      if (gone.length) db.prepare(`DELETE FROM tags WHERE source = 'shoot' AND name IN (${gone.map(() => '?').join(',')}) AND photo_id IN (SELECT id FROM photos WHERE shoot_id = ?)`).run(...gone, id);
+      db.prepare('UPDATE shoots SET shared = ? WHERE id = ?').run(JSON.stringify(now), id);
+      applyShoot(id);
+    }
     if (typeof b.description === 'string') db.prepare('UPDATE shoots SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if ('dateFrom' in b) db.prepare('UPDATE shoots SET date_from = ? WHERE id = ?').run(validDate(b.dateFrom), id);
     if ('dateTo' in b) db.prepare('UPDATE shoots SET date_to = ? WHERE id = ?').run(validDate(b.dateTo), id);
@@ -74,8 +128,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.post('/api/shoots/:id/move', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
-    for (const pid of ((((req.body ?? {}) as Row).photoIds as unknown[]) ?? []).slice(0, 5000)) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(id, num(pid));
+    moveInto(id, (((req.body ?? {}) as Row).photoIds as unknown[]) ?? []);
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
+  });
+  // Pass the shoot's place, subjects and tags down to every photograph again (after changes made one by one, or to catch up older shoots).
+  app.post('/api/shoots/:id/sync', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    return applyShoot(id);
   });
 
   /**

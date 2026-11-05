@@ -8,6 +8,22 @@ import { useUi } from '../ui';
 import { AddToComposition } from '../components/AddToComposition';
 import { MoveToShoot } from '../components/MoveToShoot';
 
+/** The subjects (or tags) a shoot gives to every photograph in it: chips to take away, and a box to add one (existing names are suggested). */
+function SharedNames({ kind, names, onChange }: { kind: 'subject' | 'tag'; names: string[]; onChange: (n: string[]) => void }) {
+  const known = useApi<{ name: string; n: number }[]>(`/tags?kind=${kind}`);
+  const [text, setText] = useState('');
+  const id = `known-${kind}`;
+  const add = () => { const n = text.trim().toLowerCase(); if (n && !names.includes(n)) onChange([...names, n]); setText(''); };
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginRight: 6 }}>{kind === 'subject' ? 'Subjects' : 'Tags'} for every photograph</span>
+      {names.map((n) => <span key={n} className="chip">{n} <button aria-label={`Remove ${kind} ${n} from every photograph`} onClick={() => onChange(names.filter((x) => x !== n))}>✕</button></span>)}
+      <input list={id} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} onBlur={add} placeholder={`Add a ${kind}`} aria-label={`Add a ${kind} to every photograph`} style={{ borderRadius: 999, padding: '5px 12px', fontSize: 12.5, width: 150 }} />
+      <datalist id={id}>{(known.data ?? []).filter((k) => !names.includes(k.name)).map((k) => <option key={k.name} value={k.name} />)}</datalist>
+    </div>
+  );
+}
+
 export function ShootDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -72,6 +88,14 @@ export function ShootDetail() {
         <label>From <input type="date" aria-label="From date" value={f.dateFrom} onChange={(e) => { setF({ ...f, dateFrom: e.target.value }); save({ dateFrom: e.target.value || null }); }} /></label>
         <label>To <input type="date" aria-label="To date" value={f.dateTo} onChange={(e) => { setF({ ...f, dateTo: e.target.value }); save({ dateTo: e.target.value || null }); }} /></label>
         <span className="muted">{s.dates} · {s.count} {s.count === 1 ? 'photograph' : 'photographs'}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '0 0 16px' }}>
+        <SharedNames kind="subject" names={s.subjects} onChange={(n) => save({ subjects: n })} />
+        <SharedNames kind="tag" names={s.tags} onChange={(n) => save({ tags: n })} />
+        <p className="muted" style={{ fontSize: 12.5, margin: 0, maxWidth: 640 }}>
+          The place, subjects and tags set here are passed down to the photographs in this shoot, and to any moved into it. A place a photograph has of its own stays, and subjects and tags you add to a photograph yourself are never taken away.{' '}
+          <button className="t2" style={{ textDecoration: 'underline' }} onClick={async () => { const r = await api<{ photos: number }>(`/shoots/${s.id}/sync`, { body: {} }); setMsg(`Applied to ${r.photos} ${r.photos === 1 ? 'photograph' : 'photographs'}.`); photos.reload(); }}>Apply to every photograph again</button>
+        </p>
       </div>
       <textarea className="area" aria-label="Description" rows={2} placeholder="Describe this photoshoot" value={f.description} style={{ maxWidth: 640, marginBottom: 20 }} onChange={(e) => setF({ ...f, description: e.target.value })} onBlur={() => f.description !== s.description && save({ description: f.description })} />
       {msg && <div className="muted" role="status" style={{ fontSize: 13, marginBottom: 14 }}>{msg}</div>}
