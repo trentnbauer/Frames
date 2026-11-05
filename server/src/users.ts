@@ -139,7 +139,8 @@ export function resolveUser(sys: DB, who: Who, allowSignups: boolean, guestOnly 
     if (!guestOnly && bindOwner(sys, who)) u = getUser(sys, OWNER_ID); // a share-link visitor never becomes the owner
   }
   if (!u) {
-    if (!allowSignups) return null;
+    // Switching off new accounts is about accounts with a library. A guest account (made from a share link, with no library) is still allowed, so guests can always sign in.
+    if (!allowSignups && !guestOnly) return null;
     const id = Number(sys.prepare("INSERT INTO users(provider, sub, email, name, role, folder, created) VALUES(?, ?, ?, ?, ?, ?, ?)").run(who.provider, who.sub, who.email, who.name, guestOnly || getSetting<{ defaultRole?: string }>(sys, 'instance', {}).defaultRole === 'guest' ? 'guest' : 'member', uniqueFolder(sys, who.email, who.name), now).lastInsertRowid);
     u = getUser(sys, id);
   }

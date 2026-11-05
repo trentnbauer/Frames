@@ -308,6 +308,19 @@ describe('with sign-in on', () => {
       expect((await signIn('fake', m, { guest: true, returnTo: `/s/${token}` })).statusCode).toBe(403);
       await call('PUT', '/api/auth/config', { allow: ['owner@example.test', '@family.test'] }, sess);
     });
+    it('with new accounts switched off, a guest can still sign in from a share link, and the link still offers it', async () => {
+      env.cfg.allowSignups = false;
+      try {
+        const c = (await call('POST', '/api/collections', { name: 'Closed door' }, sess)).json();
+        const token = (await call('POST', '/api/shares', { kind: 'collection', id: c.id, allowReview: true }, sess)).json().token;
+        expect((await call('GET', `/api/s/${token}`)).json().signIn.map((p: any) => p.id)).toContain('fake'); // the button is still offered
+        const g = { sub: 'sl-closed', email: 'closed.guest@nowhere.test', verified: true };
+        expect((await signIn('fake', g)).statusCode).toBe(403); // an ordinary new person is still refused
+        const r = await signIn('fake', g, { guest: true, returnTo: `/s/${token}` });
+        expect(r.statusCode).toBe(302);
+        expect((await call('GET', '/api/me', undefined, sessionHeader(r))).json()).toMatchObject({ role: 'guest' });
+      } finally { env.cfg.allowSignups = true; }
+    });
     it('with ALLOW_SIGNUPS off, an allowed newcomer gets no account, but people who already have one still sign in', async () => {
       env.cfg.allowSignups = false;
       try {

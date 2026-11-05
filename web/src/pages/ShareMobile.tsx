@@ -30,7 +30,9 @@ type Props = {
   d: { name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; layout?: Layout | null; viewer?: Viewer };
   photos: SharedPhoto[]; wallPrints: Print[]; others: SharedPhoto[]; reviewer: string;
   withName: (then: (name: string) => void) => void; changeName: () => void;
-  mine: Record<number, number>; suggest: (forId: number, photoId: number | null) => Promise<void>; sugErr: string;
+  /** The guest's version, kept by the page: print's own photograph -> the candidate put in its place, and print id -> frame colour. */
+  mine: Record<number, number>; frames: Record<number, string>; swap: (forId: number, photoId: number | null) => void; setFrame: (printId: number, colour: string | null) => void;
+  changes: number; dirty: boolean; sending: boolean; sendNote: { ok: boolean; text: string } | null; sendBack: () => void; discard: () => void; sugErr: string;
   dl: { done: number; total: number; ready: boolean } | null; download: () => void; cancelDl: () => void;
   openLayout: () => void; layoutSent: boolean;
 };
@@ -44,12 +46,13 @@ export function ShareMobile(p: Props) {
   const canReview = d.allowReview;
   const byId = new Map(photos.map((x) => [x.id, x]));
   const wallPhotos = new Map<number, Pic>(photos.map((x) => [x.id, { id: x.id, title: x.title, w: 0, h: 0, ar: x.ar }]));
-  const order = [...wallPrints.flatMap(photosOf).map((id) => byId.get(id)).filter((x): x is SharedPhoto => !!x), ...others];
+  const swapOf = (id: number | null) => (id !== null && p.mine[id] !== undefined ? p.mine[id] : id);
+  const shown = wallPrints.map((pr) => ({ ...pr, photoId: swapOf(pr.photoId), photoId2: swapOf(pr.photoId2), frame: pr.frame && p.frames[pr.id] ? { ...pr.frame, color: p.frames[pr.id] } : pr.frame }));
+  const order = [...shown.flatMap(photosOf).map((id) => byId.get(id)).filter((x): x is SharedPhoto => !!x), ...others];
   const [look, setLook] = useState<number | null>(null);
   const [lookText, setLookText] = useState('');
   const [picking, setPicking] = useState<number | null>(null); // the chosen photograph whose print a suggestion is for
   const [framing, setFraming] = useState<number | null>(null); // index of the print whose frame colour is being suggested
-  const [frameSug, setFrameSug] = useState<Record<number, string>>({}); // print id -> colour this guest suggested
   const [ratings, setRatings] = useState<Record<number, number>>({});
   const [comment, setComment] = useState('');
   const [commentNote, setCommentNote] = useState('');
@@ -60,10 +63,6 @@ export function ShareMobile(p: Props) {
   const flash = (t: string) => { setToast(t); clearTimeout(timer.current); timer.current = setTimeout(() => setToast(''), 2400); };
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const post = async (path: string, body: object) => {
-    const r = await fetch(`/api/s/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, reviewer }) });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Could not save that');
-  };
   const rate = (photoId: number, rating: number) => withName(async (name) => {
     const was = ratings[photoId];
     setRatings((r) => ({ ...r, [photoId]: rating }));
@@ -72,11 +71,6 @@ export function ShareMobile(p: Props) {
   });
   const sendText = (photoId: number | null, text: string, done: () => void) => withName(async (name) => {
     try { await fetch(`/api/s/${token}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoId, body: text, reviewer: name }) }).then(async (r) => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Could not send that'); }); done(); }
-    catch (e) { flash((e as Error).message); }
-  });
-  const suggestFrame = (i: number, colour: string | null) => withName(async () => {
-    const pr = wallPrints[i];
-    try { await post('frame', { printId: pr.id, color: colour === pr.frame?.color ? null : colour }); setFrameSug((f) => { const c = { ...f }; if (colour === null || colour === pr.frame?.color) delete c[pr.id]; else c[pr.id] = colour; return c; }); }
     catch (e) { flash((e as Error).message); }
   });
 
@@ -102,7 +96,12 @@ export function ShareMobile(p: Props) {
     if (s?.active) {
       suppress.current = true; setTimeout(() => { suppress.current = false; }, 80);
       const at = hit(s.x, s.y), pr = at !== null ? wallPrints[at] : null, forId = pr ? photosOf(pr)[0] : undefined;
-      if (forId !== undefined && canReview) withName(() => { void p.suggest(forId, s.pid).then(() => flash(`Suggested for print ${at! + 1}.`)); });
+      if (forId !== undefined && canReview) {
+        // A photograph taken out of a print can only go back to its own print; any other candidate takes the print's place.
+        if (p.mine[s.pid] !== undefined && forId !== s.pid) flash('That photograph was in another print. Hold it and drop it back on that print.');
+        else if (p.mine[s.pid] !== undefined) { p.swap(forId, null); flash(`Put back in print ${at! + 1}.`); }
+        else { p.swap(forId, s.pid); flash(`Changed print ${at! + 1}. Send it back when you are ready.`); }
+      }
     }
     cleanup();
   }
@@ -116,19 +115,23 @@ export function ShareMobile(p: Props) {
   };
   useEffect(() => cleanup, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The wall with the frame colours this guest suggested drawn in.
-  const shown = wallPrints.map((pr) => (pr.frame && frameSug[pr.id] ? { ...pr, frame: { ...pr.frame, color: frameSug[pr.id] } } : pr));
   const f = wallPrints.length ? frameOf(wallPrints, PAD) : null;
-  const openPrint = (i: number) => { const pid = photosOf(wallPrints[i])[0]; const at = order.findIndex((x) => x.id === pid); if (at >= 0) { setLook(at); setLookText(''); } };
+  const openPrint = (i: number) => { const pid = photosOf(shown[i])[0]; const at = order.findIndex((x) => x.id === pid); if (at >= 0) { setLook(at); setLookText(''); } };
   const unrated = order.findIndex((x) => ratings[x.id] === undefined);
   const rated = Object.keys(ratings).length;
   const go = (n: number) => { if (look === null) return; setLook((look + n + order.length) % order.length); setLookText(''); };
   const swipe = useRef(0);
+  // Escape (a keyboard on a phone or a small window) backs out of the top layer: frame colour, swap list, then the photograph.
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (framing !== null) setFraming(null); else if (picking !== null) setPicking(null); else if (look !== null) setLook(null); };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, [framing, picking, look]);
 
   const lp = look !== null ? order[look] : null;
-  const slot = lp ? wallPrints.findIndex((pr) => photosOf(pr).includes(lp.id)) : -1;
+  const slot = lp ? shown.findIndex((pr) => photosOf(pr).includes(lp.id)) : -1;
   const sugOf = slot >= 0 ? mine_for(slot) : undefined;
-  function mine_for(i: number) { const pid = photosOf(wallPrints[i])[0]; return p.mine[pid] !== undefined ? byId.get(p.mine[pid]) : undefined; }
+  function mine_for(i: number) { const pid = photosOf(wallPrints[i])[0]; return p.mine[pid] !== undefined ? byId.get(p.mine[pid]) : undefined; } // the candidate this print has in the guest's version
 
   return (
     <div className="sm-cols" style={{ minHeight: '100dvh', background: '#0d0d0d', overflowX: 'clip' }}>
@@ -173,7 +176,7 @@ export function ShareMobile(p: Props) {
             <span style={eyebrow}>{f ? 'Other candidates' : 'Photographs'}</span>
             <span style={{ fontSize: 12, color: '#6f6c67' }}>{(f ? others : photos).length}</span>
           </div>
-          {canReview && f && others.length > 0 && <p style={{ fontSize: 12.5, color: '#8f8c86', margin: '-4px 0 12px' }}>Hold one, then drag it onto a print to suggest it there.</p>}
+          {canReview && f && others.length > 0 && <p style={{ fontSize: 12.5, color: '#8f8c86', margin: '-4px 0 12px' }}>Hold one, then drag it onto a print to try it there.</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {(f ? others : photos).map((x) => (
               <button key={x.id} onClick={() => { if (suppress.current) return; const at = order.findIndex((o) => o.id === x.id); if (at >= 0) { setLook(at); setLookText(''); } }} onPointerDown={down(x.id)} onContextMenu={(e) => e.preventDefault()} aria-label={`Open ${x.title}`}
@@ -202,6 +205,13 @@ export function ShareMobile(p: Props) {
           <div role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: '#a8a59f', marginBottom: 10 }}>
             <span>{p.dl.ready ? `${p.dl.total} files sent to your downloads.` : `Downloading ${p.dl.done} of ${p.dl.total}…`}</span>
             {!p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, color: '#efede8' }}>Cancel</button>}
+          </div>
+        )}
+        {canReview && (p.dirty || p.sendNote) && (
+          <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5, color: p.sendNote && !p.sendNote.ok ? 'oklch(0.78 0.11 35)' : '#a8a59f' }}>
+            {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send back to the photographer · ${p.changes}`}</button>}
+            {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Discard</button>}
+            {p.sendNote && <span style={{ flex: '1 1 100%' }}>{p.sendNote.text}</span>}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
@@ -236,13 +246,13 @@ export function ShareMobile(p: Props) {
               </div>
               {canReview && slot >= 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={() => withName(() => setPicking(photosOf(wallPrints[slot])[0]))} style={{ flex: 'none', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Swap photo</button>
-                  {wallPrints[slot].frame && <button onClick={() => withName(() => setFraming(slot))} style={{ flex: 'none', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Frame colour</button>}
+                  <button onClick={() => setPicking(photosOf(wallPrints[slot])[0])} style={{ flex: 'none', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Swap photo</button>
+                  {wallPrints[slot].frame && <button onClick={() => setFraming(slot)} style={{ flex: 'none', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Frame colour</button>}
                   {sugOf && (
                     <>
                       <img src={imgUrl(sugOf.id, 'thumb', token)} alt="" style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flex: 'none' }} />
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#a8a59f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>You suggested {sugOf.title}</span>
-                      <button onClick={() => void p.suggest(photosOf(wallPrints[slot])[0], null)} style={{ flex: 'none', minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#a8a59f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>In your version: {sugOf.title}</span>
+                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flex: 'none', minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
                     </>
                   )}
                 </div>
@@ -261,7 +271,7 @@ export function ShareMobile(p: Props) {
                     })}
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input value={lookText} onChange={(e) => setLookText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} maxLength={1000} placeholder="Comment on this photograph…" aria-label="Comment on this photograph"
+                    <input value={lookText} onChange={(e) => setLookText(e.target.value)} onKeyDown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }} maxLength={1000} placeholder="Comment on this photograph…" aria-label="Comment on this photograph"
                       style={{ flex: 1, minWidth: 0, height: 44, background: '#161615', border: 0, borderRadius: 999, padding: '0 16px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)', outline: 'none', color: 'inherit', fontFamily: 'inherit' }} />
                     <button onClick={() => { if (lookText.trim()) sendText(lp.id, lookText, () => { setLookText(''); flash('Sent. Only the person who shared this will see it.'); }); }} style={{ flex: 'none', height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring, opacity: lookText.trim() ? 1 : 0.45 }}>Send</button>
                   </div>
@@ -287,12 +297,12 @@ export function ShareMobile(p: Props) {
                 <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Suggest another</h2>
                 <button onClick={() => setPicking(null)} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Close</button>
               </div>
-              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${pr.size} ${pr.orientation}. ` : ''}It is sent to whoever shared this; nothing changes until they decide.</p>
+              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${pr.size} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {others.map((x) => {
+                {others.filter((x) => p.mine[x.id] === undefined).map((x) => {
                   const wrong = !!pr && (pr.orientation === 'portrait') !== (x.ar < 1);
                   return (
-                    <button key={x.id} onClick={() => { void p.suggest(picking, x.id).then(() => { setPicking(null); flash(`Suggested for print ${idx + 1}.`); }); }} aria-label={`Suggest ${x.title}`}
+                    <button key={x.id} onClick={() => { p.swap(picking, x.id); setPicking(null); flash(`Changed print ${idx + 1}. Send it back when you are ready.`); }} aria-label={`Suggest ${x.title}`}
                       style={{ flex: 'none', height: 96, aspectRatio: String(x.ar), borderRadius: 3, position: 'relative', overflow: 'hidden', opacity: wrong ? 0.55 : 1 }}>
                       <img src={imgUrl(x.id, 'thumb', token)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       {wrong && <span style={{ position: 'absolute', left: 4, right: 4, bottom: 4, fontSize: 11, lineHeight: 1.25, background: 'rgba(0,0,0,.72)', padding: '3px 5px', borderRadius: 3, textAlign: 'left' }}>{x.ar < 1 ? 'Portrait' : 'Landscape'}</span>}
@@ -306,25 +316,25 @@ export function ShareMobile(p: Props) {
       })()}
 
       {framing !== null && wallPrints[framing]?.frame && (() => {
-        const pr = wallPrints[framing], cur = frameSug[pr.id] ?? pr.frame!.color;
+        const pr = wallPrints[framing], cur = p.frames[pr.id] ?? pr.frame!.color;
         return (
           <div onClick={(e) => e.target === e.currentTarget && setFraming(null)} style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
             <div role="dialog" aria-label="Frame colour" style={{ width: '100%', overflowY: 'auto', background: '#161615', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 16px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
                 <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Frame for print {framing + 1}</h2>
-                <button onClick={() => { if (frameSug[pr.id]) flash(`Suggested a ${frameSug[pr.id]} frame for print ${framing + 1}.`); setFraming(null); }} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Done</button>
+                <button onClick={() => { if (p.frames[pr.id]) flash(`Changed print ${framing + 1} to a ${p.frames[pr.id]} frame. Send it back when you are ready.`); setFraming(null); }} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Done</button>
               </div>
-              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 18px' }}>It is {pr.frame!.color} now. Pick another colour to suggest it; nothing changes until they decide.</p>
+              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 18px' }}>It is {pr.frame!.color} now. Pick another colour to try it on the wall. It is only sent when you send it back.</p>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {Object.keys(SWATCH).map((c) => (
-                  <button key={c} onClick={() => suggestFrame(framing, c)} aria-pressed={cur === c} aria-label={c} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 48, fontSize: 12, color: cur === c ? '#efede8' : '#a8a59f' }}>
+                  <button key={c} onClick={() => p.setFrame(pr.id, c === pr.frame!.color ? null : c)} aria-pressed={cur === c} aria-label={c} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 48, fontSize: 12, color: cur === c ? '#efede8' : '#a8a59f' }}>
                     <span style={{ width: 44, height: 44, borderRadius: '50%', background: SWATCH[c], boxShadow: cur === c ? '0 0 0 2px #161615, 0 0 0 4px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />
                     {c[0].toUpperCase() + c.slice(1)}
                   </button>
                 ))}
               </div>
-              {frameSug[pr.id] && <button onClick={() => suggestFrame(framing, null)} style={{ minHeight: 44, marginTop: 10, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Back to {pr.frame!.color}</button>}
+              {p.frames[pr.id] && <button onClick={() => p.setFrame(pr.id, null)} style={{ minHeight: 44, marginTop: 10, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Back to {pr.frame!.color}</button>}
             </div>
           </div>
         );
