@@ -1,3 +1,5 @@
+This is AI slop
+
 # Frames
 
 A self-hosted archive for portfolio photographs: organise them into photoshoots, review them over several sessions so your real opinion settles, find what's strongest, and curate compositions you can download as untouched original files or share with a link.
