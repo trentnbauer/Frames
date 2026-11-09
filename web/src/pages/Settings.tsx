@@ -13,6 +13,7 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
+import { GearDefaults } from '../components/GearDefaults';
 
 type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
   | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
@@ -55,7 +56,7 @@ const HEADINGS: Partial<Record<Sec, string[]>> = {
   Profile: ['Display picture', 'Display name', 'Signed in as', 'Ways to sign in as you'],
   Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
   'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
-  'Metadata & XMP': ['Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
+  'Metadata & XMP': ['Camera defaults', 'Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
   AI: ['Your AIs', 'Add an AI', 'Analysis'],
   'Cloud sync': ['Your connected folders', 'Connect an account', 'Dropbox', 'Google Drive', 'OneDrive'],
   Portfolio: ['Publish the portfolio', 'Which photos', 'The site', 'Its own web address', 'What a visitor gets when they open a photo'],
@@ -348,6 +349,11 @@ function Metadata({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pr
       <div className="field">
         <h3>Reading other apps’ edits</h3>
         <p>When a sidecar file (photo.jpg.xmp or photo.xmp) sits next to a photograph, Frames reads its keywords as tags, and its title and description where you have not written your own. Your own edits always win. Frames never removes tags that another app added, and never changes the image file.</p>
+      </div>
+      <div className="field">
+        <h3>Camera defaults</h3>
+        <p>Camera details for every new photograph whose file has none: a film camera and stock, say. They only fill blanks. What the file says, and anything you type on a photograph, is never replaced, and a photoshoot can have its own defaults, which win over these. Photographs already here are not changed.</p>
+        <GearDefaults label="Camera defaults" value={s.gear} onSave={(gear) => save({ gear })} />
       </div>
       <Toggle on={s.xmpWriteBack} onChange={(v) => save({ xmpWriteBack: v })} label="Write XMP next to my originals" hint="Off by default, because libraries are read-only. Turn it on only if the library folder is mounted writable. Another program’s existing sidecar is never overwritten." />
       <div className="field">

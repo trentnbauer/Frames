@@ -6,6 +6,7 @@ import { Header, Img, Loading, useField, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
 import { AddToComposition } from '../components/AddToComposition';
+import { GearDefaults } from '../components/GearDefaults';
 import { MoveToShoot } from '../components/MoveToShoot';
 
 /** The subjects (or tags) a shoot gives to every photograph in it: chips to take away, and a box to add one (existing names are suggested). */
@@ -98,6 +99,11 @@ export function ShootDetail() {
           <button className="t2" style={{ textDecoration: 'underline' }} onClick={async () => { const r = await api<{ photos: number }>(`/shoots/${s.id}/sync`, { body: {} }); setMsg(`Applied to ${r.photos} ${r.photos === 1 ? 'photograph' : 'photographs'}.`); photos.reload(); }}>Apply to every photograph again</button>
         </p>
       </div>
+      <details style={{ margin: '0 0 14px', maxWidth: 640 }}>
+        <summary className="muted" style={{ cursor: 'pointer' }}>Camera defaults for this photoshoot</summary>
+        <p className="muted" style={{ fontSize: 12.5 }}>For photographs in this shoot whose file has no camera details (a roll of film, say). They win over your own defaults, and photographs added or moved here follow them. Nothing the file says or you typed is replaced.</p>
+        <GearDefaults label="Photoshoot camera defaults" value={s.gear} onSave={(gear) => save({ gear })} />
+      </details>
       <textarea className="area" aria-label="Description" rows={2} placeholder="Describe this photoshoot" value={f.description} style={{ maxWidth: 640, marginBottom: 20 }} onChange={(e) => setF({ ...f, description: e.target.value })} onBlur={() => f.description !== s.description && save({ description: f.description })} />
       {msg && <div className="muted" role="status" style={{ fontSize: 13, marginBottom: 14 }}>{msg}</div>}
       <div className="just">
