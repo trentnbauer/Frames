@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { imgUrl } from '../api';
 import {
   arrange, area, cap, cellOf, dims, FRAMES, fits, frameOf, GROUPS, MATS, mouldOf, nextUp, or, PAD, PAPER, pxOf, rectsIn, shoppingList, sizeName,
-  type Frame2D, type Mode, type Print,
+  type Crop, type Frame2D, type Mode, type Print,
 } from '../layout';
 
 const serif = "'Instrument Serif',Georgia,serif";
@@ -81,7 +81,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
                 const ph = pid !== null ? photos.get(pid) : undefined;
                 return (
                   <div key={k} style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {ph ? <img src={imgUrl(ph.id, 'preview', share)} alt={ph.title} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                    {ph ? <span style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}><img src={imgUrl(ph.id, 'preview', share)} alt={ph.title} draggable={false} style={{ width: '100%', height: '100%', ...cropStyle(k === 0 ? p.crop : undefined), display: 'block' }} /></span>
                       : <span style={{ fontSize: 12, color: '#6f6c67', textAlign: 'center', padding: '0 8px' }}>{p.stack ? `Print ${i + 1} · ${p.orientation === 'portrait' ? (k === 0 ? 'top' : 'bottom') : (k === 0 ? 'left' : 'right')}` : `Print ${i + 1}`}</span>}
                   </div>
                 );
@@ -96,9 +96,44 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   );
 }
 
+/** A photograph fills its print (the edges beyond the paper are cut off); a crop zooms in on a chosen point. Only how it looks here. */
+export const cropStyle = (c?: Crop) => ({ objectFit: 'cover' as const, ...(c ? { transform: `scale(${c.zoom})`, transformOrigin: `${c.fx * 100}% ${c.fy * 100}%` } : {}) });
+
+/** Zoom in on the photograph and drag it around, to see how the print would look cropped. */
+function CropBox({ photoId, print: sp, onChange }: { photoId: number; print: Print; onChange: (fn: (q: Print) => void) => void }) {
+  const [pw, ph] = or(sp.size, sp.orientation);
+  const c = sp.crop ?? { zoom: 1, fx: 0.5, fy: 0.5 };
+  const W = 220, H = Math.round((W * ph) / pw);
+  const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
+  const set = (fn: (cur: Crop) => Crop) => onChange((q) => { const n = fn(q.crop ?? { zoom: 1, fx: 0.5, fy: 0.5 }); if (n.zoom <= 1.005) delete q.crop; else q.crop = n; });
+  const move = (e: React.PointerEvent) => {
+    const d = drag.current; if (!d || c.zoom <= 1) return;
+    // Dragging the picture by a distance moves the window over it by that distance / zoom; the origin moves by that over (zoom - 1).
+    const k = c.zoom - 1;
+    const fx = Math.min(1, Math.max(0, d.fx - (e.clientX - d.x) / (W * k))), fy = Math.min(1, Math.max(0, d.fy - (e.clientY - d.y) / (H * k)));
+    set((cur) => ({ ...cur, fx, fy }));
+  };
+  return (
+    <div>
+      <div style={{ ...eyebrow, marginBottom: 8 }}>Crop (only to see how it looks)</div>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div aria-label="Crop preview" onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY, fx: c.fx, fy: c.fy }; (e.target as Element).setPointerCapture?.(e.pointerId); }} onPointerMove={move} onPointerUp={() => { drag.current = null; }}
+          style={{ width: W, height: H, overflow: 'hidden', background: '#000', borderRadius: 4, cursor: c.zoom > 1 ? 'grab' : 'default', touchAction: 'none', position: 'relative' }}>
+          <img src={imgUrl(photoId, 'preview')} alt="" draggable={false} style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none', ...cropStyle(sp.crop) }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5, color: '#a8a59f', flex: 1, minWidth: 140 }}>
+          <label>Zoom {Math.round(c.zoom * 100)}%<input type="range" aria-label="Zoom" min={100} max={400} step={5} value={Math.round(c.zoom * 100)} onChange={(e) => set((cur) => ({ ...cur, zoom: Number(e.target.value) / 100 }))} style={{ width: '100%' }} /></label>
+          <span>{c.zoom > 1 ? 'Drag the picture to move it.' : 'Filled to the print. Zoom in to crop.'}</span>
+          {sp.crop && <button onClick={() => set(() => ({ zoom: 1, fx: 0.5, fy: 0.5 }))} style={{ textAlign: 'left', textDecoration: 'underline', color: '#a8a59f' }}>Reset to fill</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** A print's own settings: size, which way round, one photograph or two, poster or framed (and the frame). */
-export function PrintModal({ prints, index, count, ppi = 300, onChange, onApplyAll, onDelete, onClose }: {
-  prints: Print[]; index: number; count: number; ppi?: number;
+export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange, onApplyAll, onDelete, onClose }: {
+  prints: Print[]; index: number; count: number; ppi?: number; /** The photograph in this print, so its crop can be shown and set. */ photoId?: number | null;
   onChange: (fn: (q: Print) => void) => void; onApplyAll: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const sp = prints[index];
@@ -131,6 +166,7 @@ export function PrintModal({ prints, index, count, ppi = 300, onChange, onApplyA
           {group('Photographs', <div style={{ display: 'flex', gap: 6 }}>{[false, true].map((st) => <button key={String(st)} aria-pressed={sp.stack === st} onClick={() => onChange((q) => { q.stack = st; if (!st) q.photoId2 = null; })} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, ...opt(sp.stack === st) }}>{st ? 'Two stacked' : 'One'}</button>)}</div>)}
         </div>
         {sp.stack && <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: -10 }}>{sp.orientation === 'portrait' ? 'Two landscape photographs, one above the other.' : 'Two portrait photographs, side by side.'} Each fills {Math.round(cw)} × {Math.round(ch)} mm. The originals are exported as they are, never joined.</div>}
+        {photoId != null && !sp.stack && <CropBox photoId={photoId} print={sp} onChange={onChange} />}
         {group('Hang as', <div style={{ display: 'flex', gap: 6 }}>{(['poster', 'framed'] as const).map((k) => { const on = k === 'framed' ? !!fr : !fr; return <button key={k} aria-pressed={on} onClick={() => onChange((q) => { q.frame = k === 'framed' ? q.frame || { size: nextUp(q.size), mat: 'white', color: 'black' } : null; })} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, ...opt(on) }}>{cap(k)}</button>; })}</div>)}
         {fr && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 18 }}>

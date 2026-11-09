@@ -16,7 +16,9 @@ export const PAD = 40; // around the whole wall
 export type Frame = { size: string; mat: string; color: string };
 export type Orientation = 'portrait' | 'landscape';
 /** A print holds one photograph, or (stack) two: two landscape photographs one above the other make a portrait print, two portrait ones side by side make a landscape one. */
-export type Print = { id: number; size: string; orientation: Orientation; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
+/** How a photograph is cropped in its print, to see how it would look: zoomed in by `zoom` around the point (fx, fy), each 0 to 1. Only for looking: the original is never changed. */
+export type Crop = { zoom: number; fx: number; fy: number };
+export type Print = { crop?: Crop; id: number; size: string; orientation: Orientation; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
 export type Mode = 'row' | 'grid' | 'feature' | 'free';
 export type Layout = { mode: Mode; prints: Print[]; /** The sharpness wanted, in pixels per inch (300 when absent). A photograph below it is allowed, with a warning. */ ppi?: number };
 type Photo = { w: number; h: number };
@@ -159,7 +161,7 @@ type Dims = (id: number) => Photo | undefined;
 /** Which place in this print the next photograph takes: the only place, or for a stack the first empty one (else the second). */
 const slotFor = (p: Print): 0 | 1 => (p.stack && p.photoId !== null ? 1 : 0);
 const getAt = (p: Print, s: 0 | 1) => (s === 0 ? p.photoId : p.stack ? p.photoId2 : null);
-const setAt = (p: Print, s: 0 | 1, v: number | null) => { if (s === 0) p.photoId = v; else p.photoId2 = v; };
+const setAt = (p: Print, s: 0 | 1, v: number | null) => { if (s === 0) { if (p.photoId !== v) delete p.crop; p.photoId = v; } else p.photoId2 = v; };
 const clonePrint = (p: Print): Print => ({ ...p, frame: p.frame ? { ...p.frame } : null });
 
 /**

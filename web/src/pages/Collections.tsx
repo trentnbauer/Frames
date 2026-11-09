@@ -379,7 +379,7 @@ export function CollectionDetail() {
         {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
       </div>
       {printed && <ShoppingList prints={wallPrints} ppi={ppi} />}
-      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} onChange={editSel}
+      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} photoId={wallPrints[sel]?.photoId} onChange={editSel}
         onApplyAll={() => { const f = wallPrints[sel].frame; void saveLayout(wallPrints.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : p.size === f.size ? p.size : f.size } : null }))); }}
         onDelete={() => { if (wallPrints.length <= 1) return; setPrintModal(false); setSelPrint(0); void saveLayout(wallPrints.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setPrintModal(false)} />}
 
