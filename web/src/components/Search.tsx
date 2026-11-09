@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, useApi } from '../api';
 import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 import { Justified } from './bits';
@@ -30,6 +30,7 @@ export function Search({ onClose }: { onClose: () => void }) {
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [note, setNote] = useState('');
+  const places = useApi<{ name: string; n: number }[]>('/places');
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
   useEffect(() => {
@@ -45,6 +46,9 @@ export function Search({ onClose }: { onClose: () => void }) {
     if (parsed.time) chips.push({ key: 'time', label: `Time: ${parsed.time.from}–${parsed.time.to}` });
     if (parsed.colours.length) chips.push({ key: 'colours', label: `Colour: ${parsed.colours.join(', ')}` });
   }
+  // A place already in use is offered like a tag: "gee" suggests "Geelong".
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const placeHits = words.length ? (places.data ?? []).filter((p) => words.every((w) => p.name.toLowerCase().includes(w))).slice(0, 6) : [];
   const live = chips.filter((c) => !removed.includes(c.key));
 
   const params = () => {
@@ -94,6 +98,11 @@ export function Search({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           {live.map((c) => <span key={c.key} style={{ display: 'inline-flex', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)' }}>{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved([...removed, c.key])} style={{ color: '#8f8c86' }}>✕</button></span>)}
         </div>
+        {placeHits.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }} aria-label="Places">
+            {placeHits.map((p) => <button key={p.name} onClick={() => { onClose(); nav(`/library?place=${encodeURIComponent(p.name)}`); }} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)' }}>Place: {p.name}</button>)}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 12.5 }}>
           <span style={{ color: '#a8a59f' }}>{busy ? 'Searching…' : `${count} ${count === 1 ? 'photograph' : 'photographs'} · ${shoots} ${shoots === 1 ? 'shoot' : 'shoots'}`}</span>
           {results.length > 0 && <button style={{ color: '#a8a59f' }} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>}

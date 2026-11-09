@@ -22,6 +22,7 @@ export function PhotoDetail() {
   const photo = useApi<PhotoFull>(`/photos/${id}`);
   useTitle(photo.data?.title ?? 'Photograph');
   const shoots = useApi<Shoot[]>('/shoots');
+  const places = useApi<{ name: string; n: number }[]>('/places');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
   const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
@@ -186,7 +187,7 @@ export function PhotoDetail() {
           <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: '#a8a59f', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
             <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Place</dt>
-            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} />{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
+            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
             <dt style={{ color: '#6f6c67' }}>Camera</dt><dd style={{ margin: 0 }}>{[p.camera, p.lens].filter(Boolean).join(' · ') || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Exposure</dt><dd style={{ margin: 0 }}>{p.exposure || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>
