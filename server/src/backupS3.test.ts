@@ -66,17 +66,17 @@ describe('backups to S3', () => {
   });
 
   it('copies a backup to the bucket with a valid signature, lists it, and keeps only the newest seven', async () => {
-    const r = await A.post('/api/admin/backup/s3/sync');
+    const r = await A.post('/api/admin/backup/sync');
     expect(r.status).toBe(200);
     expect(r.body.uploaded).toHaveLength(1);
     const name = r.body.uploaded[0] as string;
     expect(store.has(`frames/${name}`)).toBe(true);
     expect(store.get(`frames/${name}`)!.length).toBeGreaterThan(1000); // a tar of databases
-    expect(((await A.get('/api/admin/backup/s3/list')).body as any[]).map((o) => o.name)).toEqual([name]);
-    expect((await A.post('/api/admin/backup/s3/sync')).body.uploaded).toEqual([]); // nothing new
+    expect(((await A.get('/api/admin/backup/remote?from=s3')).body as any[]).map((o) => o.name)).toEqual([name]);
+    expect((await A.post('/api/admin/backup/sync')).body.uploaded).toEqual([]); // nothing new
     for (let d = 1; d <= 9; d++) store.set(`frames/frames-server-backup-2025-01-0${d}.tar`, Buffer.from('x'));
     store.set('frames/other-file.txt', Buffer.from('not ours'));
-    await A.post('/api/admin/backup/s3/sync');
+    await A.post('/api/admin/backup/sync');
     const left = [...store.keys()].filter((k) => k.endsWith('.tar'));
     expect(left).toHaveLength(7);
     expect(left).toContain(`frames/${name}`);
@@ -85,19 +85,19 @@ describe('backups to S3', () => {
   });
 
   it('puts a backup from the bucket aside for restore, refusing other names and a bad archive', async () => {
-    const name = ((await A.get('/api/admin/backup/s3/list')).body as any[])[0].name as string;
-    const r = await A.post('/api/admin/backup/s3/restore', { name });
+    const name = ((await A.get('/api/admin/backup/remote?from=s3')).body as any[])[0].name as string;
+    const r = await A.post('/api/admin/backup/remote/restore', { from: 's3', name });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ staged: true });
     await A.del('/api/admin/restore');
-    expect((await A.post('/api/admin/backup/s3/restore', { name: '../etc/passwd' })).status).toBe(404);
+    expect((await A.post('/api/admin/backup/remote/restore', { from: 's3', name: '../etc/passwd' })).status).toBe(404);
     store.set('frames/frames-server-backup-2025-01-09.tar', Buffer.from('not a tar'));
-    expect((await A.post('/api/admin/backup/s3/restore', { name: 'frames-server-backup-2025-01-09.tar' })).status).toBe(400);
+    expect((await A.post('/api/admin/backup/remote/restore', { from: 's3', name: 'frames-server-backup-2025-01-09.tar' })).status).toBe(400);
   });
 
   it('says what went wrong when the service refuses, and can be removed', async () => {
     await A.put('/api/admin/backup/s3', { endpoint, region: 'eu-west-1', bucket: 'bkt', prefix: 'frames', accessKeyId: KEY, secretAccessKey: 'wrong-secret' });
-    const r = await A.post('/api/admin/backup/s3/sync');
+    const r = await A.post('/api/admin/backup/sync');
     expect(r.status).toBe(400);
     expect(r.body.error).toContain('SignatureDoesNotMatch');
     expect(JSON.stringify((await A.get('/api/admin/backup/s3')).body.status)).toContain('"ok":false');

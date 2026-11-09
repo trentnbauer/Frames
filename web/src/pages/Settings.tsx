@@ -378,7 +378,8 @@ function Restore() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
-  const s3list = useApi<{ name: string; bytes: number }[]>('/admin/backup/s3/list');
+  const s3list = useApi<{ name: string; bytes: number }[]>('/admin/backup/remote?from=s3');
+  const cloudlist = useApi<{ name: string; bytes: number }[]>('/admin/backup/remote?from=cloud');
   const done = (x: { parts: string[]; people: number }) => { setMsg({ ok: true, text: `Checked: ${x.people} ${x.people === 1 ? 'person' : 'people'} and ${x.parts.length - 1} ${x.parts.length === 2 ? 'library' : 'libraries'}. It is applied the next time Frames starts.` }); r.reload(); };
   const run = async (fn: () => Promise<{ parts: string[]; people: number }>) => { setMsg(null); setBusy(true); try { done(await fn()); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); };
   const upload = async (f: File) => {
@@ -407,11 +408,15 @@ function Restore() {
       </div>
       <p className="muted" style={{ fontSize: 12.5 }}>A file you downloaded above. Or put it in <span className="mono">{r.data?.dir ?? 'the backups folder'}</span> and pick it here:</p>
       {r.data?.archives.length === 0 && <p className="muted">No server backups in that folder yet. One is made a day (the last seven kept).</p>}
-      {s3list.data && s3list.data.length > 0 && <p className="muted" style={{ fontSize: 12.5 }}>In your S3 bucket:</p>}
-      {s3list.data?.map((a) => (
-        <div className="row" key={`s3-${a.name}`}>
-          <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB · S3</span></span>
-          <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name} in your S3 bucket? It is downloaded and checked first, and applied the next time Frames starts.`)) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/s3/restore', { body: { name: a.name } }); r.reload(); return x; }); }}>Restore</button>
+      {([['s3', 'In your S3 bucket', s3list], ['cloud', 'In your cloud account', cloudlist]] as const).map(([from, label, l]) => (
+        <div key={from}>
+          {l.data && l.data.length > 0 && <p className="muted" style={{ fontSize: 12.5 }}>{label}:</p>}
+          {l.data?.map((a) => (
+            <div className="row" key={`${from}-${a.name}`}>
+              <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
+              <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name} (${label.toLowerCase()})? It is downloaded and checked first, and applied the next time Frames starts.`)) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/remote/restore', { body: { from, name: a.name } }); r.reload(); return x; }); }}>Restore</button>
+            </div>
+          ))}
         </div>
       ))}
       {r.data?.archives.map((a) => (
@@ -449,12 +454,42 @@ function S3Backup() {
       </div>
       <div className="form">
         <button className="pill primary" disabled={busy} onClick={() => void act(async () => { await api('/admin/backup/s3', { method: 'PUT', body: f }); setF((x) => ({ ...x, secretAccessKey: '' })); return 'Saved.'; })}>Save</button>
-        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/s3/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>}
+        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>}
         {st.data?.configured && <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to S3? Copies already in the bucket stay there.')) void act(async () => { await api('/admin/backup/s3', { method: 'DELETE' }); setF({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' }); return 'S3 backups are off.'; }); }}>Turn off</button>}
       </div>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
       {st.data?.status && <p className="muted" style={{ fontSize: 12.5 }}>Last attempt {fmtDate(st.data.status.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}: {st.data.status.ok ? st.data.status.message : <span className="reason">{st.data.status.message}</span>}</p>}
       <p className="muted" style={{ fontSize: 12.5 }}>Backups in the bucket are listed under Restore below. Not tested against the real services.</p>
+    </div>
+  );
+}
+
+type CloudBackupState = { connected: boolean; provider: string; account: string; status: { at: string; ok: boolean; message: string } | null };
+const PROVIDER_NAMES: Record<string, string> = { dropbox: 'Dropbox', google: 'Google Drive', onedrive: 'OneDrive' };
+
+/** Copy the daily archive to the administrator's own Dropbox, Google Drive or OneDrive, in a folder called Frames backups. */
+function CloudBackup() {
+  const st = useApi<CloudBackupState>('/admin/backup/cloud');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(() => { const b = new URLSearchParams(window.location.search).get('backup'); return b ? { ok: b === 'connected', text: b === 'connected' ? 'Connected.' : b } : null; });
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<string>) => { setMsg(null); setBusy(true); try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); st.reload(); };
+  const connect = (p: string) => act(async () => { const r = await api<{ url: string }>(`/admin/backup/cloud/connect/${p}`, { body: {} }); window.location.href = r.url; return 'Opening the sign-in…'; });
+  return (
+    <div className="field">
+      <h3>Back up to Dropbox, Google Drive or OneDrive</h3>
+      <p>Copy the daily whole-server archive to your own cloud account, into a folder called <span className="mono">Frames backups</span> that Frames makes. The last seven are kept. This is a separate sign-in for backups, with permission to write to that folder only where the service allows it (the connections used to read photographs never get write access). The service must first be set up under Settings, Cloud services, and its app registration must allow writing files.</p>
+      {st.data?.connected ? (
+        <div className="form">
+          <span>Connected to {PROVIDER_NAMES[st.data.provider] ?? st.data.provider}{st.data.account ? `, ${st.data.account}` : ''}.</span>
+          <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>
+          <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to this account? Copies already there stay there.')) void act(async () => { await api('/admin/backup/cloud', { method: 'DELETE' }); return 'Disconnected.'; }); }}>Disconnect</button>
+        </div>
+      ) : (
+        <div className="form">{Object.entries(PROVIDER_NAMES).map(([id, label]) => <button key={id} className="pill" disabled={busy} onClick={() => void connect(id)}>Connect {label}</button>)}</div>
+      )}
+      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
+      {st.data?.status && <p className="muted" style={{ fontSize: 12.5 }}>Last attempt {fmtDate(st.data.status.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}: {st.data.status.ok ? st.data.status.message : <span className="reason">{st.data.status.message}</span>}</p>}
+      <p className="muted" style={{ fontSize: 12.5 }}>Not tested against the real services. A backup over 140 MB is refused for Dropbox: use S3 for archives that big.</p>
     </div>
   );
 }
@@ -476,6 +511,7 @@ function Backup() {
         {list.data?.map((b) => <div className="row" key={b.whose + b.name}><span><span className="mono">{b.name}</span> <span className="muted">{b.whose}</span></span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
       </div>
       <S3Backup />
+      <CloudBackup />
       <Restore />
     </>
   );
