@@ -4,6 +4,7 @@ import { api, imgUrl, useApi } from '../api';
 import type { PhotoFull, PhotoLite } from '../data';
 import { Header, Justified, Loading } from '../components/bits';
 import { useStore } from '../store';
+import { AddToComposition } from '../components/AddToComposition';
 
 type Item = { key: string; title: string; detail: string; count: number; photoIds: number[]; ids?: number[]; link?: string };
 type Todo = { total: number; kinds: number; items: Item[] };
@@ -228,6 +229,16 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
             <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 10 }}>{!p ? 'Loading…' : leftN ? `${plural(leftN, 'thing', 'things')} left on this one` : 'All done here.'}</div>
           </div>
 
+          {p && !w.need.tags && (mine('subject').length + mine('tag').length + sugg('subject').length + sugg('tag').length > 0) && (
+            <div>
+              <div style={eyebrow}>Subjects &amp; tags</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                {[...mine('subject'), ...mine('tag')].map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)' }}>{t.name}</span>)}
+                {[...sugg('subject'), ...sugg('tag')].map((t) => <span key={t.name} title="Suggested by the AI" style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, border: '1px dashed rgba(255,255,255,.35)', color: '#a8a59f' }}>{t.name}</span>)}
+              </div>
+            </div>
+          )}
+
           {p && sectionBox('tags', 'Subjects & tags', [...mine('subject'), ...mine('tag')].map((t) => t.name).join(', '), (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -274,6 +285,7 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <button onClick={() => (allDone || !isLast ? next() : undefined)} style={{ width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>{nextLabel}</button>
+            <AddToComposition up label="Add to a composition…" ids={[w.id]} onDone={setMsg} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               {ai && <button onClick={recheck} disabled={checking} style={pill}>{checking ? 'Checking…' : 'Re-check with AI'}</button>}
               <button onClick={() => go(1)} style={{ fontSize: 12.5, color: '#8f8c86', marginLeft: 'auto' }}>Skip for now</button>
