@@ -63,6 +63,11 @@ function TodoList({ items, start, reload }: { items: Item[]; start: (id: number)
     await api('/todo/accept-ai', { body: { kind } });
     reload();
   };
+  const takeOut = async (ids: number[]) => {
+    if (!window.confirm(`Take ${ids.length.toLocaleString()} ${ids.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+    await api('/photos/remove', { body: { ids } });
+    reload();
+  };
   return (
     <>
       {items.map((i) => {
@@ -76,7 +81,9 @@ function TodoList({ items, start, reload }: { items: Item[]; start: (id: number)
             <p style={{ fontSize: 13, color: '#8f8c86', margin: '6px 0 14px', maxWidth: 640 }}>{i.detail}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               {i.link && <Link to={i.link} style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Open</Link>}
-              {i.key !== 'cloud' && i.photoIds[0] && <button onClick={() => start(i.photoIds[0])} style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Go through them one by one</button>}
+              {i.key !== 'cloud' && i.key !== 'delete' && i.photoIds[0] && <button onClick={() => start(i.photoIds[0])} style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Go through them one by one</button>}
+              {i.key === 'delete' && <button style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }} onClick={() => takeOut(i.ids ?? i.photoIds)}>Take all {i.count.toLocaleString()} out of Frames</button>}
+              {i.key === 'delete' && i.photoIds[0] && <Link to={`/photo/${i.photoIds[0]}`} style={pill}>Look at the first</Link>}
               {(i.key === 'ai-tags' || i.key === 'ai-description') && <button style={pill} onClick={() => acceptAll(i.key === 'ai-tags' ? 'tags' : 'description', i.count)}>Accept all {i.count.toLocaleString()}</button>}
               {(i.key === 'subjects' || i.key === 'tags') && <Link to={`/library?missing=${i.key === 'subjects' ? 'subject' : 'tag'}`} style={pill}>See all {i.count.toLocaleString()} in the Library</Link>}
             </div>
