@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api } from './api';
 
 export type Settings = {
-  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; deleteBelow: number; todoReasons: string[];
+  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; deleteBelow: number; todoReasons: string[]; gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
   ai: 'off' | 'local' | 'external'; aiActive: string;
   xmpWriteBack: boolean;
 };

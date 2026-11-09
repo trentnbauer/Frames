@@ -4,6 +4,7 @@ import { suggestFilters, aiConfig, embedText, fromBlob, parseQuery } from '../ai
 import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
+import { applyGear } from '../gear.js';
 import { loadSettings } from '../settings.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
@@ -228,6 +229,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     if (b.shootId !== undefined) {
       if (!one('SELECT 1 x FROM shoots WHERE id = ?', num(b.shootId))) return rep.code(400).send({ error: 'That photoshoot does not exist' });
       set('UPDATE photos SET shoot_id = ? WHERE id = ?', num(b.shootId), id);
+      applyGear(db, id, false); // it takes the new photoshoot's camera defaults
     }
     if (b.parentId !== undefined) {
       if (b.parentId === null) set('UPDATE photos SET parent_id = NULL WHERE id = ?', id);

@@ -1,5 +1,6 @@
 import { getSetting, setSetting, type DB } from './db.js';
 import { INTERVAL_OPTIONS } from './schedule.js';
+import { cleanGear, NO_GEAR, type Gear } from './gear.js';
 import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources.js';
 
 export { BadSetting };
@@ -17,6 +18,8 @@ export type Settings = {
   deleteBelow: number;
   /** Which reasons put a photograph on the To do list (see TODO_REASONS). */
   todoReasons: string[];
+  /** Camera details every new photograph starts with where the file has none (a photoshoot's own defaults win). */
+  gear: Gear;
   /** The id of the AI source in use (Settings, AI), or '' for AI off. */
   aiActive: string;
   /** Worked out from the active source, never stored: 'off', or whether analysis stays on your network. */
@@ -33,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   archiveSuggest: false,
   deleteBelow: 2,
   todoReasons: TODO_DEFAULT,
+  gear: { ...NO_GEAR },
   aiActive: '',
   ai: 'off',
   xmpWriteBack: false,
@@ -59,6 +63,7 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
   if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
+  if (patch.gear !== undefined) next.gear = cleanGear(patch.gear);
   if (Array.isArray(patch.todoReasons)) next.todoReasons = TODO_REASONS.filter((r) => (patch.todoReasons as unknown[]).includes(r));
   if (typeof patch.aiActive === 'string') {
     if (patch.aiActive === '') next.aiActive = '';

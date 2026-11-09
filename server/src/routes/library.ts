@@ -13,6 +13,7 @@ import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
+import { applyGear, applyShootGear, cleanGear } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
 /**
@@ -78,6 +79,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     }
     for (const i of ids) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(shootId, i);
     applyShoot(shootId, ids);
+    for (const i of ids) applyGear(db, i, false); // a photograph moved here takes this photoshoot's camera defaults
   };
 
   app.post('/api/shoots', async (req, rep) => {
@@ -120,6 +122,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       db.prepare('UPDATE shoots SET shared = ? WHERE id = ?').run(JSON.stringify(now), id);
       applyShoot(id);
     }
+    // The photoshoot's camera defaults: photographs in it with a blank take them, and follow a later change.
+    if ('gear' in b) { db.prepare('UPDATE shoots SET gear = ? WHERE id = ?').run(JSON.stringify(cleanGear(b.gear)), id); applyShootGear(db, id); }
     if (typeof b.description === 'string') db.prepare('UPDATE shoots SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if ('dateFrom' in b) db.prepare('UPDATE shoots SET date_from = ? WHERE id = ?').run(validDate(b.dateFrom), id);
     if ('dateTo' in b) db.prepare('UPDATE shoots SET date_to = ? WHERE id = ?').run(validDate(b.dateTo), id);

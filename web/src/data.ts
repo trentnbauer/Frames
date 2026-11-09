@@ -23,6 +23,8 @@ export type Shoot = {
   dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; sessions: number;
   /** Subjects and tags the shoot gives to every photograph in it. */
   subjects: string[]; tags: string[];
+  /** Camera details the shoot gives to photographs that have none. */
+  gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
 };
 export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean; /** A picture of a room behind the wall (size in pixels), if one is set. */ background?: { w: number; h: number; v: number } | null };
 

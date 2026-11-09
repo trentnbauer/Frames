@@ -3,6 +3,7 @@ import { loadSettings } from './settings.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { applyGear } from './gear.js';
 import exifr from 'exifr';
 import sharp from 'sharp';
 import { analyseLocal } from './analysis.js';
@@ -187,8 +188,12 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
   const args: unknown[] = [];
   const put = (field: string, cols: Record<string, unknown>) => { if (mine.has(field)) return; for (const [c, v] of Object.entries(cols)) { sets.push(`${c} = ?`); args.push(v); } };
   put('captured_at', { captured_at: cap });
-  put('camera', { camera: [x.Make, x.Model].filter(Boolean).join(' ').trim() });
-  put('lens', { lens: x.LensModel ?? '' });
+  // A camera or lens the file names is the file's; a blank in the file leaves one that came from a default alone.
+  const srcNow = new Set(String((db.prepare('SELECT gear_src g FROM photos WHERE id = ?').get(id) as { g: string } | undefined)?.g ?? '').split(',').filter(Boolean));
+  const fileCamera = [x.Make, x.Model].filter(Boolean).join(' ').trim(), fileLens = String(x.LensModel ?? '');
+  if (fileCamera || !srcNow.has('camera')) { put('camera', { camera: fileCamera }); if (fileCamera) srcNow.delete('camera'); }
+  if (fileLens || !srcNow.has('lens')) { put('lens', { lens: fileLens }); if (fileLens) srcNow.delete('lens'); }
+  sets.push('gear_src = ?'); args.push([...srcNow].join(','));
   put('exposure', {
     exposure, iso: typeof x.ISO === 'number' ? Math.round(x.ISO) : null, aperture: typeof x.FNumber === 'number' ? x.FNumber : null,
     shutter: shutterOf(x.ExposureTime), focal_mm: typeof x.FocalLength === 'number' ? x.FocalLength : null,
@@ -199,6 +204,7 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
   // IPTC inside the file, then the sidecar next to it (the sidecar is what other photo apps edit).
   applyExternal(db, id, { title: arr(x.ObjectName)[0], description: arr(x.Caption)[0] ?? arr(x['Caption-Abstract'])[0], keywords: arr(x.Keywords), place: [arr(x.City)[0], arr(x.Country)[0]].filter(Boolean).join(', ') }, 'iptc');
   importSidecar(db, id, file);
+  applyGear(db, id, true); // blanks take the photoshoot's defaults, then the person's own
 }
 
 /** Imports every new file into one photoshoot named for today's date, then notices files that changed. Originals are only ever read. */
