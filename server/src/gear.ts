@@ -46,9 +46,32 @@ export function applyGear(db: DB, photoId: number, personal: boolean) {
   const changed = GEAR_FIELDS.filter((f) => val[f] !== was[f]);
   const next = [...src].join(',');
   if (changed.length || next !== String(p.gear_src ?? '')) db.prepare(`UPDATE photos SET ${[...changed.map((f) => `${f} = ?`), 'gear_src = ?'].join(', ')} WHERE id = ?`).run(...changed.map((f) => val[f]), next, photoId);
+  syncGearTags(db, photoId);
 }
 
 /** A photoshoot's defaults changed: its photographs follow (the person's own defaults are not applied to photographs already here). */
 export function applyShootGear(db: DB, shootId: number) {
   for (const r of db.prepare('SELECT id FROM photos WHERE shoot_id = ?').all(shootId) as { id: number }[]) applyGear(db, r.id, false);
+}
+
+/** Wide angle, regular or telephoto, from a focal length in 35mm terms (a 35mm-equivalent from the file where it has one, else the lens's own, which is right for a full-frame camera). */
+export const lensKind = (mm: number | null | undefined): string => (!mm || mm <= 0 ? '' : mm <= 35 ? 'wide angle' : mm <= 70 ? 'regular' : 'telephoto');
+
+/**
+ * The camera, lens, film stock and field of view as tags (source "gear"), so they can be searched and used in compositions
+ * ("Sunsets on Kodak Gold", "Cars on telephoto"). Tags that no longer match are taken away; one a person removed is not put back
+ * unless its detail changes. Run whenever the details can have changed.
+ */
+export function syncGearTags(db: DB, photoId: number) {
+  const p = db.prepare('SELECT camera, lens, medium, film, focal_mm, focal35, gear_sig FROM photos WHERE id = ?').get(photoId) as { camera: string; lens: string; medium: string; film: string; focal_mm: number | null; focal35: number | null; gear_sig: string } | undefined;
+  if (!p) return;
+  const tag = (s: string) => s.trim().toLowerCase().slice(0, 60);
+  const want = [...new Set([p.camera, p.lens, p.medium, p.medium === 'film' ? p.film : '', lensKind(p.focal35 ?? p.focal_mm)].map(tag).filter(Boolean))];
+  const was: string[] = (() => { try { return JSON.parse(p.gear_sig || '[]'); } catch { return []; } })();
+  if (JSON.stringify(want) === JSON.stringify(was)) return;
+  db.transaction(() => {
+    for (const old of was.filter((n) => !want.includes(n))) db.prepare("DELETE FROM tags WHERE photo_id = ? AND name = ? AND source = 'gear'").run(photoId, old);
+    for (const n of want.filter((n) => !was.includes(n))) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'gear', 1, 'tag')").run(photoId, n);
+    db.prepare('UPDATE photos SET gear_sig = ? WHERE id = ?').run(JSON.stringify(want), photoId);
+  })();
 }

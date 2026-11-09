@@ -197,6 +197,7 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
   put('exposure', {
     exposure, iso: typeof x.ISO === 'number' ? Math.round(x.ISO) : null, aperture: typeof x.FNumber === 'number' ? x.FNumber : null,
     shutter: shutterOf(x.ExposureTime), focal_mm: typeof x.FocalLength === 'number' ? x.FocalLength : null,
+    focal35: typeof x.FocalLengthIn35mmFormat === 'number' ? x.FocalLengthIn35mmFormat : null,
   });
   put('latlon', { lat, lon });
   const W = x.ExifImageWidth ?? x.ImageWidth ?? 0, H = x.ExifImageHeight ?? x.ImageHeight ?? 0;
