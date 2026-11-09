@@ -21,7 +21,7 @@ import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signu
  */
 
 /** What a library takes up inside the data volume. For the owner, whose data sits in the data folder itself, only their own parts count. */
-const OWNER_PARTS = ['frames.db', 'frames.db-wal', 'frames.db-shm', 'originals', 'derivatives', 'cloud', 'backups'];
+const OWNER_PARTS = ['frames.db', 'frames.db-wal', 'frames.db-shm', 'originals', 'derivatives', 'cloud', 'backups', 'backgrounds'];
 function sizeOf(p: string, budget = { files: 200_000 }): number {
   let n = 0;
   let st: fs.Stats;
@@ -48,7 +48,7 @@ export function eraseUserData(x: Ctx, id: number) {
     db.transaction(() => { for (const n of tables) db.prepare(`DELETE FROM "${n}"`).run(); })();
     db.pragma('foreign_keys = ON');
     db.exec('VACUUM');
-    for (const d of ['originals', 'derivatives', 'cloud', 'backups']) fs.rmSync(path.join(base.dataDir, d), { recursive: true, force: true });
+    for (const d of ['originals', 'derivatives', 'cloud', 'backups', 'backgrounds']) fs.rmSync(path.join(base.dataDir, d), { recursive: true, force: true });
     fs.mkdirSync(path.join(base.dataDir, 'cloud'), { recursive: true });
     return;
   }
