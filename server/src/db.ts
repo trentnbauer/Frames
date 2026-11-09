@@ -261,6 +261,11 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       db.prepare('UPDATE photos SET shutter = ?, aperture = ?, iso = ? WHERE id = ?').run(sh, ap ? Number(ap) : null, iso ? Number(iso) : null, r.id);
     }
   },
+  // 20: default camera details: which of a photograph's camera, lens, film or digital and film stock came from a default (a photoshoot's or the person's own), and a photoshoot's own defaults.
+  (db) => {
+    addColumn(db, 'photos', 'gear_src', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'shoots', 'gear', "TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 export function migrate(db: DB) {

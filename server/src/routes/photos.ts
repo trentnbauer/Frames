@@ -198,7 +198,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
     // A pin on the map: both numbers, or null for both to clear it.
-    const mark = (field: string) => { const cur = new Set(String((one('SELECT user_fields f FROM photos WHERE id = ?', id) as Row).f ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
+    const unsrc = (field: string) => { const cur = String((one('SELECT gear_src g FROM photos WHERE id = ?', id) as Row).g ?? '').split(',').filter((x) => x && x !== field); set('UPDATE photos SET gear_src = ? WHERE id = ?', cur.join(','), id); };
+    const mark = (field: string) => { unsrc(field); const cur = new Set(String((one('SELECT user_fields f FROM photos WHERE id = ?', id) as Row).f ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
     if (b.lat === null && b.lon === null) { set('UPDATE photos SET lat = NULL, lon = NULL WHERE id = ?', id); mark('latlon'); }
     else if (b.lat !== undefined || b.lon !== undefined) {
       if (typeof b.lat !== 'number' || typeof b.lon !== 'number' || !Number.isFinite(b.lat) || !Number.isFinite(b.lon) || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) return rep.code(400).send({ error: 'A pin needs a latitude between -90 and 90 and a longitude between -180 and 180' });
@@ -208,8 +209,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     // Camera details a person sets by hand: kept when the file is read again. A blank clears the value.
     const bad = (m: string) => rep.code(400).send({ error: m });
     const text = (k: string, max: number, field: string, col = k) => { if (b[k] === undefined) return true; if (typeof b[k] !== 'string') return false; set(`UPDATE photos SET ${col} = ? WHERE id = ?`, (b[k] as string).trim().slice(0, max), id); if (field) mark(field); return true; };
-    if (!text('camera', 120, 'camera') || !text('lens', 120, 'lens') || !text('film', 60, '')) return bad('Camera, lens and film must be text.');
-    if (b.medium !== undefined) { if (b.medium !== '' && b.medium !== 'digital' && b.medium !== 'film') return bad('Choose film or digital.'); set('UPDATE photos SET medium = ?, film = CASE WHEN ? = \'film\' THEN film ELSE \'\' END WHERE id = ?', b.medium, b.medium, id); }
+    if (!text('camera', 120, 'camera') || !text('lens', 120, 'lens') || !text('film', 60, 'film')) return bad('Camera, lens and film must be text.');
+    if (b.medium !== undefined) { if (b.medium !== '' && b.medium !== 'digital' && b.medium !== 'film') return bad('Choose film or digital.'); set('UPDATE photos SET medium = ?, film = CASE WHEN ? = \'film\' THEN film ELSE \'\' END WHERE id = ?', b.medium, b.medium, id); mark('medium'); }
     {
       const num2 = (k: string, lo: number, hi: number) => (b[k] === null || b[k] === '' ? null : typeof b[k] === 'number' && Number.isFinite(b[k] as number) && (b[k] as number) >= lo && (b[k] as number) <= hi ? (b[k] as number) : undefined);
       const touched = ['iso', 'aperture', 'shutter', 'focalMm'].some((k) => b[k] !== undefined);
