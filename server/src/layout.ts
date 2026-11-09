@@ -17,7 +17,8 @@ export type Frame = { size: string; mat: string; color: string };
 export type Crop = { zoom: number; fx: number; fy: number };
 export type Print = { crop?: Crop; id: number; size: string; orientation: 'portrait' | 'landscape'; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
 /** `ppi` is the sharpness the photographer wants (pixels per inch at print size); a photograph with fewer is still allowed, with a warning. Absent means 300. */
-export type Layout = { mode: (typeof MODES)[number]; prints: Print[]; ppi?: number };
+export type Layout = { mode: (typeof MODES)[number]; prints: Print[]; ppi?: number;
+  /** The scale of the room picture behind the wall: how many mm of wall one pixel of the picture is. Absent until it is set. */ bg?: { mmPerPx: number } };
 export const PPI_MIN = 72, PPI_MAX = 600;
 
 /** Whether paper `frame` is at least as big as paper `print` (in both sides). */
@@ -60,7 +61,9 @@ export function parseLayout(raw: unknown, members: Set<number>): Layout | null {
   const ids = new Set<number>();
   for (const p of prints) { while (ids.has(p.id)) p.id++; ids.add(p.id); }
   const ppi = typeof r.ppi === 'number' && Number.isFinite(r.ppi) && r.ppi >= PPI_MIN && r.ppi <= PPI_MAX && Math.round(r.ppi) !== 300 ? Math.round(r.ppi) : undefined;
-  return { mode: (MODES as readonly string[]).includes(String(r.mode)) ? (r.mode as Layout['mode']) : 'row', prints, ...(ppi ? { ppi } : {}) };
+  const bgScale = (r as { bg?: { mmPerPx?: unknown } }).bg?.mmPerPx;
+  const bg = typeof bgScale === 'number' && Number.isFinite(bgScale) && bgScale >= 0.05 && bgScale <= 50 ? { mmPerPx: Math.round(bgScale * 1000) / 1000 } : undefined;
+  return { mode: (MODES as readonly string[]).includes(String(r.mode)) ? (r.mode as Layout['mode']) : 'row', prints, ...(ppi ? { ppi } : {}), ...(bg ? { bg } : {}) };
 }
 
 /** The layout an older composition (a print size, a number of prints, chosen photographs) has, until it is edited. */

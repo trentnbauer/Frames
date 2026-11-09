@@ -13,7 +13,7 @@ const pct = (v: number) => `${v}%`;
 export type Pic = { id: number; title: string; w: number; h: number; ar: number };
 
 /** The wall, drawn to scale: each print at its size, with its frame and mount, and the photographs in it. */
-export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, warn, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
+export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, warn, stage, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
   prints: Print[]; mode: Mode; editing: boolean; sel: number; photos: Map<number, Pic>; over: number | null; locked: boolean;
   /** A share link's token, when the pictures are served through it (a guest's page). */
   share?: string;
@@ -23,6 +23,8 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   fill?: boolean;
   /** Print index -> a short warning drawn in its label ("294 PPI"). */
   warn?: Record<number, string>;
+  /** A picture of a room to hang the prints on: its size in mm of wall, and where the picture is. The prints are drawn where they are in mm, on it. */
+  stage?: { w: number; h: number; url: string };
   onSelect: (i: number) => void; onEdit: (i: number) => void; onMoved: (prints: Print[]) => void;
   onOver: (i: number | null) => void; onDropPhoto: (i: number, pid: number) => void;
 }) {
@@ -31,7 +33,8 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   const [live, setLive] = useState<Print[] | null>(null);
   const drag = useRef<{ i: number; sx: number; sy: number; ox: number; oy: number; k: number; moved: boolean; prints: Print[] } | null>(null);
   const shown = live ?? prints;
-  const f = frozen ?? frameOf(shown, PAD);
+  const frameFor = (ps: Print[]): Frame2D => (stage ? { ...frameOf(ps, 0), x0: 0, y0: 0, pad: 0, W: stage.w, H: stage.h } : frameOf(ps, PAD));
+  const f = frozen ?? frameFor(shown);
   const rects = rectsIn(shown, f);
 
   useEffect(() => () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -53,7 +56,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   const down = (i: number, e: React.PointerEvent) => {
     onSelect(i);
     if (!editing || locked || e.button !== 0 || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect(), fr = frameOf(prints, PAD);
+    const rect = ref.current.getBoundingClientRect(), fr = frameFor(prints);
     drag.current = { i, sx: e.clientX, sy: e.clientY, ox: prints[i].x, oy: prints[i].y, k: fr.W / rect.width, moved: false, prints };
     setFrozen(fr);
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
@@ -61,7 +64,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
 
   const cell = (100 / f.W) * 100, cellH = (100 / f.H) * 100;
   return (
-    <div ref={ref} style={{ position: 'relative', width: fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(430px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }} data-mode={mode}>
+    <div ref={ref} style={{ position: 'relative', width: fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(${stage ? 560 : 430}px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), ...(stage ? { backgroundImage: `url(${stage.url})`, backgroundSize: '100% 100%' } : { backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }) }} data-mode={mode}>
       {shown.map((p, i) => {
         const [W, H] = dims(p), on = editing && i === sel, isOver = over === i;
         const [pw, phh] = or(p.size, p.orientation), fm = mouldOf(p);

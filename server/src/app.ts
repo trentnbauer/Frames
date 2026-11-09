@@ -24,6 +24,7 @@ import { registerProfile } from './routes/profile.js';
 import { registerInsights } from './routes/insights.js';
 import { registerTodo } from './routes/todo.js';
 import { registerMap } from './routes/map.js';
+import { backgroundOf, registerBackground, removeBackground } from './routes/background.js';
 import { createAccessGate } from './access.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerCloud } from './routes/cloud.js';
@@ -233,7 +234,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     return {
       id: c.id, name: c.name, description: c.description, theme: c.theme ?? '',
       target: stored ? targetOf(stored) : c.target ? JSON.parse(c.target) : null,
-      layout, layoutSaved: !!stored,
+      layout, layoutSaved: !!stored, background: backgroundOf(db, c.id),
       photoIds: rows.map((r) => r.photo_id), chosenIds: stored ? chosenOf(stored) : oldChosen, printedAt: c.printed_at ?? null,
     };
   };
@@ -465,7 +466,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     }
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
-  app.delete('/api/collections/:id', async (req) => { db.prepare('DELETE FROM collections WHERE id = ?').run(num((req.params as Row).id)); return { ok: true }; });
+  app.delete('/api/collections/:id', async (req) => { const id = num((req.params as Row).id); db.prepare('DELETE FROM collections WHERE id = ?').run(id); removeBackground(db, cfg.dataDir, id); return { ok: true }; });
   app.put('/api/collections/:id/photos/:photoId', async (req, rep) => {
     const { id, photoId } = req.params as Row;
     if (!one('SELECT 1 x FROM collections WHERE id = ?', num(id)) || !one('SELECT 1 x FROM photos WHERE id = ?', num(photoId))) return notFound(rep);
@@ -517,6 +518,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
   registerTodo(app, ctx);
+  registerBackground(app, ctx);
   registerMap(app, ctx);
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
