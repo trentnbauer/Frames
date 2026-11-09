@@ -258,12 +258,14 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return { who: { provider: p.id, sub: String(c.sub), email, emailVerified: verified && !!email, name: String(c.name ?? c.preferred_username ?? email ?? c.sub) }, flow };
   }
 
+  const compareKey = crypto.randomBytes(32);
   // ---------- the gate ----------
   const passwordOk = (req: FastifyRequest) => {
     if (!cfg.authPassword) return false;
     const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
     const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
-    const d = (s: string) => crypto.createHash('sha256').update(s).digest();
+    // Both sides are keyed with a key made at start-up, so the two are the same length for a constant-time compare. This is not storage of the password.
+    const d = (s: string) => crypto.createHmac('sha256', compareKey).update(s).digest();
     return !!m && crypto.timingSafeEqual(d(`${u}:${rest.join(':')}`), d(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
   };
   // Wrong shared-password attempts are counted per address: after 10 in a minute, even the right password is refused until the minute is up.

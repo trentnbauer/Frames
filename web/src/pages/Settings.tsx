@@ -38,7 +38,7 @@ const DESC: Record<Sec, string> = {
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
   AI: 'The AI that describes and tags your own photographs.',
-  'Cloud sync': 'Folders from your cloud accounts that Frames keeps in your library.'.replace('Frames', 'Frames'),
+  'Cloud sync': 'Folders from your cloud accounts that Frames keeps in your library.',
   Portfolio: 'Your public site: which photos, how it looks and its address.',
   'Your data': 'What Frames keeps about your library, and how to back it up or delete it.',
   People: 'Who has a library on this server, and the privacy page they see.',

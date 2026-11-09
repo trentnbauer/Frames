@@ -54,7 +54,7 @@ describe('sign in with the cloud services’ own app', () => {
     const real = globalThis.fetch;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
       const url = String(input);
-      if (!url.includes('dropboxapi.com')) return real(input, init);
+      if (!/(^|\.)dropboxapi\.com$/.test(new URL(url).hostname)) return real(input, init);
       calls.push({ url, method: init?.method ?? 'GET', body: String(init?.body ?? '') });
       if (url.endsWith('/oauth2/token')) return new Response(JSON.stringify({ access_token: 'tok', token_type: 'bearer' }), { status: 200, headers: { 'content-type': 'application/json' } });
       const who = (globalThis as any).__dbxWho as { account_id: string; email: string };

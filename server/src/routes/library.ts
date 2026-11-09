@@ -236,7 +236,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   // ---------- internally managed storage: upload ----------
   // Files land in the data folder's "originals" library and are imported like any other library file.
   void app.register(multipart, { limits: { fileSize: (cfg.maxUploadMb ?? 2048) * 1024 * 1024, files: 500 } }).after(() => {
-    app.post('/api/upload', async (req, rep) => {
+    // Uploads are counted per visitor on top of the overall limit: a few hundred files a minute is plenty for a person.
+    app.post('/api/upload', { preHandler: (app as any).rateLimit({ max: 600, timeWindow: '1 minute' }) }, async (req, rep) => {
       if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
