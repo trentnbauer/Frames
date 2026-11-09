@@ -107,6 +107,14 @@ describe('the one-at-a-time list', () => {
     expect(got.need).toEqual({ tags: false, place: false, desc: true });
   });
 
+  it('the getting-started list keeps a finished step, ticked, for three loads and then drops it', async () => {
+    const get = async () => ((await A.get('/api/getting-started')).body.steps as { key: string; done: boolean }[]);
+    for (let i = 0; i < 3; i++) expect((await get()).find((s) => s.key === 'library')).toMatchObject({ done: true });
+    const after = await get();
+    expect(after.find((s) => s.key === 'library')).toBeUndefined();
+    expect(after.find((s) => s.key === 'composition')).toMatchObject({ done: false }); // not done stays until it is
+  });
+
   it('lists every place in use, so it can be offered like a tag', async () => {
     const id = (await A.get('/api/photos')).body.photos[0].id as number;
     await A.patch(`/api/photos/${id}`, { place: 'Geelong' });
