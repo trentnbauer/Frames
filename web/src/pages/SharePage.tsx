@@ -6,7 +6,7 @@ import { Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
 import { HumanCheck } from '../components/HumanCheck';
-import { WALL_BG, arrange, photosOf, type Layout, type Print } from '../layout';
+import { WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
 
@@ -146,7 +146,7 @@ export function SharePage() {
         <ShareMobile token={token} d={d} photos={photos} wallPrints={wallPrints} reviewer={reviewer} withName={withName} changeName={() => setAsking(() => () => undefined)}
           mine={mine} frames={frames} others={viewOthers} swap={swap} setFrame={setFrame} changes={changes} dirty={dirty} sending={sending} sendNote={sendNote} sendBack={sendBack} discard={discard} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
           openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
-        {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
+        {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
         {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </>
     );
@@ -172,10 +172,10 @@ export function SharePage() {
       {showPrints && (
         <>
           <div className="label" style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', gap: 14 }}>The {count === 1 ? 'print' : `${count} prints`}
-            {d.allowReview && d.layout && <button className="t2" style={{ textDecoration: 'underline', textTransform: 'none', letterSpacing: 0 }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Suggest a different layout again' : 'Suggest a different layout'}</button>}
+            {d.allowReview && d.layout && <button className="t2" style={{ textDecoration: 'underline', textTransform: 'none', letterSpacing: 0 }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Suggest a change again' : 'Suggest a change'}</button>}
             {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
           </div>
-          {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
+          {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
           {d.allowReview && (dirty || sendNote) && (
             <div role="status" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', fontSize: 13 }}>
               {dirty && <span>You have changed {changes} {changes === 1 ? 'thing' : 'things'} on the wall. Nothing is sent until you send it back.</span>}
@@ -196,7 +196,7 @@ export function SharePage() {
               return (
                 <div key={p!.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5 }}>
                   <button onClick={() => setLook(photos.indexOf(p!))} aria-label={`Open ${p!.title}`}><img src={imgUrl(p!.id, 'thumb', token)} alt="" style={{ height: 40, borderRadius: 3, display: 'block' }} /></button>
-                  <span className="muted">Print {n + 1} · {p!.title}</span>
+                  <span className="muted">Print {n + 1} · {sizeLabel(wallPrints[n])} · {p!.title}</span>
                   {d.allowReview && viewOthers.length > 0 && (sug ? (
                     <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">In your version instead</span><button className="t2" onClick={() => swap(p!.id, null)}>Undo</button></span>
                   ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p!.id))}>Suggest another</button>)}

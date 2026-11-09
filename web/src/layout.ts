@@ -29,6 +29,8 @@ export const PPI_CHOICES = [300, 240, 200, 150, 100, 72];
 export const pxOf = (k: string, ppi = DEFAULT_PPI): [number, number] => { const [a, b] = PAPER[k]; return [Math.round((a / 25.4) * ppi), Math.round((b / 25.4) * ppi)]; };
 /** A print's width and height as hung (portrait: short side across). */
 export const or = (size: string, o: Orientation): [number, number] => { const [s, l] = PAPER[size]; return o === 'portrait' ? [s, l] : [l, s]; };
+/** "A3 Print | A2 Frame": the print size, and the frame size when it is framed. */
+export const sizeLabel = (p: Print) => `${p.size} Print${p.frame ? ` | ${p.frame.size} Frame` : ''}`;
 export const mouldOf = (p: Print) => (p.frame && p.frame.color !== 'none' ? MOULD : 0);
 /** The whole of a print on the wall: the print, or its frame with the moulding. */
 export const dims = (p: Print): [number, number] => {
