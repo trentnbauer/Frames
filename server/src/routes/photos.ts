@@ -196,6 +196,14 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       set("DELETE FROM xmp_conflicts WHERE photo_id = ? AND field = 'description'", id);
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
+    // A pin on the map: both numbers, or null for both to clear it.
+    const mark = (field: string) => { const cur = new Set(String(p.user_fields ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
+    if (b.lat === null && b.lon === null) { set('UPDATE photos SET lat = NULL, lon = NULL WHERE id = ?', id); mark('latlon'); }
+    else if (b.lat !== undefined || b.lon !== undefined) {
+      if (typeof b.lat !== 'number' || typeof b.lon !== 'number' || !Number.isFinite(b.lat) || !Number.isFinite(b.lon) || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) return rep.code(400).send({ error: 'A pin needs a latitude between -90 and 90 and a longitude between -180 and 180' });
+      set('UPDATE photos SET lat = ?, lon = ? WHERE id = ?', Math.round(b.lat * 1e6) / 1e6, Math.round(b.lon * 1e6) / 1e6, id);
+      mark('latlon');
+    }
     if (typeof b.archived === 'boolean') set('UPDATE photos SET archived = ? WHERE id = ?', b.archived ? 1 : 0, id);
     if (b.reviewAgain === true) set('UPDATE photos SET next_review_at = ? WHERE id = ?', new Date().toISOString(), id);
     if (b.shootId !== undefined) {

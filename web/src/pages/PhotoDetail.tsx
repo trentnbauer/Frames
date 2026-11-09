@@ -6,6 +6,7 @@ import { PAPER_MM } from '../target';
 import { Header, Img, Loading, Swatches, useField, useKey, useTitle } from '../components/bits';
 import { useStore } from '../store';
 import { useUi } from '../ui';
+import { MapPin } from '../components/MapPin';
 
 const serif = "'Instrument Serif',Georgia,serif";
 const mono = "'IBM Plex Mono',monospace";
@@ -31,6 +32,7 @@ export function PhotoDetail() {
   const comments = useApi<{ comments: { id: number; by: string; body: string; at: string }[] }>(`/photos/${id}/comments`);
   const [msg, setMsg] = useState('');
   const [compOpen, setCompOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   // Opened from the To do list: Previous and Next walk what still needs doing, not the whole library.
   const [qs] = useSearchParams();
   const todoKey = qs.get('todo');
@@ -163,6 +165,7 @@ export function PhotoDetail() {
               {inCount ? `In ${inCount} ${inCount === 1 ? 'composition' : 'compositions'} · manage` : 'Add to a composition'}
             </button>
           </div>
+          {mapOpen && <MapPin lat={p.lat} lon={p.lon} onClose={() => setMapOpen(false)} onSave={async (la, lo) => { await patch({ lat: la, lon: lo }, la === null ? 'Pin removed.' : 'Pin saved.'); setMapOpen(false); }} />}
           {compOpen && (
           <div onMouseDown={(e) => e.target === e.currentTarget && setCompOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,.7)', zIndex: 40, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <div role="dialog" aria-label="Compositions" style={{ width: 460, maxWidth: '100%', maxHeight: '80vh', overflow: 'auto', borderRadius: 18, background: '#1a1a19', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', padding: '22px 24px' }}>
@@ -204,7 +207,7 @@ export function PhotoDetail() {
           <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: '#a8a59f', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
             <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Place</dt>
-            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
+            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)} </span>}<button className="t2" onClick={() => setMapOpen(true)} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{p.lat !== null ? 'Move pin' : 'Pin on map'}</button></dd>
             <dt style={{ color: '#6f6c67' }}>Camera</dt><dd style={{ margin: 0 }}>{[p.camera, p.lens].filter(Boolean).join(' · ') || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Exposure</dt><dd style={{ margin: 0 }}>{p.exposure || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>

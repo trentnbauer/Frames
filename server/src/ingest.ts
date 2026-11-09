@@ -180,9 +180,18 @@ function readInto(db: DB, id: number, x: Meta, file: string) {
   const exposure = [x.ExposureTime ? `1/${Math.round(1 / x.ExposureTime)}s` : null, x.FNumber ? `f/${x.FNumber}` : null, x.ISO ? `ISO ${x.ISO}` : null].filter(Boolean).join(' · ');
   const lat = typeof x.latitude === 'number' ? x.latitude : null;
   const lon = typeof x.longitude === 'number' ? x.longitude : null;
-  db.prepare('UPDATE photos SET captured_at = ?, camera = ?, lens = ?, exposure = ?, lat = ?, lon = ?, w = CASE WHEN ? > 0 THEN ? ELSE w END, h = CASE WHEN ? > 0 THEN ? ELSE h END WHERE id = ?')
-    .run(cap, [x.Make, x.Model].filter(Boolean).join(' ').trim(), x.LensModel ?? '', exposure, lat, lon,
-      x.ExifImageWidth ?? x.ImageWidth ?? 0, x.ExifImageWidth ?? x.ImageWidth ?? 0, x.ExifImageHeight ?? x.ImageHeight ?? 0, x.ExifImageHeight ?? x.ImageHeight ?? 0, id);
+  // Fields a person set by hand (a map pin, ...) are kept as they are.
+  const mine = new Set(String((db.prepare('SELECT user_fields f FROM photos WHERE id = ?').get(id) as { f: string } | undefined)?.f ?? '').split(',').filter(Boolean));
+  const sets: string[] = [];
+  const args: unknown[] = [];
+  const put = (field: string, cols: Record<string, unknown>) => { if (mine.has(field)) return; for (const [c, v] of Object.entries(cols)) { sets.push(`${c} = ?`); args.push(v); } };
+  put('captured_at', { captured_at: cap });
+  put('camera', { camera: [x.Make, x.Model].filter(Boolean).join(' ').trim() });
+  put('lens', { lens: x.LensModel ?? '' });
+  put('exposure', { exposure });
+  put('latlon', { lat, lon });
+  const W = x.ExifImageWidth ?? x.ImageWidth ?? 0, H = x.ExifImageHeight ?? x.ImageHeight ?? 0;
+  db.prepare(`UPDATE photos SET ${sets.join(', ')}${sets.length ? ', ' : ''}w = CASE WHEN ? > 0 THEN ? ELSE w END, h = CASE WHEN ? > 0 THEN ? ELSE h END WHERE id = ?`).run(...args, W, W, H, H, id);
   // IPTC inside the file, then the sidecar next to it (the sidecar is what other photo apps edit).
   applyExternal(db, id, { title: arr(x.ObjectName)[0], description: arr(x.Caption)[0] ?? arr(x['Caption-Abstract'])[0], keywords: arr(x.Keywords), place: [arr(x.City)[0], arr(x.Country)[0]].filter(Boolean).join(', ') }, 'iptc');
   importSidecar(db, id, file);

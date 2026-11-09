@@ -23,6 +23,7 @@ import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
 import { registerInsights } from './routes/insights.js';
 import { registerTodo } from './routes/todo.js';
+import { registerMap } from './routes/map.js';
 import { createAccessGate } from './access.js';
 import { registerAdmin } from './routes/admin.js';
 import { registerCloud } from './routes/cloud.js';
@@ -516,6 +517,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
   registerTodo(app, ctx);
+  registerMap(app, ctx);
   registerShare(app, ctx);
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
