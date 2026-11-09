@@ -73,13 +73,17 @@ export class CloudError extends Error {
 
 // ---------- endpoints (only the test setup may change them) ----------
 const REAL = {
-  google: { auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', api: 'https://www.googleapis.com/drive/v3' },
+  google: { auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', api: 'https://www.googleapis.com/drive/v3', upload: 'https://www.googleapis.com/upload/drive/v3' },
   dropbox: { auth: 'https://www.dropbox.com/oauth2/authorize', token: 'https://api.dropboxapi.com/oauth2/token', api: 'https://api.dropboxapi.com/2', content: 'https://content.dropboxapi.com/2' },
   onedrive: { auth: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', token: 'https://login.microsoftonline.com/common/oauth2/v2.0/token', api: 'https://graph.microsoft.com/v1.0', content: '' },
 };
-const urls = (cfg: AppCfg, p: ProviderId) => (cfg.cloudBase
-  ? { auth: `${cfg.cloudBase}/${p}/auth`, token: `${cfg.cloudBase}/${p}/token`, api: `${cfg.cloudBase}/${p}/api`, content: `${cfg.cloudBase}/${p}/content` }
-  : { content: '', ...REAL[p] });
+export const urls = (cfg: AppCfg, provider: ProviderId): { auth: string; token: string; api: string; content: string; upload: string } => {
+  // The provider is picked from a closed set of constants, so an address is only ever one of the three known ones (or the test stand-in's).
+  const p: ProviderId = provider === 'google' ? 'google' : provider === 'dropbox' ? 'dropbox' : 'onedrive';
+  return cfg.cloudBase
+    ? { auth: `${cfg.cloudBase}/${p}/auth`, token: `${cfg.cloudBase}/${p}/token`, api: `${cfg.cloudBase}/${p}/api`, content: `${cfg.cloudBase}/${p}/content`, upload: `${cfg.cloudBase}/${p}/upload` }
+    : { content: '', upload: '', ...REAL[p] };
+};
 
 const SCOPE: Record<ProviderId, string> = {
   google: 'https://www.googleapis.com/auth/drive.readonly',
@@ -94,18 +98,26 @@ const EXTRA: Record<ProviderId, Record<string, string>> = {
 };
 
 // ---------- sign-in with the provider (authorization code + PKCE) ----------
-const pending = new Map<string, { provider: ProviderId; verifier: string; exp: number; dir: string }>();
+const pending = new Map<string, { provider: ProviderId; verifier: string; exp: number; dir: string; purpose?: 'backup' }>();
+/** What a sign-in in progress is for: reading photographs (the default) or an administrator's backup connection. */
+export const pendingPurpose = (state: string) => pending.get(state)?.purpose;
+/** Write access, only for the administrator's backup connection: a folder Frames makes, and its files. */
+const BACKUP_SCOPE: Record<ProviderId, string> = {
+  google: 'https://www.googleapis.com/auth/drive.file',
+  dropbox: 'files.metadata.read files.metadata.write files.content.read files.content.write account_info.read',
+  onedrive: 'Files.ReadWrite offline_access User.Read',
+};
 const b64u = (b: Buffer) => b.toString('base64url');
 
-export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirectUri: string): string {
+export function beginConnect(db: DB, cfg: AppCfg, provider: ProviderId, redirectUri: string, purpose?: 'backup'): string {
   const clientId = clientOf(cfg, db, provider).clientId;
   if (!clientId) throw new CloudError(`${PROVIDERS.find((p) => p.id === provider)!.label} is not set up on this server yet. An administrator enters its client ID under Settings, Cloud storage providers.`);
   for (const [k, v] of pending) if (v.exp < Date.now()) pending.delete(k);
   const state = b64u(crypto.randomBytes(24));
   const verifier = b64u(crypto.randomBytes(32));
-  pending.set(state, { provider, verifier, exp: Date.now() + 10 * 60_000, dir: cfg.dataDir });
+  pending.set(state, { provider, verifier, exp: Date.now() + 10 * 60_000, dir: cfg.dataDir, purpose });
   const q = new URLSearchParams({
-    response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: SCOPE[provider], state,
+    response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: purpose === 'backup' ? BACKUP_SCOPE[provider] : SCOPE[provider], state,
     code_challenge: b64u(crypto.createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256', ...EXTRA[provider],
   });
   return `${urls(cfg, provider).auth}?${q}`;
@@ -122,6 +134,26 @@ async function tokenCall(db: DB, cfg: AppCfg, provider: ProviderId, body: Record
   }
   return j;
 }
+
+/**
+ * Finishes an administrator's backup sign-in. The one connection is kept in the server's own database (id 'backup'); signing in again
+ * replaces it. Returns who it is, for the page to show.
+ */
+export async function finishBackupConnect(sys: DB, cfg: AppCfg, code: string, state: string, redirectUri: string): Promise<{ provider: ProviderId; account: string }> {
+  const p = pending.get(state);
+  pending.delete(state);
+  if (!p || p.purpose !== 'backup' || p.exp < Date.now() || p.dir !== cfg.dataDir) throw new CloudError('That sign-in expired. Start again.');
+  const t = await tokenCall(sys, cfg, p.provider, { grant_type: 'authorization_code', code, redirect_uri: redirectUri, code_verifier: p.verifier });
+  if (!t.refresh_token) throw new CloudError('The provider did not allow lasting access. Remove Frames from the account’s connected apps and try again.');
+  saveTokens(sys, BACKUP_CONN, { access: t.access_token, exp: Date.now() + (t.expires_in ?? 3600) * 1000, refresh: t.refresh_token });
+  let account = '';
+  try { account = await adapters[p.provider].who(http(sys, cfg, { id: BACKUP_CONN, provider: p.provider } as Conn), urls(cfg, p.provider)); } catch { /* the name is only a label */ }
+  return { provider: p.provider, account };
+}
+export const BACKUP_CONN = 'backup';
+/** A signed request for the backup connection: token fetched and renewed as for any connection. */
+export const backupHttp = (sys: DB, cfg: AppCfg, provider: ProviderId): Http => http(sys, cfg, { id: BACKUP_CONN, provider } as Conn);
+export const dropBackupTokens = (sys: DB) => saveTokens(sys, BACKUP_CONN, null);
 
 /** Finishes the sign-in: swaps the code for tokens and stores a new connection. Returns its id. */
 export async function finishConnect(db: DB, cfg: AppCfg, code: string, state: string, redirectUri: string): Promise<Conn> {
@@ -160,7 +192,7 @@ async function accessToken(db: DB, cfg: AppCfg, conn: Conn): Promise<string> {
 }
 
 // ---------- talking to each provider ----------
-type Http = (url: string, init?: RequestInit & { timeout?: number }) => Promise<Response>;
+export type Http = (url: string, init?: RequestInit & { timeout?: number }) => Promise<Response>;
 const snippet = async (r: Response) => (await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160);
 
 function http(db: DB, cfg: AppCfg, conn: Conn): Http {

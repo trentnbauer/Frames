@@ -11,6 +11,8 @@ import { pipeline } from 'node:stream/promises';
 import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
 import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
+import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeCloudDest, removeS3, s3State, saveCloudDest, saveS3, storeOf } from '../backupS3.js';
+import { beginConnect, CloudError, finishBackupConnect, isProvider, pendingPurpose } from '../cloud.js';
 import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
@@ -156,6 +158,47 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     if (!restart) return rep.code(409).send({ error: 'This server cannot restart itself. Restart it yourself and the restore is applied.' });
     setImmediate(restart);
     return { ok: true };
+  });
+  // Backups to S3 (or MinIO, Backblaze B2, Wasabi) and to an administrator's own Dropbox, Google Drive or OneDrive: the settings, a copy now,
+  // what is there, and a restore from it.
+  const ownerCfg = () => x.tenants.owner().cfg;
+  app.get('/api/admin/backup/s3', async () => s3State(sys));
+  app.put('/api/admin/backup/s3', async (req, rep) => {
+    try { saveS3(sys, (req.body ?? {}) as Row); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+    return s3State(sys);
+  });
+  app.delete('/api/admin/backup/s3', async () => { removeS3(sys); return s3State(sys); });
+  app.get('/api/admin/backup/cloud', async () => cloudState(sys));
+  app.delete('/api/admin/backup/cloud', async () => { removeCloudDest(sys); return cloudState(sys); });
+  // Step 1 of the backup sign-in (with write access to a folder Frames makes); step 2 is the callback in routes/cloud.ts.
+  app.post('/api/admin/backup/cloud/connect/:provider', async (req, rep) => {
+    const { provider } = req.params as Row;
+    if (!isProvider(provider)) return x.notFound(rep);
+    try { return { url: beginConnect(sys, ownerCfg(), provider, `${x.baseUrl(req)}/api/cloud/callback`, 'backup') }; } catch (e) { return rep.code(400).send({ error: e instanceof CloudError ? e.message : 'Could not start the sign-in.' }); }
+  });
+  app.post('/api/admin/backup/sync', async (_req, rep) => {
+    if (!loadS3(sys) && !loadCloudDest(sys)) return rep.code(400).send({ error: 'Set up S3 or connect a cloud account first.' });
+    try {
+      const r = await backupNow({ sys, tenants: x.tenants as any }, ownerCfg(), backupDir());
+      if (r.errors.length) return rep.code(400).send({ error: r.errors.join(' ') });
+      return { ...r, s3: s3State(sys), cloud: cloudState(sys) };
+    } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+  });
+  const whichStore = (v: unknown) => (v === 's3' || v === 'cloud' ? v : null);
+  app.get('/api/admin/backup/remote', async (req, rep) => {
+    const which = whichStore((req.query as Row).from);
+    const store = which && storeOf(sys, ownerCfg(), which);
+    if (!store) return [];
+    try { return (await store.list()).filter((o) => isArchiveName(o.name)).sort((a, b) => b.name.localeCompare(a.name)); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+  });
+  app.post('/api/admin/backup/remote/restore', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    const which = whichStore(b.from);
+    const store = which && storeOf(sys, ownerCfg(), which);
+    const name = String(b.name ?? '');
+    if (!store || !isArchiveName(name)) return x.notFound(rep);
+    const tmp = path.join(dataDirOf(), `remote-${Date.now()}.tar`);
+    try { fs.writeFileSync(tmp, await store.get(name)); return stage(rep, tmp); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); } finally { fs.rmSync(tmp, { force: true }); }
   });
   app.get('/api/admin/backup/list', async () => {
     const out: { name: string; whose: string; bytes: number }[] = [];

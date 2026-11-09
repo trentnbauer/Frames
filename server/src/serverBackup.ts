@@ -4,6 +4,8 @@ import { pipeline } from 'node:stream/promises';
 import Database from 'better-sqlite3';
 import type { DB } from './db.js';
 import { scrubCopy, tarOf } from './backup.js';
+import type { AppCfg } from './ctx.js';
+import { loadCloudDest, loadS3, syncAll } from './backupS3.js';
 
 /**
  * The whole-server backup: one archive holding the people (system.db) and every library's database. It leaves out the server's own settings
@@ -18,7 +20,7 @@ const PART = /^(system|library-\d+-[A-Za-z0-9._-]{0,80})\.db$/;
 const label = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80);
 
 export type Parts = { name: string; file: string }[];
-type Source = { sys: DB; tenants: { all(): { user: { id: number; folder: string; name: string }; db: DB }[] } };
+type Source = { sys: DB; tenants: { all(): { user: { id: number; folder: string; name: string }; db: DB }[]; owner?: () => { cfg: AppCfg } } };
 
 /** Copies of every database, scrubbed, in a scratch directory. The caller removes them. */
 export async function serverParts(src: Source, scratch: string): Promise<Parts> {
@@ -46,7 +48,8 @@ export async function writeServerArchive(src: Source, dir: string, now = new Dat
 export function startServerBackup(src: () => Source, dir: string) {
   let told = false;
   const run = () => {
-    writeServerArchive(src(), dir).catch((e: NodeJS.ErrnoException) => {
+    const s = src();
+    writeServerArchive(s, dir).then(() => (loadS3(s.sys) || loadCloudDest(s.sys) ? syncAll(s.sys, s.tenants.owner?.().cfg, dir).then(() => undefined) : undefined)).catch((e: NodeJS.ErrnoException) => {
       if (e.code === 'EACCES' || e.code === 'EROFS') {
         if (!told) console.error(`Server backup cannot write to ${dir} (${e.code}). Frames runs as an unprivileged user (uid ${process.getuid?.() ?? '?'}): give it that folder (chown it to that user, for a bind mount or a volume that something else created), or point BACKUP_DIR somewhere it can write.`);
         told = true;

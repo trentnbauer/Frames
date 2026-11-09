@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { beginConnect, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
+import { saveCloudDest } from '../backupS3.js';
+import { beginConnect, finishBackupConnect, pendingPurpose, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
 import { setSecret } from '../ai.js';
 import type { Ctx, Row } from '../ctx.js';
 
@@ -50,6 +51,14 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   app.get('/api/cloud/callback', async (req, rep) => {
     const q = req.query as Row;
     const back = (m: string) => rep.redirect(`/settings?cloud=${encodeURIComponent(m)}`);
+    // A sign-in for the administrator's backup connection: only an administrator may have started it, and it lands on the Backup page.
+    if (typeof q.state === 'string' && pendingPurpose(q.state) === 'backup') {
+      const goBack = (m: string) => rep.redirect(`/settings?section=backup&backup=${encodeURIComponent(m)}`);
+      if (typeof q.error === 'string') return goBack('The provider did not grant access.');
+      if (typeof q.code !== 'string') return goBack('The sign-in did not complete.');
+      if (x.tenant().user.role !== 'admin') return goBack('Only an administrator can connect backups.');
+      try { saveCloudDest(x.sys, await finishBackupConnect(x.sys, x.tenants.owner().cfg, q.code, q.state, redirect(req))); return goBack('connected'); } catch (e) { return goBack(e instanceof CloudError ? e.message : 'The sign-in failed.'); }
+    }
     if (typeof q.error === 'string') return back('The provider did not grant access.');
     if (typeof q.code !== 'string' || typeof q.state !== 'string') return back('The sign-in did not complete.');
     try { await finishConnect(db, cfg, q.code, q.state, redirect(req)); return back('connected'); } catch (e) { return back(e instanceof CloudError ? e.message : 'The sign-in failed.'); }
