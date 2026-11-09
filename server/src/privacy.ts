@@ -55,6 +55,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
     <li>If you turn on <strong>AI analysis</strong>, small previews of your photographs (up to 1024 pixels) are sent to the AI service you choose, which may keep them under its own terms. Nothing is sent unless you set one up and confirm it. An AI on your own network sends nothing outside it.</li>
     <li>If you connect <strong>Google Drive, Dropbox or OneDrive</strong>, Frames reads your files from that service (read-only) using the access you grant.</li>
     ${tunnel ? '<li>This server is reached through a <strong>Cloudflare tunnel</strong>, so Cloudflare carries your traffic to it.</li>' : ''}
+    <li>If you open the <strong>map</strong> to place a pin on a photograph, this server fetches map tiles and place searches from <strong>OpenStreetMap</strong> for you. OpenStreetMap sees this server's address and the area you look at or the place you search for, never your browser. Nothing is fetched until you open a map.</li>
     <li>The pages load their typefaces from <strong>Google Fonts</strong>, so your browser contacts Google for them.</li>
   </ul>
 

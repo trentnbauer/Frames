@@ -4,6 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
+import { mapSource } from './routes/map.js';
 import type { AppCfg } from './ctx.js';
 
 /** Test helpers: patterned test photographs (flat colours all hash the same, so they would all look like duplicates). */
@@ -18,6 +19,7 @@ export const jpg = (input: Buffer, opts: { exif?: object } = {}) => {
 
 export type Env = { tmp: string; lib: string; data: string; app: ReturnType<typeof buildApp>; db: ReturnType<typeof openDb>; cfg: AppCfg };
 export function makeEnv(extra: Partial<AppCfg> = {}): Env {
+  mapSource.fetch = async () => { throw new Error('no network in tests'); }; // the map service is never reached from a test
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-t-'));
   const lib = path.join(tmp, 'lib');
   const data = path.join(tmp, 'data');

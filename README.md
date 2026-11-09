@@ -10,6 +10,7 @@ A self-hosted archive for portfolio photographs: organise them into photoshoots,
 
 - **Photoshoots and a library.** Photographs are read from a folder you mount (read-only), uploaded, or synced from Google Drive, Dropbox or OneDrive. Originals are never modified or deleted.
 - **Reviews.** Rate each photograph over several sessions, spaced out, so a settled opinion emerges.
+- **Map pin.** Place a pin on a photograph from its page (click the map, or search for a place to move it). Map tiles and search come from OpenStreetMap through your server, only when you open a map, so the browser never contacts it; the server sends an identifying User-Agent, as their usage policy asks, and searches are limited to one a second. A pin you set is never overwritten when the file is read again. Not tested against the real service from CI. Photoshoots keep a place name only, with no pin.
 - **Compositions.** Plan a wall of prints to scale: sizes, frames, stacked photographs, a shopping list, and an export of the untouched originals.
 - **Sharing.** Send a link for guests to rate, suggest other photographs, frame colours or a different layout, and send their version back. Guests can have an account, or just give a name.
 - **A public portfolio**, an optional **AI** for tags, descriptions and search, **XMP** sidecars, several people on one server, and a **Cloudflare tunnel** to reach it from outside.
