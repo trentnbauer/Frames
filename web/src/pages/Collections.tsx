@@ -4,6 +4,7 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, WALL_BG, lowRes, ppiOf, PPI_CHOICES, DEFAULT_PPI, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
 import { PrintModal, ShoppingList, Wall } from '../components/CompositionWall';
+import { RoomBackground } from '../components/RoomBackground';
 import { Header, Img, Justified, Loading, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { useUi } from '../ui';
@@ -184,6 +185,10 @@ export function CollectionDetail() {
   useEffect(() => { if (c) { setMode(c.layout.mode); setLay(c.layout.prints); } }, [c?.layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const prints: Print[] = lay ?? c?.layout.prints ?? [];
   const wallPrints = mode === 'free' ? prints : arrange(prints, mode);
+  // A room picture behind the wall: drawn at its real size from the scale, or (until a scale is set) taken to be 3 metres across.
+  const mmPerPx = c?.layout.bg?.mmPerPx ?? (c?.background ? 3000 / c.background.w : 0);
+  const stage = c?.background ? { w: c.background.w * mmPerPx, h: c.background.h * mmPerPx, url: `/api/collections/${c.id}/background?v=${c.background.v}` } : undefined;
+  const setScale = (m: number) => saveLayout(prints, mode, ppi, m);
   const firstEmpty = wallPrints.findIndex((p) => photosOf(p).length < (p.stack ? 2 : 1));
   const sel = Math.min(editing ? selPrint : Math.max(0, firstEmpty), Math.max(0, prints.length - 1));
   const sp = wallPrints[sel];
@@ -214,10 +219,10 @@ export function CollectionDetail() {
   // Takes a photograph out of this composition (it stays in the library, and any print slot it held is freed).
   const removeFromComp = async (pid: number) => { coll.set(await api<Collection>(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' })); reload(); };
   // Saves the prints (laid out as they are shown) and what they hold. The server keeps the chosen photographs in print order.
-  const saveLayout = async (ps: Print[], m: Mode = mode, nextPpi: number = ppi) => {
+  const saveLayout = async (ps: Print[], m: Mode = mode, nextPpi: number = ppi, scale?: number) => {
     const laid = m === 'free' ? ps : arrange(ps, m);
     setLay(laid); setMode(m);
-    coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: m, prints: laid, ppi: nextPpi } } })); reload();
+    coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: m, prints: laid, ppi: nextPpi, ...(scale ? { bg: { mmPerPx: scale } } : c?.layout.bg ? { bg: c.layout.bg } : {}) } } })); reload();
   };
   // A guest's suggestion: swap it into the print it was for (in the same place), or put it aside.
   const useSuggestion = async (forId: number, photoId: number) => {
@@ -368,13 +373,15 @@ export function CollectionDetail() {
               {([['row', 'Row'], ['grid', 'Grid'], ['feature', 'Feature']] as const).map(([k, l]) => <button key={k} aria-pressed={mode === k} onClick={() => saveLayout(prints, k)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: mode === k ? '#efede8' : 'transparent', color: mode === k ? '#0d0d0d' : '#efede8', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{l}</button>)}
               <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,.12)', margin: '0 4px' }} />
               <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>+ Add a print</button>
+              <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,.12)', margin: '0 4px' }} />
+              <RoomBackground id={c!.id} bg={c?.background} onChanged={() => { coll.reload?.(); reload(); }} onScale={(m) => void setScale(m)} />
             </div>
           )}
-          <Wall warn={warns} prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
+          <Wall stage={stage} warn={warns} prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#6f6c67', marginTop: 8 }}>
           <span>{editing ? 'Drawn to scale. Drag a print to move it, or use Edit on a print to change its size and frame.' : 'Drawn to scale. Drag a candidate onto a print, or use Edit layout to move prints and change sizes and frames.'}</span>
-          <span style={{ fontFamily: mono }}>1 square = 10 cm</span>
+          <span style={{ fontFamily: mono }}>{stage ? (c?.layout.bg ? `Room photo at your scale: ${(stage.w / 1000).toFixed(1)} m across` : 'Room photo: scale not set, taken to be 3 m across. Use Edit layout, then Set scale.') : '1 square = 10 cm'}</span>
         </div>
         {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
       </div>
