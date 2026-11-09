@@ -115,8 +115,40 @@ describe('the one-at-a-time list', () => {
     expect(after.find((s) => s.key === 'composition')).toMatchObject({ done: false }); // not done stays until it is
   });
 
+  it('lists every place in use, so it can be offered like a tag', async () => {
+    const id = (await A.get('/api/photos')).body.photos[0].id as number;
+    await A.patch(`/api/photos/${id}`, { place: 'Geelong' });
+    const places = (await A.get('/api/places')).body as { name: string; n: number }[];
+    expect(places.find((p) => p.name === 'Geelong')).toMatchObject({ n: 1 });
+  });
+
+  it('library search finds a photograph by its exposure (ISO, aperture, shutter)', async () => {
+    const id = (await A.get('/api/photos')).body.photos[0].id as number;
+    env.db.prepare("UPDATE photos SET exposure = '1/250s · f/2.8 · ISO 800' WHERE id = ?").run(id);
+    for (const q of ['iso 800', 'f/2.8', '1/250s']) expect(((await A.get(`/api/photos?q=${encodeURIComponent(q)}`)).body.photos as any[]).map((p) => p.id)).toEqual([id]);
+  });
+
   it('re-checking with the AI says the AI is off when it is, and a missing photograph is not found', async () => {
     expect((await A.post('/api/photos/1/recheck')).body).toMatchObject({ ai: false, added: [] });
     expect((await A.post('/api/photos/99999/recheck')).status).toBe(404);
+  });
+
+  it('leaves out a reason that is switched off, lists opt-in reasons only when on, and lists poorly reviewed photographs', async () => {
+    const photos = (await A.get('/api/photos')).body.photos as any[];
+    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['location', 'subjects', 'tags', 'description']);
+    expect(await kinds()).not.toContain('camera');
+    await A.put('/api/settings', { todoReasons: ['camera', 'nonsense'] });
+    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['camera']); // unknown reasons are dropped
+    const k = await kinds();
+    expect(k).toContain('camera');
+    expect(k).not.toContain('subjects');
+    expect(k).not.toContain('place');
+    expect(((await A.get('/api/todo/walk')).body.photos as any[]).length).toBe(0);
+    // A photograph averaging under the default line of 2 after every session is listed for deleting.
+    const id = photos[0].id as number;
+    const { sessions } = (await A.get('/api/settings')).body.settings;
+    for (let i = 1; i <= sessions; i++) env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z', 1)").run(id, i, `d${i}`);
+    expect(((await A.get('/api/todo')).body.items as any[]).find((i) => i.key === 'delete')).toMatchObject({ count: 1, photoIds: [id] });
+    await A.put('/api/settings', { todoReasons: ['location', 'subjects', 'tags', 'description'] });
   });
 });

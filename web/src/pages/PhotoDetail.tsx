@@ -22,6 +22,7 @@ export function PhotoDetail() {
   const photo = useApi<PhotoFull>(`/photos/${id}`);
   useTitle(photo.data?.title ?? 'Photograph');
   const shoots = useApi<Shoot[]>('/shoots');
+  const places = useApi<{ name: string; n: number }[]>('/places');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
   const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
@@ -29,6 +30,7 @@ export function PhotoDetail() {
   const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
   const comments = useApi<{ comments: { id: number; by: string; body: string; at: string }[] }>(`/photos/${id}/comments`);
   const [msg, setMsg] = useState('');
+  const [compOpen, setCompOpen] = useState(false);
   // Opened from the To do list: Previous and Next walk what still needs doing, not the whole library.
   const [qs] = useSearchParams();
   const todoKey = qs.get('todo');
@@ -55,7 +57,9 @@ export function PhotoDetail() {
     const n = stepIds[(idx + d + stepIds.length) % stepIds.length];
     nav(`/photo/${n}${todoKey ? `?todo=${todoKey}` : ''}`);
   };
-  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, stepIds.length]);
+  // Back goes to where you were (keeping the library's scroll place) when you came from inside the app.
+  const back = () => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); };
+  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'Escape') back(); if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, stepIds.length]);
 
   if (!p) return <div className="page"><Header /><Loading error={photo.error} /></div>;
   const ai = !!settings && settings.ai !== 'off';
@@ -73,6 +77,7 @@ export function PhotoDetail() {
   const sug = p.aiSuggestion;
   const showAiDescription = ai && sug && sug.description && p.descSource !== 'user';
   const inComp = (c: Collection) => c.photoIds.includes(p.id);
+  const inCount = (colls.data ?? []).filter(inComp).length;
   const toggleComp = async (c: Collection) => { await api(`/collections/${c.id}/photos/${p.id}`, { method: inComp(c) ? 'DELETE' : 'PUT' }); colls.reload(); };
   const fits = (['A4', 'A3', 'A2'] as const).map((size) => {
     const r = requiredPx({ size, ppi: 300, count: 1, orientation: 'any' }) ?? [0, 0];
@@ -97,7 +102,7 @@ export function PhotoDetail() {
     <div className="page">
       <Header />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
-        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
+        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
         <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
           <Link to={`/library?similarTo=${p.id}`}>Find similar</Link>
           {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare</Link>}
@@ -154,6 +159,17 @@ export function PhotoDetail() {
           )}
           <div>
             <div style={eyebrow}>Compositions</div>
+            <button onClick={() => setCompOpen(true)} style={{ width: '100%', borderRadius: 999, padding: '11px 20px', fontSize: 14, boxShadow: ring, color: '#efede8' }}>
+              {inCount ? `In ${inCount} ${inCount === 1 ? 'composition' : 'compositions'} · manage` : 'Add to a composition'}
+            </button>
+          </div>
+          {compOpen && (
+          <div onMouseDown={(e) => e.target === e.currentTarget && setCompOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,.7)', zIndex: 40, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <div role="dialog" aria-label="Compositions" style={{ width: 460, maxWidth: '100%', maxHeight: '80vh', overflow: 'auto', borderRadius: 18, background: '#1a1a19', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', padding: '22px 24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <div style={eyebrow}>Compositions</div>
+              <button onClick={() => setCompOpen(false)} aria-label="Close" style={{ color: '#8f8c86' }}>✕</button>
+            </div>
             {(colls.data ?? []).filter((c) => !c.printedAt || inComp(c)).map((c) => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 13 }}>
                 <Link to={`/collections/${c.id}`} style={{ textAlign: 'left' }}><span style={{ font: `400 18px ${serif}` }}>{c.name}</span><div style={{ fontSize: 12, color: '#8f8c86' }}>{stateOf(c)}</div></Link>
@@ -163,6 +179,8 @@ export function PhotoDetail() {
             ))}
             <button onClick={() => openNew({ name: p.title, photoIds: [p.id] })} style={{ marginTop: 12, width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Start a composition with this</button>
           </div>
+          </div>
+          )}
 
           <div>
             <div style={eyebrow}>Prints at 300 PPI</div>
@@ -186,7 +204,7 @@ export function PhotoDetail() {
           <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: '#a8a59f', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
             <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Place</dt>
-            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} />{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
+            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)}</span>}</dd>
             <dt style={{ color: '#6f6c67' }}>Camera</dt><dd style={{ margin: 0 }}>{[p.camera, p.lens].filter(Boolean).join(' · ') || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Exposure</dt><dd style={{ margin: 0 }}>{p.exposure || '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>

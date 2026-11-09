@@ -4,6 +4,10 @@ import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources
 
 export { BadSetting };
 
+/** Reasons a photograph can appear in the To do list. The first four are on until switched off; the rest are opt-in so the list does not fill up. */
+export const TODO_REASONS = ['camera', 'location', 'time', 'subjects', 'tags', 'description', 'composition', 'light', 'mood'] as const;
+const TODO_DEFAULT = ['location', 'subjects', 'tags', 'description'];
+
 export type Settings = {
   sessions: number;
   intervals: string[];
@@ -11,6 +15,8 @@ export type Settings = {
   archiveSuggest: boolean;
   /** Suggest taking out photographs whose average rating, after all their sessions, is below this (0 = never suggest). */
   deleteBelow: number;
+  /** Which reasons put a photograph on the To do list (see TODO_REASONS). */
+  todoReasons: string[];
   /** The id of the AI source in use (Settings, AI), or '' for AI off. */
   aiActive: string;
   /** Worked out from the active source, never stored: 'off', or whether analysis stays on your network. */
@@ -25,7 +31,8 @@ export const DEFAULT_SETTINGS: Settings = {
   intervals: ['1 week', '1 week', '1 week', '1 week'],
   adaptive: true,
   archiveSuggest: false,
-  deleteBelow: 0,
+  deleteBelow: 2,
+  todoReasons: TODO_DEFAULT,
   aiActive: '',
   ai: 'off',
   xmpWriteBack: false,
@@ -52,6 +59,7 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
   if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
+  if (Array.isArray(patch.todoReasons)) next.todoReasons = TODO_REASONS.filter((r) => (patch.todoReasons as unknown[]).includes(r));
   if (typeof patch.aiActive === 'string') {
     if (patch.aiActive === '') next.aiActive = '';
     else {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RATINGS, fmtDate } from '../data';
 import { Mark } from '../components/bits';
 import { Wall, type Pic } from '../components/CompositionWall';
-import { PAD, WALL_BG, frameOf, metres, photosOf, type Layout, type Print } from '../layout';
+import { PAD, WALL_BG, frameOf, metres, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import { imgUrl } from '../api';
 
 export type SharedPhoto = { id: number; title: string; ar: number; n: number };
@@ -156,7 +156,7 @@ export function ShareMobile(p: Props) {
             <div style={{ position: 'relative', margin: 0, background: WALL_BG, padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {canReview && d.layout && (
                 <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a layout again' : 'Suggest a different layout'}</button>
+                  <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a change'}</button>
                   {p.layoutSent && <span role="status" style={{ fontSize: 12, color: '#8f8c86' }}>Sent. Thank you.</span>}
                 </div>
               )}
@@ -242,7 +242,7 @@ export function ShareMobile(p: Props) {
             <div className="sm-lbp" style={{ flex: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 12, padding: '12px 16px max(16px, env(safe-area-inset-bottom))' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '0 4px' }}>
                 <span style={{ font: `400 22px/1.1 ${serif}` }}>{lp.title}</span>
-                <span style={{ fontSize: 12, color: '#8f8c86', flex: 'none' }}>{slot >= 0 ? `Print ${slot + 1} · ${wallPrints[slot].size}` : 'Candidate'}</span>
+                <span style={{ fontSize: 12, color: '#8f8c86', flex: 'none' }}>{slot >= 0 ? `Print ${slot + 1} · ${sizeLabel(wallPrints[slot])}` : 'Candidate'}</span>
               </div>
               {canReview && slot >= 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -297,7 +297,7 @@ export function ShareMobile(p: Props) {
                 <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Suggest another</h2>
                 <button onClick={() => setPicking(null)} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Close</button>
               </div>
-              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${pr.size} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>
+              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {others.filter((x) => p.mine[x.id] === undefined).map((x) => {
                   const wrong = !!pr && (pr.orientation === 'portrait') !== (x.ar < 1);

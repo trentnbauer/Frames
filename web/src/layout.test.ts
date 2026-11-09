@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrange, cellOf, chosenIn, findPhoto, place, unplace, dims, photosOf, fits, frameOf, fromPreset, GAP, MOULD, nextUp, PRESETS, lowRes, ppiOf, printsSummary, problem, rectsIn, shoppingList, type Print } from './layout';
+import { sizeLabel, arrange, cellOf, chosenIn, findPhoto, place, unplace, dims, photosOf, fits, frameOf, fromPreset, GAP, MOULD, nextUp, PRESETS, lowRes, ppiOf, printsSummary, problem, rectsIn, shoppingList, type Print } from './layout';
 
 const pr = (o: Partial<Print> = {}): Print => ({ id: 1, size: 'A4', orientation: 'portrait', frame: null, photoId: null, stack: false, photoId2: null, x: 0, y: 0, ...o });
 
@@ -134,5 +134,12 @@ describe('putting photographs in prints', () => {
     expect(chosenIn(ps)).toEqual([1, 2]);
     expect(findPhoto(ps, 2)).toEqual({ index: 0, slot: 1 });
     expect(unplace(ps, 1)[0]).toMatchObject({ photoId: null, photoId2: 2 });
+  });
+});
+
+describe('sizeLabel', () => {
+  it('shows the print size, and the frame size when framed', () => {
+    expect(sizeLabel(pr({ size: 'A3' }))).toBe('A3 Print');
+    expect(sizeLabel(pr({ size: 'A3', frame: { size: 'A2', mat: 'white', color: 'black' } }))).toBe('A3 Print | A2 Frame');
   });
 });

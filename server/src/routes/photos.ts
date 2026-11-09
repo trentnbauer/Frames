@@ -89,8 +89,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const semantic = q.semantic === '1' && !!cfgAi && !!q.q;
     if (!semantic) {
       for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-        where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-        args.push(like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
+        where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+        args.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
       }
     }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
@@ -249,6 +249,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     } else db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, ?) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1").run(id, name, existing?.kind ?? kind);
     return x.tagsOf(id);
   });
+
+  // Every place in use (photographs and photoshoots), so a place can be offered like a tag when searching or typing.
+  app.get('/api/places', async () => all(`SELECT name, SUM(n) n FROM (
+      SELECT TRIM(place) name, COUNT(*) n FROM photos WHERE missing = 0 AND TRIM(place) <> '' GROUP BY TRIM(place)
+      UNION ALL SELECT TRIM(place), 0 FROM shoots WHERE TRIM(place) <> '') GROUP BY name ORDER BY n DESC, name`));
 
   // The whole vocabulary: every tag and subject in use, plus ones created ahead of time.
   app.get('/api/tags', async (req) => {

@@ -73,7 +73,9 @@ describe('suggesting what to delete by its review score', () => {
     rate(list[0], [1, 1, 2, 1]);       // average 1.25, all sessions done
     rate(list[1], [2, 2, 2, 3]);       // average 2.25
     rate(list[2], [1, 1]);             // very low, but only two of four sessions: not yet
-    expect((await A.get('/api/photos/delete-suggestions')).body.photos).toEqual([]); // off by default
+    expect((await A.get('/api/settings')).body.settings.deleteBelow).toBe(2); // on by default
+    expect((await A.put('/api/settings', { deleteBelow: 0 })).body.deleteBelow).toBe(0);
+    expect((await A.get('/api/photos/delete-suggestions')).body.photos).toEqual([]); // off when set to never
     expect((await A.put('/api/settings', { deleteBelow: 2 })).body.deleteBelow).toBe(2);
     let s = (await A.get('/api/photos/delete-suggestions')).body;
     expect(s.photos.map((p: any) => p.id)).toEqual([list[0]]);

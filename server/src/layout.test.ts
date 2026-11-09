@@ -8,6 +8,15 @@ describe('layout rules', () => {
   const members = new Set([1, 2, 3]);
   const print = (o: object = {}) => ({ id: 1, size: 'A4', orientation: 'portrait', frame: null, photoId: null, x: 0, y: 0, ...o });
 
+  it('keeps a look-only crop on a print with a photograph, clamped, and drops it when there is nothing to crop', () => {
+    const got = (o: object) => parseLayout({ prints: [print(o)] }, members)!.prints[0];
+    expect(got({ photoId: 1, crop: { zoom: 2.5, fx: 0.2, fy: 0.9 } }).crop).toEqual({ zoom: 2.5, fx: 0.2, fy: 0.9 });
+    expect(got({ photoId: 1, crop: { zoom: 99, fx: -4, fy: 7 } }).crop).toEqual({ zoom: 4, fx: 0, fy: 1 });
+    expect(got({ photoId: 1, crop: { zoom: 1, fx: 0.5, fy: 0.5 } }).crop).toBeUndefined(); // fill is the default
+    expect(got({ photoId: null, crop: { zoom: 2, fx: 0.5, fy: 0.5 } }).crop).toBeUndefined();
+    expect(got({ photoId: 1, crop: 'x' }).crop).toBeUndefined();
+  });
+
   it('accepts a good layout, and refuses one that is not a list of prints, empty, too long or with an unknown size', () => {
     expect(parseLayout({ mode: 'grid', prints: [print()] }, members)).toMatchObject({ mode: 'grid', prints: [{ size: 'A4', orientation: 'portrait' }] });
     for (const bad of [null, 'x', {}, { prints: [] }, { prints: 'a' }, { prints: Array.from({ length: 13 }, () => print()) }, { prints: [print({ size: 'A9' })] }]) expect(parseLayout(bad, members)).toBeNull();

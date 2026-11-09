@@ -205,8 +205,27 @@ function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pro
       </div>
       <Toggle on={s.adaptive} onChange={(v) => save({ adaptive: v })} label="Adapt to consistency" hint="Steady ratings come back less often. Mixed ratings come back sooner." />
       <DeleteSuggestions s={s} save={save} />
+      <TodoReasons s={s} save={save} />
       <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and compositions." />
     </>
+  );
+}
+
+const TODO_REASONS: [string, string][] = [['camera', 'Camera specs'], ['location', 'Location'], ['time', 'Time'], ['subjects', 'Subjects'], ['tags', 'Tags'], ['description', 'Description'], ['composition', 'Not in a composition'], ['light', 'Light'], ['mood', 'Mood']];
+
+/** Which missing things put a photograph on the To do list. Turning one off only hides it from that list. */
+function TodoReasons({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
+  const on = s.todoReasons ?? [];
+  return (
+    <div className="field">
+      <h3>To do list</h3>
+      <p>Choose what puts a photograph on your To do list. A reason you turn off is left out: a photograph with no camera set will not be listed if Camera specs is unticked.</p>
+      <div className="form">
+        {TODO_REASONS.map(([k, label]) => (
+          <label key={k}><input type="checkbox" checked={on.includes(k)} onChange={(e) => save({ todoReasons: e.target.checked ? [...on, k] : on.filter((x) => x !== k) })} /> {label}</label>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -228,7 +247,7 @@ function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Setting
   return (
     <div className="field">
       <h3>Suggest taking out low-rated photos</h3>
-      <p>After a photograph has had all {s.sessions} of its sessions, suggest taking it out of Frames if its average is below a score you choose. Nothing is removed without you ticking it and confirming.</p>
+      <p>After a photograph has had all {s.sessions} of its sessions, suggest taking it out of Frames if its average is below a score you choose (2 unless you change it). Suggestions also appear on your To do list. Nothing is removed without you confirming.</p>
       <div className="form">
         <label>Suggest when the average is below{' '}
           <select aria-label="Suggest taking out below" value={s.deleteBelow} onChange={(e) => { setOpen(false); save({ deleteBelow: Number(e.target.value) }); }}>

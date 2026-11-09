@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
@@ -52,6 +52,17 @@ export function Library() {
     return order.map((s) => ({ s, photos: list.data!.photos.filter((p) => p.shootId === s.id) })).filter((g) => g.photos.length);
   }, [list.data, shoots.data, flat, sp]);
   const count = list.data?.count ?? 0;
+
+  // Coming back from a photograph lands where you were, not at the top.
+  const scrollKey = `frames.libScroll:${sp.toString()}`;
+  const scrollY = useRef(0);
+  useEffect(() => { const f = () => { scrollY.current = window.scrollY; }; window.addEventListener('scroll', f, { passive: true }); return () => { window.removeEventListener('scroll', f); try { sessionStorage.setItem(scrollKey, String(scrollY.current)); } catch { /* storage blocked */ } }; }, [scrollKey]);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !list.data || !shoots.data) return;
+    restored.current = true;
+    try { const y = Number(sessionStorage.getItem(scrollKey)); if (y > 0) requestAnimationFrame(() => window.scrollTo(0, y)); } catch { /* storage blocked */ }
+  }, [list.data, shoots.data, scrollKey]);
 
   // What is currently filtering, as removable chips.
   const chips: { label: string; remove: () => void }[] = [];

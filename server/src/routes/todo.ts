@@ -3,6 +3,8 @@ import { loadCloud } from '../cloud.js';
 import { getSetting, setSetting } from '../db.js';
 import { displayNameOf } from './profile.js';
 import type { Ctx, Row } from '../ctx.js';
+import { loadSettings } from '../settings.js';
+import { deleteSuggestions } from '../remove.js';
 
 /** One thing for the person to do: a kind, how many photographs it covers, and the first few of them. */
 export type TodoItem = { key: string; title: string; detail: string; count: number; photoIds: number[]; /** Every photograph in the item (newest first), so the photograph page can step through them. */ ids?: number[]; link?: string };
@@ -23,6 +25,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
    */
   type Need = { tags: boolean; place: boolean; desc: boolean };
   const needs = (): { id: number; need: Need }[] => {
+    const on = new Set(loadSettings(db).todoReasons);
     const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.source = 'ai' AND t.accepted = 0) AS pend,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) AS hasSubject,
@@ -30,17 +33,19 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
       FROM photos p WHERE p.missing = 0 ORDER BY p.id DESC`) as Row[];
     const out: { id: number; need: Need }[] = [];
     for (const r of rows) {
-      const tags = !!r.pend || !r.hasSubject || !r.hasTag;
-      const place = !String(r.place ?? '').trim();
+      const tags = (!!r.pend && (on.has('subjects') || on.has('tags'))) || (on.has('subjects') && !r.hasSubject) || (on.has('tags') && !r.hasTag);
+      const place = on.has('location') && !String(r.place ?? '').trim();
       let aiDesc = false;
       if (r.description === '' && r.ai_status === 'done' && r.ai_json) { try { const a = JSON.parse(r.ai_json as string); aiDesc = !!a.description && !a.descriptionRejected; } catch { /* unreadable */ } }
-      const desc = aiDesc || ((tags || place) && r.description === '');
+      const desc = on.has('description') && (aiDesc || ((tags || place) && r.description === ''));
       if (tags || place || desc) out.push({ id: r.id as number, need: { tags, place, desc } });
     }
     return out;
   };
 
   const todo = (): TodoItem[] => {
+    const st = loadSettings(db);
+    const on = new Set(st.todoReasons);
     const items: TodoItem[] = [];
     const ids = (sql: string): number[] => (all(sql) as Row[]).map((r) => r.id as number);
     const add = (key: string, title: string, detail: string, list: number[], link?: string) => {
@@ -52,18 +57,28 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const pendingDesc = (all("SELECT id, ai_json FROM photos WHERE missing = 0 AND ai_status = 'done' AND description = '' AND ai_json LIKE '%description%' ORDER BY id DESC") as Row[])
       .filter((r) => { try { const a = JSON.parse(r.ai_json as string); return !!a.description && !a.descriptionRejected; } catch { return false; } })
       .map((r) => r.id as number);
-    add('ai-tags', 'Approve the AI’s suggested tags and subjects', 'The AI suggested these. Nothing is kept until you accept it.', [...pendingTags]);
-    add('ai-description', 'Approve the AI’s suggested descriptions', 'A suggested description is shown on the photograph’s page until you accept or reject it.', pendingDesc);
+    if (on.has('subjects') || on.has('tags')) add('ai-tags', 'Approve the AI’s suggested tags and subjects', 'The AI suggested these. Nothing is kept until you accept it.', [...pendingTags]);
+    if (on.has('description')) add('ai-description', 'Approve the AI’s suggested descriptions', 'A suggested description is shown on the photograph’s page until you accept or reject it.', pendingDesc);
 
     // Photographs with nothing set yet (newest first, so what was just brought in comes first).
-    add('subjects', 'Add a subject', 'No subject yet, so these do not show up when you filter the library or a composition by subject.',
+    if (on.has('subjects')) add('subjects', 'Add a subject', 'No subject yet, so these do not show up when you filter the library or a composition by subject.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) ORDER BY p.id DESC"));
-    add('tags', 'Add a tag', 'No tags yet.',
+    if (on.has('tags')) add('tags', 'Add a tag', 'No tags yet.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1) ORDER BY p.id DESC"));
-    add('place', 'Name the place', 'No place yet, so these cannot be found by location.',
+    if (on.has('location')) add('place', 'Name the place', 'No place yet, so these cannot be found by location.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.place) = '' ORDER BY p.id DESC"));
     add('colours', 'Colours not read yet', 'The dominant colours are read from the preview, so these cannot be found by colour yet. A scan fills them in.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND (p.palette IS NULL OR p.palette = '' OR p.palette = '[]') ORDER BY p.id DESC"));
+
+    // Opt-in reasons (Settings, To do).
+    if (on.has('camera')) add('camera', 'Add the camera', 'No camera is recorded for these.', ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.camera) = '' ORDER BY p.id DESC"));
+    if (on.has('time')) add('time', 'Add the date and time', 'No capture time is recorded for these.', ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND p.captured_at IS NULL ORDER BY p.id DESC'));
+    if (on.has('composition')) add('composition', 'Not in a composition yet', 'These are not part of any composition.', ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM collection_photos c WHERE c.photo_id = p.id) ORDER BY p.id DESC'));
+    for (const [k, field, title] of [['light', 'lighting', 'Describe the light'], ['mood', 'mood', 'Describe the mood']] as const) {
+      if (on.has(k)) add(k, title, `The AI’s analysis has no ${k} note for these.`, ids(`SELECT p.id FROM photos p WHERE p.missing = 0 AND p.ai_status = 'done' AND COALESCE(json_extract(p.ai_json, '$.${field}'), '') = '' ORDER BY p.id DESC`));
+    }
+    // Poorly reviewed photographs, when the person has a line set (Settings, Reviews).
+    add('delete', 'Take poorly reviewed photographs out of Frames', `Their average, after all ${st.sessions} sessions, is below ${st.deleteBelow}. Nothing is removed until you confirm. Files in your library folders are never touched.`, deleteSuggestions(db, st.sessions, st.deleteBelow, 2000).map((r) => r.id));
 
     const stuck = loadCloud(db).connections.filter((c) => c.needsReconnect);
     if (stuck.length) items.push({ key: 'cloud', title: 'Reconnect a cloud account', detail: `${stuck.map((c) => c.account || c.provider).join(', ')} stopped syncing and needs to be reconnected.`, count: stuck.length, photoIds: [], link: '/settings?section=cloud' });
@@ -118,7 +133,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
   app.get('/api/todo', async () => {
     const items = todo();
     // "Things" are counted per photograph (its tags, its place, its description each once), the way the one-at-a-time view counts them, plus accounts to reconnect.
-    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0);
+    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0) + (items.find((i) => i.key === 'delete')?.count ?? 0);
     return { total: things, kinds: items.length, items };
   });
 
