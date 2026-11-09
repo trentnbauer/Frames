@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import { trimEnd, trimStart } from './text.js';
 import { attachKey, getSetting, type DB } from './db.js';
 
 /**
@@ -71,7 +72,8 @@ export const validFolder = (f: string) => /^[a-z0-9][a-z0-9._-]{0,39}$/.test(f) 
 
 /** A readable, safe folder name from an email or name, unique among everyone. */
 export function uniqueFolder(sys: DB, email: string, name: string): string {
-  const raw = (email.split('@')[0] || name || 'user').toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[-.]+$/, '').slice(0, 32);
+  let raw = (email.split('@')[0] || name || 'user').slice(0, 200).toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]+/g, '-').slice(0, 64);
+  raw = trimEnd(trimStart(raw, '-._'), '-.').slice(0, 32);
   const base = validFolder(raw) ? raw : 'user';
   const taken = new Set((sys.prepare("SELECT folder FROM users WHERE folder != ''").all() as Row[]).map((r) => r.folder as string));
   let f = base, n = 2;

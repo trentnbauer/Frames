@@ -7,6 +7,7 @@ import { cleanAllow, isAllowed, loadAuth, saveAuth, type Provider } from './auth
 import { CloudflareError, cloudflare, type Cloudflare } from './cloudflare.js';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
+import { trimEnd } from './text.js';
 import { loadEnvState } from './tunnelEnv.js';
 
 /**
@@ -293,7 +294,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       saveAuth(db, { ...a, allow: list });
     }
     if (b.appUrl !== undefined) {
-      const v = String(b.appUrl).trim().replace(/\/+$/, '');
+      const v = trimEnd(String(b.appUrl).trim().slice(0, 400), '/');
       if (v) { try { const u = new URL(v); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(); } catch { return bad('The App URL must start with https:// (for example https://frames.example.com)'); } }
       saveAuth(db, { ...loadAuth(db), publicUrl: v.slice(0, 300) });
     }

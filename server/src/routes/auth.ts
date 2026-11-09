@@ -7,6 +7,7 @@ import { getSetting } from '../db.js';
 import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
+import { trimEnd } from '../text.js';
 import { bindOwner, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -188,7 +189,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     if (b.allow !== undefined) next.allow = cleanAllow(b.allow);
     if (b.publicUrl !== undefined) {
-      const v = String(b.publicUrl).trim().replace(/\/+$/, '');
+      const v = trimEnd(String(b.publicUrl).trim().slice(0, 400), '/');
       if (v) { try { const u = new URL(v); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(); } catch { return bad('The public address must start with http:// or https://'); } }
       next.publicUrl = v.slice(0, 300);
     }
