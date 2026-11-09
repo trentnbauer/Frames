@@ -19,6 +19,7 @@ export const jpg = (input: Buffer, opts: { exif?: object } = {}) => {
 
 export type Env = { tmp: string; lib: string; data: string; app: ReturnType<typeof buildApp>; db: ReturnType<typeof openDb>; cfg: AppCfg };
 export function makeEnv(extra: Partial<AppCfg> = {}): Env {
+  mapSource.pauseMs = 0;
   mapSource.fetch = async () => { throw new Error('no network in tests'); }; // the map service is never reached from a test
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-t-'));
   const lib = path.join(tmp, 'lib');
