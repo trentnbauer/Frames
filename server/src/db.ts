@@ -243,6 +243,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       for (const w of new Set(r.name.split(/\s+/).filter((x) => x && x.length <= 40))) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'ai', ?, ?)").run(r.photo_id, w, r.accepted, r.kind);
     }
   },
+  // 18: which metadata fields a person has set by hand (comma separated: latlon, camera, ...), so reading the file again never overwrites them.
+  (db) => {
+    addColumn(db, 'photos', 'user_fields', "TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 export function migrate(db: DB) {
