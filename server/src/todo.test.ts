@@ -107,6 +107,19 @@ describe('the one-at-a-time list', () => {
     expect(got.need).toEqual({ tags: false, place: false, desc: true });
   });
 
+  it('lists every place in use, so it can be offered like a tag', async () => {
+    const id = (await A.get('/api/photos')).body.photos[0].id as number;
+    await A.patch(`/api/photos/${id}`, { place: 'Geelong' });
+    const places = (await A.get('/api/places')).body as { name: string; n: number }[];
+    expect(places.find((p) => p.name === 'Geelong')).toMatchObject({ n: 1 });
+  });
+
+  it('library search finds a photograph by its exposure (ISO, aperture, shutter)', async () => {
+    const id = (await A.get('/api/photos')).body.photos[0].id as number;
+    env.db.prepare("UPDATE photos SET exposure = '1/250s · f/2.8 · ISO 800' WHERE id = ?").run(id);
+    for (const q of ['iso 800', 'f/2.8', '1/250s']) expect(((await A.get(`/api/photos?q=${encodeURIComponent(q)}`)).body.photos as any[]).map((p) => p.id)).toEqual([id]);
+  });
+
   it('re-checking with the AI says the AI is off when it is, and a missing photograph is not found', async () => {
     expect((await A.post('/api/photos/1/recheck')).body).toMatchObject({ ai: false, added: [] });
     expect((await A.post('/api/photos/99999/recheck')).status).toBe(404);
