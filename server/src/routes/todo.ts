@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { loadCloud } from '../cloud.js';
+import { getSetting, setSetting } from '../db.js';
+import { displayNameOf } from './profile.js';
 import type { Ctx, Row } from '../ctx.js';
 
 /** One thing for the person to do: a kind, how many photographs it covers, and the first few of them. */
@@ -67,6 +69,31 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     if (stuck.length) items.push({ key: 'cloud', title: 'Reconnect a cloud account', detail: `${stuck.map((c) => c.account || c.provider).join(', ')} stopped syncing and needs to be reconnected.`, count: stuck.length, photoIds: [], link: '/settings?section=cloud' });
     return items;
   };
+
+  /**
+   * The getting-started checklist on the home page. A finished step stays on the list, ticked, for a few page loads and then goes
+   * for good (how many loads it has been done for is kept per person).
+   */
+  const SHOW_DONE_LOADS = 3;
+  app.get('/api/getting-started', async () => {
+    const n = (sql: string) => (one(sql) as Row).n as number > 0;
+    const steps: { key: string; title: string; detail: string; link: string; done: boolean }[] = [
+      { key: 'library', title: 'Bring in some photographs', detail: 'Sync a library folder or cloud account, or upload files.', link: '/shoots', done: n('SELECT COUNT(*) n FROM photos') },
+      { key: 'photoshoot', title: 'Create your first photoshoot', detail: 'A day or a roll of film. Importing photographs makes one for you.', link: '/shoots', done: n('SELECT COUNT(*) n FROM shoots') },
+      { key: 'review', title: 'Rate your first photographs', detail: 'A short review session: the opinion that settles is yours.', link: '/review', done: n('SELECT COUNT(*) n FROM reviews') },
+      { key: 'composition', title: 'Create your first composition', detail: 'Pick photographs that belong together and plan the prints.', link: '/collections', done: n('SELECT COUNT(*) n FROM collections') },
+      { key: 'profile', title: 'Fill out your profile', detail: 'Your name, shown on your portfolio and share links.', link: '/settings?section=profile', done: !!displayNameOf(db) },
+    ];
+    const seen = getSetting<Record<string, number>>(db, 'gettingStarted', {});
+    const next: Record<string, number> = { ...seen };
+    const shown = steps.filter((st) => {
+      if (!st.done) return true;
+      next[st.key] = (seen[st.key] ?? 0) + 1;
+      return next[st.key] <= SHOW_DONE_LOADS;
+    });
+    if (JSON.stringify(next) !== JSON.stringify(seen)) setSetting(db, 'gettingStarted', next);
+    return { steps: shown };
+  });
 
   // Accepts every AI suggestion of one kind. Only what the AI suggested and is still waiting: nothing a person added or rejected.
   app.post('/api/todo/accept-ai', async (req, rep) => {

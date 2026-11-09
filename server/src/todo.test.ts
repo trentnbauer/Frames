@@ -107,6 +107,14 @@ describe('the one-at-a-time list', () => {
     expect(got.need).toEqual({ tags: false, place: false, desc: true });
   });
 
+  it('the getting-started list keeps a finished step, ticked, for three loads and then drops it', async () => {
+    const get = async () => ((await A.get('/api/getting-started')).body.steps as { key: string; done: boolean }[]);
+    for (let i = 0; i < 3; i++) expect((await get()).find((s) => s.key === 'library')).toMatchObject({ done: true });
+    const after = await get();
+    expect(after.find((s) => s.key === 'library')).toBeUndefined();
+    expect(after.find((s) => s.key === 'composition')).toMatchObject({ done: false }); // not done stays until it is
+  });
+
   it('re-checking with the AI says the AI is off when it is, and a missing photograph is not found', async () => {
     expect((await A.post('/api/photos/1/recheck')).body).toMatchObject({ ai: false, added: [] });
     expect((await A.post('/api/photos/99999/recheck')).status).toBe(404);

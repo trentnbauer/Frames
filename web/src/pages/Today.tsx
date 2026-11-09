@@ -13,6 +13,28 @@ const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercas
 const lightBtn = { background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999 } as const;
 const cover = (id: number) => imgUrl(id, 'thumb');
 
+/** The getting-started checklist: what is still to do to set Frames up. Finished steps are shown ticked for a few visits, then go. */
+function GettingStarted() {
+  const gs = useApi<{ steps: { key: string; title: string; detail: string; link: string; done: boolean }[] }>('/getting-started');
+  const steps = gs.data?.steps ?? [];
+  if (!steps.length) return null;
+  return (
+    <section aria-label="Getting started" style={{ margin: '0 0 36px', maxWidth: 640 }}>
+      <div style={{ ...eyebrow, color: '#6f6c67', marginBottom: 10 }}>Getting started</div>
+      {steps.map((st) => (
+        <div key={st.key} style={{ display: 'flex', gap: 12, alignItems: 'baseline', padding: '8px 0', borderTop: '1px solid rgba(255,255,255,.08)', opacity: st.done ? 0.55 : 1 }}>
+          <span aria-hidden style={{ width: 18, flex: 'none' }}>{st.done ? '✓' : '○'}</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14, textDecoration: st.done ? 'line-through' : 'none' }}>{st.title}</span>
+            <span style={{ display: 'block', fontSize: 12.5, color: '#8f8c86' }}>{st.detail}</span>
+          </span>
+          {!st.done && <Link to={st.link} style={{ fontSize: 12.5, color: '#efede8', textDecoration: 'underline', textUnderlineOffset: 3 }}>Go</Link>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Home: what is due to review, a way into composing, compositions in progress, and the newest shoots. */
 export function Today() {
   const { summary: s } = useStore();
@@ -39,7 +61,8 @@ export function Today() {
     return (
       <div className="page">
         <Header />
-        <div style={{ maxWidth: 560 }}>
+        <div style={{ maxWidth: 640 }}>
+          <GettingStarted />
           <h1 className="serif" style={{ fontSize: 64, lineHeight: 1, margin: '0 0 20px' }}>Your library is empty.</h1>
           <p className="t2" style={{ fontSize: 14, lineHeight: 1.55, margin: '0 0 24px' }}>Put photographs in the library folder you mounted, then bring them in. Originals are never changed.</p>
           <Link to="/shoots" className="pill primary">Go to Photoshoots</Link>
@@ -56,6 +79,7 @@ export function Today() {
   return (
     <div className="page">
       <Header />
+      <GettingStarted />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 24, marginBottom: 56 }}>
         <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#161615', minHeight: 380, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 32 }}>
           {s?.nextId && <img src={cover(s.nextId)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(28px) brightness(.55)', transform: 'scale(1.15)' }} />}
