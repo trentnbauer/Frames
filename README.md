@@ -10,6 +10,7 @@ A self-hosted archive for portfolio photographs: organise them into photoshoots,
 
 - **Photoshoots and a library.** Photographs are read from a folder you mount (read-only), uploaded, or synced from Google Drive, Dropbox or OneDrive. Originals are never modified or deleted.
 - **Reviews.** Rate each photograph over several sessions, spaced out, so a settled opinion emerges.
+- **Backups to S3.** An administrator can send the daily whole-server archive to Amazon S3 or an S3-compatible service (MinIO, Backblaze B2, Wasabi) under Settings, Backup: endpoint, region, bucket, optional folder, and an access and secret key (the secret is write-only, never shown again, and left out of backups). The last seven are kept there, only Frames' own archives are ever removed, and they are listed under Restore to restore from. Path-style addresses; tested against a stand-in server, not the real services. Photographs are not backed up.
 - **Compositions.** Plan a wall of prints to scale: sizes, frames, stacked photographs, a shopping list, and an export of the untouched originals.
 - **Sharing.** Send a link for guests to rate, suggest other photographs, frame colours or a different layout, and send their version back. Guests can have an account, or just give a name.
 - **A public portfolio**, an optional **AI** for tags, descriptions and search, **XMP** sidecars, several people on one server, and a **Cloudflare tunnel** to reach it from outside.

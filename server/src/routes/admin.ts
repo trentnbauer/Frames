@@ -11,6 +11,8 @@ import { pipeline } from 'node:stream/promises';
 import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
 import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
+import { backupNow, isArchiveName, loadS3, removeS3, s3State, saveS3, syncS3 } from '../backupS3.js';
+import { s3Get, s3List } from '../s3.js';
 import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
@@ -156,6 +158,29 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     if (!restart) return rep.code(409).send({ error: 'This server cannot restart itself. Restart it yourself and the restore is applied.' });
     setImmediate(restart);
     return { ok: true };
+  });
+  // Backups to S3 (or MinIO, Backblaze B2, Wasabi): the settings, a copy now, what is there, and a restore from it.
+  app.get('/api/admin/backup/s3', async () => s3State(sys));
+  app.put('/api/admin/backup/s3', async (req, rep) => {
+    try { saveS3(sys, (req.body ?? {}) as Row); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+    return s3State(sys);
+  });
+  app.delete('/api/admin/backup/s3', async () => { removeS3(sys); return s3State(sys); });
+  app.post('/api/admin/backup/s3/sync', async (_req, rep) => {
+    if (!loadS3(sys)) return rep.code(400).send({ error: 'Set up S3 first.' });
+    try { return { ...(await backupNow({ sys, tenants: x.tenants as any }, backupDir())), state: s3State(sys) }; } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+  });
+  app.get('/api/admin/backup/s3/list', async (_req, rep) => {
+    const c = loadS3(sys);
+    if (!c) return [];
+    try { return (await s3List(c)).filter((o) => isArchiveName(o.name)); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
+  });
+  app.post('/api/admin/backup/s3/restore', async (req, rep) => {
+    const c = loadS3(sys);
+    const name = String(((req.body ?? {}) as Row).name ?? '');
+    if (!c || !isArchiveName(name)) return x.notFound(rep);
+    const tmp = path.join(dataDirOf(), `s3-${Date.now()}.tar`);
+    try { fs.writeFileSync(tmp, await s3Get(c, name)); return stage(rep, tmp); } catch (e) { return rep.code(400).send({ error: (e as Error).message }); } finally { fs.rmSync(tmp, { force: true }); }
   });
   app.get('/api/admin/backup/list', async () => {
     const out: { name: string; whose: string; bytes: number }[] = [];

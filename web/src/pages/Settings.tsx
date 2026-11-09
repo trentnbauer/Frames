@@ -378,6 +378,7 @@ function Restore() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const s3list = useApi<{ name: string; bytes: number }[]>('/admin/backup/s3/list');
   const done = (x: { parts: string[]; people: number }) => { setMsg({ ok: true, text: `Checked: ${x.people} ${x.people === 1 ? 'person' : 'people'} and ${x.parts.length - 1} ${x.parts.length === 2 ? 'library' : 'libraries'}. It is applied the next time Frames starts.` }); r.reload(); };
   const run = async (fn: () => Promise<{ parts: string[]; people: number }>) => { setMsg(null); setBusy(true); try { done(await fn()); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); };
   const upload = async (f: File) => {
@@ -406,12 +407,54 @@ function Restore() {
       </div>
       <p className="muted" style={{ fontSize: 12.5 }}>A file you downloaded above. Or put it in <span className="mono">{r.data?.dir ?? 'the backups folder'}</span> and pick it here:</p>
       {r.data?.archives.length === 0 && <p className="muted">No server backups in that folder yet. One is made a day (the last seven kept).</p>}
+      {s3list.data && s3list.data.length > 0 && <p className="muted" style={{ fontSize: 12.5 }}>In your S3 bucket:</p>}
+      {s3list.data?.map((a) => (
+        <div className="row" key={`s3-${a.name}`}>
+          <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB · S3</span></span>
+          <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name} in your S3 bucket? It is downloaded and checked first, and applied the next time Frames starts.`)) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/s3/restore', { body: { name: a.name } }); r.reload(); return x; }); }}>Restore</button>
+        </div>
+      ))}
       {r.data?.archives.map((a) => (
         <div className="row" key={a.name}>
           <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
           <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name}? It is checked first and applied the next time Frames starts.`)) void run(() => api('/admin/restore', { body: { name: a.name } })); }}>Restore this</button>
         </div>
       ))}
+    </div>
+  );
+}
+
+type S3State = { configured: boolean; endpoint: string; region: string; bucket: string; prefix: string; accessKeyId: string; hasSecret: boolean; status: { at: string; ok: boolean; message: string } | null };
+
+/** Copy the daily whole-server archive to S3 or an S3-compatible service. The secret key is write-only: it is never shown again. */
+function S3Backup() {
+  const st = useApi<S3State>('/admin/backup/s3');
+  const [f, setF] = useState({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (st.data) setF((x) => ({ ...x, endpoint: st.data!.endpoint, region: st.data!.region, bucket: st.data!.bucket, prefix: st.data!.prefix, accessKeyId: st.data!.accessKeyId })); }, [st.data?.endpoint, st.data?.bucket]); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (fn: () => Promise<string>) => { setMsg(null); setBusy(true); try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); st.reload(); };
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  return (
+    <div className="field">
+      <h3>Back up to S3</h3>
+      <p>Copy the daily whole-server archive to Amazon S3, or a service that speaks the same language (MinIO, Backblaze B2, Wasabi). The last seven are kept there. Use a key that may only write to this bucket. The secret key is stored on this server, never shown again, and left out of backups.</p>
+      <div className="form">
+        <label>Endpoint <input value={f.endpoint} onChange={set('endpoint')} placeholder="https://s3.us-east-1.amazonaws.com" aria-label="S3 endpoint" /></label>
+        <label>Region <input value={f.region} onChange={set('region')} placeholder="us-east-1" aria-label="S3 region" /></label>
+        <label>Bucket <input value={f.bucket} onChange={set('bucket')} aria-label="S3 bucket" /></label>
+        <label>Folder in the bucket (optional) <input value={f.prefix} onChange={set('prefix')} placeholder="frames" aria-label="S3 folder" /></label>
+        <label>Access key <input value={f.accessKeyId} onChange={set('accessKeyId')} autoComplete="off" aria-label="S3 access key" /></label>
+        <label>Secret key <input type="password" value={f.secretAccessKey} onChange={set('secretAccessKey')} autoComplete="off" placeholder={st.data?.hasSecret ? 'Saved. Type to replace' : ''} aria-label="S3 secret key" /></label>
+      </div>
+      <div className="form">
+        <button className="pill primary" disabled={busy} onClick={() => void act(async () => { await api('/admin/backup/s3', { method: 'PUT', body: f }); setF((x) => ({ ...x, secretAccessKey: '' })); return 'Saved.'; })}>Save</button>
+        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/s3/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>}
+        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to S3? Copies already in the bucket stay there.')) void act(async () => { await api('/admin/backup/s3', { method: 'DELETE' }); setF({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' }); return 'S3 backups are off.'; }); }}>Turn off</button>}
+      </div>
+      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
+      {st.data?.status && <p className="muted" style={{ fontSize: 12.5 }}>Last attempt {fmtDate(st.data.status.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}: {st.data.status.ok ? st.data.status.message : <span className="reason">{st.data.status.message}</span>}</p>}
+      <p className="muted" style={{ fontSize: 12.5 }}>Backups in the bucket are listed under Restore below. Not tested against the real services.</p>
     </div>
   );
 }
@@ -432,6 +475,7 @@ function Backup() {
         {list.data?.length === 0 && <p className="muted">None yet. The first is made shortly after start-up.</p>}
         {list.data?.map((b) => <div className="row" key={b.whose + b.name}><span><span className="mono">{b.name}</span> <span className="muted">{b.whose}</span></span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
       </div>
+      <S3Backup />
       <Restore />
     </>
   );
