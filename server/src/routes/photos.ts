@@ -197,12 +197,31 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
     // A pin on the map: both numbers, or null for both to clear it.
-    const mark = (field: string) => { const cur = new Set(String(p.user_fields ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
+    const mark = (field: string) => { const cur = new Set(String((one('SELECT user_fields f FROM photos WHERE id = ?', id) as Row).f ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
     if (b.lat === null && b.lon === null) { set('UPDATE photos SET lat = NULL, lon = NULL WHERE id = ?', id); mark('latlon'); }
     else if (b.lat !== undefined || b.lon !== undefined) {
       if (typeof b.lat !== 'number' || typeof b.lon !== 'number' || !Number.isFinite(b.lat) || !Number.isFinite(b.lon) || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) return rep.code(400).send({ error: 'A pin needs a latitude between -90 and 90 and a longitude between -180 and 180' });
       set('UPDATE photos SET lat = ?, lon = ? WHERE id = ?', Math.round(b.lat * 1e6) / 1e6, Math.round(b.lon * 1e6) / 1e6, id);
       mark('latlon');
+    }
+    // Camera details a person sets by hand: kept when the file is read again. A blank clears the value.
+    const bad = (m: string) => rep.code(400).send({ error: m });
+    const text = (k: string, max: number, field: string, col = k) => { if (b[k] === undefined) return true; if (typeof b[k] !== 'string') return false; set(`UPDATE photos SET ${col} = ? WHERE id = ?`, (b[k] as string).trim().slice(0, max), id); if (field) mark(field); return true; };
+    if (!text('camera', 120, 'camera') || !text('lens', 120, 'lens') || !text('film', 60, '')) return bad('Camera, lens and film must be text.');
+    if (b.medium !== undefined) { if (b.medium !== '' && b.medium !== 'digital' && b.medium !== 'film') return bad('Choose film or digital.'); set('UPDATE photos SET medium = ?, film = CASE WHEN ? = \'film\' THEN film ELSE \'\' END WHERE id = ?', b.medium, b.medium, id); }
+    {
+      const num2 = (k: string, lo: number, hi: number) => (b[k] === null || b[k] === '' ? null : typeof b[k] === 'number' && Number.isFinite(b[k] as number) && (b[k] as number) >= lo && (b[k] as number) <= hi ? (b[k] as number) : undefined);
+      const touched = ['iso', 'aperture', 'shutter', 'focalMm'].some((k) => b[k] !== undefined);
+      if (touched) {
+        const iso = b.iso === undefined ? undefined : num2('iso', 1, 10_000_000), ap = b.aperture === undefined ? undefined : num2('aperture', 0.5, 128), fo = b.focalMm === undefined ? undefined : num2('focalMm', 1, 3000);
+        const sh = b.shutter === undefined ? undefined : b.shutter === null || b.shutter === '' ? '' : typeof b.shutter === 'string' && /^(1\/\d{1,6}|\d{1,3}(\.\d{1,2})?)$/.test(b.shutter.trim()) ? b.shutter.trim() : undefined;
+        if ((b.iso !== undefined && iso === undefined) || (b.aperture !== undefined && ap === undefined) || (b.focalMm !== undefined && fo === undefined) || (b.shutter !== undefined && sh === undefined)) return bad('Check the ISO, aperture, shutter speed (such as 1/250 or 2) and focal length.');
+        const cur = one('SELECT iso, aperture, shutter, focal_mm FROM photos WHERE id = ?', id) as Row;
+        const n = { iso: iso === undefined ? cur.iso : iso === null ? null : Math.round(iso), aperture: ap === undefined ? cur.aperture : ap, shutter: sh === undefined ? cur.shutter : sh, focal: fo === undefined ? cur.focal_mm : fo };
+        const text2 = [n.shutter ? `${n.shutter}s` : null, n.aperture ? `f/${n.aperture}` : null, n.iso ? `ISO ${n.iso}` : null].filter(Boolean).join(' · ');
+        set('UPDATE photos SET iso = ?, aperture = ?, shutter = ?, focal_mm = ?, exposure = ? WHERE id = ?', n.iso, n.aperture, n.shutter, n.focal, text2, id);
+        mark('exposure');
+      }
     }
     if (typeof b.archived === 'boolean') set('UPDATE photos SET archived = ? WHERE id = ?', b.archived ? 1 : 0, id);
     if (b.reviewAgain === true) set('UPDATE photos SET next_review_at = ? WHERE id = ?', new Date().toISOString(), id);
@@ -262,6 +281,12 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   app.get('/api/places', async () => all(`SELECT name, SUM(n) n FROM (
       SELECT TRIM(place) name, COUNT(*) n FROM photos WHERE missing = 0 AND TRIM(place) <> '' GROUP BY TRIM(place)
       UNION ALL SELECT TRIM(place), 0 FROM shoots WHERE TRIM(place) <> '') GROUP BY name ORDER BY n DESC, name`));
+
+  // The cameras, lenses and film stocks in this library, most used first, to offer while typing.
+  app.get('/api/gear', async () => {
+    const list = (col: string) => all(`SELECT ${col} name, COUNT(*) n FROM photos WHERE TRIM(${col}) <> '' GROUP BY ${col} ORDER BY n DESC, name`);
+    return { cameras: list('camera'), lenses: list('lens'), films: list('film') };
+  });
 
   // The whole vocabulary: every tag and subject in use, plus ones created ahead of time.
   app.get('/api/tags', async (req) => {

@@ -174,6 +174,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       id: p.id, title: p.title, file: p.file, shootId: p.shoot_id, w: p.w, h: p.h,
       ar: p.w && p.h ? p.w / p.h : 1.5, hasImage: !!p.has_derivs,
       capturedAt: p.captured_at, camera: p.camera, lens: p.lens, exposure: p.exposure,
+      iso: p.iso ?? null, aperture: p.aperture ?? null, shutter: p.shutter ?? '', focalMm: p.focal_mm ?? null, medium: p.medium ?? '', film: p.film ?? '',
       fileType: p.file_type, sizeMb: Math.round(p.size_bytes / 1048576), archived: !!p.archived, missing: !!p.missing,
       // When it was last reviewed; a photograph never reviewed counts from when it was added.
       lastReviewedAt: agg ? (g?.d ?? p.added_at) : ((one('SELECT MAX(date) d FROM reviews WHERE photo_id = ?', p.id)?.d as string | undefined) ?? p.added_at),

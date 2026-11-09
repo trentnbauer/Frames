@@ -171,13 +171,14 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
 
 export type ScanResult = { imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null };
 
-function readInto(db: DB, id: number, x: Meta, file: string) {
+export function readInto(db: DB, id: number, x: Meta, file: string) {
   // EXIF capture times carry no timezone. Keep the wall-clock time as written ("06:30 on 12 Oct"), never
   // converted to UTC, or a dawn shot lands on the previous day.
   const d = x.DateTimeOriginal instanceof Date && !Number.isNaN(+x.DateTimeOriginal) ? x.DateTimeOriginal : null;
   const p2 = (n: number) => String(n).padStart(2, '0');
   const cap = d ? `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : null;
-  const exposure = [x.ExposureTime ? `1/${Math.round(1 / x.ExposureTime)}s` : null, x.FNumber ? `f/${x.FNumber}` : null, x.ISO ? `ISO ${x.ISO}` : null].filter(Boolean).join(' · ');
+  const shutterOf = (t: unknown) => (typeof t === 'number' && t > 0 ? (t >= 0.5 ? String(Math.round(t * 10) / 10) : `1/${Math.round(1 / t)}`) : '');
+  const exposure = [shutterOf(x.ExposureTime) ? `${shutterOf(x.ExposureTime)}s` : null, x.FNumber ? `f/${x.FNumber}` : null, x.ISO ? `ISO ${x.ISO}` : null].filter(Boolean).join(' · ');
   const lat = typeof x.latitude === 'number' ? x.latitude : null;
   const lon = typeof x.longitude === 'number' ? x.longitude : null;
   // Fields a person set by hand (a map pin, ...) are kept as they are.
@@ -188,7 +189,10 @@ function readInto(db: DB, id: number, x: Meta, file: string) {
   put('captured_at', { captured_at: cap });
   put('camera', { camera: [x.Make, x.Model].filter(Boolean).join(' ').trim() });
   put('lens', { lens: x.LensModel ?? '' });
-  put('exposure', { exposure });
+  put('exposure', {
+    exposure, iso: typeof x.ISO === 'number' ? Math.round(x.ISO) : null, aperture: typeof x.FNumber === 'number' ? x.FNumber : null,
+    shutter: shutterOf(x.ExposureTime), focal_mm: typeof x.FocalLength === 'number' ? x.FocalLength : null,
+  });
   put('latlon', { lat, lon });
   const W = x.ExifImageWidth ?? x.ImageWidth ?? 0, H = x.ExifImageHeight ?? x.ImageHeight ?? 0;
   db.prepare(`UPDATE photos SET ${sets.join(', ')}${sets.length ? ', ' : ''}w = CASE WHEN ? > 0 THEN ? ELSE w END, h = CASE WHEN ? > 0 THEN ? ELSE h END WHERE id = ?`).run(...args, W, W, H, H, id);

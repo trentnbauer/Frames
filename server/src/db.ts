@@ -247,6 +247,20 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'photos', 'user_fields', "TEXT NOT NULL DEFAULT ''");
   },
+  // 19: camera settings as numbers (so they can be edited and searched), and whether a photograph is film or digital and which film stock.
+  (db) => {
+    addColumn(db, 'photos', 'iso', 'INTEGER');
+    addColumn(db, 'photos', 'aperture', 'REAL');
+    addColumn(db, 'photos', 'shutter', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'photos', 'focal_mm', 'REAL');
+    addColumn(db, 'photos', 'medium', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'photos', 'film', "TEXT NOT NULL DEFAULT ''");
+    // Filled from the exposure text each photograph already has ("1/250s · f/2.8 · ISO 800").
+    for (const r of db.prepare("SELECT id, exposure FROM photos WHERE exposure <> ''").all() as { id: number; exposure: string }[]) {
+      const sh = /(1\/\d+)s/.exec(r.exposure)?.[1] ?? '', ap = /f\/([\d.]+)/.exec(r.exposure)?.[1], iso = /ISO (\d+)/.exec(r.exposure)?.[1];
+      db.prepare('UPDATE photos SET shutter = ?, aperture = ?, iso = ? WHERE id = ?').run(sh, ap ? Number(ap) : null, iso ? Number(iso) : null, r.id);
+    }
+  },
 ];
 
 export function migrate(db: DB) {

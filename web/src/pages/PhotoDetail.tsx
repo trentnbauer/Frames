@@ -7,6 +7,7 @@ import { Header, Img, Loading, Swatches, useField, useKey, useTitle } from '../c
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { MapPin } from '../components/MapPin';
+import { GearRows } from '../components/GearRows';
 
 const serif = "'Instrument Serif',Georgia,serif";
 const mono = "'IBM Plex Mono',monospace";
@@ -208,8 +209,7 @@ export function PhotoDetail() {
             <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
             <dt style={{ color: '#6f6c67' }}>Place</dt>
             <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)} </span>}<button className="t2" onClick={() => setMapOpen(true)} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{p.lat !== null ? 'Move pin' : 'Pin on map'}</button></dd>
-            <dt style={{ color: '#6f6c67' }}>Camera</dt><dd style={{ margin: 0 }}>{[p.camera, p.lens].filter(Boolean).join(' · ') || '–'}</dd>
-            <dt style={{ color: '#6f6c67' }}>Exposure</dt><dd style={{ margin: 0 }}>{p.exposure || '–'}</dd>
+            <GearRows p={p} patch={(body) => patch(body)} />
             <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>
           </dl>
 

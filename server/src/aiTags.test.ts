@@ -28,7 +28,7 @@ describe('tags already stored that way', () => {
     ins.run('dog sign signpost forest nature', 'ai', 0, 'tag');
     ins.run('golden hour', 'ai', 0, 'tag'); // a real name: kept
     ins.run('my own four word tag', 'user', 1, 'tag'); // the person's own: never touched
-    db.pragma(`user_version = ${(db.pragma('user_version', { simple: true }) as number) - 2}`); // back to just before the tag-splitting step (one migration has been added since)
+    db.pragma('user_version = 16'); // back to the tag-splitting step (migration 17, the 16th in the list), so it and the ones after it run again
     migrate(db);
     const names = (db.prepare('SELECT name, source, accepted, kind FROM tags ORDER BY name').all() as any[]);
     expect(names.map((r) => r.name)).toEqual(['dog', 'forest', 'golden hour', 'my own four word tag', 'nature', 'sign', 'signpost']);
