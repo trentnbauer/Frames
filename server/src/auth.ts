@@ -258,15 +258,23 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return { who: { provider: p.id, sub: String(c.sub), email, emailVerified: verified && !!email, name: String(c.name ?? c.preferred_username ?? email ?? c.sub) }, flow };
   }
 
-  const compareKey = crypto.randomBytes(32);
   // ---------- the gate ----------
+  // The shared password is checked with scrypt (a slow, salted hash), and a header that has been checked once is remembered in memory, so a
+  // signed-in script does not pay for it on every request. Wrong attempts are limited below.
+  const salt = crypto.randomBytes(16);
+  const slow = (s: string) => crypto.scryptSync(s, salt, 32, { N: 16384 });
+  const expected = cfg.authPassword ? slow(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`) : null;
+  const accepted = new Set<string>();
   const passwordOk = (req: FastifyRequest) => {
-    if (!cfg.authPassword) return false;
-    const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
-    const [u = '', ...rest] = m ? Buffer.from(m[1], 'base64').toString().split(':') : [];
-    // Both sides are keyed with a key made at start-up, so the two are the same length for a constant-time compare. This is not storage of the password.
-    const d = (s: string) => crypto.createHmac('sha256', compareKey).update(s).digest();
-    return !!m && crypto.timingSafeEqual(d(`${u}:${rest.join(':')}`), d(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`));
+    if (!expected) return false;
+    const h = req.headers.authorization ?? '';
+    if (accepted.has(h)) return true;
+    const m = /^Basic (.+)$/.exec(h);
+    if (!m) return false;
+    const [u = '', ...rest] = Buffer.from(m[1], 'base64').toString().split(':');
+    const ok = crypto.timingSafeEqual(slow(`${u}:${rest.join(':')}`), expected);
+    if (ok) { if (accepted.size >= 50) accepted.clear(); accepted.add(h); }
+    return ok;
   };
   // Wrong shared-password attempts are counted per address: after 10 in a minute, even the right password is refused until the minute is up.
   const wrong = new Map<string, { n: number; reset: number }>();
