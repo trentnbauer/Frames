@@ -79,18 +79,21 @@ export function SharePage() {
   // Straight to the browser's own downloader, in order, so files go to disk untouched.
   const download = async () => {
     cancelled.current = false;
-    const pad = String(photos.length).length;
-    setDl({ done: 0, total: photos.length, ready: false });
-    for (let i = 0; i < photos.length; i++) {
+    // Only the photographs in the composition, when there is one.
+    const chosen = d.chosenIds ?? [];
+    const files = chosen.length ? photos.filter((p) => chosen.includes(p.id)) : photos;
+    const pad = String(files.length).length;
+    setDl({ done: 0, total: files.length, ready: false });
+    for (let i = 0; i < files.length; i++) {
       if (cancelled.current) { setDl(null); return; }
       const a = document.createElement('a');
-      a.href = `/api/s/${token}/photos/${photos[i].id}/original?n=${i + 1}&pad=${pad}`;
+      a.href = `/api/s/${token}/photos/${files[i].id}/original?n=${i + 1}&pad=${pad}`;
       a.download = '';
       document.body.appendChild(a); a.click(); a.remove();
-      setDl({ done: i + 1, total: photos.length, ready: false });
+      setDl({ done: i + 1, total: files.length, ready: false });
       await new Promise((r) => setTimeout(r, 450));
     }
-    setDl({ done: photos.length, total: photos.length, ready: true });
+    setDl({ done: files.length, total: files.length, ready: true });
   };
 
   const prints = (d.chosenIds ?? []).map((id) => photos.find((p) => p.id === id)).filter((p): p is (typeof photos)[number] => !!p);

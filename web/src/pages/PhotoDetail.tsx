@@ -55,7 +55,9 @@ export function PhotoDetail() {
     const n = stepIds[(idx + d + stepIds.length) % stepIds.length];
     nav(`/photo/${n}${todoKey ? `?todo=${todoKey}` : ''}`);
   };
-  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, stepIds.length]);
+  // Back goes to where you were (keeping the library's scroll place) when you came from inside the app.
+  const back = () => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); };
+  useKey((e) => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return; if (e.key === 'Escape') back(); if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); }, [idx, stepIds.length]);
 
   if (!p) return <div className="page"><Header /><Loading error={photo.error} /></div>;
   const ai = !!settings && settings.ai !== 'off';
@@ -97,7 +99,7 @@ export function PhotoDetail() {
     <div className="page">
       <Header />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
-        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
+        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
         <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
           <Link to={`/library?similarTo=${p.id}`}>Find similar</Link>
           {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare</Link>}

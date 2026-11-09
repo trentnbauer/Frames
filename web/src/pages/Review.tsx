@@ -4,6 +4,7 @@ import { api } from '../api';
 import { RATINGS } from '../data';
 import { useStore } from '../store';
 import { Fit, Loading, useKey } from '../components/bits';
+import { AddToComposition } from '../components/AddToComposition';
 
 type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
 
@@ -15,6 +16,7 @@ export function Review() {
   const [error, setError] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState('');
   const [noting, setNoting] = useState(false);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     (() => {
@@ -34,11 +36,16 @@ export function Review() {
   const rate = (n: number) => {
     if (!s || !cur) return;
     const before = s;
-    setNoting(false);
+    setNoting(false); setMsg('');
     setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
     api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } })
       .then(() => refreshSummary())
       .catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
+  };
+  const remove = async () => {
+    if (!s || !cur) return;
+    if (!window.confirm('Take this photograph out of Frames?\n\nIts reviews, tags and composition places go with it. The file in your library folder is not touched (a copy Frames holds itself, such as an upload, is deleted).')) return;
+    try { await api(`/photos/${cur.id}`, { method: 'DELETE' }); refreshSummary(); await move(s.index + 1); } catch (e) { setSaveErr(`Not deleted (${(e as Error).message}).`); }
   };
   const saveNote = async (note: string) => {
     if (!s || !cur) return;
@@ -48,7 +55,7 @@ export function Review() {
   };
 
   useKey((e) => {
-    if (!s) return;
+    if (!s || (e.target as HTMLElement)?.tagName === 'INPUT') return; // typing a composition name
     if (done) { if (e.key === 'Escape') leave(); return; }
     if (/^[1-5]$/.test(e.key)) rate(Number(e.key));
     else if (e.key.toLowerCase() === 'n') { e.preventDefault(); setNoting(true); }
@@ -104,6 +111,13 @@ export function Review() {
         ))}
       </div>
       <button className="notebtn" onClick={() => setNoting(true)}>N note</button>
+      {cur && (
+        <div style={{ position: 'absolute', top: 24, right: 28, display: 'flex', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
+          {msg && <span className="t2" role="status">{msg}</span>}
+          <AddToComposition label="Add to composition" ids={[cur.id]} onDone={setMsg} />
+          <button className="pill" onClick={remove}>Delete</button>
+        </div>
+      )}
       {saveErr && <div className="reason" role="alert" style={{ position: 'absolute', bottom: 100, left: 0, right: 0, textAlign: 'center' }}>{saveErr}</div>}
       {noting && cur && (
         <div className="notebox">
