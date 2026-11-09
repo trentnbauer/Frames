@@ -266,6 +266,11 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'photos', 'gear_src', "TEXT NOT NULL DEFAULT ''");
     addColumn(db, 'shoots', 'gear', "TEXT NOT NULL DEFAULT ''");
   },
+  // 21: camera details as tags: the focal length as a 35mm camera would give it (for wide angle, regular or telephoto), and the tags last made from the details, so a tag a person removed is not put back.
+  (db) => {
+    addColumn(db, 'photos', 'focal35', 'REAL');
+    addColumn(db, 'photos', 'gear_sig', "TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 export function migrate(db: DB) {

@@ -77,7 +77,7 @@ async function askJson(c: AiCfg, prompt: string, jpeg?: Buffer): Promise<any> {
   return parseJson(String(j?.choices?.[0]?.message?.content ?? ''));
 }
 
-const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words"}. Do not guess names of people.';
+const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase; include one of wide angle, regular or telephoto for how much of the scene the lens takes in"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words"}. Do not guess names of people.';
 
 export async function describePhoto(c: AiCfg, jpeg: Buffer): Promise<Analysis> {
   const a = await askJson(c, DESCRIBE, jpeg);

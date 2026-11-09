@@ -4,7 +4,7 @@ import { suggestFilters, aiConfig, embedText, fromBlob, parseQuery } from '../ai
 import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
-import { applyGear } from '../gear.js';
+import { applyGear, syncGearTags } from '../gear.js';
 import { loadSettings } from '../settings.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
@@ -38,7 +38,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     // ?missing=subject or ?missing=tag: photographs with none yet.
     for (const k of String(q.missing ?? '').split(',')) {
-      if (k === 'subject' || k === 'tag') where.push(`NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = '${k}' AND t.accepted = 1)`);
+      if (k === 'subject' || k === 'tag') where.push(`NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = '${k}' AND t.accepted = 1${k === 'tag' ? " AND t.source <> 'gear'" : ''})`); // tags made from camera details do not count as tagged
     }
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(s);
@@ -221,10 +221,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
         const cur = one('SELECT iso, aperture, shutter, focal_mm FROM photos WHERE id = ?', id) as Row;
         const n = { iso: iso === undefined ? cur.iso : iso === null ? null : Math.round(iso), aperture: ap === undefined ? cur.aperture : ap, shutter: sh === undefined ? cur.shutter : sh, focal: fo === undefined ? cur.focal_mm : fo };
         const text2 = [n.shutter ? `${n.shutter}s` : null, n.aperture ? `f/${n.aperture}` : null, n.iso ? `ISO ${n.iso}` : null].filter(Boolean).join(' · ');
-        set('UPDATE photos SET iso = ?, aperture = ?, shutter = ?, focal_mm = ?, exposure = ? WHERE id = ?', n.iso, n.aperture, n.shutter, n.focal, text2, id);
+        set('UPDATE photos SET iso = ?, aperture = ?, shutter = ?, focal_mm = ?, exposure = ?' + (b.focalMm !== undefined ? ', focal35 = NULL' : '') + ' WHERE id = ?', n.iso, n.aperture, n.shutter, n.focal, text2, id);
         mark('exposure');
       }
     }
+    if (['camera', 'lens', 'film', 'medium', 'focalMm'].some((k) => b[k] !== undefined)) { applyGear(db, id, false); syncGearTags(db, id); }
     if (typeof b.archived === 'boolean') set('UPDATE photos SET archived = ? WHERE id = ?', b.archived ? 1 : 0, id);
     if (b.reviewAgain === true) set('UPDATE photos SET next_review_at = ? WHERE id = ?', new Date().toISOString(), id);
     if (b.shootId !== undefined) {
