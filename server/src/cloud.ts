@@ -77,9 +77,13 @@ const REAL = {
   dropbox: { auth: 'https://www.dropbox.com/oauth2/authorize', token: 'https://api.dropboxapi.com/oauth2/token', api: 'https://api.dropboxapi.com/2', content: 'https://content.dropboxapi.com/2' },
   onedrive: { auth: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', token: 'https://login.microsoftonline.com/common/oauth2/v2.0/token', api: 'https://graph.microsoft.com/v1.0', content: '' },
 };
-export const urls = (cfg: AppCfg, p: ProviderId): { auth: string; token: string; api: string; content: string; upload: string } => (cfg.cloudBase
-  ? { auth: `${cfg.cloudBase}/${p}/auth`, token: `${cfg.cloudBase}/${p}/token`, api: `${cfg.cloudBase}/${p}/api`, content: `${cfg.cloudBase}/${p}/content`, upload: `${cfg.cloudBase}/${p}/upload` }
-  : { content: '', upload: '', ...REAL[p] });
+export const urls = (cfg: AppCfg, provider: ProviderId): { auth: string; token: string; api: string; content: string; upload: string } => {
+  // The provider is picked from a closed set of constants, so an address is only ever one of the three known ones (or the test stand-in's).
+  const p: ProviderId = provider === 'google' ? 'google' : provider === 'dropbox' ? 'dropbox' : 'onedrive';
+  return cfg.cloudBase
+    ? { auth: `${cfg.cloudBase}/${p}/auth`, token: `${cfg.cloudBase}/${p}/token`, api: `${cfg.cloudBase}/${p}/api`, content: `${cfg.cloudBase}/${p}/content`, upload: `${cfg.cloudBase}/${p}/upload` }
+    : { content: '', upload: '', ...REAL[p] };
+};
 
 const SCOPE: Record<ProviderId, string> = {
   google: 'https://www.googleapis.com/auth/drive.readonly',
