@@ -2,17 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
-import { Wall } from '../components/CompositionWall';
+import { PrintModal, Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
 import { HumanCheck } from '../components/HumanCheck';
-import { FRAMES, WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
+import { FRAMES, WALL_BG, arrange, bounds, metres, newPrintId, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
 import { PinGate } from './Auth';
 
 type G = { id: number; title: string; ar: number; n: number };
 type Shared = { askName?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
+
+/** "3 × A3 · 1.6 × 0.6 m": what the wall is made of and how much room it takes. */
+const spanText = (ps: Print[]) => {
+  if (!ps.length) return '';
+  const c = new Map<string, number>();
+  ps.forEach((p) => c.set(p.size, (c.get(p.size) || 0) + 1));
+  const b = bounds(ps);
+  return `${[...c].map(([k, n]) => (n > 1 ? `${n} × ${k}` : k)).join(', ')} · ${metres(b.w)} × ${metres(b.h)} m`;
+};
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -40,7 +49,10 @@ export function SharePage() {
   // The guest's version of the composition: photographs swapped in and frame colours changed. It lives here, on this page, and is shown on the
   // wall straight away; nothing reaches the photographer until "Send back" (and what was sent can be changed and sent again).
   const [frames, setFrames] = useState<Record<number, string>>({}); // print id -> the frame colour this guest picked
-  const [sentSnap, setSentSnap] = useState('{"m":{},"f":{}}'); // the version last sent
+  const [draft, setDraft] = useState<Print[] | null>(null); // the guest's own layout: other sizes, frames, more or fewer prints
+  const [fs, setFs] = useState(false);
+  const wallBox = useRef<HTMLDivElement>(null);
+  const [sentSnap, setSentSnap] = useState('{"m":{},"f":{},"l":null}'); // the version last sent
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [relayout, setRelayout] = useState(false); // the layout suggestion box
@@ -111,18 +123,19 @@ export function SharePage() {
     setPicking(null);
   };
   const setFrame = (printId: number, colour: string | null) => { setSendNote(null); setFrames((f) => { const c = { ...f }; if (colour === null) delete c[printId]; else c[printId] = colour; return c; }); };
-  const changes = Object.keys(mine).length + Object.keys(frames).length;
-  const draftNow = JSON.stringify({ m: mine, f: frames });
+  const changes = Object.keys(mine).length + Object.keys(frames).length + (draft ? 1 : 0);
+  const draftNow = JSON.stringify({ m: mine, f: frames, l: draft });
   const dirty = draftNow !== sentSnap;
-  const discard = () => { const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string> }; setMine(was.m); setFrames(was.f); setSendNote(null); };
+  const discard = () => { const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string>; l: Print[] | null }; setMine(was.m); setFrames(was.f); setDraft(was.l); setSendNote(null); };
   // Sends what differs from the last send, one suggestion for each, under the guest's name.
   const sendBack = () => withName(async (name) => {
     setSending(true); setSendNote(null);
-    const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string> };
+    const was = JSON.parse(sentSnap) as { m: Record<number, number>; f: Record<number, string>; l: Print[] | null };
     const errs: string[] = [];
     const post = async (path: string, body: object) => { const r = await fetch(`/api/s/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, reviewer: name }) }); if (!r.ok) errs.push((await r.json().catch(() => ({}))).error ?? 'Could not save that'); };
     for (const k of new Set([...Object.keys(was.m), ...Object.keys(mine)])) { const now = mine[Number(k)] ?? null; if (now !== (was.m[Number(k)] ?? null)) await post('suggest', { forId: Number(k), photoId: now }); }
     for (const k of new Set([...Object.keys(was.f), ...Object.keys(frames)])) { const now = frames[Number(k)] ?? null; if (now !== (was.f[Number(k)] ?? null)) await post('frame', { printId: Number(k), color: now }); }
+    if (draft && JSON.stringify(draft) !== JSON.stringify(was.l)) await post('layout', { layout: { mode: 'free', prints: draft }, note: '' });
     setSending(false);
     if (errs.length) setSendNote({ ok: false, text: errs[0] }); else { setSentSnap(draftNow); setSendNote({ ok: true, text: 'Sent. Thank you.' }); }
   });
@@ -130,19 +143,28 @@ export function SharePage() {
   const count = prints.length;
   // The guest's version, as drawn: swapped photographs in their prints (and the ones they replaced back among the candidates), their frame colours.
   const swapped = new Set(Object.values(mine));
-  const viewPrints: Print[] = wallPrints.map((pr) => {
+  const baseWall: Print[] = draft ?? wallPrints;
+  const origOf = (id: number) => wallPrints.find((q) => q.id === id);
+  const viewPrints: Print[] = baseWall.map((pr) => {
     const swapOf = (id: number | null) => (id !== null && mine[id] !== undefined ? mine[id] : id);
     return { ...pr, photoId: swapOf(pr.photoId), photoId2: swapOf(pr.photoId2), frame: pr.frame && frames[pr.id] ? { ...pr.frame, color: frames[pr.id] } : pr.frame };
   });
   const viewOthers = [...others.filter((o) => !swapped.has(o.id)), ...Object.keys(mine).map((k) => photos.find((x) => x.id === Number(k))).filter((x): x is (typeof photos)[number] => !!x)];
   // A candidate dropped on a print takes its place. A photograph that was in a print can only go back to its own print (the photographer chose it for the wall).
   const dropOn = (i: number, pid: number) => {
-    const orig = photosOf(wallPrints[i])[0];
+    const orig = viewPrints[i] && origOf(viewPrints[i].id) ? photosOf(origOf(viewPrints[i].id)!)[0] : undefined;
     if (orig === undefined) return;
     if (mine[pid] !== undefined) { if (pid === orig) swap(orig, null); else setSugErr('That photograph was in another print. Drag it back onto that print, or drop a different candidate here.'); return; }
     if (wallPrints.some((q) => photosOf(q).includes(pid))) { setSugErr('That photograph is already in a print.'); return; }
     setSugErr(''); swap(orig, pid);
   };
+  const cloneP = (p: Print): Print => ({ ...p, frame: p.frame ? { ...p.frame } : null });
+  const selI = Math.max(0, Math.min(selPrint, baseWall.length - 1));
+  const editSel = (fn: (q: Print) => void) => { const b = baseWall.map(cloneP); if (!b[selI]) return; fn(b[selI]); if (!b[selI].stack) b[selI].photoId2 = null; setDraft(b); setSendNote(null); };
+  const addPrint = () => { const b = baseWall.map(cloneP); const last = b[b.length - 1]; if (!last) return; b.push({ ...cloneP(last), id: newPrintId() + 1000, photoId: null, photoId2: null, x: last.x + 80, y: last.y + 80 }); setDraft(b); setSelPrint(b.length - 1); setSendNote(null); };
+  const lineUp = () => { setDraft(arrange(baseWall.map(cloneP), 'row')); setSendNote(null); };
+  const toggleFs = async () => { const el = wallBox.current; if (!el) return; if (document.fullscreenElement) { await document.exitFullscreen().catch(() => undefined); return; } try { await el.requestFullscreen(); } catch { setFs(!fs); } };
+  const canEdit = !!(d.allowReview && d.allowSuggest && d.layout);
   const wallPhotos = new Map(photos.map((p) => [p.id, { id: p.id, title: p.title, w: 0, h: 0, ar: p.ar }]));
 
   if (phone) {
@@ -160,12 +182,12 @@ export function SharePage() {
   if (view === 'review') return <GuestReview token={token} photos={photos} reviewer={reviewer} onDone={() => setView('grid')} />;
 
   return (
-    <Shell>
+    <Shell who={reviewer}>
       {showPrints && d.allowReview && (
         <div className="guest-head" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div className="muted" style={{ fontSize: 13 }}>{d.owner ? `${d.owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 44, lineHeight: 1 }}>{d.name}</h1><span className="faint" style={{ fontSize: 12.5, fontFamily: 'var(--mono)' }}>{count} print{count === 1 ? '' : 's'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 44, lineHeight: 1 }}>{d.name}</h1><span className="faint" style={{ fontSize: 12.5, fontFamily: 'var(--mono)' }}>{spanText(viewPrints)}</span></div>
           </div>
           <nav className="steps" aria-label="Your steps" style={{ order: -1, width: '100%', justifyContent: 'center', marginBottom: 8 }}>
             <span style={{ padding: '6px 12px' }}>✓ 1 Rate</span><span className="arrow">→</span><span className={dirty ? '' : 'on'} style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? undefined : 'var(--hover)', color: dirty ? undefined : 'var(--text)' }}>2 Try changes</span><span className="arrow">→</span><span style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? 'var(--hover)' : undefined, color: dirty ? 'var(--text)' : undefined }}>3 Send to {d.owner || 'them'}</span>
@@ -189,57 +211,80 @@ export function SharePage() {
       </div>
       {showPrints && (
         <>
-          <div className="label" style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', gap: 14 }}>The {count === 1 ? 'print' : `${count} prints`}
-            {d.allowReview && d.layout && <button className="t2" style={{ textDecoration: 'underline', textTransform: 'none', letterSpacing: 0 }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Suggest a change again' : 'Suggest a change'}</button>}
-            {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
-          </div>
           {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
           {sendNote && <div role="status" className={sendNote.ok ? 'muted' : 'reason'} style={{ marginBottom: 12, fontSize: 13 }}>{sendNote.text}</div>}
           {wallPrints.length > 0 && (
             <div className="editor-grid">
-              <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 380, backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
-                <Wall prints={viewPrints} mode="free" editing={false} sel={Math.min(selPrint, viewPrints.length - 1)} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => setSelPrint(i)} onEdit={(i) => setSelPrint(i)} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
-              </div>
-              {(() => {
-                const i = Math.min(selPrint, viewPrints.length - 1), pr = viewPrints[i], orig = wallPrints[i];
-                const pid = photosOf(pr)[0];
-                const cur = pid !== undefined ? photos.find((x) => x.id === pid) : undefined;
-                const swapped = pid !== undefined && Object.values(mine).includes(pid);
-                return (
-                  <aside aria-label="This print" style={{ background: 'var(--surface)', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div className="spread" style={{ alignItems: 'baseline' }}><span className="serif" style={{ fontSize: 28 }}>Print {i + 1}</span><span className="muted" style={{ fontSize: 13 }}>{cur ? cur.title : 'empty'}</span></div>
-                    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                      {cur ? <img src={imgUrl(cur.id, 'thumb', token)} alt="" style={{ height: 56, borderRadius: 3 }} /> : <i style={{ width: 44, height: 56, background: 'var(--bg)', borderRadius: 3 }} />}
-                      <span className="muted" style={{ fontSize: 13 }}>{d.allowReview && viewOthers.length ? 'Click a candidate below, or drag one onto the print.' : 'This is the print.'}</span>
+              <div>
+                <div ref={wallBox} style={{ position: fs ? 'fixed' : 'relative', inset: fs ? 0 : undefined, zIndex: fs ? 80 : undefined, background: WALL_BG, borderRadius: fs ? 0 : 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 420, backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+                  <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} style={{ position: 'absolute', top: 14, left: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>{fs ? '✕ Exit' : '⤢ Fullscreen'}</button>
+                  {canEdit && (
+                    <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 3, display: 'flex', gap: 8 }}>
+                      <button onClick={() => withName(addPrint)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>+ Print</button>
+                      <button onClick={() => withName(lineUp)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>Line up</button>
                     </div>
-                    {swapped && <button className="t2" style={{ textAlign: 'left', textDecoration: 'underline' }} onClick={() => { const o = photosOf(orig)[0]; if (o !== undefined) swap(o, null); }}>Put the original photo back</button>}
+                  )}
+                  <Wall prints={viewPrints} mode="free" editing={false} sel={selI} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => setSelPrint(i)} onEdit={(i) => setSelPrint(i)} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
+                  <div style={{ position: 'absolute', left: 16, right: 16, bottom: 10, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11.5, color: 'var(--faint)' }}>
+                    <span>{canEdit ? 'Drag a candidate onto a print to fill it' : 'Drawn to scale'}</span><span style={{ fontFamily: 'var(--mono)' }}>1 square = 10 cm</span>
+                  </div>
+                </div>
+              </div>
+              {canEdit ? (() => {
+                const pr = viewPrints[selI]; const orig = pr ? origOf(pr.id) : undefined;
+                const pid = pr ? photosOf(pr)[0] : undefined;
+                const swappedIn = pid !== undefined && Object.values(mine).includes(pid);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <PrintModal inline prints={baseWall} index={selI} count={baseWall.length} photoId={undefined} onChange={editSel} title={pid !== undefined ? photos.find((x) => x.id === pid)?.title : undefined} thumb={pid !== undefined ? imgUrl(pid, 'thumb', token) : undefined} hint={viewOthers.length ? 'Click a candidate below, or drag one onto the print.' : 'This is the print.'} sharpness={pid === undefined ? 'pick a photo first' : undefined}
+                      onApplyAll={() => { const f = baseWall[selI]?.frame; setDraft(baseWall.map((p) => ({ ...cloneP(p), frame: f ? { ...f, size: p.frame ? p.frame.size : f.size } : null }))); }}
+                      onDelete={() => { if (baseWall.length <= 1) return; setDraft(baseWall.filter((_, k) => k !== selI)); setSelPrint(0); }} onClose={() => undefined} />
+                    {swappedIn && orig && <button className="t2" style={{ textAlign: 'left', textDecoration: 'underline', fontSize: 13 }} onClick={() => { const o = photosOf(orig)[0]; if (o !== undefined) swap(o, null); }}>Put the original photo back</button>}
+                  </div>
+                );
+              })() : (() => {
+                const pr = viewPrints[selI]; const pid = pr ? photosOf(pr)[0] : undefined;
+                const cur = pid !== undefined ? photos.find((x) => x.id === pid) : undefined;
+                return pr ? (
+                  <aside aria-label="This print" style={{ background: 'var(--surface)', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div className="spread" style={{ alignItems: 'baseline' }}><span className="serif" style={{ fontSize: 28 }}>Print {selI + 1}</span><span className="muted" style={{ fontSize: 13 }}>{cur ? cur.title : 'empty'}</span></div>
                     <div className="spread"><span className="eyebrow">Print size</span><span style={{ fontSize: 14 }}>{sizeLabel(pr)}</span></div>
                     <div className="spread"><span className="eyebrow">Orientation</span><span style={{ fontSize: 14, textTransform: 'capitalize' }}>{pr.orientation}</span></div>
-                    {pr.frame ? (
-                      <>
-                        <div className="spread" style={{ alignItems: 'center' }}><span style={{ fontSize: 14 }}>Colour</span>
-                          <span style={{ display: 'flex', gap: 8 }}>{Object.keys(FRAMES).map((k) => <button key={k} title={k} aria-label={`${k} frame`} aria-pressed={pr.frame!.color === k} disabled={!d.allowReview || !d.allowSuggest} onClick={() => setFrame(pr.id, orig.frame && orig.frame.color === k ? null : k)} style={{ width: 24, height: 24, borderRadius: '50%', background: FRAMES[k], boxShadow: pr.frame!.color === k ? '0 0 0 2px var(--surface), 0 0 0 4px var(--text)' : 'inset 0 0 0 1px var(--hair)', opacity: d.allowReview && d.allowSuggest ? 1 : 0.6 }} />)}</span>
-                        </div>
-                        <div className="muted" style={{ fontSize: 13 }}>{pr.frame.color} {sizeLabel({ ...pr, size: pr.frame.size })} frame, {pr.frame.mat} mat around the {sizeLabel(pr)} print</div>
-                      </>
-                    ) : <div className="muted" style={{ fontSize: 13 }}>Hung as a poster, no frame.</div>}
-                    {d.allowReview && d.allowSuggest && d.layout && <button className="btn outline" style={{ alignSelf: 'flex-start' }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Layout idea sent' : 'Suggest a different layout…'}</button>}
                   </aside>
-                );
+                ) : null;
               })()}
             </div>
           )}
-          {d.allowReview && viewOthers.length > 0 && <p className="muted" style={{ fontSize: 13, margin: '12px 0 14px' }}>The photos {d.owner || 'they'} shortlisted · click one to put it in Print {Math.min(selPrint, viewPrints.length - 1) + 1}, or drag it onto a print.</p>}
+          {viewOthers.length > 0 && d.allowReview && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, margin: '28px 0 6px', flexWrap: 'wrap' }}>
+              <h2 className="serif" style={{ fontSize: 28, margin: 0, fontWeight: 400 }}>Candidates</h2>
+              <span className="chip" style={{ background: 'var(--chip)', borderRadius: 999, padding: '6px 12px', fontSize: 13 }}>All · {viewOthers.length}</span>
+              <span className="muted" style={{ marginLeft: 'auto', fontSize: 13 }}>The photos {d.owner || 'they'} shortlisted · drag one onto a print</span>
+            </div>
+          )}
+          {d.allowReview && viewOthers.length > 0 && <p className="muted" style={{ fontSize: 13, margin: '0 0 14px' }}>Click a photo to put it in Print {selI + 1}.</p>}
           {sugErr && <p className="reason" role="alert">{sugErr}</p>}
-          {viewOthers.length > 0 && <div className="label" style={{ marginBottom: 12 }}>Other candidates</div>}
         </>
       )}
-      <div className="just">
-        {(showPrints ? viewOthers : photos).map((p) => (
-          <button key={p.id} draggable={d.allowReview && showPrints} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(p.id)); e.dataTransfer.effectAllowed = 'move'; }} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => { const target = showPrints && d.allowReview && d.allowSuggest ? photosOf(wallPrints[Math.min(selPrint, wallPrints.length - 1)] ?? { photoId: null, photoId2: null, stack: false } as never)[0] : undefined; if (target !== undefined) withName(() => swap(target, p.id)); else setLook(photos.indexOf(p)); }} aria-label={`Open ${p.title}`}><Img p={p} /></button>
-        ))}
-        <i />
-      </div>
+      {showPrints ? (
+        <div className="cand-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: '18px 14px', alignItems: 'start' }}>
+          {viewOthers.map((p) => (
+            <button key={p.id} draggable={d.allowReview} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(p.id)); e.dataTransfer.effectAllowed = 'move'; }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'var(--surface)', borderRadius: 8, padding: 8 }}
+              onClick={() => { const pr = viewPrints[selI]; const o = pr ? origOf(pr.id) : undefined; const target = d.allowReview && d.allowSuggest && o ? photosOf(o)[0] : undefined; if (target !== undefined) withName(() => swap(target, p.id)); else setLook(photos.indexOf(p)); }} aria-label={`Open ${p.title}`}>
+              <Img p={p} style={{ width: '100%', aspectRatio: String(p.ar), objectFit: 'cover', display: 'block', borderRadius: 2 }} />
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="just">
+          {photos.map((p) => (
+            <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`}><Img p={p} /></button>
+          ))}
+          <i />
+        </div>
+      )}
       {asking && (
         <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
       )}
@@ -323,10 +368,10 @@ function NameBox({ initial, token, signIn, onDone, onCancel }: { initial: string
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, who }: { children: React.ReactNode; who?: string }) {
   return (
     <div className="page" style={{ paddingBottom: 60 }}>
-      <header className="header"><span className="lockup"><Mark />Frames</span><span className="faint" style={{ fontSize: 12 }}>Shared with you</span></header>
+      <header className="header"><span className="lockup"><Mark />Frames</span>{who ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}><span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: 'oklch(0.7 0.13 45)', color: '#0d0d0d', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{who.trim()[0]?.toUpperCase()}</span>{who.trim().split(/\s+/)[0]}</span> : <span className="faint" style={{ fontSize: 12 }}>Shared with you</span>}</header>
       {children}
     </div>
   );

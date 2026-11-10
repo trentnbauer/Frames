@@ -39,6 +39,14 @@ describe('server choices (sessions, guest links, backups)', () => {
   });
 });
 
+describe('guest ranking weight', () => {
+  it('can be read as well as set', async () => {
+    expect((await A.get('/api/collections/guest-weight')).body).toEqual({ weight: 35 });
+    await A.put('/api/collections/guest-weight', { weight: 20 });
+    expect((await A.get('/api/collections/guest-weight')).body).toEqual({ weight: 20 });
+  });
+});
+
 describe('system information', () => {
   it('reports the version, disks, cache and health checks to an administrator', async () => {
     const r = (await A.get('/api/admin/system')).body as { version: string; cache: { bytes: number }; checks: { name: string; ok: boolean }[] };

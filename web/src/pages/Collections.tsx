@@ -29,6 +29,7 @@ const ring = 'inset 0 0 0 1px var(--outline)';
 const fmt = (n: number | null) => (n === null ? '–' : n.toFixed(1));
 const thumb = (id: number) => imgUrl(id, 'thumb');
 /** "3 × A3", "A2 + 2 × A5": what a composition is made of, for its card. */
+const spanShort = (ps: { size: string }[]) => { const m = new Map<string, number>(); ps.forEach((p) => m.set(p.size, (m.get(p.size) || 0) + 1)); return [...m].map(([k, n]) => (n > 1 ? `${n} × ${k}` : k)).join(', '); };
 const printsShort = (c: Collection) => { const m = new Map<string, number>(); c.layout.prints.forEach((p) => m.set(p.size, (m.get(p.size) || 0) + 1)); return [...m].map(([k, n]) => (n > 1 ? `${n} × ${printSize(k)}` : printSize(k))).join(' + '); };
 const isFull = (prints: Print[]) => prints.length > 0 && prints.every((p) => photosOf(p).length === (p.stack ? 2 : 1));
 const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -263,6 +264,7 @@ export function CollectionDetail() {
   });
 
   const [guestsOpen, setGuestsOpen] = useState(qs.has('guests'));
+  const [more, setMore] = useState(false);
   const [guestTab, setGuestTab] = useState<'suggestions' | 'ratings' | 'comments'>(qs.get('guests') === 'ratings' ? 'ratings' : 'suggestions');
   const pending = (suggestions.data?.suggestions.length ?? 0) + (frameIdeas.data?.suggestions.length ?? 0) + (layoutIdeas.data?.suggestions.length ?? 0);
   const wallRef = useRef<HTMLDivElement>(null);
@@ -433,18 +435,24 @@ export function CollectionDetail() {
         <Link to="/collections" style={{ height: 32, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', fontSize: 13.5, color: 'var(--text2)' }}>← Compositions</Link>
         <div style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'baseline', gap: 14 }}>
           <input className="serif inline" aria-label="Composition name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 40, lineHeight: 1, width: 'auto', minWidth: 160, flex: '0 1 auto', field: undefined } as React.CSSProperties} size={Math.max(8, c.name.length)} />
-          <span className="faint" style={{ fontSize: 12.5, fontFamily: mono }}>{printsShort(c)} · {metres(live.w)} × {metres(live.h)} m</span>
+          <span className="faint" style={{ fontSize: 12.5, fontFamily: mono }}>{spanShort(wallPrints)} · {metres(live.w)} × {metres(live.h)} m</span>
         </div>
+        <span style={{ position: 'relative' }}>
+          <button className="btn outline" aria-haspopup="menu" aria-expanded={more} aria-label="More" onClick={() => setMore(!more)} style={{ padding: '0 14px' }}>⋯</button>
+          {more && (
+            <div role="menu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20, background: 'var(--menu, var(--surface))', borderRadius: 12, padding: 12, width: 260, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: '0 0 0 1px var(--hair), 0 12px 30px rgba(0,0,0,.5)' }}>
+              <input aria-label="Theme" className="pin" placeholder="Add a theme" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ width: '100%' }} />
+              <button role="menuitem" className="t2" style={{ textAlign: 'left', padding: '6px 4px' }} onClick={() => { setAdding(!adding); setMore(false); }}>{adding ? 'Done adding' : '+ Add photos'}</button>
+              {printed && <button role="menuitem" className="t2" style={{ textAlign: 'left', padding: '6px 4px' }} onClick={async () => { setMore(false); await save({ printed: false }); }}>Reopen</button>}
+              <button role="menuitem" className="t2 danger" style={{ textAlign: 'left', padding: '6px 4px' }} onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
+            </div>
+          )}
+        </span>
         <button className="btn outline" onClick={() => setGuestsOpen(true)} style={{ gap: 8 }}>Guests{pending > 0 && <span className="mono" style={{ background: 'var(--chip)', borderRadius: 999, fontSize: 11, padding: '1px 8px' }}>{pending}</span>}</button>
         <button className="btn outline" onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share <span className="faint" style={{ fontSize: 12 }}>{liveShare ? '· on' : ''}</span></button>
         <button className="btn primary lg" onClick={() => (canExport || printed) && setExporting(printed ? 'printed' : 'ready')} disabled={!canExport && !printed} style={{ opacity: canExport || printed ? 1 : 0.5 }}>{printed ? 'Export again' : canExport ? `Export · ${slotCount} prints` : `Export · ${slotCount - chosenIn(prints).length} print${slotCount - chosenIn(prints).length === 1 ? '' : 's'} empty`}</button>
       </div>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, fontSize: 13, color: 'var(--muted)' }}>
-        <input aria-label="Theme" className="t2 inline" placeholder="Add a theme" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ fontSize: 13.5, maxWidth: 260 }} />
-        <button onClick={() => setAdding(!adding)}>{adding ? 'Done adding' : '+ Add photos'}</button>
-        <button onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
-        {printed && <button onClick={async () => { await save({ printed: false }); }} style={{ textDecoration: 'underline' }}>Reopen</button>}
-      </div>
+      {c.theme && <p className="muted" style={{ margin: '-8px 0 14px', fontSize: 13.5 }}>{c.theme}</p>}
       {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => setSharing(false)} />}
       {guestsOpen && (
         <Modal title="Guests" sub="What the people you shared this with have said and suggested." width={620} onClose={() => setGuestsOpen(false)}>
@@ -456,22 +464,6 @@ export function CollectionDetail() {
           </div>
         </Modal>
       )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', borderTop: '1px solid var(--hair)', borderBottom: '1px solid var(--hair)', padding: '12px 0', margin: '22px 0 24px', fontSize: 13.5 }}>
-        <span style={eyebrow}>Prints</span>
-        <span><b style={{ fontWeight: 500 }}>{printsSummary(wallPrints)}</b>, <b style={{ fontWeight: 500 }}>{metres(live.w)} × {metres(live.h)} m</b> on the wall</span>
-        <span style={{ color: 'var(--muted)' }}>{chosenIn(prints).length} of {slotCount} chosen · {c.photoIds.length} candidates</span>
-        <label style={{ color: 'var(--text2)', display: 'flex', gap: 8, alignItems: 'center' }}>Sharpness wanted
-          <select aria-label="Sharpness wanted, in pixels per inch" value={ppi} disabled={printed} onChange={(e) => void saveLayout(wallPrints, mode, Number(e.target.value))} style={{ background: 'transparent', color: 'inherit', borderRadius: 6, padding: '2px 6px', boxShadow: ring }}>
-            {[...new Set([...PPI_CHOICES, ppi])].sort((a, b) => b - a).map((n) => <option key={n} value={n} style={{ color: '#000' }}>{n} PPI{n === 300 ? ' (print quality)' : ''}</option>)}
-          </select>
-        </label>
-        {lowCount > 0 && <span role="status" style={{ color: 'oklch(0.78 0.11 35)' }}>⚠ {lowCount} {lowCount === 1 ? 'print has' : 'prints have'} a photograph below {ppi} PPI</span>}
-        <span style={{ marginLeft: 'auto', color: 'var(--text2)', display: 'flex', gap: 10, alignItems: 'baseline' }}>
-          Ranking: yours {100 - w}% · guests {w}%
-          {editW ? <input type="number" min={0} max={60} step={5} aria-label="Guests’ share of the ranking" defaultValue={w} onBlur={async (e) => { const n = Math.round(Number(e.target.value)); setEditW(false); if (n >= 0 && n <= 60 && n !== w) { await api('/collections/guest-weight', { method: 'PUT', body: { weight: n } }); ranking.reload(); } }} autoFocus style={{ width: 64, borderRadius: 6, padding: '2px 6px' }} /> : <button onClick={() => setEditW(true)} style={{ fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 3 }}>Change</button>}
-        </span>
-      </div>
 
       {adding && (
         <div style={{ marginBottom: 32 }}>
@@ -501,27 +493,25 @@ export function CollectionDetail() {
       <div className="editor-grid">
       <div>
         <div ref={wallRef} className={fs ? 'wall-fs' : ''} style={{ position: fs && !document.fullscreenElement ? 'fixed' : 'relative', inset: fs && !document.fullscreenElement ? 0 : undefined, zIndex: fs ? 80 : undefined, background: WALL_BG, borderRadius: fs ? 0 : 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: fs ? '100vh' : 500 }}>
-          <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} title={fs ? 'Exit fullscreen (Esc)' : 'Fullscreen'} style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 13, background: 'rgba(13,13,13,.6)', color: '#efede8' }}>{fs ? '⤡ Exit fullscreen' : '⤢ Fullscreen'}</button>
+          <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} title={fs ? 'Exit fullscreen (Esc)' : 'Fullscreen'} style={{ position: 'absolute', top: 14, left: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>{fs ? '⤡ Exit' : '⤢ Fullscreen'}</button>
           {false && <button onClick={() => { setEditing(!editing); setSelPrint(0); }} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 500, background: editing ? 'var(--text)' : 'rgba(13,13,13,.6)', color: editing ? '#0d0d0d' : 'var(--text)', boxShadow: editing ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{editing ? 'Done' : 'Edit layout'}</button>}
           {editing && !printed && (
-            <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={() => saveLayout(wallPrints, mode === 'free' ? 'row' : mode)} title="Re-space the prints evenly" style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.3)', color: '#efede8' }}>Line up</button>
-              <span style={{ width: 1, height: 16, background: 'var(--chip)', margin: '0 4px' }} />
-              <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)' }}>+ Add a print</button>
-              <span style={{ width: 1, height: 16, background: 'var(--chip)', margin: '0 4px' }} />
+            <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '7px 14px', borderRadius: 999, fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>+ Print</button>
+              <button onClick={() => saveLayout(wallPrints, mode === 'free' ? 'row' : mode)} title="Re-space the prints evenly" style={{ padding: '7px 14px', borderRadius: 999, fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>Line up</button>
               <RoomBackground id={c!.id} bg={c?.background} onChanged={() => { coll.reload?.(); reload(); }} onScale={(m) => void setScale(m)} />
             </div>
           )}
+          <div style={{ position: 'absolute', left: 16, right: 16, bottom: 10, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11.5, color: 'var(--faint)', pointerEvents: 'none' }}>
+            <span>{editing ? 'Drag prints to arrange · drop a candidate on a print to fill it' : 'Drag a candidate onto a print'}</span>
+            <span style={{ fontFamily: mono }}>{stage ? (c?.layout.bg ? `Room photo at your scale: ${(stage.w / 1000).toFixed(1)} m across` : 'Room photo: scale not set, taken to be 3 m across') : `1 square = 10 cm · spans ${metres(live.w)} × ${metres(live.h)} m`}</span>
+          </div>
           <Wall stage={stage} warn={warns} prints={wallPrints} mode={mode} editing={editing} sel={sel} photos={byId} over={over} locked={printed} onSelect={setSelPrint} onEdit={(i) => { setSelPrint(i); setPrintModal(true); }} onMoved={(ps) => void saveLayout(ps, 'free')} onOver={setOver} onDropPhoto={assign} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--faint)', marginTop: 8 }}>
-          <span>{editing ? 'Drawn to scale. Drag a print to move it, or use Edit on a print to change its size and frame.' : 'Drawn to scale. Drag a candidate onto a print, or use Edit layout to move prints and change sizes and frames.'}</span>
-          <span style={{ fontFamily: mono }}>{stage ? (c?.layout.bg ? `Room photo at your scale: ${(stage.w / 1000).toFixed(1)} m across` : 'Room photo: scale not set, taken to be 3 m across. Use Edit layout, then Set scale.') : '1 square = 10 cm'}</span>
         </div>
         {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
       </div>
       <div>
-      {!printed && <PrintModal inline prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} photoId={wallPrints[sel]?.photoId} onChange={editSel}
+      {!printed && <PrintModal inline prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} photoId={wallPrints[sel]?.photoId} onChange={editSel} title={byId.get(wallPrints[sel]?.photoId ?? -1)?.title} thumb={wallPrints[sel]?.photoId != null ? imgUrl(wallPrints[sel].photoId!, 'thumb') : undefined} ranking={<>you {100 - w}% · guests {w}% <button style={{ textDecoration: 'underline', color: 'var(--text2)', marginLeft: 4 }} onClick={() => setEditW(true)}>Change</button>{editW && <input type="number" min={0} max={60} step={5} aria-label="Guests’ share of the ranking" defaultValue={w} autoFocus style={{ width: 70, marginLeft: 8 }} onBlur={async (e) => { const n = Math.round(Number(e.target.value)); setEditW(false); if (n >= 0 && n <= 60 && n !== w) { await api('/collections/guest-weight', { method: 'PUT', body: { weight: n } }); ranking.reload(); } }} />}</>} sharpness={<>{wallPrints[sel]?.photoId == null ? 'pick a photo first' : lowCount > 0 ? <span style={{ color: 'oklch(0.78 0.11 35)' }}>⚠ {lowCount} {lowCount === 1 ? 'print is' : 'prints are'} below {ppi} PPI</span> : 'every photo meets it'}{' '}<select className="psel" aria-label="Sharpness wanted, in pixels per inch" value={ppi} disabled={printed} onChange={(e) => void saveLayout(wallPrints, mode, Number(e.target.value))} style={{ height: 26, fontSize: 12.5, marginLeft: 6 }}>{[...new Set([...PPI_CHOICES, ppi])].sort((a, b) => b - a).map((n) => <option key={n} value={n}>{n} PPI{n === 300 ? ' (print quality)' : ''}</option>)}</select></>}
         onApplyAll={() => { const f = wallPrints[sel].frame; void saveLayout(wallPrints.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : p.size === f.size ? p.size : f.size } : null }))); }}
         onDelete={() => { if (wallPrints.length <= 1) return; setPrintModal(false); setSelPrint(0); void saveLayout(wallPrints.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setPrintModal(false)} />}
       </div>

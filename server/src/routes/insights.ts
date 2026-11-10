@@ -142,6 +142,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   // Ranking for one composition: what you rated, what guests rated through its share links, and a blend of the two.
   const GUEST_WEIGHT_KEY = 'guestWeight';
   const guestWeight = () => Math.min(60, Math.max(0, Math.round(Number(getSetting<number>(db, GUEST_WEIGHT_KEY, 35)) || 0)));
+  app.get('/api/collections/guest-weight', async () => ({ weight: guestWeight() }));
   app.put('/api/collections/guest-weight', async (req, rep) => {
     const w = ((req.body ?? {}) as Row).weight;
     if (typeof w !== 'number' || !Number.isFinite(w) || w < 0 || w > 60) return rep.code(400).send({ error: 'The guests’ share must be between 0 and 60 percent.' });
