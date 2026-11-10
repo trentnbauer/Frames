@@ -104,6 +104,8 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
 function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
   const { me, summary, todo } = useStore();
   const nav = useNavigate();
+  const health = useApi<{ version: string }>(open ? '/health' : null);
+  const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
   const [theme, setT] = useState(getTheme());
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
   const close = () => setOpen(false);
@@ -136,7 +138,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Community review', go('/community'))}
             {item('Near-duplicates', go('/duplicates'))}
             <div className="msep" />
-            {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); })}
+            {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); }, ver)}
             {item('Welcome tour', go('/welcome'))}
             {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
             {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
