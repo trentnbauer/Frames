@@ -250,6 +250,12 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     // Uploads are counted per visitor on top of the overall limit: a few hundred files a minute is plenty for a person.
     app.post('/api/upload', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, rep) => {
       if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
+      // Storage per person: a member at their limit cannot add more (administrators are not limited).
+      const limitGb = policyOf(x.sys).userQuotaGb;
+      if (limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin') {
+        const used = (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n;
+        if (used >= limitGb * 1073741824) return rep.code(413).send({ error: `You have used the ${limitGb} GB of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
+      }
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
       const saved: string[] = [], rejected: { file: string; reason: string }[] = [];

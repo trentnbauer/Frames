@@ -58,12 +58,14 @@ CREATE INDEX IF NOT EXISTS community_reports_photo ON community_reports(owner, p
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 `;
 
+import { PASSKEY_SCHEMA } from './passkeys.js';
 export function openSystemDb(dataDir: string): DB {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new Database(path.join(dataDir, 'system.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SYSTEM_SCHEMA);
+  db.exec(PASSKEY_SCHEMA);
   ensureOwner(db);
   return attachKey(db, dataDir);
 }

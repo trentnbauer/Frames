@@ -130,7 +130,7 @@ export function CloudBackup() {
 }
 
 
-type Inst = { allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always'; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number; cacheLimitGb: number; previewPx: number; workers: number; logLevel: 'errors' | 'warnings' | 'info'; updateChannel: 'stable' | 'beta'; cloudWho: 'admins' | 'members'; cloudMinSyncMin: number; cloudQuotaGb: number; membersSeeShoots: boolean; aiMonthlyLimit: number; aiMembersOwn: boolean; aiSharedFirst: boolean; heavyJobs: 'always' | 'idle'; crashReports: boolean; crashHost: string };
+type Inst = { allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always'; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number; cacheLimitGb: number; previewPx: number; workers: number; logLevel: 'errors' | 'warnings' | 'info'; updateChannel: 'stable' | 'beta'; cloudWho: 'admins' | 'members'; cloudMinSyncMin: number; cloudQuotaGb: number; membersSeeShoots: boolean; aiMonthlyLimit: number; aiMembersOwn: boolean; aiSharedFirst: boolean; heavyJobs: 'always' | 'idle'; crashHost: string };
 type SysInfo = { version: string; image: string; libraryDisk: { path: string; total: number; free: number }; dataDisk: { path: string; total: number; free: number }; cache: { path: string; bytes: number }; checks: { name: string; ok: boolean }[]; libraries: number };
 
 /** Settings, Server, Photos & storage: where originals live, the XMP sidecar choice, the originals rules and the cloud services members can use. */
@@ -301,8 +301,6 @@ export function UpdatesSystem() {
       <SCard>
         <SRow title="Health" hint={sys.data ? (bad.length ? `Needs attention: ${bad.map((c) => c.name).join(', ')}` : `All good · ${sys.data.checks.map((c) => c.name).join(', ')}`) : 'Checking…'}><button className="ghost" onClick={() => sys.reload()}>Run checks</button></SRow>
         <SRow title="Log level" hint="What the server keeps in its log. Errors only is the quietest."><PSelect label="Log level" value={inst.data?.logLevel ?? 'info'} options={[['errors', 'Errors'], ['warnings', 'Warnings'], ['info', 'Everything']]} set={(v) => put({ logLevel: v })} /></SRow>
-        <SRow title="Send anonymous crash reports" hint={inst.data?.crashHost ? `When Frames stops on an error, it sends the version, the error and where it happened (no photos, names, emails or folder paths) to ${inst.data.crashHost}. Off unless you turn it on.` : 'Off. Nothing can be sent until the person running the server sets CRASH_REPORT_URL to a place that takes reports.'}><PSwitch label="Send anonymous crash reports" on={!!inst.data?.crashReports} disabled={!inst.data?.crashHost} set={(v) => put({ crashReports: v })} /></SRow>
-        <SRow title="Logs" hint={`Last 7 days · ${logs.data ? (logs.data.bytes > 1048576 ? `${(logs.data.bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(logs.data.bytes / 1024))} KB`) : '…'}`}><a className="ghost" href="/api/admin/logs" download="frames.log">Download</a></SRow>
       </SCard>
 
       <Eyebrow>Advanced</Eyebrow>

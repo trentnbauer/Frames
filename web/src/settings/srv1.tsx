@@ -44,12 +44,12 @@ export function useSignin(ctx: Ctx): Section {
   const configure = () => ctx.modal(<Modal title="Sign-in methods" sub="Set up, test and remove each method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access /></Modal>);
   const rows: R[] = METHODS.map(([k, icon, label, hint, type, fail]) => {
     const p = a.data?.providers.find((x) => x.type === type);
-    const on = !!p && !p.off;
+    const on = k === 'passkey' ? true : !!p && !p.off;
     const tested = !!p && a.data?.testedBy?.provider === p.id;
     return {
-      id: `m_${k}`, t: 'method', icon, label, hint, value: on, togDisabled: k === 'passkey' ? 'Passkeys are not in this version of Frames' : undefined,
+      id: `m_${k}`, t: 'method', icon, label, hint, value: on, togDisabled: k === 'passkey' ? 'Built in: people add passkeys under Settings, Profile' : undefined,
       method: {
-        on, test: tested || on ? 'pass' : 'none', failWith: fail, configure,
+        on, configured: !!p, builtIn: k === 'passkey', test: tested || on ? 'pass' : 'none', failWith: fail, configure,
         setOn: async (v) => { if (!p) { ctx.toast(`Set up ${label} first: press Configure`); return; } await act(ctx, () => api(`/auth/methods/${p.id}`, { method: 'PUT', body: { on: v } })); a.reload(); },
         runTest: () => { if (!p) { ctx.toast(`${fail} · press Configure`); return; } window.location.assign(`/auth/login/${p.id}?test=1`); },
       },
@@ -134,6 +134,7 @@ export function useMembers(ctx: Ctx): Section {
 const WHO: [string, string][] = [['Admins and members', 'members'], ['Admins only', 'admins']];
 const SYNC: [string, number][] = [['Every 15 min', 15], ['Every hour', 60], ['Every 6 hours', 360]];
 const QUOTA: [string, number][] = [['50 GB', 50], ['200 GB', 200], ['500 GB', 500], ['No limit', 0]];
+const PERSON: [string, number][] = [['No limit', 0], ['10 GB', 10], ['25 GB', 25], ['50 GB', 50], ['100 GB', 100], ['250 GB', 250], ['500 GB', 500]];
 const OTHER_PROV: [string, string, string, string][] = [['cpIcloud', 'iC', 'iCloud shared albums', 'Public shared-album links only. No sign-in needed.'], ['cpS3', 'S3', 'S3-compatible', 'AWS S3, Backblaze B2, Cloudflare R2, MinIO.'], ['cpWebdav', 'WD', 'WebDAV / Nextcloud', 'Members enter their own server address.'], ['cpSmb', 'SM', 'Network share (SMB)', 'A NAS folder on your network.']];
 export function useFolders(ctx: Ctx): Section {
   const info = useApi<{ internalDir: string; libraries: { path: string }[] }>('/settings');
@@ -150,7 +151,7 @@ export function useFolders(ctx: Ctx): Section {
   const provs = cl.data?.providers ?? [];
   const ABBR: Record<string, string> = { google: 'GD', dropbox: 'DB', onedrive: 'OD' };
   const mRows: R[] = [
-    ...provs.map((p): R => ({ id: `cp_${p.id}`, t: 'method', icon: ABBR[p.id] ?? p.id.slice(0, 2).toUpperCase(), label: p.label, hint: p.configured ? `Uses your ${p.label} app · client ID set` : 'Needs an app ID.', value: p.configured, togDisabled: 'Set or clear the app under Configure', method: { on: p.configured, test: p.configured ? 'pass' : 'none', failWith: 'App ID not set', configure: manage, setOn: () => ctx.toast('Set or clear the app under Configure'), runTest: () => ctx.toast(p.configured ? `${p.label} is set up` : 'App ID not set · press Configure') } })),
+    ...provs.map((p): R => ({ id: `cp_${p.id}`, t: 'method', icon: ABBR[p.id] ?? p.id.slice(0, 2).toUpperCase(), label: p.label, hint: p.configured ? `Uses your ${p.label} app · client ID set` : 'Needs an app ID.', value: p.configured, togDisabled: 'Set or clear the app under Configure', method: { on: p.configured, configured: p.configured, test: p.configured ? 'pass' : 'none', failWith: 'App ID not set', configure: manage, setOn: () => ctx.toast('Set or clear the app under Configure'), runTest: () => ctx.toast(p.configured ? `${p.label} is set up` : 'App ID not set · press Configure') } })),
     ...OTHER_PROV.map(([id, icon, label, hint]): R => ({ id, t: 'method', icon, label, hint, value: false, togDisabled: 'Not in this version of Frames', method: { on: false, test: 'none', failWith: 'Not available', configure: () => ctx.toast(`${label} is not in this version of Frames`), setOn: () => ctx.toast(`${label} is not in this version of Frames`), runTest: () => ctx.toast(`${label} is not in this version of Frames`) } })),
   ];
   const details: R[] = provs.flatMap((p): R[] => [
@@ -173,6 +174,9 @@ export function useFolders(ctx: Ctx): Section {
         { id: 'allowOrig', t: 'toggle', label: 'Allow original downloads on portfolios', value: !!inst.data?.allowOriginals, set: (v) => void put({ allowOriginals: v }) },
         { id: 'srvFullRes', t: 'toggle', label: 'Allow original resolution from the cloud', hint: 'Off: everyone’s cloud imports are saved as 4096 px copies to save disk space.', value: !!orig.data?.allow, set: async (v: boolean) => { await act(ctx, () => api('/admin/cloud-originals', { method: 'PUT', body: { allow: v } })); orig.reload(); } },
         { id: 'cloudOnly', t: 'toggle', label: 'Keep originals in cloud storage only', hint: 'Frees disk space on this server. Nothing in the cloud is touched.', value: !!inst.data?.cloudOnly, set: (v) => { if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload to Frames, and every cloud photo is kept only as a smaller copy here. Deleting a photo from the cloud deletes its only full-size original.')) return; void put({ cloudOnly: v }); } },
+      ] },
+      { title: 'Per-person limit', rows: [
+        { id: 'userQuota', t: 'select', label: 'Storage per person', hint: 'Uploads pause for that member at the limit. Administrators aren’t limited.', opts: PERSON.map((q) => q[0]), value: PERSON.find((q) => q[1] === ((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0))?.[0] ?? 'No limit', set: (v) => void put({ userQuotaGb: PERSON.find((q) => q[0] === v)![1] }) },
       ] },
       { title: 'Cloud providers', rows: mRows },
       { title: 'Cloud sign-in details', rows: [...details, { id: 'cpRedirect', t: 'link', label: 'Redirect URL', hint: `${cl.data?.redirectUri ?? ''} · paste this into each provider’s app settings`, meta: 'Copy', act: () => { void navigator.clipboard?.writeText(cl.data?.redirectUri ?? ''); ctx.toast('Copied the redirect URL'); } }] },

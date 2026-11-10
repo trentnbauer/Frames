@@ -91,6 +91,29 @@ export function useNetwork(ctx: Ctx): Section {
     ],
   };
 }
+
+type LogLine = { time: string; level: string; message: string };
+/** The server's own log: the newest lines, colour-coded (WRN amber, ERR red), with the whole file as a download. */
+function LogModal({ ctx }: { ctx: Ctx }) {
+  const l = useApi<{ lines: LogLine[]; bytes: number; level: string }>('/admin/logs/tail?tail=300');
+  const lines = l.data?.lines ?? [];
+  const bytes = l.data?.bytes ?? 0;
+  const size = bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  const tag = (x: string) => (x === 'WARN' ? 'WRN' : x === 'ERROR' ? 'ERR' : x === 'DEBUG' ? 'DBG' : 'INF');
+  const colour = (x: string) => (x === 'WARN' ? 'oklch(0.8 0.13 80)' : x === 'ERROR' ? '#e79a82' : '#a8a59f');
+  const text = lines.map((x) => `${x.time} ${tag(x.level)} ${x.message}`).join('\n');
+  return (
+    <Modal title="Logs" sub={`Log level: ${cap1(l.data?.level ?? 'info')} · the newest lines, last 7 days`} width={820} onClose={close(ctx)}
+      foot={<><span className="grow" /><a className="btn outline" href="/api/admin/logs/download" download>Download all · {size}</a><button className="btn" onClick={() => { void navigator.clipboard?.writeText(text).then(() => ctx.toast('Copied')); }}>Copy</button><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
+      <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '12px 14px', maxHeight: 380, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+        {l.loading && <span style={{ color: '#8f8c86' }}>Loading…</span>}
+        {!l.loading && lines.length === 0 && <span style={{ color: '#8f8c86' }}>Nothing logged yet.</span>}
+        {lines.map((x, i) => <div key={i} style={{ color: colour(x.level) }}><span style={{ color: '#6f6c67' }}>{x.time.slice(11, 19)}</span> {tag(x.level)} {x.message}</div>)}
+      </div>
+    </Modal>
+  );
+}
+const cap1 = (s: string) => s[0].toUpperCase() + s.slice(1);
 function TunnelLog() {
   const l = useApi<{ lines: string[] }>('/tunnel/logs');
   return <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '12px 14px', maxHeight: 340, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, color: '#a8a59f', whiteSpace: 'pre-wrap', marginTop: 12 }}>{l.data?.lines.length ? l.data.lines.join('\n') : 'Nothing logged yet.'}</div>;
@@ -256,8 +279,7 @@ export function useServer(ctx: Ctx): Section {
       { title: 'Logs & health', rows: [
         { id: 'health', t: 'button', label: 'Health', hint: sys.data ? (bad.length ? `Needs attention: ${bad.map((c) => c.name).join(', ')}` : `All good · ${sys.data.checks.map((c) => c.name).join(', ')}`) : 'Checking…', meta: 'Run checks', act: () => { sys.reload(); ctx.toast(bad.length ? `${bad.length} need attention` : `All ${sys.data?.checks.length ?? 0} checks passed`); } },
         { id: 'logLevel', t: 'select', label: 'Log level', opts: LEVELS.map((l) => l[0]), value: LEVELS.find((l) => l[1] === inst.data?.logLevel)?.[0] ?? 'Info', set: (v) => void put({ logLevel: LEVELS.find((l) => l[0] === v)![1] }) },
-        { id: 'logs', t: 'button', label: 'Logs', hint: `Last 7 days · ${size}`, meta: 'Download', act: () => { window.location.href = '/api/admin/logs'; ctx.toast('Downloading frames.log'); } },
-        { id: 'telemetry', t: 'toggle', label: 'Send anonymous crash reports', hint: inst.data?.crashHost ? `Sent to ${inst.data.crashHost}: the version, the error and where it happened. No photos, names, emails or folder paths.` : 'Nothing can be sent until the person running the server sets CRASH_REPORT_URL.', value: !!inst.data?.crashReports, togDisabled: inst.data?.crashHost ? undefined : 'No place to send reports is set', set: (v) => void put({ crashReports: v }) },
+        { id: 'logs', t: 'button', label: 'Logs', hint: `Last 7 days · ${size}`, meta: 'Show', act: () => ctx.modal(<LogModal ctx={ctx} />) },
       ] },
       { title: 'Advanced', rows: [
         { id: 'env', t: 'link', label: 'Environment file', hint: 'Compare the app’s settings with /config/frames.env.', meta: 'Show differences', act: () => ctx.modal(<Diff ctx={ctx} secrets={secrets} />) },

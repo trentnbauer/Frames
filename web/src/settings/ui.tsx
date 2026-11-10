@@ -17,7 +17,7 @@ export type R = {
   /** selTog and order: the switch beside the control. */
   tog?: boolean; togSet?: (v: boolean) => void; togDisabled?: string;
   /** method: a sign-in or cloud provider that is tested before it is turned on. */
-  method?: { on: boolean; setOn: (v: boolean) => void; test: 'none' | 'pass' | 'fail' | 'busy'; failWith?: string; runTest: () => void; configure: () => void };
+  method?: { configured?: boolean; builtIn?: boolean; on: boolean; setOn: (v: boolean) => void; test: 'none' | 'pass' | 'fail' | 'busy'; failWith?: string; runTest: () => void; configure: () => void };
   /** order: which provider comes first, how many follow, and how to open the order. */
   order?: { first: string; more: number; open: () => void };
 };
@@ -153,7 +153,9 @@ export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: 
         {t === 'button' && <span role="button" tabIndex={0} onClick={r.act} onKeyDown={(e) => { if (e.key === 'Enter') r.act?.(); }} className="sbtn" style={{ height: 32, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 999, boxShadow: ringBtn, fontSize: 13.5, cursor: 'pointer', color: r.danger ? 'oklch(0.75 0.14 28)' : '#efede8' }}>{r.meta}</span>}
         {t === 'method' && m && (
           <>
-            <span role="button" tabIndex={0} onClick={m.configure} className="slink" style={{ fontSize: 13, color: '#a8a59f', cursor: 'pointer' }}>Configure</span>
+            {m.builtIn
+              ? <span style={{ fontSize: 13, color: '#6f6c67' }}>Built in</span>
+              : <span role="button" tabIndex={0} onClick={m.configure} className="slink" style={{ fontSize: 13, color: m.configured ? '#6f6c67' : '#a8a59f', cursor: 'pointer' }}>{m.configured ? '✓ Configured' : 'Configure'}</span>}
             <span role="button" tabIndex={0} onClick={() => m.test !== 'busy' && m.runTest()} className="sbtn" style={{ height: 30, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: ringBtn, color: testFg }}>
               {m.test === 'busy' && <i style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(255,255,255,.2)', borderTopColor: '#efede8', animation: 'spin .8s linear infinite', display: 'inline-block' }} />}{testLabel}
             </span>
