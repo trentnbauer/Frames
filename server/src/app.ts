@@ -22,6 +22,8 @@ import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
 import { registerNotifications } from './routes/notifications.js';
+import { registerHome } from './routes/home.js';
+import { registerCommunity } from './routes/community.js';
 import { registerSystem, startEmailHealth } from './routes/system.js';
 import { registerInsights } from './routes/insights.js';
 import { parseGear } from './gear.js';
@@ -236,7 +238,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const portrait = (pid: number) => { const p = one('SELECT w, h FROM photos WHERE id = ?', pid); return p && p.w && p.h ? p.h > p.w : null; };
     const layout = stored ?? deriveLayout(c.target ? JSON.parse(c.target) : null, oldChosen, portrait);
     return {
-      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '',
+      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', updatedAt: c.updated_at ?? '',
       target: stored ? targetOf(stored) : c.target ? JSON.parse(c.target) : null,
       layout, layoutSaved: !!stored, background: backgroundOf(db, c.id),
       photoIds: rows.map((r) => r.photo_id), chosenIds: stored ? chosenOf(stored) : oldChosen, printedAt: c.printed_at ?? null,
@@ -529,6 +531,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerAuth(app, ctx, auth);
   registerProfile(app, ctx);
   registerNotifications(app, ctx);
+  registerHome(app, ctx);
+  registerCommunity(app, ctx);
   registerSystem(app, ctx);
   startEmailHealth(ctx, (fn) => app.addHook('onClose', async () => fn()));
   registerCloud(app, ctx);

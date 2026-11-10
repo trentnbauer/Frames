@@ -8,9 +8,9 @@ import { WALL_BG, arrange, area, fits, frameOf, fromPreset, GROUPS, metres, newP
 import type { NewCompositionStart } from '../ui';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
-const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 } as const;
-const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
-const opt = (on: boolean) => ({ background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: ring });
+const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 8 } as const;
+const ring = 'inset 0 0 0 1px var(--outline)';
+const opt = (on: boolean) => ({ background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
 
 type Kind = 'subject' | 'tag' | 'colour';
 type Item = { name: string; n?: number };
@@ -26,11 +26,11 @@ function PickField({ kind, title, items, chosen, fromName, onAdd, onRemove }: { 
   return (
     <div style={{ marginBottom: 16, position: 'relative' }}>
       <div style={label}>{title}</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', background: '#0d0d0d', borderRadius: 8, padding: '6px 8px', boxShadow: ring }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg)', borderRadius: 8, padding: '6px 8px', boxShadow: ring }}>
         {chosen.map((n) => (
-          <span key={n} title={fromName.includes(n) ? 'Matched from the name' : undefined} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '4px 10px', borderRadius: 999, fontSize: 12.5, background: '#efede8', color: '#0d0d0d' }}>
+          <span key={n} title={fromName.includes(n) ? 'Matched from the name' : undefined} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '4px 10px', borderRadius: 999, fontSize: 12.5, background: 'var(--btn-bg)', color: 'var(--btn-fg)' }}>
             {fromName.includes(n) && <span aria-hidden style={{ fontSize: 10 }}>✦</span>}{n}
-            <button aria-label={`Remove ${kind} ${n}`} onClick={() => onRemove(n)} style={{ color: '#6f6c67' }}>✕</button>
+            <button aria-label={`Remove ${kind} ${n}`} onClick={() => onRemove(n)} style={{ color: 'var(--faint)' }}>✕</button>
           </span>
         ))}
         <input value={text} onChange={(e) => { setText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}
@@ -39,8 +39,8 @@ function PickField({ kind, title, items, chosen, fromName, onAdd, onRemove }: { 
           style={{ flex: 1, minWidth: 120, background: 'none', border: 0, outline: 'none', fontSize: 13, padding: '4px 2px' }} />
       </div>
       {open && hits.length > 0 && (
-        <div role="listbox" aria-label={`${title} suggestions`} style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5, marginTop: 4, background: '#1e1e1d', borderRadius: 8, boxShadow: '0 0 0 1px rgba(255,255,255,.1),0 12px 30px rgba(0,0,0,.5)', maxHeight: 220, overflow: 'auto' }}>
-          {hits.map((i) => <button key={i.name} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); add(i.name); }} style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13 }}><span>{i.name}</span>{i.n !== undefined && <span style={{ color: '#6f6c67' }}>{i.n}</span>}</button>)}
+        <div role="listbox" aria-label={`${title} suggestions`} style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5, marginTop: 4, background: 'var(--raised2)', borderRadius: 8, boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', maxHeight: 220, overflow: 'auto' }}>
+          {hits.map((i) => <button key={i.name} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); add(i.name); }} style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13 }}><span>{i.name}</span>{i.n !== undefined && <span style={{ color: 'var(--faint)' }}>{i.n}</span>}</button>)}
         </div>
       )}
     </div>
@@ -127,10 +127,10 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   };
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div role="dialog" aria-label="New composition" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <div role="dialog" aria-label="New composition" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 18px' }}>New composition</h2>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Birds at the beach" aria-label="Composition name"
-          style={{ width: '100%', background: '#0d0d0d', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
+          style={{ width: '100%', background: 'var(--bg)', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
         <div style={label}>Layout</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 6, marginBottom: 18 }}>
           {PRESETS.map((pr) => {
@@ -138,7 +138,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
             return (
               <button key={pr.key} aria-pressed={on} onClick={() => { setPreset(pr.key); setMode(pr.mode); setPrints(fromPreset(pr)); }} style={{ borderRadius: 8, padding: '10px 6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, fontSize: 12, ...opt(on) }}>
                 <span style={{ position: 'relative', display: 'block', width: `min(100%, ${Math.round((34 * f.W) / f.H)}px)`, aspectRatio: String(f.W / f.H), maxHeight: 34 }}>
-                  {rectsIn(laid, f).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: on ? '#0d0d0d' : '#a8a59f' }} />)}
+                  {rectsIn(laid, f).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: on ? '#0d0d0d' : 'var(--text2)' }} />)}
                 </span>
                 {pr.label}
               </button>
@@ -148,7 +148,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={label}>Prints</div>
         <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
           {prints.map((p, i) => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,.08)', flexWrap: 'wrap' }}>
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--hair)', flexWrap: 'wrap' }}>
               <span style={{ font: "italic 400 20px/1 'Instrument Serif',Georgia,serif", width: 18 }}>{i + 1}</span>
               <select aria-label="Print size" value={p.size} onChange={(e) => custom((q) => { q[i].size = e.target.value; if (q[i].frame && !fits(q[i].frame!.size, e.target.value)) q[i].frame = { ...q[i].frame!, size: e.target.value }; })}>
                 {GROUPS.map(([g, ks]) => <optgroup key={g} label={g}>{ks.map((k) => <option key={k} value={k}>{sizeName(k)}</option>)}</optgroup>)}
@@ -161,31 +161,31 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
                 <option value="poster">Poster</option>
                 {Object.keys(PAPER).filter((k) => fits(k, p.size)).sort((a, b) => area(a) - area(b)).map((k) => <option key={k} value={k}>{k === p.size ? 'Framed, no border' : `In ${sizeName(k)} frame`}</option>)}
               </select>
-              <button aria-label="Remove print" onClick={() => prints.length > 1 && custom((q) => { q.splice(i, 1); })} style={{ color: '#6f6c67', fontSize: 12, width: 16 }}>✕</button>
+              <button aria-label="Remove print" onClick={() => prints.length > 1 && custom((q) => { q.splice(i, 1); })} style={{ color: 'var(--faint)', fontSize: 12, width: 16 }}>✕</button>
             </div>
           ))}
         </div>
-        {prints.length < 6 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: '#a8a59f', marginBottom: 14 }}>+ Add a print</button>}
+        {prints.length < 6 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>+ Add a print</button>}
         <div style={{ background: WALL_BG, borderRadius: 8, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 20, position: 'relative' }} aria-label="Layout preview">
           <div style={{ position: 'relative', width: `min(100%, ${Math.round((98 * wall.W) / wall.H)}px)`, aspectRatio: String(wall.W / wall.H) }}>
-            {rectsIn(laid, wall).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: '#efede8', opacity: 0.85 }} />)}
+            {rectsIn(laid, wall).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: 'var(--btn-bg)', opacity: 0.85 }} />)}
           </div>
-          <span style={{ position: 'absolute', right: 10, bottom: 8, font: "400 11px 'IBM Plex Mono',monospace", color: '#6f6c67' }}>{metres(wall.w)} × {metres(wall.h)} m</span>
+          <span style={{ position: 'absolute', right: 10, bottom: 8, font: "400 11px 'IBM Plex Mono',monospace", color: 'var(--faint)' }}>{metres(wall.w)} × {metres(wall.h)} m</span>
         </div>
         {aiOn && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-8px 0 16px', flexWrap: 'wrap' }}>
             <button onClick={askAi} disabled={!name.trim() || aiBusy} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 13, boxShadow: ring, opacity: name.trim() ? 1 : 0.5 }}>{aiBusy ? 'Asking the AI…' : '✨ Find with AI'}</button>
-            <span style={{ fontSize: 12.5, color: '#8f8c86' }} role="status">{aiMsg || 'Reads the name and picks subjects, tags and colours you already have.'}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }} role="status">{aiMsg || 'Reads the name and picks subjects, tags and colours you already have.'}</span>
           </div>
         )}
         <PickField kind="subject" title="Subjects to look for (optional)" items={known.subject} chosen={chosen('subject')} fromName={auto.subject} onAdd={(n) => add('subject', n)} onRemove={(n) => remove('subject', n)} />
         <PickField kind="tag" title="Tags to look for (optional)" items={known.tag} chosen={chosen('tag')} fromName={auto.tag} onAdd={(n) => add('tag', n)} onRemove={(n) => remove('tag', n)} />
         <PickField kind="colour" title="Colours to look for (optional)" items={known.colour} chosen={chosen('colour')} fromName={auto.colour} onAdd={(n) => add('colour', n)} onRemove={(n) => remove('colour', n)} />
-        {(auto.subject.length + auto.tag.length + auto.colour.length) > 0 && <p style={{ fontSize: 12, color: '#8f8c86', margin: '-6px 0 16px' }}>✦ matched from the name. Take any away with ✕.</p>}
+        {(auto.subject.length + auto.tag.length + auto.colour.length) > 0 && <p style={{ fontSize: 12, color: 'var(--muted)', margin: '-6px 0 16px' }}>✦ matched from the name. Take any away with ✕.</p>}
         {err && <p className="reason" role="alert">{err}</p>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`}</span>
-          <button onClick={create} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Create and rank</button>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`}</span>
+          <button onClick={create} disabled={busy} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Create and rank</button>
         </div>
       </div>
     </div>

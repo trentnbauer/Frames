@@ -42,18 +42,18 @@ export function SharePanel({ kind, id, onClose }: { kind: 'collection' | 'shoot'
   };
 
   const live = links.data?.find((l) => l.status === 'active');
-  const row = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,.08)', fontSize: 13 } as const;
+  const row = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--hair)', fontSize: 13 } as const;
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-    <section className="sharepanel" role="dialog" aria-label="Share" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', margin: 0, border: 0 }}>
+    <section className="sharepanel" role="dialog" aria-label="Share" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', margin: 0, border: 0 }}>
       <div className="spread"><h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Share for review</h2><button className="t2" onClick={onClose}>Close</button></div>
-      <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>
+      <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 18px' }}>
         A private link to this {kind === 'shoot' ? 'photoshoot' : 'composition'}. Guests see only the pictures: no places, notes or anything else in your library. Their ratings are kept apart from yours and only feed the ranking.
       </p>
       {live && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <div style={{ flex: 1, background: '#0d0d0d', borderRadius: 999, padding: '10px 16px', font: "400 13px 'IBM Plex Mono',monospace", color: '#a8a59f', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{urlOf(live.token).replace(/^https?:\/\//, '')}</div>
-          <button onClick={() => copy(live)} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '10px 18px', fontSize: 14 }}>{copied === live.id ? 'Copied' : 'Copy link'}</button>
+          <div style={{ flex: 1, background: 'var(--bg)', borderRadius: 999, padding: '10px 16px', font: "400 13px 'IBM Plex Mono',monospace", color: 'var(--text2)', boxShadow: 'inset 0 0 0 1px var(--outline)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{urlOf(live.token).replace(/^https?:\/\//, '')}</div>
+          <button onClick={() => copy(live)} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '10px 18px', fontSize: 14 }}>{copied === live.id ? 'Copied' : 'Copy link'}</button>
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 14 }}>

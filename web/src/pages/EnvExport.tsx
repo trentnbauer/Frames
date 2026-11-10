@@ -85,7 +85,7 @@ export function EnvExport() {
                     const secretCell = (set: boolean) => <span className="faint">{set ? '•••• secret, set' : '–'}</span>;
                     const val = (v: string | undefined) => (v === undefined ? <span className="faint">–</span> : <span className="mono" style={{ wordBreak: 'break-all' }}>{v === '' ? <span className="faint">(empty)</span> : v}</span>);
                     return (
-                      <tr key={r.name} style={{ borderTop: '1px solid rgba(255,255,255,.08)', verticalAlign: 'top' }}>
+                      <tr key={r.name} style={{ borderTop: '1px solid var(--hair)', verticalAlign: 'top' }}>
                         <td className="mono" style={{ padding: '6px 8px 6px 0', wordBreak: 'break-all' }}>{r.name}</td>
                         <td style={{ padding: '6px 8px' }}>{r.secret ? secretCell(r.status !== 'app only') : r.status === 'app only' ? <span className="faint">not set</span> : val(r.env)}</td>
                         <td style={{ padding: '6px 8px' }}>{r.secret ? secretCell(r.status !== 'env only') : r.status === 'same' ? <span className="faint">same</span> : r.status === 'env only' ? <span className="faint">not saved</span> : val(r.app)}</td>

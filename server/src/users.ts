@@ -44,6 +44,17 @@ CREATE TABLE IF NOT EXISTS email_log (
 );
 CREATE TABLE IF NOT EXISTS email_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS email_codes_email ON email_codes(email);
+CREATE TABLE IF NOT EXISTS community_ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, owner INTEGER NOT NULL, photo INTEGER NOT NULL, reviewer INTEGER NOT NULL, rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  note TEXT, ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS community_ratings_photo ON community_ratings(owner, photo);
+CREATE INDEX IF NOT EXISTS community_ratings_reviewer ON community_ratings(reviewer);
+CREATE TABLE IF NOT EXISTS community_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, owner INTEGER NOT NULL, photo INTEGER NOT NULL, reporter INTEGER NOT NULL, admin INTEGER NOT NULL DEFAULT 0,
+  reason TEXT NOT NULL DEFAULT 'other', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS community_reports_photo ON community_reports(owner, photo);
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 `;
 

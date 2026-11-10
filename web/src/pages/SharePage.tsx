@@ -219,9 +219,9 @@ export function SharePage() {
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div role="dialog" aria-label="Suggest another" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+          <div role="dialog" aria-label="Suggest another" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
             <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>Suggest another</h2>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
             <div className="just">
               {others.filter((o) => !swapped.has(o.id) || mine[picking] === o.id).map((p) => <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 140}px`, aspectRatio: String(p.ar) }} onClick={() => swap(picking, p.id)} aria-label={`Suggest ${p.title}`}><Img p={p} /></button>)}
               <i />
@@ -276,17 +276,17 @@ function NameBox({ initial, token, signIn, onDone, onCancel }: { initial: string
   const ok = n.trim().length > 0;
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: '#161615', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>What should we call you?</h2>
-        <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
         <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" className="namebox" style={{ width: '100%', marginBottom: 16 }} />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="pill" onClick={onCancel}>Cancel</button>
           <button className="pill primary" disabled={!ok}>Continue with this name</button>
         </div>
         {signIn.length > 0 && (
-          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--hair)' }}>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {signIn.map((p) => <a key={p.id} className="pill" href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
             </div>

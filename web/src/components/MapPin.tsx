@@ -46,10 +46,10 @@ export function MapPin({ lat, lon, onSave, onClose }: { lat: number | null; lon:
 
   return (
     <div className="sheet-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div role="dialog" aria-label="Place a pin on the map" style={{ background: '#161615', borderRadius: 14, padding: 20, width: W + 40, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <div role="dialog" aria-label="Place a pin on the map" style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: W + 40, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <h2 style={{ font: "400 26px 'Instrument Serif',Georgia,serif", margin: 0 }}>Place a pin</h2>
-          <button onClick={onClose} aria-label="Close" style={{ color: '#a8a59f' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--text2)' }}>✕</button>
         </div>
         <form onSubmit={(e) => { e.preventDefault(); void search(); }} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search for a place to move the map" aria-label="Search the map" style={{ flex: 1 }} />
@@ -57,7 +57,7 @@ export function MapPin({ lat, lon, onSave, onClose }: { lat: number | null; lon:
         </form>
         {err && <div className="reason" role="alert" style={{ marginBottom: 8 }}>{err}</div>}
         {hits && (hits.length === 0 ? <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>No place found.</div> : (
-          <div style={{ marginBottom: 10 }}>{hits.map((h) => <button key={`${h.lat},${h.lon}`} onClick={() => { setC({ lat: h.lat, lon: h.lon }); setZ(12); setHits(null); }} style={{ display: 'block', textAlign: 'left', fontSize: 12.5, padding: '4px 0', color: '#efede8' }}>{h.name}</button>)}</div>
+          <div style={{ marginBottom: 10 }}>{hits.map((h) => <button key={`${h.lat},${h.lon}`} onClick={() => { setC({ lat: h.lat, lon: h.lon }); setZ(12); setHits(null); }} style={{ display: 'block', textAlign: 'left', fontSize: 12.5, padding: '4px 0', color: 'var(--text)' }}>{h.name}</button>)}</div>
         ))}
         <div aria-label="Map" onPointerDown={(e) => { drag.current = { x: e.clientX, y: e.clientY, cx: mid.x, cy: mid.y, moved: false }; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); }}
           onPointerMove={(e) => { const d = drag.current; if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true; if (d.moved) setC(unproject(d.cx - dx, d.cy - dy, z)); }}

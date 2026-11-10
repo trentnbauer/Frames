@@ -71,26 +71,26 @@ export function Shoots() {
       <Header />
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 28 }}>
         <h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Photoshoots</h1>
-        {shoots.data && <span style={{ fontSize: 13, color: '#8f8c86' }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
+        {shoots.data && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
       </div>
       <input ref={fileInput} type="file" multiple hidden accept=".jpg,.jpeg,.png,.tif,.tiff,.raf,.cr2,.cr3,.nef,.arw,.dng,.orf,.rw2" onChange={(e) => upload(e.target.files)} aria-label="Choose photographs to upload" />
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
-        style={{ width: '100%', borderRadius: 12, padding: '30px 32px', marginBottom: 36, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', textAlign: 'left', background: 'rgba(255,255,255,.03)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>
+        style={{ width: '100%', borderRadius: 12, padding: '30px 32px', marginBottom: 36, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', textAlign: 'left', background: 'rgba(255,255,255,.03)', boxShadow: 'inset 0 0 0 1px var(--outline)' }}>
         <div>
           <div style={{ font: "400 30px/1.1 'Instrument Serif',Georgia,serif" }}>Bring in a new shoot</div>
-          <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>{cloudOnly ? <>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings, Cloud sync</Link>, or sync the library folder.</> : 'Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.'}</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 6 }}>{cloudOnly ? <>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings, Cloud sync</Link>, or sync the library folder.</> : 'Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.'}</div>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#6f6c67' }}>
+          <span style={{ fontSize: 12, color: 'var(--faint)' }}>
             {p?.lastScan ? `Last synced ${fmtDate(p.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
             <button onClick={sync} disabled={busy} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
           </span>
-          <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>New photoshoot</button>
+          <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)' }}>New photoshoot</button>
           {cloudOnly
-            ? <Link to="/settings?section=cloud-sync" style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Connect cloud storage</Link>
-            : <button onClick={() => setBox('drop')} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>}
+            ? <Link to="/settings?section=cloud-sync" style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Connect cloud storage</Link>
+            : <button onClick={() => setBox('drop')} disabled={busy} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>}
         </div>
       </div>
       {naming && (
@@ -101,30 +101,30 @@ export function Shoots() {
       )}
       {box && (
         <div onMouseDown={(e) => e.target === e.currentTarget && box !== 'busy' && setBox(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div role="dialog" aria-label="Bring in a shoot" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+          <div role="dialog" aria-label="Bring in a shoot" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
             {box === 'drop' && (
               <>
                 <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Bring in a shoot</h2>
-                <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>One shoot or roll at a time works best. Frames groups by date and suggests splits.</p>
+                <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 18px' }}>One shoot or roll at a time works best. Frames groups by date and suggests splits.</p>
                 <button onClick={() => fileInput.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
-                  style={{ width: '100%', aspectRatio: '2', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(255,255,255,.03)' }}>
+                  style={{ width: '100%', aspectRatio: '2', borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(255,255,255,.03)' }}>
                   <span style={{ font: "400 24px 'Instrument Serif',Georgia,serif" }}>Drop photographs here</span>
-                  <span style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Choose files</span>
-                  <span style={{ fontSize: 12, color: '#6f6c67' }}>JPEG · TIFF · RAW</span>
+                  <span style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Choose files</span>
+                  <span style={{ fontSize: 12, color: 'var(--faint)' }}>JPEG · TIFF · RAW</span>
                 </button>
-                <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 14 }}>Or <button onClick={async () => { setBox('busy'); await sync(); setBox('done'); }} style={{ color: '#efede8', textDecoration: 'underline' }}>sync the library folder</button> · {p?.count ?? 0} new {p?.count === 1 ? 'file' : 'files'} found</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 14 }}>Or <button onClick={async () => { setBox('busy'); await sync(); setBox('done'); }} style={{ color: 'var(--text)', textDecoration: 'underline' }}>sync the library folder</button> · {p?.count ?? 0} new {p?.count === 1 ? 'file' : 'files'} found</div>
               </>
             )}
             {box === 'busy' && (
               <>
                 <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 18px' }}>{progress && progress.total ? `Importing ${progress.total} photographs…` : 'Importing…'}</h2>
-                <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', width: progress && progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : '8%', background: '#a8a59f' }} /></div>
-                <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 8 }}>Reading camera data and building previews. Originals are not touched.</div>
+                <div style={{ height: 2, background: 'var(--hair)' }}><i style={{ display: 'block', height: '100%', width: progress && progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : '8%', background: 'var(--text2)' }} /></div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Reading camera data and building previews. Originals are not touched.</div>
               </>
             )}
             {box === 'done' && (
               <>
-                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 }}>{result && result.imported > 0 ? `Imported ${result.imported} ${result.imported === 1 ? 'photograph' : 'photographs'}` : 'Nothing new to import'}</div>
+                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 8 }}>{result && result.imported > 0 ? `Imported ${result.imported} ${result.imported === 1 ? 'photograph' : 'photographs'}` : 'Nothing new to import'}</div>
                 <div style={{ font: "400 36px/1.1 'Instrument Serif',Georgia,serif", marginBottom: 4 }}>{result?.shootName ?? 'Your library is up to date'}</div>
                 {result?.errors && result.errors.length > 0 && <div className="reason" style={{ fontSize: 12.5, marginBottom: 8 }}>{result.errors.length} could not be read: {result.errors.slice(0, 3).map((e) => e.file).join(', ')}.</div>}
                 <div style={{ display: 'flex', gap: 4, height: 70, margin: '14px 0 22px', overflow: 'hidden' }}>
@@ -132,14 +132,14 @@ export function Shoots() {
                 </div>
                 {result?.shootId ? (
                   <>
-                    <div style={{ fontSize: 13, color: '#a8a59f', marginBottom: 12 }}>What next?</div>
+                    <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>What next?</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <button onClick={() => { setBox(null); openNew({ name: result.shootName ?? '', photoIds: (made.data?.photos ?? []).map((x) => x.id) }); }} style={{ textAlign: 'left', background: '#efede8', color: '#0d0d0d', borderRadius: 10, padding: '14px 16px' }}><b style={{ fontWeight: 500 }}>Start a composition from this shoot</b><div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 2 }}>Choose how many prints and what size</div></button>
-                      <button onClick={() => nav(`/shoots/${result.shootId}?share=1`)} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Send it for review</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>A link where friends rate the photos</div></button>
-                      <button onClick={() => nav('/review')} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Review it now</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>Your first session, a week apart from the next</div></button>
+                      <button onClick={() => { setBox(null); openNew({ name: result.shootName ?? '', photoIds: (made.data?.photos ?? []).map((x) => x.id) }); }} style={{ textAlign: 'left', background: 'var(--btn-bg)', color: 'var(--btn-fg)', borderRadius: 10, padding: '14px 16px' }}><b style={{ fontWeight: 500 }}>Start a composition from this shoot</b><div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 2 }}>Choose how many prints and what size</div></button>
+                      <button onClick={() => nav(`/shoots/${result.shootId}?share=1`)} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px var(--outline)' }}><b style={{ fontWeight: 500 }}>Send it for review</b><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>A link where friends rate the photos</div></button>
+                      <button onClick={() => nav('/review')} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px var(--outline)' }}><b style={{ fontWeight: 500 }}>Review it now</b><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>Your first session, a week apart from the next</div></button>
                     </div>
                   </>
-                ) : <button onClick={() => setBox(null)} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Close</button>}
+                ) : <button onClick={() => setBox(null)} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Close</button>}
               </>
             )}
           </div>
@@ -192,13 +192,13 @@ function ShootCard({ s }: { s: Shoot }) {
     <div>
       <Link to={`/shoots/${s.id}`} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
         <div className="cover" style={{ borderRadius: 6, marginBottom: 12 }}>{s.coverId && <Img p={{ id: s.coverId, ar: 2.2 }} style={{ aspectRatio: '2.2', width: '100%', height: '100%' }} />}</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: "400 22px 'Instrument Serif',Georgia,serif" }}>{s.name}</span><span style={{ fontSize: 12.5, color: '#8f8c86' }}>{s.count}</span></div>
-        <div style={{ fontSize: 12, color: '#8f8c86', margin: '2px 0 10px' }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
-        <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${s.reviewPct}%` }} /></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: "400 22px 'Instrument Serif',Georgia,serif" }}>{s.name}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{s.count}</span></div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 10px' }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
+        <div style={{ height: 2, background: 'var(--hair)' }}><i style={{ display: 'block', height: '100%', background: 'var(--text2)', width: `${s.reviewPct}%` }} /></div>
       </Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ fontSize: 11.5, color: '#6f6c67' }}>{s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</span>
-        <button onClick={() => openNew({ name: s.name, photoIds: (photos.data?.photos ?? []).map((p) => p.id) })} style={{ fontSize: 12.5, color: '#efede8' }}>Compose from this →</button>
+        <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>{s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</span>
+        <button onClick={() => openNew({ name: s.name, photoIds: (photos.data?.photos ?? []).map((p) => p.id) })} style={{ fontSize: 12.5, color: 'var(--text)' }}>Compose from this →</button>
       </div>
     </div>
   );

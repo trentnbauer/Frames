@@ -423,3 +423,13 @@ main.auth.terms { width: 640px; }
 .auth-agree { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text2); margin-bottom: 16px; cursor: pointer; }
 .auth-agree input { margin-top: 4px; }
 .auth-agree a { color: var(--text); text-decoration: underline; }
+
+.pickrow:hover { background: var(--hover); }
+
+@media (max-width: 1199px) { .home-grid { grid-template-columns: 1fr 1fr !important; } }
+@media (max-width: 767px) {
+  .home-grid, .compose-cols { grid-template-columns: 1fr !important; }
+  .compose-cols > i { display: none; }
+  .review-banner { flex-direction: column; align-items: flex-start !important; gap: 16px !important; padding: 20px !important; }
+  .page h1.serif { font-size: 32px !important; }
+}

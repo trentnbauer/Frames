@@ -40,11 +40,14 @@ export type PortfolioCfg = {
   fullSize: 'resized' | 'original' | 'none';
   captions: boolean;
   order: 'collection' | 'newest' | 'oldest' | 'captured';
+  /** Photographs whose average rating reaches the threshold join the portfolio by themselves (unless left out). */
+  autoAdd: boolean;
+  autoThreshold: number;
 };
 
 export const DEFAULT_PORTFOLIO: PortfolioCfg = {
   enabled: false, host: '', collectionId: null, photographerName: '', tagline: '', accentColor: 'oklch(0.58 0.13 35)',
-  buttons: [], gear: '', footer: '', fullSize: 'resized', captions: true, order: 'collection',
+  buttons: [], gear: '', footer: '', fullSize: 'resized', captions: true, order: 'collection', autoAdd: false, autoThreshold: 4.3,
 };
 export const MAX_BUTTONS = 8;
 /** The three fixed links an earlier version had (Instagram, X, Behance) become buttons the first time the settings are read. */
@@ -102,13 +105,20 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
 export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
-  /** Photographs in the chosen collection that have a picture to show, in the chosen order. */
+  /**
+   * What the portfolio shows: photographs added by hand (the chosen collection), favourites, and photographs whose score reaches the
+   * automatic threshold, minus any left out (which always wins).
+   */
+  const MEMBER = `p.has_derivs = 1 AND p.missing = 0 AND p.id NOT IN (SELECT photo_id FROM portfolio_marks WHERE out = 1) AND (
+      p.id IN (SELECT photo_id FROM collection_photos WHERE collection_id = :col)
+      OR p.id IN (SELECT photo_id FROM portfolio_marks WHERE favourite = 1)
+      OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))`;
   const photos = (c: PortfolioCfg): Row[] => {
-    if (!c.collectionId) return [];
-    const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos ASC, p.id ASC';
-    return all(`SELECT p.* FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND p.has_derivs = 1 AND p.missing = 0 ORDER BY ${order}`, c.collectionId);
+    const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos IS NULL, cp.pos ASC, p.id ASC';
+    return db.prepare(`SELECT p.* FROM photos p LEFT JOIN collection_photos cp ON cp.collection_id = :col AND cp.photo_id = p.id WHERE ${MEMBER} ORDER BY ${order}`)
+      .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold }) as Row[];
   };
-  const inSet = (c: PortfolioCfg, id: number) => !!c.collectionId && !!one('SELECT 1 x FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? AND cp.photo_id = ? AND p.has_derivs = 1 AND p.missing = 0', c.collectionId, id);
+  const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold });
 
   /** A 2400 px progressive JPEG with no camera data, made once and kept. */
   async function portfolioJpeg(id: number): Promise<string | null> {
@@ -244,8 +254,9 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     if (b.fullSize === 'original' && !originalsAllowed()) return bad('Switched off on this server. An administrator can allow it under Settings, Photo folders.');
     for (const [k, vals] of [['fullSize', ['resized', 'original', 'none']], ['order', ['collection', 'newest', 'oldest', 'captured']]] as const) if (b[k] !== undefined) { if (!(vals as readonly string[]).includes(b[k])) return bad(`Unknown ${k}`); (n as any)[k] = b[k]; }
     if (typeof b.captions === 'boolean') n.captions = b.captions;
+    if (typeof b.autoAdd === 'boolean') n.autoAdd = b.autoAdd;
+    if (b.autoThreshold !== undefined) { const t = Math.round(Number(b.autoThreshold) * 10) / 10; if (!(t >= 1 && t <= 5)) return bad('The score must be between 1 and 5.'); n.autoThreshold = t; }
     if (typeof b.enabled === 'boolean') n.enabled = b.enabled;
-    if (n.enabled && !n.collectionId) return bad('Choose the collection the portfolio shows first.');
     save(db, n);
     // The system database maps each hostname to its owner, so a visitor reaches the right library without signing in.
     x.sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(x.tenant().user.id);
@@ -254,24 +265,54 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     return dto(n);
   });
 
-  /** Puts a photograph in or out of the portfolio. Makes a "Portfolio" collection the first time. */
+  /** One photograph's place in the portfolio: in (by hand or favourite), auto (added by the score rule), or none. */
+  const stateOf = (id: number) => {
+    const c = loadPortfolio(db);
+    const m = (one('SELECT favourite, out FROM portfolio_marks WHERE photo_id = ?', id) ?? { favourite: 0, out: 0 }) as Row;
+    const hand = !!c.collectionId && !!one('SELECT 1 x FROM collection_photos WHERE collection_id = ? AND photo_id = ?', c.collectionId, id);
+    const score = (one('SELECT AVG(rating) a, COUNT(*) n FROM reviews WHERE photo_id = ?', id) ?? {}) as Row;
+    const qualifies = c.autoAdd && score.n > 0 && score.a >= c.autoThreshold;
+    const state = m.out ? 'none' : hand || m.favourite ? 'in' : qualifies ? 'auto' : 'none';
+    return { state, inPortfolio: state !== 'none', favourite: !!m.favourite, score: score.n ? Math.round(score.a * 10) / 10 : null, enabled: c.enabled, autoAdd: c.autoAdd, collectionId: c.collectionId };
+  };
+  /** Makes sure the hand-picked collection exists ("Portfolio") and returns its id. */
+  const handCollection = (): number => {
+    const c = loadPortfolio(db);
+    if (c.collectionId && one('SELECT 1 x FROM collections WHERE id = ?', c.collectionId)) return c.collectionId;
+    const col = Number(db.prepare("INSERT INTO collections(name, description) VALUES('Portfolio', 'Shown on the public portfolio website')").run().lastInsertRowid);
+    save(db, { ...c, collectionId: col });
+    return col;
+  };
+  app.get('/api/portfolio/photos/:id', async (req) => stateOf(num((req.params as Row).id)));
   app.post('/api/portfolio/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
-    const on = ((req.body ?? {}) as Row).on !== false;
-    const c = loadPortfolio(db);
-    let col = c.collectionId;
-    if (!col || !one('SELECT 1 x FROM collections WHERE id = ?', col)) {
-      if (!on) return { inPortfolio: false };
-      col = Number(db.prepare("INSERT INTO collections(name, description) VALUES('Portfolio', 'Shown on the public portfolio website')").run().lastInsertRowid);
-      save(db, { ...c, collectionId: col });
+    const b = (req.body ?? {}) as Row;
+    const before = stateOf(id);
+    const mark = (col: 'favourite' | 'out', v: number) => { db.prepare('INSERT OR IGNORE INTO portfolio_marks(photo_id) VALUES(?)').run(id); db.prepare(`UPDATE portfolio_marks SET ${col} = ? WHERE photo_id = ?`).run(v, id); };
+    const add = () => { const col = handCollection(); mark('out', 0); db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) VALUES(?, ?, (SELECT COALESCE(MAX(pos), -1) + 1 FROM collection_photos WHERE collection_id = ?))').run(col, id, col); };
+    if (typeof b.favourite === 'boolean') { mark('favourite', b.favourite ? 1 : 0); if (b.favourite) add(); }
+    if (typeof b.on === 'boolean') {
+      if (b.on) add();
+      else {
+        // Out: take it off the hand-picked list and un-star it. If the score rule had added it, it is marked left out so the rule never re-adds it.
+        const c = loadPortfolio(db);
+        if (c.collectionId) db.prepare('DELETE FROM collection_photos WHERE collection_id = ? AND photo_id = ?').run(c.collectionId, id);
+        mark('favourite', 0);
+        if (before.state === 'auto' || stateOf(id).state === 'auto') mark('out', 1);
+      }
     }
-    if (on) db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) VALUES(?, ?, (SELECT COALESCE(MAX(pos), -1) + 1 FROM collection_photos WHERE collection_id = ?))').run(col, id, col);
-    else db.prepare('DELETE FROM collection_photos WHERE collection_id = ? AND photo_id = ?').run(col, id);
-    return { inPortfolio: on, collectionId: col };
+    return stateOf(id);
   });
-  app.get('/api/portfolio/photos/:id', async (req) => {
+  // Settings, Portfolio: who is in by hand, who is a favourite, who is left out.
+  app.get('/api/portfolio/marks', async () => {
     const c = loadPortfolio(db);
-    return { inPortfolio: !!c.collectionId && !!one('SELECT 1 x FROM collection_photos WHERE collection_id = ? AND photo_id = ?', c.collectionId, num((req.params as Row).id)), enabled: c.enabled };
+    return {
+      favourites: all('SELECT photo_id FROM portfolio_marks WHERE favourite = 1').map((r) => r.photo_id as number),
+      out: all('SELECT photo_id FROM portfolio_marks WHERE out = 1').map((r) => r.photo_id as number),
+      hand: c.collectionId ? all('SELECT photo_id FROM collection_photos WHERE collection_id = ?', c.collectionId).map((r) => r.photo_id as number) : [],
+      count: photos(c).length,
+    };
   });
+  app.delete('/api/portfolio/marks/:id', async (req) => { db.prepare('UPDATE portfolio_marks SET out = 0 WHERE photo_id = ?').run(num((req.params as Row).id)); return { ok: true }; });
 }

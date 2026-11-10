@@ -35,7 +35,7 @@ function Trend({ rows }: { rows: { month: string; avg: number; n: number }[] }) 
   const y = (v: number) => H - pad - ((v - 1) / 4) * (H - pad * 2);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Average rating by month: ${rows.map((r) => `${r.month} ${r.avg}`).join(', ')}`} style={{ width: '100%', maxWidth: 560, display: 'block' }}>
-      {[1, 3, 5].map((v) => <g key={v}><line x1={pad} x2={W - pad} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,.08)" /><text x={4} y={y(v) + 4} fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{v}</text></g>)}
+      {[1, 3, 5].map((v) => <g key={v}><line x1={pad} x2={W - pad} y1={y(v)} y2={y(v)} stroke="var(--hair)" /><text x={4} y={y(v) + 4} fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{v}</text></g>)}
       <polyline fill="none" stroke="#efede8" strokeWidth="1.5" points={rows.map((r, i) => `${x(i)},${y(r.avg)}`).join(' ')} />
       {rows.map((r, i) => <circle key={r.month} cx={x(i)} cy={y(r.avg)} r="3" fill="#efede8"><title>{`${r.month}: ${r.avg} (${r.n} reviews)`}</title></circle>)}
       <text x={pad} y={H - 6} fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{rows[0].month}</text>

@@ -12,7 +12,6 @@ import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
 import { Shoots } from './pages/Shoots';
 import { Collections, CollectionDetail } from './pages/Collections';
-import { ForYou } from './pages/ForYou';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './pages/Settings';
 import { ShootDetail } from './pages/ShootDetail';
@@ -20,6 +19,7 @@ import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
+import { Community } from './pages/Community';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
@@ -27,7 +27,7 @@ import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
   '/': 'Today', '/library': 'Library', '/review': 'Review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
-  '/collections': 'Compositions', '/for-you': 'For you', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
+  '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
 const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
@@ -75,7 +75,7 @@ function Shell() {
         <Route path="/duplicates" element={<Duplicates />} />
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
-        <Route path="/for-you" element={<ForYou />} />
+        <Route path="/community" element={<Community />} />
         <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/welcome" element={<Welcome />} />

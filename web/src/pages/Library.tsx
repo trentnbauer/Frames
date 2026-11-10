@@ -124,8 +124,8 @@ export function Library() {
         </div>
       </div>
 
-      <button onClick={openSearch} aria-label="Search the library" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161615', borderRadius: 999, padding: '11px 18px', color: '#8f8c86', fontSize: 14, marginBottom: 28, textAlign: 'left' }}>
-        {ai ? "Describe what you're looking for, or search filenames, places and tags" : 'Search filenames, places, tags and metadata'}<span style={{ color: '#6f6c67', fontSize: 12 }}>⌘K</span>
+      <button onClick={openSearch} aria-label="Search the library" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', borderRadius: 999, padding: '11px 18px', color: 'var(--muted)', fontSize: 14, marginBottom: 28, textAlign: 'left' }}>
+        {ai ? "Describe what you're looking for, or search filenames, places and tags" : 'Search filenames, places, tags and metadata'}<span style={{ color: 'var(--faint)', fontSize: 12 }}>⌘K</span>
       </button>
       {(chips.length > 0 || sp.get('q')) && (
         <div className="chips-row">
@@ -146,9 +146,9 @@ export function Library() {
               <h2 style={{ margin: 0 }}><Link to={`/shoots/${s.id}`}>{s.name}</Link></h2>
               <div className="meta" style={{ marginTop: 4, marginBottom: 0 }}>{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
             </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: '#a8a59f' }}>
+            <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--text2)' }}>
               {selecting && <button onClick={() => setPicked((x) => new Set([...x, ...photos.map((p) => p.id)]))}>Select all {photos.length}</button>}
-              <button style={{ color: '#efede8' }} onClick={() => openNew({ name: s.name, photoIds: photos.map((p) => p.id) })}>Compose from these →</button>
+              <button style={{ color: 'var(--text)' }} onClick={() => openNew({ name: s.name, photoIds: photos.map((p) => p.id) })}>Compose from these →</button>
             </div>
           </div>
           <Justified {...tiles} badges={badge} photos={photos} />
@@ -157,11 +157,11 @@ export function Library() {
       {selecting && (
         <div className="selbar float" role="region" aria-label="Selected photographs">
           <b style={{ fontWeight: 500 }}>{picked.size} selected</b>
-          <button style={{ color: '#a8a59f' }} onClick={() => setPicked(new Set())}>Clear</button>
-          {lastActive && <button disabled={picked.size === 0} style={{ borderRadius: 999, padding: '10px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }} onClick={async () => { for (const id of picked) await api(`/collections/${lastActive.id}/photos/${id}`, { method: 'PUT' }); setNote(`Added ${picked.size} to “${lastActive.name}”.`); setPicked(new Set()); colls.reload(); }}>Add to {lastActive.name}</button>}
+          <button style={{ color: 'var(--text2)' }} onClick={() => setPicked(new Set())}>Clear</button>
+          {lastActive && <button disabled={picked.size === 0} style={{ borderRadius: 999, padding: '10px 16px', boxShadow: 'inset 0 0 0 1px var(--outline)' }} onClick={async () => { for (const id of picked) await api(`/collections/${lastActive.id}/photos/${id}`, { method: 'PUT' }); setNote(`Added ${picked.size} to “${lastActive.name}”.`); setPicked(new Set()); colls.reload(); }}>Add to {lastActive.name}</button>}
           {<AddToComposition up label="Add to a composition…" ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
           <MoveToShoot up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); list.reload(); shoots.reload(); }} />
-          <button disabled={picked.size === 0} onClick={() => openNew({ name: 'New composition', photoIds: [...picked] })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.size ? 1 : 0.5 }}>New composition from {picked.size}</button>
+          <button disabled={picked.size === 0} onClick={() => openNew({ name: 'New composition', photoIds: [...picked] })} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.size ? 1 : 0.5 }}>New composition from {picked.size}</button>
           {note && <span className="muted" role="status">{note}</span>}
         </div>
       )}

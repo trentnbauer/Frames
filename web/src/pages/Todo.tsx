@@ -14,9 +14,9 @@ type Walk = { photos: WalkPhoto[]; things: number };
 
 const serif = "'Instrument Serif',Georgia,serif";
 const mono = "'IBM Plex Mono',monospace";
-const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' } as const;
-const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
-const pill = { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '9px 16px', fontSize: 13, boxShadow: ring, color: '#efede8' } as const;
+const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)' } as const;
+const ring = 'inset 0 0 0 1px var(--outline)';
+const pill = { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '9px 16px', fontSize: 13, boxShadow: ring, color: 'var(--text)' } as const;
 const plural = (n: number, a: string, b: string) => `${n.toLocaleString()} ${n === 1 ? a : b}`;
 
 /** What is waiting on you: one photograph at a time, showing only what it still needs, or everything as a list. */
@@ -31,7 +31,7 @@ export function Todo() {
   const left = photos.filter((p) => !done.has(p.id));
   const things = left.reduce((n, p) => n + +p.need.tags + +p.need.place + +p.need.desc, 0) + (todo.data?.items.find((i) => i.key === 'cloud')?.count ?? 0);
   const start = (id: number) => { const i = photos.findIndex((p) => p.id === id); if (i >= 0) setCur(i); setView('focus'); };
-  const tab = (on: boolean) => ({ padding: '6px 14px', borderRadius: 999, fontSize: 13, color: on ? '#efede8' : '#a8a59f', background: on ? 'rgba(255,255,255,.08)' : 'transparent' });
+  const tab = (on: boolean) => ({ padding: '6px 14px', borderRadius: 999, fontSize: 13, color: on ? 'var(--text)' : 'var(--text2)', background: on ? 'var(--hair)' : 'transparent' });
   const reloadAll = () => { todo.reload(); walk.reload(); refreshSummary(); };
 
   return (
@@ -39,14 +39,14 @@ export function Todo() {
       <Header />
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 28, flexWrap: 'wrap' }}>
         <h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>To do</h1>
-        {things > 0 && <span style={{ fontSize: 13, color: '#8f8c86' }}>{plural(things, 'thing', 'things')} on {plural(left.length, 'photograph', 'photographs')}</span>}
+        {things > 0 && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plural(things, 'thing', 'things')} on {plural(left.length, 'photograph', 'photographs')}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignSelf: 'center' }}>
           <button onClick={() => setView('focus')} style={tab(view === 'focus')}>One at a time</button>
           <button onClick={() => setView('list')} style={tab(view === 'list')}>Everything</button>
         </div>
       </div>
       {(todo.loading || walk.loading) && !todo.data && <Loading error={todo.error} />}
-      {todo.data && walk.data && things === 0 && todo.data.items.length === 0 && <div style={{ color: '#8f8c86', padding: '40px 0' }}>Nothing is waiting on you. New photographs, and anything the AI suggests, show up here.</div>}
+      {todo.data && walk.data && things === 0 && todo.data.items.length === 0 && <div style={{ color: 'var(--muted)', padding: '40px 0' }}>Nothing is waiting on you. New photographs, and anything the AI suggests, show up here.</div>}
       {walk.data && view === 'focus' && photos.length > 0 && (
         <Focus photos={photos} cur={Math.min(cur, photos.length - 1)} setCur={setCur} done={done} markDone={(id) => setDone((d) => new Set(d).add(id))} onChange={() => { refreshSummary(); todo.reload(); }} />
       )}
@@ -77,13 +77,13 @@ function TodoList({ items, start, reload }: { items: Item[]; start: (id: number)
           <section key={i.key} aria-label={i.title} style={{ marginBottom: 40 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
               <h2 style={{ font: `400 28px/1 ${serif}`, margin: 0 }}>{i.title}</h2>
-              <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{i.key === 'cloud' ? '' : plural(i.count, 'photograph', 'photographs')}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{i.key === 'cloud' ? '' : plural(i.count, 'photograph', 'photographs')}</span>
             </div>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '6px 0 14px', maxWidth: 640 }}>{i.detail}</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '6px 0 14px', maxWidth: 640 }}>{i.detail}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              {i.link && <Link to={i.link} style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Open</Link>}
-              {i.key !== 'cloud' && i.key !== 'delete' && i.photoIds[0] && <button onClick={() => start(i.photoIds[0])} style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Go through them one by one</button>}
-              {i.key === 'delete' && <button style={{ ...pill, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }} onClick={() => takeOut(i.ids ?? i.photoIds)}>Take all {i.count.toLocaleString()} out of Frames</button>}
+              {i.link && <Link to={i.link} style={{ ...pill, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Open</Link>}
+              {i.key !== 'cloud' && i.key !== 'delete' && i.photoIds[0] && <button onClick={() => start(i.photoIds[0])} style={{ ...pill, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Go through them one by one</button>}
+              {i.key === 'delete' && <button style={{ ...pill, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }} onClick={() => takeOut(i.ids ?? i.photoIds)}>Take all {i.count.toLocaleString()} out of Frames</button>}
               {i.key === 'delete' && i.photoIds[0] && <Link to={`/photo/${i.photoIds[0]}`} style={pill}>Look at the first</Link>}
               {(i.key === 'ai-tags' || i.key === 'ai-description') && <button style={pill} onClick={() => acceptAll(i.key === 'ai-tags' ? 'tags' : 'description', i.count)}>Accept all {i.count.toLocaleString()}</button>}
               {(i.key === 'subjects' || i.key === 'tags') && <Link to={`/library?missing=${i.key === 'subjects' ? 'subject' : 'tag'}`} style={pill}>See all {i.count.toLocaleString()} in the Library</Link>}
@@ -184,26 +184,26 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
     if (!w.need[k]) return null;
     if (isDone[k] && !edit[k]) {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,.08)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, padding: '10px 0', borderTop: '1px solid var(--hair)', borderBottom: '1px solid var(--hair)' }}>
           <span>✓</span><span style={{ flex: 'none' }}>{label}</span>
-          <span style={{ flex: 1, minWidth: 0, color: '#8f8c86', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{summary}</span>
-          <button onClick={() => setEdit((e) => ({ ...e, [k]: true }))} style={{ color: '#a8a59f', fontSize: 12.5 }}>Edit</button>
+          <span style={{ flex: 1, minWidth: 0, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{summary}</span>
+          <button onClick={() => setEdit((e) => ({ ...e, [k]: true }))} style={{ color: 'var(--text2)', fontSize: 12.5 }}>Edit</button>
         </div>
       );
     }
     return <>{body}</>;
   };
-  const chip = (t: { name: string }, kind: 'subject' | 'tag') => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>{t.name}<button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')} style={{ color: '#8f8c86' }}>✕</button></span>;
-  const sugChip = (t: { name: string }, kind: 'subject' | 'tag') => <span key={t.name} title="Suggested by the AI" style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, border: '1px dashed rgba(255,255,255,.35)', display: 'inline-flex', gap: 6, alignItems: 'center', color: '#a8a59f' }}>{t.name}<button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')} style={{ color: '#efede8' }}>✓</button><button aria-label={`Reject ${t.name}`} onClick={() => tagAct(t.name, kind, 'reject')}>✕</button></span>;
-  const addBox = (kind: 'subject' | 'tag', width: number) => <input value={draft[kind]} onChange={(e) => setDraft((d) => ({ ...d, [kind]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addTag(kind); } }} placeholder={`+ ${kind === 'subject' ? 'Subject' : 'Tag'}`} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, width, background: 'none', border: 0, outline: 'none', boxShadow: ring, color: '#efede8' }} />;
+  const chip = (t: { name: string }, kind: 'subject' | 'tag') => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>{t.name}<button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')} style={{ color: 'var(--muted)' }}>✕</button></span>;
+  const sugChip = (t: { name: string }, kind: 'subject' | 'tag') => <span key={t.name} title="Suggested by the AI" style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, border: '1px dashed rgba(255,255,255,.35)', display: 'inline-flex', gap: 6, alignItems: 'center', color: 'var(--text2)' }}>{t.name}<button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')} style={{ color: 'var(--text)' }}>✓</button><button aria-label={`Reject ${t.name}`} onClick={() => tagAct(t.name, kind, 'reject')}>✕</button></span>;
+  const addBox = (kind: 'subject' | 'tag', width: number) => <input value={draft[kind]} onChange={(e) => setDraft((d) => ({ ...d, [kind]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addTag(kind); } }} placeholder={`+ ${kind === 'subject' ? 'Subject' : 'Tag'}`} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, width, background: 'none', border: 0, outline: 'none', boxShadow: ring, color: 'var(--text)' }} />;
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14, gap: 16, flexWrap: 'wrap' }}>
-        <Link to={`/photo/${w.id}`} style={{ color: '#a8a59f' }}>{w.shoot} · open the full photo page</Link>
-        <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
+        <Link to={`/photo/${w.id}`} style={{ color: 'var(--text2)' }}>{w.shoot} · open the full photo page</Link>
+        <span style={{ display: 'flex', gap: 18, color: 'var(--text2)', alignItems: 'baseline' }}>
           <button onClick={() => go(-1)}>← Previous</button>
-          <span style={{ color: '#6f6c67' }}>{cur + 1} of {photos.length}</span>
+          <span style={{ color: 'var(--faint)' }}>{cur + 1} of {photos.length}</span>
           <button onClick={() => go(1)}>Next →</button>
         </span>
       </div>
@@ -225,16 +225,16 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
         <aside style={{ width: 340, flex: 'none', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
             <div style={{ font: `400 40px/1 ${serif}` }}>{w.title}</div>
-            <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>{p?.place ? `${w.shoot} · ${p.place}` : w.shoot}</div>
-            <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 10 }}>{!p ? 'Loading…' : leftN ? `${plural(leftN, 'thing', 'things')} left on this one` : 'All done here.'}</div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 6 }}>{p?.place ? `${w.shoot} · ${p.place}` : w.shoot}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>{!p ? 'Loading…' : leftN ? `${plural(leftN, 'thing', 'things')} left on this one` : 'All done here.'}</div>
           </div>
 
           {p && !w.need.tags && (mine('subject').length + mine('tag').length + sugg('subject').length + sugg('tag').length > 0) && (
             <div>
               <div style={eyebrow}>Subjects &amp; tags</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                {[...mine('subject'), ...mine('tag')].map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)' }}>{t.name}</span>)}
-                {[...sugg('subject'), ...sugg('tag')].map((t) => <span key={t.name} title="Suggested by the AI" style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, border: '1px dashed rgba(255,255,255,.35)', color: '#a8a59f' }}>{t.name}</span>)}
+                {[...mine('subject'), ...mine('tag')].map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)' }}>{t.name}</span>)}
+                {[...sugg('subject'), ...sugg('tag')].map((t) => <span key={t.name} title="Suggested by the AI" style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, border: '1px dashed rgba(255,255,255,.35)', color: 'var(--text2)' }}>{t.name}</span>)}
               </div>
             </div>
           )}
@@ -243,25 +243,25 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                 <div style={eyebrow}>Subjects &amp; tags</div>
-                {sugCount > 0 && <button onClick={acceptAll} style={{ fontSize: 12, color: '#a8a59f' }}>Accept all {sugCount}</button>}
+                {sugCount > 0 && <button onClick={acceptAll} style={{ fontSize: 12, color: 'var(--text2)' }}>Accept all {sugCount}</button>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '62px minmax(0,1fr)', gap: 10, alignItems: 'start' }}>
-                <span style={{ fontSize: 12.5, color: '#8f8c86', paddingTop: 5 }}>Subjects</span>
+                <span style={{ fontSize: 12.5, color: 'var(--muted)', paddingTop: 5 }}>Subjects</span>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>{mine('subject').map((t) => chip(t, 'subject'))}{sugg('subject').map((t) => sugChip(t, 'subject'))}{addBox('subject', 104)}</div>
-                <span style={{ fontSize: 12.5, color: '#8f8c86', paddingTop: 5 }}>Tags</span>
+                <span style={{ fontSize: 12.5, color: 'var(--muted)', paddingTop: 5 }}>Tags</span>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>{mine('tag').map((t) => chip(t, 'tag'))}{sugg('tag').map((t) => sugChip(t, 'tag'))}{addBox('tag', 84)}</div>
               </div>
-              {sugCount > 0 && <div style={{ fontSize: 12, color: '#6f6c67', marginTop: 10 }}>Dashed ones are the AI’s. Nothing is kept until you accept it.</div>}
+              {sugCount > 0 && <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 10 }}>Dashed ones are the AI’s. Nothing is kept until you accept it.</div>}
             </div>
           ))}
 
           {p && sectionBox('place', 'Place', p.place, (
             <div>
               <div style={{ ...eyebrow, marginBottom: 10 }}>Place</div>
-              <input value={draft.place} onChange={(e) => setDraft((d) => ({ ...d, place: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePlace(); } }} onBlur={() => void savePlace()} placeholder="Name this place" aria-label="Place" style={{ width: '100%', background: '#161615', border: 0, borderRadius: 8, padding: '8px 10px', fontSize: 13.5, color: '#efede8', outline: 'none' }} />
+              <input value={draft.place} onChange={(e) => setDraft((d) => ({ ...d, place: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePlace(); } }} onBlur={() => void savePlace()} placeholder="Name this place" aria-label="Place" style={{ width: '100%', background: 'var(--surface)', border: 0, borderRadius: 8, padding: '8px 10px', fontSize: 13.5, color: 'var(--text)', outline: 'none' }} />
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                {w.shootPlace && w.shootPlace !== p.place && <button onClick={() => { setDraft((d) => ({ ...d, place: w.shootPlace })); void savePlace(w.shootPlace); }} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: ring, color: '#a8a59f' }}>Use the shoot’s: {w.shootPlace}</button>}
-                {p.lat !== null && p.lon !== null && <span style={{ font: `400 11.5px ${mono}`, color: '#6f6c67' }}>{Math.abs(p.lat).toFixed(4)}°{p.lat < 0 ? 'S' : 'N'}, {Math.abs(p.lon).toFixed(4)}°{p.lon < 0 ? 'W' : 'E'}</span>}
+                {w.shootPlace && w.shootPlace !== p.place && <button onClick={() => { setDraft((d) => ({ ...d, place: w.shootPlace })); void savePlace(w.shootPlace); }} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: ring, color: 'var(--text2)' }}>Use the shoot’s: {w.shootPlace}</button>}
+                {p.lat !== null && p.lon !== null && <span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{Math.abs(p.lat).toFixed(4)}°{p.lat < 0 ? 'S' : 'N'}, {Math.abs(p.lon).toFixed(4)}°{p.lon < 0 ? 'W' : 'E'}</span>}
               </div>
             </div>
           ))}
@@ -270,7 +270,7 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
             <div>
               <div style={{ ...eyebrow, marginBottom: 10 }}>Description</div>
               {aiDesc && (
-                <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, fontSize: 13.5, lineHeight: 1.45, color: '#a8a59f' }}>
+                <div style={{ background: 'var(--hover)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, fontSize: 13.5, lineHeight: 1.45, color: 'var(--text2)' }}>
                   <div style={{ ...eyebrow, marginBottom: 6 }}>AI description</div>
                   <p style={{ margin: '0 0 10px' }}>{aiDesc}</p>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -279,19 +279,19 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
                   </div>
                 </div>
               )}
-              <textarea value={draft.desc} onChange={(e) => setDraft((d) => ({ ...d, desc: e.target.value }))} onBlur={() => void saveDesc()} rows={3} placeholder={aiDesc ? 'Or write your own' : 'Add a description'} aria-label="Description" style={{ width: '100%', background: '#161615', border: 0, outline: 'none', borderRadius: 8, padding: '8px 10px', font: "400 13.5px/1.45 'IBM Plex Sans',system-ui,sans-serif", resize: 'vertical', color: '#efede8' }} />
+              <textarea value={draft.desc} onChange={(e) => setDraft((d) => ({ ...d, desc: e.target.value }))} onBlur={() => void saveDesc()} rows={3} placeholder={aiDesc ? 'Or write your own' : 'Add a description'} aria-label="Description" style={{ width: '100%', background: 'var(--surface)', border: 0, outline: 'none', borderRadius: 8, padding: '8px 10px', font: "400 13.5px/1.45 'IBM Plex Sans',system-ui,sans-serif", resize: 'vertical', color: 'var(--text)' }} />
             </div>
           ))}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <button onClick={() => (allDone || !isLast ? next() : undefined)} style={{ width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>{nextLabel}</button>
+            <button onClick={() => (allDone || !isLast ? next() : undefined)} style={{ width: '100%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>{nextLabel}</button>
             <AddToComposition up label="Add to a composition…" ids={[w.id]} onDone={setMsg} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               {ai && <button onClick={recheck} disabled={checking} style={pill}>{checking ? 'Checking…' : 'Re-check with AI'}</button>}
-              <button onClick={() => go(1)} style={{ fontSize: 12.5, color: '#8f8c86', marginLeft: 'auto' }}>Skip for now</button>
+              <button onClick={() => go(1)} style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 'auto' }}>Skip for now</button>
             </div>
-            {msg && <div role="status" style={{ fontSize: 12.5, color: '#8f8c86' }}>{msg}</div>}
-            <div style={{ fontSize: 12, color: '#6f6c67' }}>← → move between photographs{ai ? ' · A accepts every suggestion' : ''}</div>
+            {msg && <div role="status" style={{ fontSize: 12.5, color: 'var(--muted)' }}>{msg}</div>}
+            <div style={{ fontSize: 12, color: 'var(--faint)' }}>← → move between photographs{ai ? ' · A accepts every suggestion' : ''}</div>
           </div>
         </aside>
       </div>

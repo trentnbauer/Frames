@@ -279,6 +279,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'shares', 'show_guests', 'INTEGER NOT NULL DEFAULT 0');
     addColumn(db, 'shares', 'ask_name', 'INTEGER NOT NULL DEFAULT 1');
   },
+  // collections remember when they were last changed, for "most recently edited"
+  (db) => { addColumn(db, 'collections', 'updated_at', 'TEXT'); },
+  // the portfolio: favourites, and photographs left out (which always wins over the automatic score rule)
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS portfolio_marks (photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, favourite INTEGER NOT NULL DEFAULT 0, out INTEGER NOT NULL DEFAULT 0)'); },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

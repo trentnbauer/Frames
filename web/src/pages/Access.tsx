@@ -208,7 +208,7 @@ export function Access() {
           <span><b>Let new people make an account</b>: someone who signs in for the first time gets an account and an empty library of their own. Untick it to close the door: only people who already have an account, and people you add by email in Settings, People, can sign in.{inst.data?.signupsLocked && <span className="reason"> Switched off by ALLOW_SIGNUPS=false on this server; remove that setting and restart to change it here.</span>}</span>
         </label>
         {c.open && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 560, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, color: 'var(--text2)' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 560, padding: '12px 14px', borderRadius: 10, background: 'var(--hover)', fontSize: 13, color: 'var(--text2)' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)', flex: 'none', marginTop: 7 }} />
             <span>Open to the public: anyone with an account at one of the providers above can sign in, and gets their own empty library. The list is kept, so switching back restores it.{!me?.signups && ' New accounts are switched off (see the box above), so only people who already have one can get in.'}</span>
           </div>
