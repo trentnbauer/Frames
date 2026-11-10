@@ -12,7 +12,7 @@ import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals } from '../cloud.js';
 import { removeShoot } from '../remove.js';
 import { tenantProxy } from '../tenants.js';
-import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
+import { IMAGE_EXT, internalDir, rebuild, reindex } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting } from '../db.js';
@@ -283,6 +283,26 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- backup and recovery ----------
+  // Settings, Your data: ratings as a CSV, the previews cleared (they are made again in the background), and every rating forgotten.
+  app.get('/api/ratings.csv', async (_req, rep) => {
+    const rows = db.prepare('SELECT p.id, p.file, COUNT(r.id) n, AVG(r.rating) a, MAX(r.date) d FROM photos p LEFT JOIN reviews r ON r.photo_id = p.id WHERE p.missing = 0 GROUP BY p.id ORDER BY p.id').all() as { id: number; file: string; n: number; a: number | null; d: string | null }[];
+    const cell = (v: unknown) => { const t = String(v ?? ''); return /^[=+\-@]/.test(t) ? `"'${t.replace(/"/g, '""')}"` : /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }; // a spreadsheet never runs a name as a formula
+    const csv = ['id,file,ratings,average,last rated', ...rows.map((r) => [r.id, r.file, r.n, r.a === null ? '' : r.a.toFixed(2), r.d ?? ''].map(cell).join(','))].join('\n') + '\n';
+    return rep.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames-ratings.csv"').header('Cache-Control', 'no-store').send(csv);
+  });
+  app.post('/api/library/clear-cache', async () => {
+    const removed = (db.prepare('SELECT COUNT(*) n FROM photos WHERE has_derivs = 1').get() as { n: number }).n;
+    fs.rmSync(path.join(cfg.dataDir, 'derivatives'), { recursive: true, force: true });
+    db.prepare('UPDATE photos SET has_derivs = 0').run();
+    void rebuild(db, cfg, false).catch(() => undefined);
+    return { cleared: removed };
+  });
+  app.post('/api/reviews/reset', async (req, rep) => {
+    if (((req.body ?? {}) as Row).confirm !== 'reset') return rep.code(400).send({ error: 'Send confirm: "reset" to forget every rating.' });
+    const n = db.prepare('DELETE FROM reviews').run().changes;
+    db.prepare('UPDATE photos SET next_review_at = added_at').run();
+    return { removed: n };
+  });
   app.get('/api/backup', async (_req, rep) => {
     const dir = path.join(cfg.dataDir, 'backups');
     fs.mkdirSync(dir, { recursive: true });
@@ -309,6 +329,21 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     return rep.code(202).send({ started: true });
   });
   app.get('/api/library/rebuild/status', async () => rb);
+  const ri = tenantProxy(() => x.bag('reindex', () => ({ running: false, done: 0, total: 0 })));
+  app.post('/api/library/reindex', async (_req, rep) => {
+    if (ri.running) return rep.code(409).send({ error: 'Already re-indexing' });
+    ri.running = true; ri.done = 0; ri.total = 0;
+    void reindex(db, (d, t) => { ri.done = d; ri.total = t; }).finally(() => { ri.running = false; });
+    return rep.code(202).send({ started: true });
+  });
+  app.get('/api/library/reindex/status', async () => ri);
+  // The background work waiting: previews to make, photographs for the AI to look at, and whether anything is running now.
+  app.get('/api/library/queue', async () => ({
+    thumbnails: (db.prepare('SELECT COUNT(*) n FROM photos WHERE missing = 0 AND has_derivs = 0').get() as { n: number }).n,
+    ai: (db.prepare("SELECT COUNT(*) n FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR ai_status = 'error')").get() as { n: number }).n,
+    running: !!(rb.running || ri.running || (x.ai.state as { running?: boolean }).running || x.scanning()),
+  }));
+
 
   // ---------- AI ----------
   const aiStatus = () => ({ enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, sharedUsage: sharedUsage(db) });

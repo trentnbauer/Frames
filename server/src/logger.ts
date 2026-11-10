@@ -7,7 +7,7 @@ import util from 'node:util';
  * so an administrator can download it. The level, set under Settings, Server, Updates & system, decides what is kept at all:
  * errors only, warnings and errors, or everything. The file is cut at 5 MB and the last two are kept (about the last week on a quiet server).
  */
-const RANK = { errors: 0, warnings: 1, info: 2 } as const;
+const RANK = { errors: 0, warnings: 1, info: 2, debug: 3 } as const;
 export type LogLevel = keyof typeof RANK;
 const MAX = 5 * 1024 * 1024;
 
@@ -33,7 +33,7 @@ export function startLogger(dataDir: string, initial: LogLevel = 'info') {
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch { file = ''; }
   if (started) return;
   started = true;
-  const real = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+  const real = { log: console.log, info: console.info, debug: console.debug, warn: console.warn, error: console.error };
   const wrap = (name: keyof typeof real, tag: string, rank: number) => {
     (console as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => {
       if (rank > RANK[level]) return; // above the chosen level: neither shown nor kept
@@ -41,8 +41,7 @@ export function startLogger(dataDir: string, initial: LogLevel = 'info') {
       write(tag, args);
     };
   };
-  wrap('log', 'INFO', 2); wrap('info', 'INFO', 2); wrap('warn', 'WARN', 1); wrap('error', 'ERROR', 0);
-  process.on('uncaughtException', (e) => { real.error('Uncaught exception', e); write('ERROR', ['Uncaught exception', e]); });
+  wrap('log', 'INFO', 2); wrap('info', 'INFO', 2); wrap('debug', 'DEBUG', 3); wrap('warn', 'WARN', 1); wrap('error', 'ERROR', 0);
 }
 
 /** The kept log, oldest first, from the last `days` days (lines that start with a date; a continuation stays with its line). */

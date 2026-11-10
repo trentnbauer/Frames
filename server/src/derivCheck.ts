@@ -1,3 +1,4 @@
+import { waitIdle } from './activity.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { dHash, hamming } from './analysis.js';
@@ -30,7 +31,7 @@ export async function verifyDerivatives(db: DB, cfg: Cfg): Promise<{ checked: nu
   let rebuilt = 0;
   if (wrong.length) {
     console.warn(`${wrong.length} preview${wrong.length === 1 ? '' : 's'} did not match ${wrong.length === 1 ? 'its' : 'their'} photograph${wrong.length === 1 ? '' : 's'} (photograph ${wrong.slice(0, 8).join(', ')}${wrong.length > 8 ? ', …' : ''}): rebuilding from the originals.`);
-    rebuilt = (await rebuild(db, cfg, false)).rebuilt;
+    rebuilt = (await rebuild(db, cfg, false, undefined, () => waitIdle(db))).rebuilt;
   }
   return { checked: rows.length, wrong: wrong.length, rebuilt };
 }

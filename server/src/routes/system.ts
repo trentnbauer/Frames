@@ -1,3 +1,4 @@
+import { getSetting, setSetting, type DB } from '../db.js';
 import { policyOf } from '../policy.js';
 import { dirBytes } from '../cache.js';
 import fs from 'node:fs';
@@ -44,6 +45,35 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
     ];
     return { version: cfg.version ?? 'dev', image: process.env.FRAMES_IMAGE ?? 'ghcr.io/trentnbauer/frames', libraryDisk: disk(folder), dataDisk: disk(owner.cfg.dataDir), cache: { path: path.join(owner.cfg.dataDir, 'derivatives'), bytes: cacheBytes }, checks, libraries: all.length };
   });
+
+  // Settings that have no behaviour of their own yet but are part of the Settings pages (and are kept, so nothing is lost when one starts to do something).
+  // One value is a string, a number, a true/false, or a short list of strings. A person's own are kept in their library, the server's in the system database.
+  const cleanPrefs = (body: unknown): Record<string, string | number | boolean | string[]> | null => {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+    const out: Record<string, string | number | boolean | string[]> = {};
+    for (const [k, v] of Object.entries(body as Row)) {
+      if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(k)) return null;
+      if (typeof v === 'string') { if (v.length > 300) return null; out[k] = v; }
+      else if (typeof v === 'number') { if (!Number.isFinite(v)) return null; out[k] = v; }
+      else if (typeof v === 'boolean') out[k] = v;
+      else if (Array.isArray(v) && v.length <= 60 && v.every((i) => typeof i === 'string' && i.length <= 100)) out[k] = v as string[];
+      else return null;
+    }
+    return out;
+  };
+  const putPrefs = (store: DB, key: string, body: unknown, rep: any) => {
+    const p = cleanPrefs(body);
+    if (!p) return rep.code(400).send({ error: 'Those settings are not valid.' });
+    const cur = getSetting<Record<string, unknown>>(store, key, {});
+    const next = { ...cur, ...p };
+    if (Object.keys(next).length > 300) return rep.code(400).send({ error: 'Too many settings.' });
+    setSetting(store, key, next);
+    return { prefs: next };
+  };
+  app.get('/api/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(db, 'uiPrefs', {}) }));
+  app.put('/api/prefs', async (req, rep) => putPrefs(db, 'uiPrefs', req.body, rep));
+  app.get('/api/admin/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(sys, 'serverPrefs', {}) }));
+  app.put('/api/admin/prefs', async (req, rep) => putPrefs(sys, 'serverPrefs', req.body, rep));
 
   // Other members' photoshoots, read-only, when the administrator allows it (Settings, Server, Members). Names, dates and counts only:
   // the photographs themselves stay in their own library.

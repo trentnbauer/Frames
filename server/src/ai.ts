@@ -1,3 +1,4 @@
+import { waitIdle } from './activity.js';
 import fs from 'node:fs';
 import sharp from 'sharp';
 import { getSetting, setSetting, type DB } from './db.js';
@@ -24,8 +25,10 @@ export const getSecret = (db: DB, name: string) => getSetting<string>(db, `secre
 export const setSecret = (db: DB, name: string, v: string) => setSetting(db, `secret:${name}`, v);
 
 /** The AIs to try for a job, best first. Before anyone sets an order, it is just the one that is switched on. */
+/** A person who has set no order and picked no AI of their own starts with the shared AIs first, when the administrator wants that. */
+const sharedFirstApplies = (db: DB) => { const s = (db as unknown as { sys?: DB }).sys; return !!s && policyOf(s).aiSharedFirst && !loadSettings(db).aiActive; };
 export function aiConfigsFor(db: DB, job: Job): AiCfg[] {
-  if (!getSetting<unknown>(db, 'aiJobs', null)) { const c = activeConfig(db, loadSettings(db).aiActive); return c ? [c] : []; }
+  if (!getSetting<unknown>(db, 'aiJobs', null) && !sharedFirstApplies(db)) { const c = activeConfig(db, loadSettings(db).aiActive); return c ? [c] : []; }
   return orderFor(db, job).map((id) => activeConfig(db, id)).filter((c): c is AiCfg => !!c);
 }
 const monthOf = () => new Date().toISOString().slice(0, 7);
@@ -46,7 +49,7 @@ export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>)
   if (list.length) throw last;
   return null;
 }
-export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, (getSetting<unknown>(db, 'aiJobs', null) ? orderFor(db, 'describe')[0] : undefined) ?? loadSettings(db).aiActive);
+export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, (getSetting<unknown>(db, 'aiJobs', null) || sharedFirstApplies(db) ? orderFor(db, 'describe')[0] : undefined) ?? loadSettings(db).aiActive);
 
 /**
  * Tags and subjects from the model: a list, or text separated by commas, semicolons or new lines. Some models run the whole list together
@@ -210,6 +213,7 @@ export function createAiWorker(db: DB, cfg: Cfg) {
       const ids = (db.prepare(`SELECT id FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR (ai_status = 'error' AND ai_attempts < ${MAX_ATTEMPTS})) ORDER BY id`).all() as { id: number }[]).map((r) => r.id);
       state.total = ids.length;
       for (const id of ids) {
+        await waitIdle(db); // "Heavy jobs run: when idle"
         if (!aiConfig(db)) break; // switched off mid-run
         try { if ((await tryEach(db, 'describe', (cc) => one(cc, id))) === null) break; } catch (e) {
           state.failed++;

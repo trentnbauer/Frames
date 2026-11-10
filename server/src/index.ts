@@ -1,3 +1,4 @@
+import { installCrashHandlers } from './crash.js';
 import { startLogger } from './logger.js';
 import { applyRuntime } from './policy.js';
 import { startCacheTrim } from './cache.js';
@@ -61,6 +62,7 @@ startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), b
 setSessionDays(policyOf(frames.sys).sessionDays);
 applyRuntime(frames.sys);
 startLogger(dataDir, policyOf(frames.sys).logLevel);
+installCrashHandlers({ enabled: () => policyOf(frames.sys).crashReports, version: process.env.APP_VERSION ?? 'dev' });
 startCacheTrim(() => ({ cfgs: frames.tenants.all().map((t) => t.cfg as never), limitGb: policyOf(frames.sys).cacheLimitGb }));
 (frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {

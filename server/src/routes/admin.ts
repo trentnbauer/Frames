@@ -1,3 +1,4 @@
+import { crashHost, crashUrl } from '../crash.js';
 import { readLog, setLogLevel } from '../logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -119,13 +120,14 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
 
   // ---------- choices that apply to the whole server ----------
   type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean; defaultRole?: 'member' | 'guest'; signups?: boolean };
-  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
+  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), crashHost: crashHost(), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
   app.get('/api/admin/instance', async () => instance());
   // The server's own log (start-up lines, warnings, errors), for the last week, as a text file.
   app.get('/api/admin/logs/info', async () => ({ bytes: readLog(7).bytes }));
   app.get('/api/admin/logs', async (_req, rep) => rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.log"').header('Cache-Control', 'no-store').send(readLog(7).text || 'Nothing logged yet.\n'));
-  app.put('/api/admin/instance', async (req) => {
+  app.put('/api/admin/instance', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
+    if (b.crashReports === true && !crashUrl()) return rep.code(400).send({ error: 'No place to send reports to is set. The person running the server sets CRASH_REPORT_URL first.' });
     const cur = getSetting<Instance>(sys, 'instance', {});
     setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}), ...(typeof b.signups === 'boolean' ? { signups: b.signups } : {}), ...policyPatch(b) });
     setSessionDays(policyOf(sys).sessionDays);

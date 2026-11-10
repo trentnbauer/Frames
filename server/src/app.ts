@@ -1,3 +1,4 @@
+import { noteUse } from './activity.js';
 import { ensureDeriv } from './cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -67,7 +68,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // Routes are added below before the plugin has loaded, so the limit is attached as a hook on the whole app instead of per route.
   // It is the first hook, so a flood is counted before sign-in or anything else runs.
   let limit: (req: any, rep: any) => Promise<unknown> = async () => undefined;
-  app.addHook('onRequest', async (req, rep) => { await limit(req, rep); });
+  app.addHook('onRequest', async (req, rep) => { noteUse(req.url); await limit(req, rep); });
   app.after(() => { limit = app.rateLimit() as typeof limit; });
   // Who the people are lives in the system database. Each person's library is their own database (see tenants.ts), and `db` and
   // `cfg` below answer from the library of whoever is making the request, so a route can only ever reach its own caller's data.

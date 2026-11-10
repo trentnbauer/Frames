@@ -113,3 +113,62 @@ describe('limits and rules an administrator sets', () => {
     expect(typeof (r.body as { bytes: number }).bytes).toBe('number');
   });
 });
+
+describe('crash reports, idle jobs and shared AI first', () => {
+  it('a report is cut down to what is safe, sent only when on and given a place, and not repeated', async () => {
+    const { buildReport, crashUrl, reportCrash, scrub } = await import('./crash.js');
+    expect(scrub('failed for mia@example.com at /home/mia/photos/secret/x.js:10:5')).toBe('failed for [email] at x.js:10:5');
+    expect(scrub('key ' + 'a'.repeat(30))).toBe('key [token]');
+    const r = buildReport(new Error('boom in /srv/frames/data/library/a.jpg'), 'uncaughtException', '1.2.3');
+    expect(r).toMatchObject({ app: 'frames', version: '1.2.3', kind: 'uncaughtException', message: 'boom in a.jpg' });
+    expect(JSON.stringify(r)).not.toContain('/srv/');
+    expect(crashUrl({})).toBe('');
+    expect(crashUrl({ CRASH_REPORT_URL: 'ftp://x' })).toBe('');
+    const env = { CRASH_REPORT_URL: 'https://reports.example.test/in' };
+    const calls: { url: string; body: string }[] = [];
+    const fetcher = (async (url: string, init: { body: string }) => { calls.push({ url, body: init.body }); return { ok: true }; }) as never;
+    expect(await reportCrash(new Error('one'), 'k', { enabled: false, version: 'v', env, fetcher })).toBe(false); // off
+    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env: {}, fetcher })).toBe(false); // nowhere to send
+    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env, fetcher, now: 1000 })).toBe(true);
+    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env, fetcher, now: 2000 })).toBe(false); // the same one
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://reports.example.test/in');
+  });
+  it('cannot be switched on without a place to send to', async () => {
+    delete process.env.CRASH_REPORT_URL;
+    expect((await A.put('/api/admin/instance', { crashReports: true })).status).toBe(400);
+    process.env.CRASH_REPORT_URL = 'https://reports.example.test/in';
+    expect((await A.put('/api/admin/instance', { crashReports: true })).body).toMatchObject({ crashReports: true, crashHost: 'reports.example.test' });
+    await A.put('/api/admin/instance', { crashReports: false });
+    delete process.env.CRASH_REPORT_URL;
+  });
+  it('heavy jobs wait for quiet only when set to idle', async () => {
+    const { waitIdle, noteUse } = await import('./activity.js');
+    await A.put('/api/admin/instance', { heavyJobs: 'always' });
+    await waitIdle(env.db, { idleMs: 60_000, pollMs: 5 }); // returns at once
+    await A.put('/api/admin/instance', { heavyJobs: 'idle' });
+    noteUse('/api/photos');
+    let done = false;
+    const w = waitIdle(env.db, { idleMs: 80, pollMs: 10 }).then(() => { done = true; });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(done).toBe(false); // somebody just used it
+    noteUse('/api/ai/status'); // a progress poll does not count
+    await w;
+    expect(done).toBe(true);
+    await A.put('/api/admin/instance', { heavyJobs: 'always' });
+  });
+  it('puts shared AIs first for a person with no order of their own, when asked', async () => {
+    const { loadJobs } = await import('./aiJobs.js');
+    const { saveSources } = await import('./aisources.js');
+    const sys = (env.db as unknown as { sys: import('./db.js').DB }).sys;
+    saveSources(env.db, [{ id: 'mine', type: 'ollama', name: 'Mine', endpoint: 'http://x', model: 'm', embedModel: '', ack: false } as never]);
+    saveSources(sys, [{ id: 'shared', type: 'ollama', name: 'Shared', endpoint: 'http://y', model: 'm', embedModel: '', ack: false } as never]);
+    env.db.prepare("DELETE FROM settings WHERE key = 'aiJobs'").run();
+    await A.put('/api/admin/instance', { aiSharedFirst: false });
+    expect(loadJobs(env.db).describe.order).toEqual(['mine', 'shared']);
+    await A.put('/api/admin/instance', { aiSharedFirst: true });
+    expect(loadJobs(env.db).describe.order).toEqual(['shared', 'mine']);
+    await A.put('/api/admin/instance', { aiSharedFirst: false });
+    saveSources(env.db, []); saveSources(sys, []);
+  });
+});
