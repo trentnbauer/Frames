@@ -271,6 +271,14 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'photos', 'focal35', 'REAL');
     addColumn(db, 'photos', 'gear_sig', "TEXT NOT NULL DEFAULT ''");
   },
+  // share links: PIN lock, permissions and the guest-facing options of the redesigned Share dialog
+  (db) => {
+    addColumn(db, 'shares', 'pin', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'shares', 'allow_suggest', 'INTEGER');
+    addColumn(db, 'shares', 'see_each_other', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'shares', 'show_guests', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'shares', 'ask_name', 'INTEGER NOT NULL DEFAULT 1');
+  },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

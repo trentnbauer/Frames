@@ -5,6 +5,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
+import { getSetting, setSetting } from '../db.js';
 import { serveDerivative } from '../imageServe.js';
 import { humanCookie, verifyToken } from '../turnstile.js';
 import { FRAME_COLOURS, parseLayout } from '../layout.js';
@@ -22,6 +23,12 @@ import { FRAME_COLOURS, parseLayout } from '../layout.js';
 
 const TOKEN = '[A-Za-z0-9_-]{16,64}';
 
+/** The one 4-number PIN in Frames: an optional lock on a share link. Never four of a kind or a straight run (1234, 9876). */
+export const isWeakPin = (p: string) => /^(\d)\1{3}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p);
+export const randomPin = () => { let p: string; do { p = String(crypto.randomInt(10000)).padStart(4, '0'); } while (isWeakPin(p)); return p; };
+const PIN_TRIES = 5, PIN_LOCK_MS = 15 * 60_000;
+const PIN_ERR = 'A PIN is four numbers, not all the same and not a straight run like 1234.';
+
 /** The only addresses served without the login: the share page shell, its assets, and the share API. */
 export function isPublicPath(url: string): boolean {
   const path = url.split('?')[0];
@@ -33,6 +40,8 @@ type Bucket = { n: number; reset: number };
 
 export function registerShare(app: FastifyInstance, x: Ctx) {
   const { db, num, one, all, notFound } = x;
+
+  const pinFails = new Map<string, { n: number; until: number }>();
 
   // ---------- rate limiting for the public routes ----------
   const buckets = new Map<string, Bucket>();
@@ -58,6 +67,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   const shareDto = (s: Row) => ({
     id: s.id, token: s.token, kind: s.kind, targetId: s.target_id, label: s.label, allowDownload: !!s.allow_download, allowReview: !!s.allow_review,
     expiresAt: s.expires_at, createdAt: s.created_at, status: statusOf(s), views: s.views, downloads: s.downloads,
+    allowSuggest: s.allow_suggest === null || s.allow_suggest === undefined ? !!s.allow_review : !!s.allow_suggest, seeEachOther: !!s.see_each_other, showGuests: !!s.show_guests, askName: !!s.ask_name, pin: s.pin || '',
     reviews: (one('SELECT COUNT(*) n FROM share_reviews WHERE share_id = ?', s.id) as Row).n,
   });
 
@@ -74,8 +84,38 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     }
     // The first part names the owner, so a visitor with no sign-in is sent to the right library.
     const token = `${x.tenant().user.id.toString(36)}_${crypto.randomBytes(16).toString('base64url')}`;
-    const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), b.allowDownload ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString()).lastInsertRowid);
+    let pin = '';
+    if (b.pin === true) pin = randomPin();
+    else if (typeof b.pin === 'string' && b.pin) { if (!/^\d{4}$/.test(b.pin) || isWeakPin(b.pin)) return rep.code(400).send({ error: PIN_ERR }); pin = b.pin; }
+    const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at, pin, allow_suggest, see_each_other, show_guests, ask_name) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), b.allowDownload ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString(), pin, b.allowSuggest === undefined ? null : b.allowSuggest ? 1 : 0, b.seeEachOther ? 1 : 0, b.showGuests ? 1 : 0, b.askName === false ? 0 : 1).lastInsertRowid);
+    return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
+  });
+  // Change a link: permissions, expiry, ask-for-name, show-guests, the PIN, or turn it on and off. `pin: true` makes a new random one; `pin: ''` removes it.
+  app.patch('/api/shares/:id', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const cur = one('SELECT * FROM shares WHERE id = ?', id);
+    if (!cur) return notFound(rep);
+    const b = (req.body ?? {}) as Row;
+    const sets: string[] = [], args: unknown[] = [];
+    const flag = (k: string, col: string) => { if (typeof b[k] === 'boolean') { sets.push(`${col} = ?`); args.push(b[k] ? 1 : 0); } };
+    flag('allowDownload', 'allow_download'); flag('allowReview', 'allow_review'); flag('allowSuggest', 'allow_suggest'); flag('seeEachOther', 'see_each_other'); flag('showGuests', 'show_guests'); flag('askName', 'ask_name');
+    if (typeof b.on === 'boolean') { sets.push('revoked = ?'); args.push(b.on ? 0 : 1); }
+    if (b.expiresAt !== undefined) {
+      if (b.expiresAt === null || b.expiresAt === '') { sets.push('expires_at = NULL'); }
+      else { const t = new Date(String(b.expiresAt)); if (Number.isNaN(+t) || +t < Date.now()) return rep.code(400).send({ error: 'The expiry date must be in the future' }); sets.push('expires_at = ?'); args.push(t.toISOString()); }
+    }
+    if (b.pin !== undefined) {
+      let pin = '';
+      if (b.pin === true) pin = randomPin();
+      else if (b.pin === '' || b.pin === false) pin = '';
+      else if (typeof b.pin === 'string' && /^\d{4}$/.test(b.pin) && !isWeakPin(b.pin)) pin = b.pin;
+      else return rep.code(400).send({ error: PIN_ERR });
+      sets.push('pin = ?'); args.push(pin);
+      for (const k of [...pinFails.keys()]) if (k.startsWith(`${id}|`)) pinFails.delete(k); // a new PIN gives everyone a fresh start
+    }
+    if (typeof b.label === 'string') { sets.push('label = ?'); args.push(b.label.slice(0, 80)); }
+    if (sets.length) db.prepare(`UPDATE shares SET ${sets.join(', ')} WHERE id = ?`).run(...args, id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });
   app.get('/api/shares', async (req) => {
@@ -161,6 +201,29 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     return [...by.values()].map((p) => ({ ...p, n: p.entries.length, avg: p.entries.reduce((a, e) => a + e.rating, 0) / p.entries.length }));
   });
 
+  // ---------- the PIN gate ----------
+  // A device is a cookie we hand out; five wrong PINs lock the link on that device for 15 minutes. The cookie that says "PIN passed" is signed,
+  // names the link and the PIN it was for, so changing the PIN signs everyone out.
+  const shareKey = (): string => { let k = getSetting<string>(x.sys, 'shareKey', ''); if (!k) { k = crypto.randomBytes(32).toString('hex'); setSetting(x.sys, 'shareKey', k); } return k; };
+  const pinSig = (share: Row) => crypto.createHmac('sha256', shareKey()).update(`${share.id}|${share.pin}`).digest('base64url');
+  const cookieOf = (req: any, name: string) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(String(req.headers.cookie ?? ''))?.[1];
+  const deviceOf = (req: any, cookies: string[]) => {
+    let d = cookieOf(req, 'frames_dev');
+    if (!d || !/^[A-Za-z0-9_-]{16,40}$/.test(d)) {
+      d = crypto.randomBytes(16).toString('base64url');
+      cookies.push(`frames_dev=${d}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${365 * 86400}`);
+    }
+    return d;
+  };
+  const pinPassed = (share: Row, req: any) => {
+    if (!share.pin) return true;
+    const c = cookieOf(req, `frames_pin_${share.id}`) ?? '';
+    const want = pinSig(share);
+    return c.length === want.length && crypto.timingSafeEqual(Buffer.from(c), Buffer.from(want));
+  };
+  const canSuggest = (share: Row) => (share.allow_suggest === null || share.allow_suggest === undefined ? !!share.allow_review : !!share.allow_suggest);
+  const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${share.id}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
+
   // ---------- public side (no login) ----------
   type Resolved = { share: Row; name: string; description: string; photoIds: number[]; chosenIds?: number[]; target?: unknown; layout?: unknown };
   const resolve = (token: string, req: any, rep: any): Resolved | null => {
@@ -168,6 +231,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const share = one('SELECT * FROM shares WHERE token = ?', token);
     if (!share) { if (!limited(req, rep, 'lookup')) rep.code(404).send({ error: 'This link does not exist' }); return null; }
     if (statusOf(share) !== 'active') { rep.code(410).send({ error: share.revoked ? 'This link has been turned off' : 'This link has expired' }); return null; }
+    if (!pinPassed(share, req)) { rep.code(401).send({ error: 'This link is locked with a PIN.', pinRequired: true, lockedFor: lockOf(share, cookieOf(req, 'frames_dev') ?? '') }); return null; }
     if (share.kind === 'collection') {
       const c = one('SELECT name, description FROM collections WHERE id = ?', share.target_id);
       if (!c) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
@@ -249,7 +313,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (limited(req, rep, 'review')) return;
     const r = resolve((req.params as Row).token, req, rep);
     if (!r) return;
-    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    if (!canSuggest(r.share)) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
     const b = (req.body ?? {}) as Row;
     const forId = num(b.forId), photoId = b.photoId === null ? null : num(b.photoId);
     const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
@@ -261,6 +325,48 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
     return { ok: true };
+  });
+
+  // What a visitor needs before the link opens: whether it has a PIN (and whether this device is locked out). Nothing about what is in it.
+  app.get('/api/s/:token/gate', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'lookup')) return;
+    const token = (req.params as Row).token;
+    const share = new RegExp(`^${TOKEN}$`).test(token) ? one('SELECT * FROM shares WHERE token = ?', token) : undefined;
+    if (!share) return rep.code(404).send({ error: 'This link does not exist' });
+    if (statusOf(share) !== 'active') return rep.code(410).send({ error: share.revoked ? 'This link has been turned off' : 'This link has expired' });
+    const cookies: string[] = [];
+    const dev = deviceOf(req, cookies);
+    if (cookies.length) rep.header('Set-Cookie', cookies);
+    return { pinRequired: !!share.pin && !pinPassed(share, req), lockedFor: share.pin ? lockOf(share, dev) : 0, askName: !!share.ask_name };
+  });
+  app.post('/api/s/:token/pin', async (req, rep) => {
+    noindex(rep);
+    if (limited(req, rep, 'lookup')) return;
+    const token = (req.params as Row).token;
+    const share = new RegExp(`^${TOKEN}$`).test(token) ? one('SELECT * FROM shares WHERE token = ?', token) : undefined;
+    if (!share || statusOf(share) !== 'active') return rep.code(404).send({ error: 'This link does not exist' });
+    if (!share.pin) return { ok: true };
+    const cookies: string[] = [];
+    const dev = deviceOf(req, cookies);
+    const key = `${share.id}|${dev}`;
+    const reply = (code: number, body: Row) => { if (cookies.length) rep.header('Set-Cookie', cookies); return rep.code(code).send(body); };
+    const wait = lockOf(share, dev);
+    if (wait) return reply(429, { error: 'Too many wrong PINs. This link is locked on this device for a while.', lockedFor: wait });
+    const given = String(((req.body ?? {}) as Row).pin ?? '');
+    const a = Buffer.from(given.padEnd(8).slice(0, 8)), b = Buffer.from(String(share.pin).padEnd(8).slice(0, 8));
+    if (/^\d{4}$/.test(given) && crypto.timingSafeEqual(a, b)) {
+      pinFails.delete(key);
+      cookies.push(`frames_pin_${share.id}=${pinSig(share)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
+      return reply(200, { ok: true });
+    }
+    const f = pinFails.get(key) ?? { n: 0, until: 0 };
+    f.n = f.until && f.until <= Date.now() ? 1 : f.n + 1;
+    if (f.n >= PIN_TRIES) { f.until = Date.now() + PIN_LOCK_MS; f.n = 0; }
+    pinFails.set(key, f);
+    if (pinFails.size > 5000) for (const [k, v] of pinFails) if (v.until < Date.now() && !v.n) pinFails.delete(k);
+    const locked = f.until > Date.now();
+    return reply(400, { error: locked ? 'Too many wrong PINs. This link is locked on this device for 15 minutes.' : 'That PIN is not right.', triesLeft: locked ? 0 : PIN_TRIES - f.n, lockedFor: locked ? Math.ceil((f.until - Date.now()) / 1000) : 0 });
   });
 
   // Passing the Turnstile check for share links: the answer is checked with Cloudflare and, if good, a signed cookie says so for a while.
@@ -281,7 +387,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (limited(req, rep, 'review')) return;
     const r = resolve((req.params as Row).token, req, rep);
     if (!r) return;
-    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    if (!canSuggest(r.share)) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
     if (r.share.kind !== 'collection') return rep.code(400).send({ error: 'Only a composition has a layout' });
     const b = (req.body ?? {}) as Row;
     const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
@@ -303,7 +409,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (limited(req, rep, 'review')) return;
     const r = resolve((req.params as Row).token, req, rep);
     if (!r) return;
-    if (!r.share.allow_review) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
+    if (!canSuggest(r.share)) return rep.code(403).send({ error: 'Suggestions are not allowed on this link' });
     const b = (req.body ?? {}) as Row;
     const reviewer = String(b.reviewer ?? '').trim().slice(0, 60) || 'Guest';
     const printId = num(b.printId);
