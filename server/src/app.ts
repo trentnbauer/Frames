@@ -484,7 +484,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     }
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
-  app.delete('/api/collections/:id', async (req) => { const id = num((req.params as Row).id); db.prepare('DELETE FROM collections WHERE id = ?').run(id); removeBackground(db, cfg.dataDir, id); return { ok: true }; });
+  app.delete('/api/collections/:id', async (req) => { const id = num((req.params as Row).id); db.prepare("DELETE FROM shares WHERE kind = 'collection' AND target_id = ?").run(id); db.prepare('DELETE FROM collections WHERE id = ?').run(id); removeBackground(db, cfg.dataDir, id); return { ok: true }; });
   app.put('/api/collections/:id/photos/:photoId', async (req, rep) => {
     const { id, photoId } = req.params as Row;
     if (!one('SELECT 1 x FROM collections WHERE id = ?', num(id)) || !one('SELECT 1 x FROM photos WHERE id = ?', num(photoId))) return notFound(rep);
