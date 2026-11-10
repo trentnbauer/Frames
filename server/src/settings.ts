@@ -1,6 +1,7 @@
 import { getSetting, setSetting, type DB } from './db.js';
 import { INTERVAL_OPTIONS } from './schedule.js';
 import { cleanGear, NO_GEAR, type Gear } from './gear.js';
+import { PREVIEW_QUALITIES, PREVIEW_SIZES, runtime } from './policy.js';
 import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources.js';
 
 export { BadSetting };
@@ -32,6 +33,9 @@ export type Settings = {
   ratingStyle: 'emoji' | 'stars';
   /** Photographs from the newest shoots come first in a review. */
   newShootsFirst: boolean;
+  /** Size and JPEG quality of the previews made for this person's photographs. Never above what the server allows (see previewSpec). */
+  previewPx: number;
+  previewQuality: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -49,7 +53,15 @@ export const DEFAULT_SETTINGS: Settings = {
   reviewSize: 12,
   ratingStyle: 'emoji',
   newShootsFirst: true,
+  previewPx: 2400,
+  previewQuality: 85,
 };
+
+/** The preview this person gets: their choice, held to the server's limits. */
+export function previewSpec(db: DB): { px: number; quality: number } {
+  const s = loadSettings(db);
+  return { px: Math.min(s.previewPx, runtime.previewPx), quality: Math.min(s.previewQuality, runtime.previewQuality) };
+}
 
 export function loadSettings(db: DB): Settings {
   const s = { ...DEFAULT_SETTINGS, ...getSetting<Partial<Settings>>(db, 'settings', {}) };
@@ -88,6 +100,8 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
     }
   }
   if (typeof patch.xmpWriteBack === 'boolean') next.xmpWriteBack = patch.xmpWriteBack;
+  if (PREVIEW_SIZES.includes(patch.previewPx as number)) next.previewPx = patch.previewPx as number;
+  if (PREVIEW_QUALITIES.includes(patch.previewQuality as number)) next.previewQuality = patch.previewQuality as number;
   const { ai: _derived, ...stored } = next;
   setSetting(db, 'settings', stored);
   return loadSettings(db);

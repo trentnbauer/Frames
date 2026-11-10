@@ -147,14 +147,19 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   };
   const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold });
 
-  /** A 2400 px progressive JPEG with no camera data, made once and kept. */
+  /**
+   * The picture the portfolio shows: at most 2400 px, no camera data. A preview that is already that small (and has none: Frames
+   * never writes it) is used as it is, so a photograph is not stored twice. A larger one is shrunk to a kept copy.
+   */
   async function portfolioJpeg(id: number): Promise<string | null> {
     const src = derivPath(cfg, id, 'preview');
     if (!fs.existsSync(src)) return null;
+    const m = await sharp(src).metadata();
+    if (Math.max(m.width ?? 0, m.height ?? 0) <= MAX_DIM) return src;
     const out = path.join(path.dirname(src), 'portfolio.jpg');
     if (fs.existsSync(out) && fs.statSync(out).mtimeMs >= fs.statSync(src).mtimeMs) return out;
     const tmp = `${out}.${process.pid}.tmp`;
-    await sharp(src).resize({ width: MAX_DIM, height: MAX_DIM, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82, progressive: true }).toFile(tmp);
+    await sharp(src).resize({ width: MAX_DIM, height: MAX_DIM, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82, mozjpeg: true }).toFile(tmp); // mozjpeg is progressive
     fs.renameSync(tmp, out);
     return out;
   }

@@ -1,6 +1,6 @@
 import { runtime } from './policy.js';
 import { addDays, intervalDays } from './schedule.js';
-import { loadSettings } from './settings.js';
+import { loadSettings, previewSpec } from './settings.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -124,7 +124,7 @@ function importSidecar(db: DB, id: number, file: string) {
   if (x) applyExternal(db, id, x, 'xmp');
 }
 
-async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolean, info: RawInfo | null) {
+async function makeDerivatives(db: DB, cfg: Cfg, id: number, file: string, isRaw: boolean, info: RawInfo | null) {
   const dir = path.dirname(derivPath(cfg, id, 'thumb'));
   fs.mkdirSync(dir, { recursive: true });
   let input: string | Buffer = file;
@@ -142,8 +142,9 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
   }
   const base = sharp(input, { failOn: 'none' }).rotate();
   const meta = await base.clone().metadata();
-  await base.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(derivPath(cfg, id, 'thumb'));
-  await base.clone().resize({ width: runtime.previewPx, height: runtime.previewPx, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 88 }).toFile(derivPath(cfg, id, 'preview'));
+  await base.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80, mozjpeg: true }).toFile(derivPath(cfg, id, 'thumb'));
+  const { px, quality } = previewSpec(db); // this person's choice, never above the server's limits
+  await base.clone().resize({ width: px, height: px, fit: 'inside', withoutEnlargement: true }).jpeg({ quality, mozjpeg: true }).toFile(derivPath(cfg, id, 'preview'));
   return meta;
 }
 
@@ -151,7 +152,7 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
 export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, opts: { exifW?: number; exifH?: number } = {}) {
   const isRaw = RAW_EXT.has(path.extname(file).toLowerCase());
   const info = isRaw ? await rawInfo(file) : null;
-  const meta = await makeDerivatives(cfg, id, file, isRaw, info).catch(() => null);
+  const meta = await makeDerivatives(db, cfg, id, file, isRaw, info).catch(() => null);
   if (!meta) return false;
   const rot = (meta.orientation ?? 1) >= 5;
   const w = rot ? meta.height : meta.width;

@@ -86,6 +86,7 @@ export function Shoots() {
   const view = sh ? {
     id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates,
     placeVal: sh.place,
+    placePin: { name: sh.place, address: ph.find((p) => p.place === sh.place)?.placeAddress ?? '', kind: ph.find((p) => p.place === sh.place)?.placeKind ?? '', suburb: '', city: '', lat: ph.find((p) => p.lat !== null)?.lat ?? null, lng: ph.find((p) => p.lat !== null)?.lon ?? null, precision: ph.find((p) => p.place === sh.place)?.placePrecision ?? 'exact' },
     camVal: sh.gear?.camera || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
     kitRest: [sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · '),
     kit: [sh.gear?.camera, sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · ') || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
@@ -141,7 +142,10 @@ export function Shoots() {
           if (m.mode === 'new') { const s = await api<Shoot>('/shoots', { body: { name: m.name || todayName(), photoIds: ids } }); dest = s.name; } else { await api(`/shoots/${m.shootId}/move`, { body: { photoIds: ids } }); dest = all.find((s) => s.id === m.shootId)?.name ?? ''; }
           reloadAll(); return dest;
         }}
-        onPlace={async (place: string) => { if (askAll('location', place)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        searchPlaces={async (q: string) => api<unknown[]>(`/map/search?q=${encodeURIComponent(q)}`)}
+        reversePlace={async (lat: number, lon: number) => api<unknown>(`/map/reverse?lat=${lat}&lon=${lon}`)}
+        onSavePlaceFull={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { if (askAll('location', pl.name)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: pl.name, placeInfo: { address: pl.address, kind: pl.kind, lat: pl.lat, lon: pl.lng, precision: pl.precision }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        onRemovePlaceFull={async () => { if (window.confirm(`Remove the location from all ${ph.length} photos in this shoot?`)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: '', overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onCamera={async (camera: string) => { if (askAll('camera', camera)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { gear: { camera, lens: sh?.gear?.lens ?? '', medium: sh?.gear?.medium ?? '', film: sh?.gear?.film ?? '' }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
         aiOn={!!settings && settings.ai !== 'off'}
