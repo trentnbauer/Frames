@@ -115,7 +115,13 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if (typeof b.place === 'string' && (b.place.slice(0, 120) !== before.place || everyPhoto)) {
       const place = b.place.slice(0, 120);
       // Photographs that had the shoot's old place (or none) take the new one; a place a photograph has of its own is left (unless everyPhoto).
-      if (everyPhoto) db.prepare('UPDATE photos SET place = ? WHERE shoot_id = ?').run(place, id);
+      if (everyPhoto) {
+        // The place dialog's details go to every photograph. A photograph's own map position (from its file) is kept; one with none takes the shoot's.
+        const i = (b.placeInfo && typeof b.placeInfo === 'object' ? b.placeInfo : {}) as Row;
+        const prec = ['exact', 'suburb', 'city'].includes(i.precision) ? i.precision : 'exact';
+        db.prepare('UPDATE photos SET place = ?, place_address = ?, place_kind = ?, place_precision = ? WHERE shoot_id = ?').run(place, place ? String(i.address ?? '').slice(0, 240) : '', place ? String(i.kind ?? '').slice(0, 40) : '', prec, id);
+        if (place && Number.isFinite(i.lat) && Number.isFinite(i.lon) && Math.abs(i.lat) <= 90 && Math.abs(i.lon) <= 180) db.prepare('UPDATE photos SET lat = ?, lon = ? WHERE shoot_id = ? AND lat IS NULL').run(i.lat, i.lon, id);
+      }
       else db.prepare("UPDATE photos SET place = ? WHERE shoot_id = ? AND (place = '' OR place = ?)").run(place, id, before.place);
       db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(place, id);
     }

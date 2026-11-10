@@ -8,7 +8,7 @@ import { DCLogic } from './runtime';
 const spin = () => React.createElement('i', { style: { width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block', flex: 'none' } });
 
 export class Logic extends DCLogic {
-  state = { selMode: false, picked: [], mv: null, up: false, phase: 'pick', prog: 0, mode: 'new', name: '', split: false, existing: null, src: null, clouds: {}, cs: 'idle', found: 0, drag: false, shootFilter: 'all', shootSort: 'time', shootName: null, shootEdit: null, toast: '', tOp: 0 };
+  state = { selMode: false, picked: [], mv: null, up: false, phase: 'pick', prog: 0, mode: 'new', name: '', split: false, existing: null, src: null, clouds: {}, cs: 'idle', found: 0, drag: false, shootFilter: 'all', shootSort: 'time', shootName: null, shootEdit: null, placeOpen: false, toast: '', tOp: 0 };
   componentDidMount() { if (this.props.uploadReq) this.open(); }
   componentDidUpdate(pp) { if (this.props.uploadReq && this.props.uploadReq !== pp.uploadReq) this.open(); }
   componentWillUnmount() { clearTimeout(this.tT); }
@@ -73,9 +73,9 @@ export class Logic extends DCLogic {
           const ed = S.shootEdit && S.shootEdit.id === sh.id ? S.shootEdit : { id: sh.id };
           const set = (k, v) => this.setState({ shootEdit: { ...ed, id: sh.id, [k]: v } });
           const done = (k, cur, save) => { const v = ed[k]; if (v != null && v.trim() !== cur) save(v.trim()); };
-          return { placeVal: ed.place ?? sh.placeVal, onPlace: (e) => set('place', e.target.value), onPlaceBlur: () => done('place', sh.placeVal, P.onPlace),
-            camVal: ed.cam ?? sh.camVal, onCam: (e) => set('cam', e.target.value), onCamBlur: () => done('cam', sh.camVal, P.onCamera),
-            onEnter: (e) => { if (e.key === 'Enter') e.target.blur(); }, kitRest: sh.kitRest }; })(),
+          return { placeVal: sh.placeVal,
+            camVal: sh.camVal, onCamCommit: (v) => { if (v !== sh.camVal) P.onCamera(v); },
+            placeOpen: S.placeOpen, openPlace: () => this.setState({ placeOpen: true }), closePlace: () => this.setState({ placeOpen: false }), placePin: sh.placePin, kitRest: sh.kitRest }; })(),
         unrated: photos.length - rated.length,
         aiLabel: ai === 'busy' ? 'Analyzing…' : ai === 'done' ? '✓ Analyzed' : '✦ Analyze with AI', aiFg: ai === 'busy' ? 'var(--text2)' : 'var(--text)', aiSpin: ai === 'busy' ? spin() : null,
         ai: async () => { if (ai === 'busy' || !P.aiOn) { if (!P.aiOn) this.flash('AI is off. Turn it on in Settings.'); return; } const msg = await P.onAnalyse(); if (msg) this.flash(msg); },
