@@ -7,7 +7,8 @@ import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
 import { Todo } from './pages/Todo';
 import { Home } from './screens/Home';
-import { Library } from './pages/Library';
+import { Library } from './screens/Library';
+import { GoContext } from './proto/runtime';
 import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
 import { Shoots } from './pages/Shoots';
@@ -63,6 +64,10 @@ function Shell() {
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
+    <GoContext.Provider value={(to) => {
+      const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', portfolio: '/portfolio/', editor: '/collections' };
+      if (to === 'search') setSearching(true); else if (map[to]) nav(map[to]);
+    }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
       <Routes>
@@ -91,6 +96,7 @@ function Shell() {
       {searching && <Search onClose={() => setSearching(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>
+    </GoContext.Provider>
   );
 }
 
