@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, imgUrl, useApi } from '../api';
+import { api, imgUrl, openPortfolio, useApi } from '../api';
 import { Modal, Spinner } from '../components/Modal';
 import { CloudSettings } from '../pages/CloudSettings';
 import { AiSettings } from '../pages/AiSettings';
@@ -191,7 +191,7 @@ export function usePortfolio(ctx: Ctx): Section {
   const names = (c?.buttons ?? []).map((b) => `${b.name} ↗`);
   return {
     key: 'portfolio', name: 'Portfolio', hint: 'A public website of your best work.',
-    action: { label: 'View site ↗', act: () => window.open(d.data?.handle ? `/${d.data.handle}/` : '/portfolio/', '_blank', 'noopener') },
+    action: { label: 'View site ↗', act: () => void openPortfolio() },
     groups: [
       { rows: [
         { id: 'pfLive', t: 'toggle', label: 'Published', hint: c?.enabled ? `Live at ${c.host || (d.data?.handle ? `/${d.data.handle}/` : '/portfolio/')} · ${d.data?.status.photoCount ?? 0} photos` : 'Not published', value: !!c?.enabled, set: (v) => void save({ enabled: v }) },

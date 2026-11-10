@@ -22,7 +22,7 @@ import { Welcome } from './screens/Welcome';
 import { Community } from './screens/Community';
 import { Gear } from './screens/Gear';
 import { GuestHome } from './pages/GuestHome';
-import { api } from './api';
+import { api, openPortfolio } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 
@@ -64,8 +64,8 @@ function Shell() {
 
   return (
     <GoContext.Provider value={(to) => {
-      const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', portfolio: '/portfolio/', editor: '/collections' };
-      if (to === 'search') setSearching(true); else if (to.startsWith('/')) nav(to); else if (map[to]) nav(map[to]);
+      const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', editor: '/collections' };
+      if (to === 'search') setSearching(true); else if (to === 'portfolio') void openPortfolio(); else if (to.startsWith('/')) nav(to); else if (map[to]) nav(map[to]);
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
