@@ -13,7 +13,7 @@ import { PinGate } from './Auth';
 import { GuestEditor } from '../screens/GuestEditor';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { askName?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
+type Shared = { askName?: boolean; emailCode?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** "3 × A3 · 1.6 × 0.6 m": what the wall is made of and how much room it takes. */
 const spanText = (ps: Print[]) => {
@@ -175,7 +175,7 @@ export function SharePage() {
           mine={mine} frames={frames} others={viewOthers} swap={swap} setFrame={setFrame} changes={changes} dirty={dirty} sending={sending} sendNote={sendNote} sendBack={sendBack} discard={discard} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
           openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
         {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
-        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </>
     );
   }
@@ -186,7 +186,7 @@ export function SharePage() {
       <Shell who={reviewer}>
         <div style={{ marginBottom: 12, fontSize: 13 }} className="muted">{reviewer.trim() ? `You’re ${reviewer.trim()}. ` : ''}<button className="t2" style={{ textDecoration: 'underline' }} onClick={() => withName(() => setView('review'))}>Rate these photos</button>{d.allowDownload && <> · <button className="t2" style={{ textDecoration: 'underline' }} onClick={download}>Download files</button></>}</div>
         <GuestEditor token={token} name={d.name} owner={d.owner} layout={d.layout} chosenIds={d.chosenIds ?? []} photos={photos} askName={withName} />
-        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </Shell>
     );
   }
@@ -297,7 +297,7 @@ export function SharePage() {
         </div>
       )}
       {asking && (
-        <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
+        <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -353,9 +353,24 @@ function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: str
 }
 
 /** "What should we call you?": a name the photographer will see next to what this person rates and suggests. */
-function NameBox({ initial, token, title, owner, signIn, onDone, onCancel }: { initial: string; token: string; title: string; owner?: string; signIn: { id: string; name: string }[]; onDone: (n: string) => void; onCancel: () => void }) {
+function NameBox({ initial, token, title, owner, signIn, emailCode, onDone, onCancel }: { initial: string; token: string; title: string; owner?: string; emailCode: boolean; signIn: { id: string; name: string }[]; onDone: (n: string) => void; onCancel: () => void }) {
   const [n, setN] = useState(initial);
   const ok = n.trim().length > 0;
+  const [em, setEm] = useState('');
+  const [code, setCode] = useState<string | null>(null); // null until a code has been asked for
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const post = async (path: string, body: object) => {
+    setBusy(true); setErr('');
+    try {
+      const r = await fetch(`/api/public/auth/email/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em.trim(), guest: true, returnTo: `/s/${token}`, ...body }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(j.error || 'That did not work. Try again.'); return false; }
+      return true;
+    } catch { setErr('Could not reach the server.'); return false; } finally { setBusy(false); }
+  };
+  const ask = async () => { if (em.includes('@') && (await post('send', {}))) setCode(''); };
+  const check = async () => { if (code && (await post('verify', { code }))) window.location.assign(`/s/${token}`); };
   const field = { width: '100%', height: 46, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 18px', font: "400 15px 'IBM Plex Sans',sans-serif", marginBottom: 12 } as const;
   const provider = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: 42, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, color: 'var(--text)' } as const;
   return (
@@ -366,9 +381,27 @@ function NameBox({ initial, token, title, owner, signIn, onDone, onCancel }: { i
         <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>Shown to {owner || 'whoever shared this'} next to what you rate and suggest. Remembered on this device.</p>
         <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" style={field} />
         <button className="btn primary" style={{ width: '100%', justifyContent: 'center', opacity: ok ? 1 : 0.4 }} disabled={!ok}>Start</button>
-        {signIn.length > 0 && (
+        {(signIn.length > 0 || emailCode) && (
           <div style={{ borderTop: '1px solid var(--hair)', marginTop: 16, paddingTop: 14 }}>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 8px' }}>New? Make a free guest account with</p>
+            {emailCode && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Been here before?</div>
+                <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Get a code by email to open your guest account and keep this in your shared list.</p>
+                {code === null ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="email" value={em} onChange={(e) => setEm(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void ask(); } }} placeholder="Email" aria-label="Email" style={{ ...field, height: 42, flex: 1, minWidth: 0, marginBottom: 0, fontSize: 14 }} />
+                    <button type="button" className="btn outline" disabled={busy || !em.includes('@')} onClick={ask}>Email me a code</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void check(); } }} placeholder="6-character code" aria-label="Code" autoFocus style={{ ...field, height: 42, flex: 1, minWidth: 0, marginBottom: 0, fontSize: 14 }} />
+                    <button type="button" className="btn outline" disabled={busy || code.length !== 6} onClick={check}>Continue</button>
+                  </div>
+                )}
+                {err && <p role="alert" style={{ fontSize: 13, color: 'var(--err)', margin: '8px 0 0' }}>{err}</p>}
+              </div>
+            )}
+            {signIn.length > 0 && <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 8px' }}>New? Make a free guest account with</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {signIn.map((p) => <a key={p.id} style={provider} href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
             </div>

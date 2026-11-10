@@ -25,6 +25,7 @@ A self-hosted archive for portfolio photographs: organise them into photoshoots,
 - **Notifications.** A bell with deep links, and email for the things you choose (guest replies, review reminders, a monthly summary), held during quiet hours. Settings, Notifications.
 - **Community review.** Opt in to let other members rate your photos anonymously, and rate theirs. Photos tagged nudity, violence or adult are never shown; reports hide a photo and go to an administrator (Settings, Members).
 - **Gear and wishlist.** What you own and a ranked want-to-buy list; it feeds the portfolio's Gear page.
+- **Guest accounts by emailed code.** On a share link's name box, while email sign-in is on (SMTP set up and passing its check), a guest can ask for a code by email to make or reopen a free guest account, with no place on the allow list needed; the link then stays in their Shared with you list. If the bot check is on and they have not passed it, the code is refused with a message. Not tested against a real mail server.
 - **Share links** can have a 4-number PIN (five wrong tries lock the link on that device for 15 minutes) and can be emailed from the Share dialog.
 - **Search** understands cameras, lenses, film stocks, apertures, shutter speeds, ISO, places and file names (`xt5` finds an X-T5, `dscf41` finds `DSCF4182.RAF`).
 - **Photos** get an editable date and a season for your hemisphere (Settings, Profile).
