@@ -6,6 +6,7 @@ import { fuzzyNames } from '../fuzzy';
 import { useStore } from '../store';
 import { WALL_BG, arrange, area, fits, frameOf, fromPreset, GROUPS, metres, newPrintId, PAPER, PRESETS, printsSummary, rectsIn, sizeName, type Mode, type Print } from '../layout';
 import type { NewCompositionStart } from '../ui';
+import ProtoMore from '../proto/ProtoMore';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 8 } as const;
@@ -55,38 +56,6 @@ export function wallFromRects(rects: Rect[]): Print[] {
 
 type Kind = 'subject' | 'tag' | 'colour';
 type Item = { name: string; n?: number };
-
-/** A box to type in: it suggests the names that contain what is typed, and a chosen name becomes a chip. */
-function PickField({ kind, title, items, chosen, fromName, onAdd, onRemove }: { kind: Kind; title: string; items: Item[]; chosen: string[]; fromName: string[]; onAdd: (n: string) => void; onRemove: (n: string) => void }) {
-  const [text, setText] = useState('');
-  const [open, setOpen] = useState(false);
-  const q = text.trim().toLowerCase();
-  const hits = (q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items).filter((i) => !chosen.includes(i.name)).slice(0, 8);
-  const add = (n: string) => { onAdd(n); setText(''); setOpen(false); };
-  if (items.length === 0 && chosen.length === 0) return null;
-  return (
-    <div style={{ marginBottom: 16, position: 'relative' }}>
-      <div style={label}>{title}</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg)', borderRadius: 8, padding: '6px 8px', boxShadow: ring }}>
-        {chosen.map((n) => (
-          <span key={n} title={fromName.includes(n) ? 'Matched from the name' : undefined} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '4px 10px', borderRadius: 999, fontSize: 12.5, background: 'var(--btn-bg)', color: 'var(--btn-fg)' }}>
-            {fromName.includes(n) && <span aria-hidden style={{ fontSize: 10 }}>✦</span>}{n}
-            <button aria-label={`Remove ${kind} ${n}`} onClick={() => onRemove(n)} style={{ color: 'var(--faint)' }}>✕</button>
-          </span>
-        ))}
-        <input value={text} onChange={(e) => { setText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (hits[0]) add(hits[0].name); } if (e.key === 'Backspace' && !text && chosen.length) onRemove(chosen[chosen.length - 1]); }}
-          placeholder={chosen.length ? '' : `Search ${kind}s…`} aria-label={`Search ${kind}s`}
-          style={{ flex: 1, minWidth: 120, background: 'none', border: 0, outline: 'none', fontSize: 13, padding: '4px 2px' }} />
-      </div>
-      {open && hits.length > 0 && (
-        <div role="listbox" aria-label={`${title} suggestions`} style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5, marginTop: 4, background: 'var(--raised2)', borderRadius: 8, boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', maxHeight: 220, overflow: 'auto' }}>
-          {hits.map((i) => <button key={i.name} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); add(i.name); }} style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13 }}><span>{i.name}</span>{i.n !== undefined && <span style={{ color: 'var(--faint)' }}>{i.n}</span>}</button>)}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * "+ Composition": a name, how many prints and what size, and optionally subjects, tags and colours to look for. The name is matched
@@ -169,75 +138,28 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
       onClose(); nav(`/collections/${created!.id}${ids.length ? '' : '?add=1'}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
+  const SIZES = ['A5', 'A4', 'A3', 'A2', 'A1'];
+  const chips = (['subject', 'tag', 'colour'] as Kind[]).flatMap((k) => chosen(k).map((n) => ({ label: `${k === 'colour' ? 'Colour' : cap(k)}: ${n}`, remove: () => remove(k, n) })));
+  const opts = optionsFor(count);
+  const v = {
+    isNew: true, isStats: false, isTodo: false, isCompare: false, isDupes: false, isWelcome: false,
+    ncName: name, onNcName: (e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value),
+    ncCount: count, ncDec: () => setN(count - 1), ncInc: () => setN(count + 1), ncDecFg: count > 1 ? '#efede8' : '#4a4845', ncIncFg: count < 12 ? '#efede8' : '#4a4845',
+    layouts: opts.map((pr) => { const on = preset === pr.key; return { label: pr.label, bg: on ? '#efede8' : 'transparent', fg: on ? '#0d0d0d' : '#efede8', hover: on ? '#efede8' : 'rgba(255,255,255,.04)', ring: on ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.16)', wall: on ? '#dcd9d2' : 'rgba(255,255,255,.04)', blockBg: on ? '#0d0d0d' : '#a8a59f', blocks: pr.rects.map(([x, y, w, h]) => ({ x: `${x}%`, y: `${(y / 64) * 100}%`, w: `${w}%`, h: `${(h / 64) * 100}%` })), go: () => choose(pr) }; }),
+    ncPrints: prints.map((p, i) => ({ n: i + 1, size: sizeName(p.size), orient: cap(p.orientation), frame: p.frame ? (p.frame.size === p.size ? 'Framed, no border' : `${sizeName(p.frame.size)} frame`) : 'Poster',
+      cycle: () => custom((q) => { const next = SIZES[(SIZES.indexOf(q[i].size) + 1) % SIZES.length] ?? 'A3'; q[i].size = next; if (q[i].frame && !fits(q[i].frame!.size, next)) q[i].frame = { ...q[i].frame!, size: next }; }) })),
+    askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Ask the AI', aiSpin: null,
+    ncChips: chips, ncChipHint: chips.length ? aiMsg : aiMsg || 'Type a name and Frames matches subjects, tags and colours you already have.',
+    ncSummary: looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`,
+    ncCreate: create, ncClose: onClose,
+  };
   return (
-    <div className="mscrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-label="New composition" style={{ width: 640, maxHeight: '90vh', overflow: 'auto' }}>
-        <div className="mbody" style={{ gap: 0 }}>
-        <div className="mhead" style={{ marginBottom: 18 }}><div className="mtitle">New composition</div><button className="xbtn" onClick={onClose} aria-label="Close">✕</button></div>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Birds at the beach" aria-label="Composition name"
-          style={{ width: '100%', background: 'var(--bg)', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
-        <div className="spread" style={{ alignItems: 'center', marginBottom: 18 }}><div><div style={{ ...label, marginBottom: 2 }}>Prints</div><div className="muted" style={{ fontSize: 13 }}>You can add or remove prints later</div></div>
-        <div className="stepper" role="group" aria-label="Number of prints">
-          <button aria-label="Fewer prints" disabled={count <= 1} onClick={() => setN(count - 1)}>−</button><b aria-live="polite">{count}</b><button aria-label="More prints" disabled={count >= 12} onClick={() => setN(count + 1)}>+</button>
-        </div></div>
-        <div style={label}>Layout</div>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, optionsFor(count).length)},minmax(0,1fr))`, gap: 6, marginBottom: 18 }}>
-          {optionsFor(count).map((pr) => {
-            const on = preset === pr.key;
-            return (
-              <button key={pr.key} aria-pressed={on} onClick={() => choose(pr)} style={{ borderRadius: 10, padding: 8, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, fontSize: 13, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text)', boxShadow: on ? 'none' : ring }}>
-                <span style={{ position: 'relative', display: 'block', aspectRatio: '100 / 64', borderRadius: 6, background: on ? 'rgba(0,0,0,.08)' : 'var(--bg)' }}>
-                  {pr.rects.map(([x, y, w, h], i) => <i key={i} style={{ position: 'absolute', left: `${x}%`, top: `${(y / 64) * 100}%`, width: `${w}%`, height: `${(h / 64) * 100}%`, background: on ? 'var(--btn-fg)' : 'var(--faint)' }} />)}
-                </span>
-                {pr.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="spread"><div style={label}>Sizes</div><span className="faint" style={{ fontSize: 12 }}>Click a size to change it</span></div>
-        <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
-          {prints.map((p, i) => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--hair)', flexWrap: 'wrap' }}>
-              <span style={{ font: "italic 400 20px/1 'Instrument Serif',Georgia,serif", width: 18 }}>{i + 1}</span>
-              <select aria-label="Print size" value={p.size} onChange={(e) => custom((q) => { q[i].size = e.target.value; if (q[i].frame && !fits(q[i].frame!.size, e.target.value)) q[i].frame = { ...q[i].frame!, size: e.target.value }; })}>
-                {GROUPS.map(([g, ks]) => <optgroup key={g} label={g}>{ks.map((k) => <option key={k} value={k}>{sizeName(k)}</option>)}</optgroup>)}
-              </select>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {(['portrait', 'landscape'] as const).map((o) => <button key={o} aria-pressed={p.orientation === o} onClick={() => custom((q) => { q[i].orientation = o; })} style={{ padding: '5px 10px', borderRadius: 6, fontSize: 12.5, ...opt(p.orientation === o) }}>{o === 'portrait' ? 'Portrait' : 'Landscape'}</button>)}
-              </div>
-              <select aria-label="Frame" value={p.frame ? p.frame.size : 'poster'} style={{ marginLeft: 'auto' }}
-                onChange={(e) => custom((q) => { const v = e.target.value; q[i].frame = v === 'poster' ? null : { mat: 'white', color: 'black', ...(q[i].frame || {}), size: v }; })}>
-                <option value="poster">Poster</option>
-                {Object.keys(PAPER).filter((k) => fits(k, p.size)).sort((a, b) => area(a) - area(b)).map((k) => <option key={k} value={k}>{k === p.size ? 'Framed, no border' : `In ${sizeName(k)} frame`}</option>)}
-              </select>
-              <button aria-label="Remove print" onClick={() => prints.length > 1 && custom((q) => { q.splice(i, 1); })} style={{ color: 'var(--faint)', fontSize: 12, width: 16 }}>✕</button>
-            </div>
-          ))}
-        </div>
-        {prints.length < 12 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>+ Add a print</button>}
-        <div style={{ background: WALL_BG, borderRadius: 8, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 20, position: 'relative' }} aria-label="Layout preview">
-          <div style={{ position: 'relative', width: `min(100%, ${Math.round((98 * wall.W) / wall.H)}px)`, aspectRatio: String(wall.W / wall.H) }}>
-            {rectsIn(laid, wall).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: 'var(--btn-bg)', opacity: 0.85 }} />)}
-          </div>
-          <span style={{ position: 'absolute', right: 10, bottom: 8, font: "400 11px 'IBM Plex Mono',monospace", color: 'var(--faint)' }}>{metres(wall.w)} × {metres(wall.h)} m</span>
-        </div>
-        {aiOn && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-8px 0 16px', flexWrap: 'wrap' }}>
-            <button onClick={askAi} disabled={!name.trim() || aiBusy} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 13, boxShadow: ring, opacity: name.trim() ? 1 : 0.5 }}>{aiBusy ? 'Asking the AI…' : '✨ Find with AI'}</button>
-            <span style={{ fontSize: 12.5, color: 'var(--muted)' }} role="status">{aiMsg || 'Reads the name and picks subjects, tags and colours you already have.'}</span>
-          </div>
-        )}
-        <PickField kind="subject" title="Subjects to look for (optional)" items={known.subject} chosen={chosen('subject')} fromName={auto.subject} onAdd={(n) => add('subject', n)} onRemove={(n) => remove('subject', n)} />
-        <PickField kind="tag" title="Tags to look for (optional)" items={known.tag} chosen={chosen('tag')} fromName={auto.tag} onAdd={(n) => add('tag', n)} onRemove={(n) => remove('tag', n)} />
-        <PickField kind="colour" title="Colours to look for (optional)" items={known.colour} chosen={chosen('colour')} fromName={auto.colour} onAdd={(n) => add('colour', n)} onRemove={(n) => remove('colour', n)} />
-        {(auto.subject.length + auto.tag.length + auto.colour.length) > 0 && <p style={{ fontSize: 12, color: 'var(--muted)', margin: '-6px 0 16px' }}>✦ matched from the name. Take any away with ✕.</p>}
-        {err && <p className="reason" role="alert">{err}</p>}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`}</span>
-          <button onClick={create} disabled={busy} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Create and rank</button>
-        </div>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(7,7,7,.75)', overflow: 'auto' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+        <ProtoMore page="new" v={v} />
       </div>
+      {err && <p role="alert" style={{ position: 'fixed', bottom: 24, left: 0, right: 0, textAlign: 'center', color: '#e79a82' }}>{err}</p>}
     </div>
   );
 }
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
