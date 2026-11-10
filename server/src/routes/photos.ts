@@ -173,7 +173,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   app.post('/api/photos/remove', async (req, rep) => {
     const ids = ((req.body ?? {}) as Row).ids;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every((n) => Number.isInteger(n))) return rep.code(400).send({ error: 'Send up to 500 photograph ids.' });
-    return removePhotos(db, cfg, ids as number[]);
+    const o = ((req.body ?? {}) as Row).originals;
+    return removePhotos(db, cfg, ids as number[], o === 'trash' ? 'trash' : o === 'keep' ? 'keep' : 'delete');
   });
   app.delete('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);

@@ -12,12 +12,28 @@ import { internalDir, type Cfg } from './ingest.js';
  * in the cloud stays, and sync does not fetch it again because it already knows it).
  * So a scan does not bring the photograph straight back, its fingerprint is remembered in `removed`; bringing them back clears that.
  */
-export type RemoveResult = { removed: number; filesDeleted: number; kept: number };
+export type RemoveResult = { removed: number; filesDeleted: number; kept: number; trashed?: number };
+/** What happens to the copy Frames holds: 'delete' (the old behaviour), 'keep' it where it is, or 'trash': move it, and its sidecar and RAW pair, to the data folder's trash. */
+export type Originals = 'delete' | 'keep' | 'trash';
 
 const inside = (file: string, dir: string) => { const r = path.relative(path.resolve(dir), path.resolve(file)); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
 
-export function removePhotos(db: DB, cfg: Cfg, ids: number[]): RemoveResult {
-  const res: RemoveResult = { removed: 0, filesDeleted: 0, kept: 0 };
+/** Moves a file into the trash folder (never deletes it), keeping its name. Returns whether it moved. */
+function toTrash(cfg: Cfg, file: string, stamp: string): boolean {
+  try {
+    if (!fs.existsSync(file)) return false;
+    const dir = path.join(cfg.dataDir, 'trash', stamp);
+    fs.mkdirSync(dir, { recursive: true });
+    let dest = path.join(dir, path.basename(file)), n = 1;
+    while (fs.existsSync(dest)) dest = path.join(dir, `${n++}_${path.basename(file)}`);
+    try { fs.renameSync(file, dest); } catch { fs.copyFileSync(file, dest); fs.rmSync(file, { force: true }); } // across volumes
+    return true;
+  } catch { return false; }
+}
+
+export function removePhotos(db: DB, cfg: Cfg, ids: number[], originals: Originals = 'delete'): RemoveResult {
+  const res: RemoveResult = { removed: 0, filesDeleted: 0, kept: 0, trashed: 0 };
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const own = [internalDir(cfg), path.join(cfg.dataDir, 'cloud')];
   const pick = db.prepare('SELECT id, path, file, hash FROM photos WHERE id = ?');
   const forget = db.prepare('INSERT OR REPLACE INTO removed(hash, path, file, removed_at) VALUES(?, ?, ?, ?)');
@@ -34,7 +50,15 @@ export function removePhotos(db: DB, cfg: Cfg, ids: number[]): RemoveResult {
       db.prepare('DELETE FROM photos WHERE id = ?').run(id); // reviews, tags, collection places and share ratings go with it
     })();
     fs.rmSync(path.join(cfg.dataDir, 'derivatives', String(id)), { recursive: true, force: true });
-    if (own.some((d) => inside(p.path, d))) { try { fs.rmSync(p.path, { force: true }); res.filesDeleted++; } catch { res.kept++; } } else res.kept++;
+    if (originals !== 'keep' && own.some((d) => inside(p.path, d))) {
+      if (originals === 'trash') {
+        // The file, its XMP sidecar and a RAW with the same name, only where Frames itself holds them.
+        const base = p.path.replace(/\.[^.\\/]+$/, '');
+        const pair = ['.xmp', '.XMP', '.raf', '.RAF', '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2'].map((e) => base + e).filter((f) => inside(f, internalDir(cfg)) || inside(f, path.join(cfg.dataDir, 'cloud')));
+        if (toTrash(cfg, p.path, stamp)) { res.trashed = (res.trashed ?? 0) + 1; res.filesDeleted++; } else res.kept++;
+        for (const f of pair) toTrash(cfg, f, stamp);
+      } else { try { fs.rmSync(p.path, { force: true }); res.filesDeleted++; } catch { res.kept++; } }
+    } else res.kept++;
     res.removed++;
   }
   return res;

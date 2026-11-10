@@ -7,8 +7,10 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { api } from '../api';
 import type { Collection } from '../data';
-import { AddToComposition } from '../components/AddToComposition';
-import { MoveToShoot } from '../components/MoveToShoot';
+import { CompPicker } from '../components/AddToComposition';
+import { AddPhotosButton } from '../components/AddPhotos';
+import { Modal } from '../components/Modal';
+import { useNavigate } from 'react-router-dom';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const RATING_OPTS = [['4+', '4 or better on average'], ['3+', '3 or better on average'], ['under', 'Under 3 on average']];
@@ -23,6 +25,11 @@ export function Library() {
   const [open, setOpen] = useState<string | null>(null);
   const [text, setText] = useState(sp.get('q') ?? '');
   const [selecting, setSelecting] = useState(false);
+  const nav = useNavigate();
+  const group = (['shoot', 'uploaded', 'taken'] as const).find((g) => g === sp.get('group')) ?? 'shoot';
+  const [moving, setMoving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [composing, setComposing] = useState(false);
   const { openNew, openSearch } = useUi();
   const colls = useApi<Collection[]>('/collections');
   const lastActive = (colls.data ?? []).find((c) => !c.printedAt);
@@ -47,10 +54,20 @@ export function Library() {
   const flat = !!(sp.get('q') || similarTo || sp.get('semantic'));
   const groups = useMemo(() => {
     if (!list.data || !shoots.data || flat) return [];
+    const photos = list.data.photos;
+    if (group === 'taken') {
+      // By the month each photograph was taken (the upload date when it has no camera date).
+      const by = new Map<string, PhotoLite[]>();
+      for (const p of photos) { const k = (p.capturedAt ?? '').slice(0, 7) || 'undated'; (by.get(k) ?? by.set(k, []).get(k)!).push(p); }
+      const label = (k: string) => (k === 'undated' ? 'No camera date' : new Date(`${k}-01T12:00:00`).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }));
+      return [...by.entries()].sort((a, b) => (sp.get('order') === 'oldest' ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]))).map(([k, ph]) => ({ s: { id: -1 - ph[0].id, name: label(k), place: '', dates: label(k), key: k } as unknown as Shoot, photos: ph }));
+    }
     const newest = sp.get('order') !== 'oldest';
-    const order = newest ? shoots.data : [...shoots.data].reverse();
-    return order.map((s) => ({ s, photos: list.data!.photos.filter((p) => p.shootId === s.id) })).filter((g) => g.photos.length);
-  }, [list.data, shoots.data, flat, sp]);
+    // "Photoshoot": by when the shoot happened; "Uploaded": by when it came in.
+    const key = (s: Shoot) => (group === 'uploaded' ? s.importedAt : s.dateFrom ?? s.importedAt) ?? '';
+    const order = [...shoots.data].sort((a, b) => key(a).localeCompare(key(b)) * (newest ? -1 : 1));
+    return order.map((s) => ({ s, photos: photos.filter((p) => p.shootId === s.id) })).filter((g) => g.photos.length);
+  }, [list.data, shoots.data, flat, sp, group]);
   const count = list.data?.count ?? 0;
 
   // Coming back from a photograph lands where you were, not at the top.
@@ -121,6 +138,11 @@ export function Library() {
           <span className="sep" />
           <button aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>
           <button onClick={() => set('order', sp.get('order') === 'oldest' ? null : 'oldest')}>{sp.get('order') === 'oldest' ? 'Oldest first' : 'Newest first'}</button>
+          <span className="sep" />
+          <span className="seg" role="group" aria-label="Group by">
+            {([['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']] as const).map(([k, l]) => <button key={k} aria-pressed={group === k} className={group === k ? 'on' : ''} onClick={() => set('group', k === 'shoot' ? null : k)}>{l}</button>)}
+          </span>
+          <AddPhotosButton onDone={() => { list.reload(); shoots.reload(); }} />
         </div>
       </div>
 
@@ -143,7 +165,7 @@ export function Library() {
         <section className="group" key={s.id}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14 }}>
             <div>
-              <h2 style={{ margin: 0 }}><Link to={`/shoots/${s.id}`}>{s.name}</Link></h2>
+              <h2 style={{ margin: 0 }}>{s.id > 0 ? <Link to={`/shoots/${s.id}`}>{s.name}</Link> : s.name}</h2>
               <div className="meta" style={{ marginTop: 4, marginBottom: 0 }}>{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
             </div>
             <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--text2)' }}>
@@ -157,14 +179,18 @@ export function Library() {
       {selecting && (
         <div className="selbar float" role="region" aria-label="Selected photographs">
           <b style={{ fontWeight: 500 }}>{picked.size} selected</b>
-          <button style={{ color: 'var(--text2)' }} onClick={() => setPicked(new Set())}>Clear</button>
-          {lastActive && <button disabled={picked.size === 0} style={{ borderRadius: 999, padding: '10px 16px', boxShadow: 'inset 0 0 0 1px var(--outline)' }} onClick={async () => { for (const id of picked) await api(`/collections/${lastActive.id}/photos/${id}`, { method: 'PUT' }); setNote(`Added ${picked.size} to “${lastActive.name}”.`); setPicked(new Set()); colls.reload(); }}>Add to {lastActive.name}</button>}
-          {<AddToComposition up label="Add to a composition…" ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
-          <MoveToShoot up ids={[...picked]} onDone={(m) => { setNote(m); setPicked(new Set()); list.reload(); shoots.reload(); }} />
-          <button disabled={picked.size === 0} onClick={() => openNew({ name: 'New composition', photoIds: [...picked] })} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.size ? 1 : 0.5 }}>New composition from {picked.size}</button>
+          <button style={{ color: 'var(--text2)' }} onClick={() => setPicked(new Set())} disabled={picked.size === 0}>Clear</button>
+          <button className="btn outline" disabled={picked.size === 0} onClick={() => setMoving(true)}>Photoshoot…</button>
+          <button className="btn outline" disabled={picked.size === 0} onClick={() => setComposing(true)}>Composition…</button>
+          <button className="btn outline" disabled={picked.size === 0} onClick={async () => { for (const id of picked) await api(`/portfolio/photos/${id}`, { body: { on: true } }); setNote(`Added ${picked.size} to your portfolio.`); setPicked(new Set()); }}>Add to portfolio</button>
+          <button className="btn outline" disabled={picked.size === 0} onClick={async () => { await api('/review/start', { body: { photoIds: [...picked] } }); nav('/review'); }}>Review</button>
+          <button className="btn outline" disabled={picked.size === 0} style={{ color: 'var(--danger)' }} onClick={() => setDeleting(true)}>Delete</button>
           {note && <span className="muted" role="status">{note}</span>}
         </div>
       )}
+      {composing && <CompPicker ids={[...picked]} onClose={() => setComposing(false)} onDone={(m) => { setNote(m); setPicked(new Set()); colls.reload(); }} />}
+      {moving && <MoveModal ids={[...picked]} onClose={() => setMoving(false)} onDone={(m) => { setNote(m); setPicked(new Set()); setMoving(false); list.reload(); shoots.reload(); }} />}
+      {deleting && <DeleteModal ids={[...picked]} onClose={() => setDeleting(false)} onDone={(m) => { setNote(m); setPicked(new Set()); setDeleting(false); list.reload(); shoots.reload(); }} />}
     </div>
     </MenuState.Provider>
   );
@@ -183,4 +209,47 @@ function Menu({ id, label, children }: { id: string; label: string; children: Re
 }
 function Item({ on, onClick, children }: { on?: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button role="menuitem" className={on ? 'on' : ''} onClick={onClick}>{children}</button>;
+}
+
+/** Move selected photographs to a new shoot (blank = today's date) or an existing one. Ratings, tags and compositions go with them; files on disk are untouched. */
+function MoveModal({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: (m: string) => void }) {
+  const shoots = useApi<Shoot[]>('/shoots');
+  const [target, setTarget] = useState<'new' | number>('new');
+  const [name, setName] = useState('');
+  const [err, setErr] = useState('');
+  const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const go = async () => {
+    try {
+      if (target === 'new') { const s = await api<Shoot>('/shoots', { body: { name: name.trim() || today, photoIds: ids } }); onDone(`Moved ${ids.length} to “${s.name}”.`); }
+      else { await api(`/shoots/${target}/move`, { body: { photoIds: ids } }); onDone(`Moved ${ids.length} to “${shoots.data?.find((x) => x.id === target)?.name}”.`); }
+    } catch (e) { setErr((e as Error).message); }
+  };
+  return (
+    <Modal title="Move to a photoshoot" sub="Ratings, tags and compositions move with the photos. Files on disk are untouched." width={480} onClose={onClose}
+      foot={<><span className="grow">{err}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={go}>Move {ids.length}</button></>}>
+      <div className="seg"><button className={target === 'new' ? 'on' : ''} onClick={() => setTarget('new')}>New photoshoot</button><button className={target !== 'new' ? 'on' : ''} onClick={() => setTarget((shoots.data?.[0]?.id) ?? 'new')}>Existing</button></div>
+      {target === 'new'
+        ? <input className="field-in" value={name} onChange={(e) => setName(e.target.value)} placeholder={`Name (blank = ${today})`} aria-label="Photoshoot name" autoFocus />
+        : <select value={String(target)} onChange={(e) => setTarget(Number(e.target.value))} aria-label="Photoshoot">{(shoots.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name} ({x.count})</option>)}</select>}
+    </Modal>
+  );
+}
+
+/** Delete: take them out of Frames (originals kept), or also move the originals Frames holds to the trash (with RAW and XMP). Cloud files are never touched. */
+function DeleteModal({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: (m: string) => void }) {
+  const [mode, setMode] = useState<'keep' | 'trash'>('keep');
+  const [err, setErr] = useState('');
+  const go = async () => {
+    try { const r = await api<{ removed: number; trashed?: number }>('/photos/remove', { body: { ids, originals: mode } }); onDone(`Removed ${r.removed} from Frames${r.trashed ? ` and moved ${r.trashed} originals to the trash` : ''}.`); } catch (e) { setErr((e as Error).message); }
+  };
+  return (
+    <Modal title={`Delete ${ids.length} photo${ids.length === 1 ? '' : 's'}?`} width={520} onClose={onClose}
+      foot={<><span className="grow">{err}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" style={{ background: 'var(--danger)', color: '#fff' }} onClick={go}>Delete</button></>}>
+      {([['keep', 'Remove from Frames', 'Originals are kept where they are. Ratings, tags and compositions for these photos go.'], ['trash', 'Also move the originals to the trash', 'Includes RAW and XMP. Only files Frames itself holds are moved: files in your library folders and in cloud storage are never touched.']] as const).map(([k, t, d]) => (
+        <label key={k} style={{ display: 'flex', gap: 12, padding: 12, borderRadius: 10, cursor: 'pointer', boxShadow: `inset 0 0 0 1px ${mode === k ? 'var(--text)' : 'var(--hair)'}` }}>
+          <input type="radio" name="del" checked={mode === k} onChange={() => setMode(k)} style={{ marginTop: 3 }} /><span><b style={{ fontWeight: 500 }}>{t}</b><br /><span className="muted" style={{ fontSize: 13 }}>{d}</span></span>
+        </label>
+      ))}
+    </Modal>
+  );
 }
