@@ -14,7 +14,7 @@ import { Review } from './screens/Review';
 import { Shoots } from './screens/Shoots';
 import { Compositions } from './screens/Compositions';
 import { CollectionDetail } from './pages/Collections';
-import { Stats } from './pages/Stats';
+import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
@@ -66,7 +66,7 @@ function Shell() {
   return (
     <GoContext.Provider value={(to) => {
       const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', portfolio: '/portfolio/', editor: '/collections' };
-      if (to === 'search') setSearching(true); else if (map[to]) nav(map[to]);
+      if (to === 'search') setSearching(true); else if (to.startsWith('/')) nav(to); else if (map[to]) nav(map[to]);
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
