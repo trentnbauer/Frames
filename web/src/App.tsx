@@ -5,7 +5,7 @@ import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
-import { Todo } from './pages/Todo';
+import { TodoPage as Todo } from './screens/Todo';
 import { Home } from './screens/Home';
 import { Library } from './screens/Library';
 import { GoContext } from './proto/runtime';
