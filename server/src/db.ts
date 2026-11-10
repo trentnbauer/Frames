@@ -283,6 +283,13 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'collections', 'updated_at', 'TEXT'); },
   // the portfolio: favourites, and photographs left out (which always wins over the automatic score rule)
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS portfolio_marks (photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, favourite INTEGER NOT NULL DEFAULT 0, out INTEGER NOT NULL DEFAULT 0)'); },
+  // gear and wishlist
+  (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS gear_items (
+      id INTEGER PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other', system TEXT NOT NULL DEFAULT '',
+      year INTEGER, why TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '', price REAL, rank INTEGER NOT NULL DEFAULT 0, bought_at TEXT, created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS gear_items_kind ON gear_items(kind, rank)`);
+  },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

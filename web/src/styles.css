@@ -433,3 +433,5 @@ main.auth.terms { width: 640px; }
   .review-banner { flex-direction: column; align-items: flex-start !important; gap: 16px !important; padding: 20px !important; }
   .page h1.serif { font-size: 32px !important; }
 }
+@media (max-width: 1199px) { .gear-hero { grid-template-columns: 1fr !important; } }
+@media (max-width: 767px) { .want-row { grid-template-columns: 24px 1fr auto !important; } .want-row > :nth-child(3), .want-row > :nth-child(4), .want-row > :nth-child(5) { display: none; } }

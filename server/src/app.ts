@@ -23,6 +23,7 @@ import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
 import { registerNotifications } from './routes/notifications.js';
 import { registerHome } from './routes/home.js';
+import { registerGearItems } from './routes/gearitems.js';
 import { registerCommunity } from './routes/community.js';
 import { registerSystem, startEmailHealth } from './routes/system.js';
 import { registerInsights } from './routes/insights.js';
@@ -532,6 +533,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerProfile(app, ctx);
   registerNotifications(app, ctx);
   registerHome(app, ctx);
+  registerGearItems(app, ctx);
   registerCommunity(app, ctx);
   registerSystem(app, ctx);
   startEmailHealth(ctx, (fn) => app.addHook('onClose', async () => fn()));

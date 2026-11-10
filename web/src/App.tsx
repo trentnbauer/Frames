@@ -20,6 +20,7 @@ import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
 import { Community } from './pages/Community';
+import { Gear } from './pages/Gear';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
@@ -76,6 +77,7 @@ function Shell() {
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
+        <Route path="/gear" element={<Gear />} />
         <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/welcome" element={<Welcome />} />

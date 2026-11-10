@@ -102,6 +102,7 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
   };
 }
 
+import { gearMarkdown } from './routes/gearitems.js';
 export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
@@ -157,7 +158,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   });
   app.get('/portfolio/gear.md', async (_req, rep) => {
     const c = live(rep); if (!c) return;
-    return open(rep).type('text/markdown; charset=utf-8').send(c.gear || '# My gear\n\nNothing listed yet.');
+    return open(rep).type('text/markdown; charset=utf-8').send(gearMarkdown(db) !== '# My gear\n\nNothing listed yet.' ? gearMarkdown(db) : c.gear || '# My gear\n\nNothing listed yet.');
   });
   app.get('/portfolio/images/manifest.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
