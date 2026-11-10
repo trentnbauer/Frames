@@ -8,6 +8,7 @@ import { RoomBackground } from '../components/RoomBackground';
 import { Header, Img, Justified, Loading, useTitle } from '../components/bits';
 import { SharePanel } from '../components/SharePanel';
 import { Modal } from '../components/Modal';
+import { useSearchParams as useSP } from 'react-router-dom';
 import { useUi } from '../ui';
 
 type SuggestedSet = { name: string; reason: string; aiAssisted: boolean; photoIds: number[]; photos: PhotoLite[] };
@@ -67,6 +68,14 @@ export function Card({ c }: { c: Collection }) {
   );
 }
 
+/** The frames a composition needs, e.g. "2 × white A3 · no mat, 1 × oak A2 · white mat". */
+const framesLine = (c: Collection) => {
+  const m = new Map<string, number>();
+  for (const p of c.layout.prints) if (p.frame) { const k = `${p.frame.color} ${p.frame.size ?? p.size} · ${p.frame.size && p.frame.size !== p.size ? `${(p.frame as { matColor?: string }).matColor ?? 'white'} mat` : 'no mat'}`; m.set(k, (m.get(k) || 0) + (p.stack ? 2 : 1)); }
+  return [...m].map(([k, n]) => `${n} × ${k}`).join(', ') || 'No frames';
+};
+const FILTERS = [['all', 'All'], ['progress', 'In progress'], ['ready', 'Ready to export'], ['printed', 'Printed']] as const;
+
 export function Collections() {
   const colls = useApi<Collection[]>('/collections');
   const sets = useApi<SuggestedSet[]>('/collections/suggestions');
@@ -80,31 +89,58 @@ export function Collections() {
     nav(`/collections/${c.id}`);
   };
   const skip = async (s: SuggestedSet) => { await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s.photoIds, verdict: 'reject' } }); sets.reload(); };
+  const [sp, setSp] = useSP();
+  const filter = (FILTERS.find((f) => f[0] === sp.get('filter')) ?? FILTERS[0])[0];
   const all = colls.data ?? [];
   const active = all.filter((c) => !c.printedAt);
+  const ready = active.filter((c) => isFull(c.layout.prints));
+  const progress = active.filter((c) => !isFull(c.layout.prints));
   const printed = all.filter((c) => c.printedAt);
+  const showProgress = filter === 'all' || filter === 'progress';
+  const showReady = filter === 'all' || filter === 'ready';
+  const showPrinted = filter === 'all' || filter === 'printed';
+  const prints = printed.reduce((n, c) => n + c.layout.prints.length, 0);
+  const frames = printed.reduce((n, c) => n + c.layout.prints.filter((p) => p.frame).length, 0);
+  const count = (k: string) => (k === 'all' ? all.length : k === 'progress' ? progress.length : k === 'ready' ? ready.length : printed.length);
   return (
     <div className="page">
       <Header />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
           <h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Compositions</h1>
-          {colls.data && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{active.length} in progress · {printed.length} printed</span>}
+          {colls.data && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{progress.length} in progress · {ready.length} ready · {printed.length} printed</span>}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={openSearch} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: ring }}>From a search…</button>
-          <button onClick={() => openNew()} style={{ ...lightBtn, padding: '11px 20px', fontSize: 14 }}>New composition</button>
+          <button onClick={openSearch} className="btn outline">From a search…</button>
+          <button onClick={() => openNew()} className="btn primary">New composition</button>
         </div>
+      </div>
+      <div className="seg" role="tablist" aria-label="Filter compositions" style={{ marginBottom: 28 }}>
+        {FILTERS.map(([k, l]) => <button key={k} role="tab" aria-selected={filter === k} className={filter === k ? 'on' : ''} onClick={() => { const n = new URLSearchParams(sp); if (k === 'all') n.delete('filter'); else n.set('filter', k); setSp(n, { replace: true }); }}>{l} <span className="faint">{count(k)}</span></button>)}
       </div>
       {(colls.loading || colls.error) && <Loading error={colls.error} />}
       {colls.data && all.length === 0 && <div className="empty">No compositions yet. A composition is a curated set of photographs you can download as untouched original files.</div>}
-      {active.length > 0 && (
+      {showReady && ready.length > 0 && (
         <>
-          <div style={{ ...eyebrow, marginBottom: 14 }}>In progress</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px', marginBottom: 48 }}>{active.map((c) => <Card key={c.id} c={c} />)}</div>
+          <div style={{ ...eyebrow, marginBottom: 14 }}>Ready to export</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '28px 24px', marginBottom: 48 }}>
+            {ready.map((c) => (
+              <div key={c.id}>
+                <Card c={c} />
+                <div style={{ fontSize: 12.5, color: 'var(--text2)', marginTop: 6 }}>{printsShort(c)} · {framesLine(c)}</div>
+              </div>
+            ))}
+          </div>
         </>
       )}
-      {(sets.data ?? []).length > 0 && (
+      {showProgress && progress.length > 0 && (
+        <>
+          <div style={{ ...eyebrow, marginBottom: 14 }}>In progress</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px', marginBottom: 48 }}>{progress.map((c) => <Card key={c.id} c={c} />)}</div>
+        </>
+      )}
+      {colls.data && all.length > 0 && count(filter) === 0 && <div className="empty">{filter === 'ready' ? 'Nothing is ready to export yet. A composition is ready when every print has a photo.' : filter === 'printed' ? 'Nothing printed yet.' : 'Nothing here.'}</div>}
+      {filter === 'all' && (sets.data ?? []).length > 0 && (
         <section style={{ marginBottom: 48 }}>
           <h2 style={{ font: `400 28px ${serif}`, margin: '0 0 4px' }}>Suggested compositions</h2>
           <p className="muted" style={{ fontSize: 12.5, margin: '0 0 18px' }}>Well-liked photographs from different photoshoots that look like they belong together.</p>
@@ -120,17 +156,17 @@ export function Collections() {
           </div>
         </section>
       )}
-      {printed.length > 0 && (
+      {showPrinted && printed.length > 0 && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--hair)', paddingTop: 20, marginBottom: 6 }}>
             <h2 style={{ font: `400 28px ${serif}`, margin: 0 }}>Printed</h2>
-            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Done and archived. Reopen any time.</span>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{printed.length} compositions · {prints} prints · {frames} frames · done and archived, reopen any time</span>
           </div>
           {printed.map((c) => (
             <Link key={c.id} to={`/collections/${c.id}`} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 18, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--hair)', textAlign: 'left' }}>
               <span style={{ display: 'flex', gap: 3, height: 40 }}>{c.chosenIds.slice(0, 6).map((id) => <img key={id} src={thumb(id)} alt="" style={{ height: '100%', aspectRatio: String(byId.get(id)?.ar ?? 1.5), objectFit: 'cover', borderRadius: 2, display: 'block' }} />)}</span>
               <span style={{ font: `400 20px ${serif}` }}>{c.name}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>{printsShort(c)}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>{c.layout.prints.length} print{c.layout.prints.length === 1 ? '' : 's'} · {framesLine(c)}</span>
               <span style={{ font: `400 12px ${mono}`, color: 'var(--muted)' }}>{dayOf(c.printedAt!)}</span>
             </Link>
           ))}

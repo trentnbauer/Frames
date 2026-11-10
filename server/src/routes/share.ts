@@ -5,6 +5,7 @@ import { derivPath } from '../ingest.js';
 import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
+import { displayNameOf } from './profile.js';
 import { getSetting, setSetting } from '../db.js';
 import { footer, sendMail, smtpHealthy } from '../email.js';
 import { notify } from '../notifications.js';
@@ -295,7 +296,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!r) return;
     db.prepare('UPDATE shares SET views = views + 1 WHERE id = ?').run(r.share.id);
     const photos = r.photoIds.map((id, i) => { const p = one('SELECT id, title, w, h FROM photos WHERE id = ?', id); return p ? { id: p.id, title: p.title, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
-    return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, layout: r.layout ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, expiresAt: r.share.expires_at, photos,
+    return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, layout: r.layout ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, allowSuggest: canSuggest(r.share), askName: !!r.share.ask_name, owner: displayNameOf(db) || x.tenant().user.name.split(' ')[0] || '', expiresAt: r.share.expires_at, photos,
       // Who is looking, if they are signed in, and how a visitor could make an account (a guest one) instead of only giving a name.
       viewer: ((req as any).shareViewer as { name: string; role: string } | null) ? { name: (req as any).shareViewer.name, role: (req as any).shareViewer.role } : null,
       signIn: (() => { const a = loadAuth(x.sys); return a.enabled ? a.providers.filter((p) => p.type !== 'cloudflare').map((p) => ({ id: p.id, name: p.name })) : []; })() };

@@ -12,6 +12,30 @@ const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase'
 const ring = 'inset 0 0 0 1px var(--outline)';
 const opt = (on: boolean) => ({ background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
 
+
+type Opt = { key: string; label: string; mode: Mode; prints: [string, 'portrait' | 'landscape', string | null][] };
+/**
+ * The layouts offered for a number of prints. 1 to 6 prints get four options each, drawn at the right shape (4 is a 2 x 2 grid, not a row);
+ * 7 to 12 get a row only.
+ */
+export function optionsFor(n: number): Opt[] {
+  const rep = (size: string, o: 'portrait' | 'landscape', frame: string | null, k: number) => Array.from({ length: k }, () => [size, o, frame] as [string, 'portrait' | 'landscape', string | null]);
+  if (n >= 7) return [{ key: `row${n}`, label: 'Row', mode: 'row', prints: rep('A5', 'portrait', 'A4', n) }];
+  if (n === 1) return [
+    { key: 'one-l', label: 'Landscape', mode: 'row', prints: rep('A2', 'landscape', 'A2', 1) }, { key: 'one-p', label: 'Portrait', mode: 'row', prints: rep('A2', 'portrait', 'A2', 1) },
+    { key: 'one-pl', label: 'Poster landscape', mode: 'row', prints: rep('50×70', 'landscape', null, 1) }, { key: 'one-pp', label: 'Poster portrait', mode: 'row', prints: rep('50×70', 'portrait', null, 1) },
+  ];
+  if (n === 2) return [
+    { key: 'row-p', label: 'Row · portrait', mode: 'row', prints: rep('A4', 'portrait', 'A3', 2) }, { key: 'row-l', label: 'Row · landscape', mode: 'row', prints: rep('A4', 'landscape', 'A3', 2) },
+    { key: 'row-m', label: 'Mixed', mode: 'row', prints: [['A3', 'portrait', 'A3'], ['A3', 'landscape', 'A3']] }, { key: 'row-b', label: 'Big and small', mode: 'row', prints: [['A2', 'portrait', 'A2'], ['A4', 'portrait', 'A3']] },
+  ];
+  return [
+    { key: `row-p${n}`, label: 'Row · portrait', mode: 'row', prints: rep('A4', 'portrait', 'A3', n) }, { key: `row-l${n}`, label: 'Row · landscape', mode: 'row', prints: rep('A4', 'landscape', 'A3', n) },
+    { key: `grid${n}`, label: 'Grid', mode: 'grid', prints: rep('A4', 'landscape', 'A4', n) },
+    { key: `feat${n}`, label: 'Feature', mode: 'feature', prints: [['A2', 'landscape', 'A2'], ...rep('A5', 'portrait', 'A4', n - 1)] },
+  ];
+}
+
 type Kind = 'subject' | 'tag' | 'colour';
 type Item = { name: string; n?: number };
 
@@ -59,9 +83,12 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState('');
   const [name, setName] = useState(start.name ?? '');
-  const [preset, setPreset] = useState<string>('triptych');
+  const [count, setCount] = useState(3);
+  const [preset, setPreset] = useState<string>('row-p3');
   const [mode, setMode] = useState<Mode>('row');
-  const [prints, setPrints] = useState<Print[]>(() => fromPreset(PRESETS[2]));
+  const [prints, setPrints] = useState<Print[]>(() => fromPreset(optionsFor(3)[0] as never));
+  const choose = (o: Opt) => { setPreset(o.key); setMode(o.mode); setPrints(fromPreset(o as never)); };
+  const setN = (n: number) => { const c = Math.max(1, Math.min(12, n)); setCount(c); choose(optionsFor(c)[0]); };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
@@ -99,7 +126,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   };
   const laid = arrange(prints, mode), wall = frameOf(laid, 0);
   // Changing a print by hand makes the layout "custom"; a grid needs three prints or more.
-  const custom = (fn: (q: Print[]) => void) => { const q = prints.map((p) => ({ ...p, frame: p.frame ? { ...p.frame } : null })); fn(q); setPreset('custom'); setPrints(q); if (mode === 'free' || (mode === 'grid' && q.length < 3)) setMode('row'); };
+  const custom = (fn: (q: Print[]) => void) => { const q = prints.map((p) => ({ ...p, frame: p.frame ? { ...p.frame } : null })); fn(q); setPreset('custom'); setPrints(q); setCount(q.length); if (mode === 'free' || (mode === 'grid' && q.length < 3)) setMode('row'); };
   const [found, setFound] = useState<number[]>([]);
   const [looking, setLooking] = useState(false);
   const queries = [...chosen('subject').map((n) => `subject=${encodeURIComponent(n)}`), ...chosen('tag').map((n) => `tag=${encodeURIComponent(n)}`), ...chosen('colour').map((n) => `colour=${encodeURIComponent(n)}`)];
@@ -131,14 +158,18 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 18px' }}>New composition</h2>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Birds at the beach" aria-label="Composition name"
           style={{ width: '100%', background: 'var(--bg)', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
+        <div style={label}>How many prints</div>
+        <div className="stepper" style={{ marginBottom: 16 }} role="group" aria-label="Number of prints">
+          <button aria-label="Fewer prints" disabled={count <= 1} onClick={() => setN(count - 1)}>−</button><b aria-live="polite">{count}</b><button aria-label="More prints" disabled={count >= 12} onClick={() => setN(count + 1)}>+</button>
+        </div>
         <div style={label}>Layout</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 6, marginBottom: 18 }}>
-          {PRESETS.map((pr) => {
-            const laid = arrange(fromPreset(pr), pr.mode), f = frameOf(laid, 0), on = preset === pr.key;
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, optionsFor(count).length)},minmax(0,1fr))`, gap: 6, marginBottom: 18 }}>
+          {optionsFor(count).map((pr) => {
+            const laid = arrange(fromPreset(pr as never), pr.mode), f = frameOf(laid, 0), on = preset === pr.key;
             return (
-              <button key={pr.key} aria-pressed={on} onClick={() => { setPreset(pr.key); setMode(pr.mode); setPrints(fromPreset(pr)); }} style={{ borderRadius: 8, padding: '10px 6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, fontSize: 12, ...opt(on) }}>
+              <button key={pr.key} aria-pressed={on} onClick={() => choose(pr)} style={{ borderRadius: 8, padding: '10px 6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, background: on ? 'var(--btn-bg)' : 'var(--bg)', color: on ? 'var(--btn-fg)' : 'var(--text2)', boxShadow: on ? 'none' : ring }}>
                 <span style={{ position: 'relative', display: 'block', width: `min(100%, ${Math.round((34 * f.W) / f.H)}px)`, aspectRatio: String(f.W / f.H), maxHeight: 34 }}>
-                  {rectsIn(laid, f).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: on ? '#0d0d0d' : 'var(--text2)' }} />)}
+                  {rectsIn(laid, f).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: on ? 'var(--btn-fg)' : 'var(--text2)' }} />)}
                 </span>
                 {pr.label}
               </button>
@@ -165,7 +196,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
             </div>
           ))}
         </div>
-        {prints.length < 6 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>+ Add a print</button>}
+        {prints.length < 12 && <button onClick={() => custom((q) => { const last = q[q.length - 1]; q.push({ ...last, id: newPrintId(), photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }); })} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>+ Add a print</button>}
         <div style={{ background: WALL_BG, borderRadius: 8, height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, marginBottom: 20, position: 'relative' }} aria-label="Layout preview">
           <div style={{ position: 'relative', width: `min(100%, ${Math.round((98 * wall.W) / wall.H)}px)`, aspectRatio: String(wall.W / wall.H) }}>
             {rectsIn(laid, wall).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: 'var(--btn-bg)', opacity: 0.85 }} />)}

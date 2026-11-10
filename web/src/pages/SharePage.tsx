@@ -9,9 +9,10 @@ import { HumanCheck } from '../components/HumanCheck';
 import { WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
+import { PinGate } from './Auth';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
+type Shared = { askName?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -20,6 +21,7 @@ export function SharePage() {
   const [gone, setGone] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<string | null>(null); // the Turnstile site key, when the link asks to be shown a person is here
   const [tries, setTries] = useState(0);
+  const [pin, setPin] = useState<{ lockedFor: number } | null>(null); // the link has a PIN this device has not entered yet
   const [view, setView] = useState<'grid' | 'review'>('grid');
   const [look, setLook] = useState<number | null>(null);
   const nameKey = `frames-guest-name-${token}`;
@@ -28,7 +30,7 @@ export function SharePage() {
   const [asking, setAsking] = useState<null | ((name: string) => void)>(null); // the name box, and what to do once there is a name
   const setName = (n: string) => { setReviewer(n); try { localStorage.setItem(nameKey, n); } catch { /* the name is only remembered for next time */ } };
   // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
-  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else setAsking(() => then); };
+  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else if (d && d.askName === false) then('Guest'); else setAsking(() => then); };
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
   const [over, setOver] = useState<number | null>(null); // the print a candidate is being dragged over
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
@@ -48,8 +50,9 @@ export function SharePage() {
   useEffect(() => {
     document.title = 'Shared photographs · Frames';
     fetch(`/api/s/${token}`).then(async (r) => {
-      if (r.ok) { setChallenge(null); return setD(await r.json()); }
+      if (r.ok) { setChallenge(null); setPin(null); return setD(await r.json()); }
       const j = await r.json().catch(() => ({}));
+      if (r.status === 401 && j.pinRequired) return setPin({ lockedFor: j.lockedFor ?? 0 });
       if (r.status === 403 && j.challenge?.siteKey) return setChallenge(j.challenge.siteKey);
       setGone(j.error ?? 'This link is not available');
     }).catch(() => setGone('Could not load this link'));
@@ -73,6 +76,7 @@ export function SharePage() {
     const pass = async (t: string) => { const r = await fetch(`/api/s/${token}/human`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) }); if (r.ok) setTries((n) => n + 1); };
     return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>One moment.</h1><p className="t2" style={{ marginBottom: 22 }}>Please show that you are a person to open this link.</p><HumanCheck siteKey={challenge} onToken={(t) => void pass(t)} /></Shell>;
   }
+  if (pin) return <PinGate token={token} lockedFor={pin.lockedFor} onDone={() => { setPin(null); setTries((t) => t + 1); }} />;
   if (!d) return <Shell><p className="muted">Loading…</p></Shell>;
   const photos = d.photos.map((p) => ({ ...p, share: token }));
 
