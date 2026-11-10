@@ -294,6 +294,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'photos', 'date_edit', 'TEXT'); },
   // who a share link was emailed to, and whether it arrived
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS share_invites (id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE, email TEXT NOT NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT \'\', at TEXT NOT NULL)'); },
+  // share links: "Show guests: only the wall" (otherwise all candidates)
+  (db) => { addColumn(db, 'shares', 'only_wall', 'INTEGER NOT NULL DEFAULT 0'); },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

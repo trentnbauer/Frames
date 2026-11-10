@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
-import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, WALL_BG, lowRes, ppiOf, PPI_CHOICES, DEFAULT_PPI, sizeName as printSize, unplace, frameOf, type Mode, type Print } from '../layout';
+import { arrange, chosenIn, findPhoto, metres, photosOf, place, printsSummary, problem as printProblem, WALL_BG, lowRes, ppiOf, PPI_CHOICES, DEFAULT_PPI, sizeName as printSize, unplace, frameOf, rectsIn, FRAMES, MATS, type Mode, type Print } from '../layout';
 import { PrintModal, ShoppingList, Wall } from '../components/CompositionWall';
 import { RoomBackground } from '../components/RoomBackground';
 import { Header, Img, Justified, Loading, useTitle } from '../components/bits';
@@ -33,36 +33,43 @@ const printsShort = (c: Collection) => { const m = new Map<string, number>(); c.
 const isFull = (prints: Print[]) => prints.length > 0 && prints.every((p) => photosOf(p).length === (p.stack ? 2 : 1));
 const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 
-/** The cover of a composition card: only the photographs chosen for the prints, laid out by how many there are. */
+/** The cover of a composition card: the wall drawn to scale on its grid, each print framed with its photograph (or an empty mat). */
 export function CompCover({ c }: { c: Collection }) {
-  const ids = c.chosenIds.slice(0, 3);
-  const img = (id: number, extra: React.CSSProperties = {}) => <img key={id} src={thumb(id)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', ...extra }} />;
-  const grid: React.CSSProperties = ids.length >= 3 ? { gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr' } : ids.length === 2 ? { gridTemplateColumns: '1fr 1fr' } : { gridTemplateColumns: '1fr' };
+  const laid = c.layout.mode === 'free' ? c.layout.prints : arrange(c.layout.prints, c.layout.mode);
+  const f = frameOf(laid, 0);
+  const rects = rectsIn(laid, f);
   return (
-    <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'grid', ...grid, gap: 4, aspectRatio: '2.2', borderRadius: 6, overflow: 'hidden', background: 'var(--surface)', marginBottom: 12, alignItems: 'center', justifyItems: 'center' }}>
-      {ids.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>Nothing chosen yet</span>}
-      {ids.length >= 3 ? <>{img(ids[0], { gridRow: 'span 2' })}{img(ids[1])}{img(ids[2])}</> : ids.map((id) => img(id))}
+    <Link to={`/collections/${c.id}`} aria-label={`Open ${c.name}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', aspectRatio: '1.6', borderRadius: 10, overflow: 'hidden', background: WALL_BG, marginBottom: 14, padding: '9% 8%', backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+      <span style={{ position: 'relative', display: 'block', width: '100%', aspectRatio: String(f.W / f.H), maxHeight: '100%' }}>
+        {laid.map((p, i) => {
+          const r = rects[i];
+          if (!r) return null;
+          const photo = p.photoId;
+          const colour = p.frame ? (FRAMES[p.frame.color] ?? FRAMES.black) : 'transparent';
+          return (
+            <i key={p.id} style={{ position: 'absolute', ...r, background: p.frame ? (MATS[p.frame.mat] ?? MATS.white) : 'var(--surface)', boxShadow: p.frame ? `0 0 0 ${Math.max(2, Math.round(f.W ? 0.014 * 100 : 2))}px ${colour}, 0 4px 10px rgba(0,0,0,.4)` : '0 4px 10px rgba(0,0,0,.4)', overflow: 'hidden', display: 'block' }}>
+              {photo ? <img src={thumb(photo)} alt="" style={{ position: 'absolute', inset: p.frame ? '12%' : 0, width: p.frame ? '76%' : '100%', height: p.frame ? '76%' : '100%', objectFit: 'cover' }} /> : <span style={{ position: 'absolute', inset: p.frame ? '12%' : 0, background: 'rgba(120,118,112,.55)' }} />}
+            </i>
+          );
+        })}
+      </span>
     </Link>
   );
 }
 
 export function Card({ c }: { c: Collection }) {
   const full = isFull(c.layout.prints);
-  const n = c.layout.prints.length, held = chosenIn(c.layout.prints).length, slots = c.layout.prints.reduce((k, p) => k + (p.stack ? 2 : 1), 0);
+  const held = chosenIn(c.layout.prints).length, slots = c.layout.prints.reduce((k, p) => k + (p.stack ? 2 : 1), 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <CompCover c={c} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
-        <h3 style={{ font: `400 22px ${serif}`, margin: 0 }}>{c.name}</h3>
-        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{printsShort(c)}</span>
+        <Link to={`/collections/${c.id}`}><h3 style={{ font: `400 20px ${serif}`, margin: 0 }}>{c.name}</h3></Link>
+        <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: mono }}>{printsShort(c)}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3, margin: '8px 0 6px' }}>
-        {c.layout.prints.slice(0, 12).map((p, i) => { const on = photosOf(p).length === (p.stack ? 2 : 1); return <i key={i} style={{ width: 10, height: 14, display: 'inline-block', background: on ? 'var(--text)' : 'transparent', boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--outline)' }} />; })}
-        <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 6 }}>{full ? 'Ready to export' : `${held} of ${slots} chosen · ${c.photoIds.length} candidates`}</span>
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 16px', fontSize: 13, fontWeight: 500, background: full ? 'var(--text)' : 'var(--hair)', color: full ? '#0d0d0d' : 'var(--text)' }}>{full ? 'Export for print' : 'Continue picking'}</Link>
-        <Link to={`/collections/${c.id}`} style={{ borderRadius: 999, padding: '8px 14px', fontSize: 13, boxShadow: ring }}>Open</Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+        <span style={{ width: 80, height: 3, background: 'var(--hair)', borderRadius: 2, display: 'inline-block' }}><i style={{ display: 'block', height: '100%', width: `${slots ? (held / slots) * 100 : 0}%`, background: 'var(--text)', borderRadius: 2 }} /></span>
+        {full ? 'Ready to export' : held === 0 ? 'Not started' : `${held} of ${slots} chosen`}
       </div>
     </div>
   );
@@ -74,7 +81,7 @@ const framesLine = (c: Collection) => {
   for (const p of c.layout.prints) if (p.frame) { const k = `${p.frame.color} ${p.frame.size ?? p.size} · ${p.frame.size && p.frame.size !== p.size ? `${(p.frame as { matColor?: string }).matColor ?? 'white'} mat` : 'no mat'}`; m.set(k, (m.get(k) || 0) + (p.stack ? 2 : 1)); }
   return [...m].map(([k, n]) => `${n} × ${k}`).join(', ') || 'No frames';
 };
-const FILTERS = [['all', 'All'], ['progress', 'In progress'], ['ready', 'Ready to export'], ['printed', 'Printed']] as const;
+const FILTERS = [['progress', 'In progress'], ['ready', 'Ready to export'], ['printed', 'Printed']] as const;
 
 export function Collections() {
   const colls = useApi<Collection[]>('/collections');
@@ -96,35 +103,39 @@ export function Collections() {
   const ready = active.filter((c) => isFull(c.layout.prints));
   const progress = active.filter((c) => !isFull(c.layout.prints));
   const printed = all.filter((c) => c.printedAt);
-  const showProgress = filter === 'all' || filter === 'progress';
-  const showReady = filter === 'all' || filter === 'ready';
-  const showPrinted = filter === 'all' || filter === 'printed';
+  const showProgress = filter === 'progress';
+  const showReady = filter === 'ready';
+  const showPrinted = filter === 'printed';
+  const [findC, setFindC] = useState('');
+  const [sortC, setSortC] = useState<'edited' | 'name'>('edited');
+  const match = (c: Collection) => !findC.trim() || c.name.toLowerCase().includes(findC.trim().toLowerCase());
+  const order = (l: Collection[]) => [...l].filter(match).sort((a, b) => (sortC === 'name' ? a.name.localeCompare(b.name) : (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id));
   const prints = printed.reduce((n, c) => n + c.layout.prints.length, 0);
   const frames = printed.reduce((n, c) => n + c.layout.prints.filter((p) => p.frame).length, 0);
-  const count = (k: string) => (k === 'all' ? all.length : k === 'progress' ? progress.length : k === 'ready' ? ready.length : printed.length);
+  const count = (k: string) => (k === 'progress' ? progress.length : k === 'ready' ? ready.length : printed.length);
   return (
     <div className="page">
       <Header />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
           <h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Compositions</h1>
-          {colls.data && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{progress.length} in progress · {ready.length} ready · {printed.length} printed</span>}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={openSearch} className="btn outline">From a search…</button>
-          <button onClick={() => openNew()} className="btn primary">New composition</button>
+          <button onClick={() => openNew()} className="btn primary lg">New composition</button>
         </div>
       </div>
-      <div className="seg" role="tablist" aria-label="Filter compositions" style={{ marginBottom: 28 }}>
-        {FILTERS.map(([k, l]) => <button key={k} role="tab" aria-selected={filter === k} className={filter === k ? 'on' : ''} onClick={() => { const n = new URLSearchParams(sp); if (k === 'all') n.delete('filter'); else n.set('filter', k); setSp(n, { replace: true }); }}>{l} <span className="faint">{count(k)}</span></button>)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 14, borderBottom: '1px solid var(--hair)', marginBottom: 28, flexWrap: 'wrap' }} role="tablist" aria-label="Filter compositions">
+        {FILTERS.map(([k, l]) => <button key={k} role="tab" aria-selected={filter === k} onClick={() => { const n = new URLSearchParams(sp); if (k === 'progress') n.delete('filter'); else n.set('filter', k); setSp(n, { replace: true }); }} style={{ height: 36, padding: '0 14px', borderRadius: 999, fontSize: 13.5, background: filter === k ? 'var(--chip)' : 'transparent', color: filter === k ? 'var(--text)' : 'var(--text2)' }}>{l} <span className="faint" style={{ marginLeft: 4 }}>{count(k)}</span></button>)}
+        <span style={{ flex: 1 }} />
+        <input className="field-in" style={{ width: 280, height: 36, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }} value={findC} onChange={(e) => setFindC(e.target.value)} placeholder="Find a composition" aria-label="Find a composition" />
+        <select aria-label="Sort" value={sortC} onChange={(e) => setSortC(e.target.value as 'edited' | 'name')} style={{ height: 36, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }}><option value="edited">Last edited</option><option value="name">Name</option></select>
       </div>
       {(colls.loading || colls.error) && <Loading error={colls.error} />}
       {colls.data && all.length === 0 && <div className="empty">No compositions yet. A composition is a curated set of photographs you can download as untouched original files.</div>}
       {showReady && ready.length > 0 && (
         <>
-          <div style={{ ...eyebrow, marginBottom: 14 }}>Ready to export</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '28px 24px', marginBottom: 48 }}>
-            {ready.map((c) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: '36px 24px', marginBottom: 48 }} className="comp-grid">
+            {order(ready).map((c) => (
               <div key={c.id}>
                 <Card c={c} />
                 <div style={{ fontSize: 12.5, color: 'var(--text2)', marginTop: 6 }}>{printsShort(c)} · {framesLine(c)}</div>
@@ -135,12 +146,11 @@ export function Collections() {
       )}
       {showProgress && progress.length > 0 && (
         <>
-          <div style={{ ...eyebrow, marginBottom: 14 }}>In progress</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px', marginBottom: 48 }}>{progress.map((c) => <Card key={c.id} c={c} />)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: '36px 24px', marginBottom: 48 }} className="comp-grid">{order(progress).map((c) => <Card key={c.id} c={c} />)}</div>
         </>
       )}
       {colls.data && all.length > 0 && count(filter) === 0 && <div className="empty">{filter === 'ready' ? 'Nothing is ready to export yet. A composition is ready when every print has a photo.' : filter === 'printed' ? 'Nothing printed yet.' : 'Nothing here.'}</div>}
-      {filter === 'all' && (sets.data ?? []).length > 0 && (
+      {false && (sets.data ?? []).length > 0 && (
         <section style={{ marginBottom: 48 }}>
           <h2 style={{ font: `400 28px ${serif}`, margin: '0 0 4px' }}>Suggested compositions</h2>
           <p className="muted" style={{ fontSize: 12.5, margin: '0 0 18px' }}>Well-liked photographs from different photoshoots that look like they belong together.</p>
@@ -191,7 +201,7 @@ export function CollectionDetail() {
   const suggestions = useApi<{ suggestions: { forId: number; photoId: number; by: string[]; notes: string[] }[] }>(`/collections/${id}/suggestions`);
   const frameIdeas = useApi<{ suggestions: { printId: number; color: string; by: string[] }[] }>(`/collections/${id}/frame-suggestions`);
   const layoutIdeas = useApi<{ suggestions: { id: number; by: string; note: string | null; at: string; layout: { mode: Mode; prints: Print[] } }[] }>(`/collections/${id}/layout-suggestions`);
-  const [editing, setEditing] = useState(false); // moving prints about and changing sizes and frames
+  const [editing, setEditing] = useState(true); // moving prints about and changing sizes and frames
   const [editW, setEditW] = useState(false);
   const [lay, setLay] = useState<Print[] | null>(null);
   const [mode, setMode] = useState<Mode>('row');
@@ -204,6 +214,8 @@ export function CollectionDetail() {
   const [fo, setFo] = useState<Fo | null>(null);
   const [dl, setDl] = useState<Dl | null>(null);
   const [sharing, setSharing] = useState(false);
+  const shareList = useApi<{ status: string }[]>(id ? `/shares?kind=collection&id=${id}` : null);
+  const liveShare = !!shareList.data?.some((l) => l.status === 'active');
   const [exporting, setExporting] = useState<'ready' | 'downloaded' | 'printed' | null>(null);
   const [fSub, setFSub] = useState<string[]>([]);
   const [fTag, setFTag] = useState<string[]>([]);
@@ -416,16 +428,23 @@ export function CollectionDetail() {
   return (
     <div className="page">
       <Header />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 20 }}>
-        <Link to="/collections" style={{ color: 'var(--text2)' }}>← Compositions</Link>
-        <span style={{ display: 'flex', gap: 18, color: 'var(--text2)' }}>
-          <button onClick={() => setGuestsOpen(true)} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>Guests{pending > 0 && <span className="mono" style={{ background: 'var(--accent)', color: '#fff', borderRadius: 999, fontSize: 11, padding: '1px 7px' }}>{pending}</span>}</button>
-          <button onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share</button>
-          <button onClick={() => setAdding(!adding)}>{adding ? 'Done adding' : 'Add photos'}</button>
-          <button onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
-        </span>
+      <div className="editor-head" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+        <Link to="/collections" style={{ height: 32, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', fontSize: 13.5, color: 'var(--text2)' }}>← Compositions</Link>
+        <div style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'baseline', gap: 14 }}>
+          <input className="serif inline" aria-label="Composition name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 40, lineHeight: 1, width: 'auto', minWidth: 160, flex: '0 1 auto', field: undefined } as React.CSSProperties} size={Math.max(8, c.name.length)} />
+          <span className="faint" style={{ fontSize: 12.5, fontFamily: mono }}>{printsShort(c)} · {metres(live.w)} × {metres(live.h)} m</span>
+        </div>
+        <button className="btn outline" onClick={() => setGuestsOpen(true)} style={{ gap: 8 }}>Guests{pending > 0 && <span className="mono" style={{ background: 'var(--chip)', borderRadius: 999, fontSize: 11, padding: '1px 8px' }}>{pending}</span>}</button>
+        <button className="btn outline" onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share <span className="faint" style={{ fontSize: 12 }}>{liveShare ? '· on' : ''}</span></button>
+        <button className="btn primary lg" onClick={() => (canExport || printed) && setExporting(printed ? 'printed' : 'ready')} disabled={!canExport && !printed} style={{ opacity: canExport || printed ? 1 : 0.5 }}>{printed ? 'Export again' : canExport ? `Export · ${slotCount} prints` : `Export · ${slotCount - chosenIn(prints).length} print${slotCount - chosenIn(prints).length === 1 ? '' : 's'} empty`}</button>
       </div>
-      {sharing && <SharePanel kind="collection" id={c.id} onClose={() => setSharing(false)} />}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, fontSize: 13, color: 'var(--muted)' }}>
+        <input aria-label="Theme" className="t2 inline" placeholder="Add a theme" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ fontSize: 13.5, maxWidth: 260 }} />
+        <button onClick={() => setAdding(!adding)}>{adding ? 'Done adding' : '+ Add photos'}</button>
+        <button onClick={async () => { if (confirm(`Delete “${c.name}”? The photographs themselves are not touched.`)) { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); } }}>Delete</button>
+        {printed && <button onClick={async () => { await save({ printed: false }); }} style={{ textDecoration: 'underline' }}>Reopen</button>}
+      </div>
+      {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => setSharing(false)} />}
       {guestsOpen && (
         <Modal title="Guests" sub="What the people you shared this with have said and suggested." width={620} onClose={() => setGuestsOpen(false)}>
           <div className="seg" role="tablist">{([['suggestions', `Suggested changes${pending ? ` · ${pending}` : ''}`], ['ratings', 'Ratings'], ['comments', 'Comments']] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={guestTab === k} className={guestTab === k ? 'on' : ''} onClick={() => setGuestTab(k)}>{l}</button>)}</div>
@@ -436,21 +455,6 @@ export function CollectionDetail() {
           </div>
         </Modal>
       )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {printed && <div style={{ ...eyebrow, color: 'var(--text2)', marginBottom: 8 }}>Done · {dayOf(c.printedAt!)}</div>}
-          <input className="serif inline" aria-label="Composition name" defaultValue={c.name} key={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && save({ name: e.target.value })} style={{ fontSize: 52, lineHeight: 1 }} />
-          <input aria-label="Theme" className="t2 inline" placeholder="Add a theme" defaultValue={c.theme} onBlur={(e) => e.target.value !== c.theme && save({ theme: e.target.value })} style={{ fontSize: 13.5, marginTop: 8 }} />
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <button onClick={() => (canExport || printed) && setExporting(printed ? 'printed' : 'ready')} disabled={!canExport && !printed} style={{ background: canExport ? 'var(--text)' : 'var(--hair)', color: canExport ? '#0d0d0d' : printed ? 'var(--text)' : 'var(--muted)', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>{exportLabel}</button>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <span>{printed ? 'Done · the shopping list is below' : 'Originals · in print order · each size checked'}</span>
-            {printed && <button onClick={async () => { await save({ printed: false }); }} style={{ color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Reopen</button>}
-          </div>
-        </div>
-      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', borderTop: '1px solid var(--hair)', borderBottom: '1px solid var(--hair)', padding: '12px 0', margin: '22px 0 24px', fontSize: 13.5 }}>
         <span style={eyebrow}>Prints</span>
@@ -493,13 +497,14 @@ export function CollectionDetail() {
         </div>
       )}
 
-      <div style={{ marginBottom: 40 }}>
+      <div className="editor-grid">
+      <div>
         <div ref={wallRef} className={fs ? 'wall-fs' : ''} style={{ position: fs && !document.fullscreenElement ? 'fixed' : 'relative', inset: fs && !document.fullscreenElement ? 0 : undefined, zIndex: fs ? 80 : undefined, background: WALL_BG, borderRadius: fs ? 0 : 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: fs ? '100vh' : 500 }}>
           <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} title={fs ? 'Exit fullscreen (Esc)' : 'Fullscreen'} style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 13, background: 'rgba(13,13,13,.6)', color: '#efede8' }}>{fs ? '⤡ Exit fullscreen' : '⤢ Fullscreen'}</button>
-          {!printed && <button onClick={() => { setEditing(!editing); setSelPrint(0); }} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 500, background: editing ? 'var(--text)' : 'rgba(13,13,13,.6)', color: editing ? '#0d0d0d' : 'var(--text)', boxShadow: editing ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{editing ? 'Done' : 'Edit layout'}</button>}
+          {false && <button onClick={() => { setEditing(!editing); setSelPrint(0); }} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 500, background: editing ? 'var(--text)' : 'rgba(13,13,13,.6)', color: editing ? '#0d0d0d' : 'var(--text)', boxShadow: editing ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{editing ? 'Done' : 'Edit layout'}</button>}
           {editing && !printed && (
-            <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={() => saveLayout(wallPrints, mode === 'free' ? 'row' : mode)} title="Re-space the prints evenly" style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.3)', color: '#efede8' }}>Tidy</button>
+            <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => saveLayout(wallPrints, mode === 'free' ? 'row' : mode)} title="Re-space the prints evenly" style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.3)', color: '#efede8' }}>Line up</button>
               <span style={{ width: 1, height: 16, background: 'var(--chip)', margin: '0 4px' }} />
               <button onClick={() => { const last = wallPrints[wallPrints.length - 1]; const m = mode === 'free' ? 'row' : mode; void saveLayout([...wallPrints, { ...last, id: Math.max(...wallPrints.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], m); setSelPrint(wallPrints.length); }} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)' }}>+ Add a print</button>
               <span style={{ width: 1, height: 16, background: 'var(--chip)', margin: '0 4px' }} />
@@ -514,10 +519,14 @@ export function CollectionDetail() {
         </div>
         {note && <div role="status" style={{ fontSize: 13, color: 'oklch(0.78 0.11 35)', marginTop: 10 }}>{note}</div>}
       </div>
-      {printed && <ShoppingList prints={wallPrints} ppi={ppi} />}
-      {printModal && !printed && <PrintModal prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} photoId={wallPrints[sel]?.photoId} onChange={editSel}
+      <div>
+      {!printed && <PrintModal inline prints={wallPrints} index={sel} count={wallPrints.length} ppi={ppi} photoId={wallPrints[sel]?.photoId} onChange={editSel}
         onApplyAll={() => { const f = wallPrints[sel].frame; void saveLayout(wallPrints.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : p.size === f.size ? p.size : f.size } : null }))); }}
         onDelete={() => { if (wallPrints.length <= 1) return; setPrintModal(false); setSelPrint(0); void saveLayout(wallPrints.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setPrintModal(false)} />}
+      </div>
+      </div>
+      {printed && <ShoppingList prints={wallPrints} ppi={ppi} />}
+
 
       {c.photoIds.length === 0 && !adding && <div className="empty">This composition is empty. Use Add photos, or Add to composition on a photograph.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: 40 }}>

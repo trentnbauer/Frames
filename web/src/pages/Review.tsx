@@ -7,7 +7,7 @@ import { Fit, Loading, useKey } from '../components/bits';
 import { CompPicker } from '../components/AddToComposition';
 import type { Collection } from '../data';
 
-type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
+type Session = { shootName?: string; runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
 
 /** Previous ratings are never shown here: the review is blind by design. */
 export function Review() {
@@ -31,6 +31,7 @@ export function Review() {
   // After a high rating, offer the best-fit composition: the open one worked on most recently that does not hold the photo yet.
   const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
   const [picker, setPicker] = useState<number | null>(null);
+  const [menu, setMenu] = useState(false);
   const bestFit = (photoId: number) => [...(colls.data ?? [])].filter((c) => !c.printedAt && !c.photoIds.includes(photoId)).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id)[0] ?? null;
   const addOffer = async () => { if (!offer) return; await api(`/collections/${offer.comp.id}/photos/${offer.id}`, { method: 'PUT' }); setMsg(`Added to “${offer.comp.name}” as a candidate.`); setOffer(null); colls.reload(); };
   useEffect(() => { if (!offer) return; const t = setTimeout(() => setOffer(null), 6000); return () => clearTimeout(t); }, [offer]);
@@ -110,32 +111,29 @@ export function Review() {
   const sel = cur ? s.ratings[cur.id] : undefined;
   return (
     <div className="review-screen">
-      <div className="counter">{s.index + 1} <span>/ {s.queue.length}</span></div>
-      <div className="esc" style={{ display: 'flex', gap: 16 }}><span>Review session</span><Link to="/" onClick={() => refreshSummary()}>Esc to finish</Link></div>
+      <div className="rbars" aria-hidden>{s.queue.map((_, i) => <i key={i} style={{ background: i < s.index ? 'var(--text)' : i === s.index ? 'var(--text2)' : 'var(--hair)' }} />)}</div>
+      <div className="counter" style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><span>{Math.min(s.index + 1, s.queue.length)}<span>/{s.queue.length}</span></span>{cur && s.shootName && <span className="muted" style={{ font: '400 13px var(--sans)' }}>{s.shootName}</span>}</div>
+      <div style={{ position: 'absolute', top: 20, right: 28, display: 'flex', gap: 8, alignItems: 'center' }}>
+        {msg && <span className="t2" role="status" style={{ fontSize: 12.5 }}>{msg}</span>}
+        <button className="circ" aria-label="More" aria-expanded={menu} onClick={() => setMenu(!menu)} style={{ width: 32, height: 32 }}>⋯</button>
+        <Link to="/" onClick={() => refreshSummary()} className="chip" style={{ height: 32, padding: '0 14px', gap: 8, background: 'var(--surface)' }}>Finish <span className="mono faint" style={{ fontSize: 11 }}>Esc</span></Link>
+        {menu && cur && <><div className="pop-scrim" onClick={() => setMenu(false)} /><div className="popover" style={{ top: 40, right: 0, width: 220 }} role="menu"><button className="mi" onClick={() => { setMenu(false); setPicker(cur.id); }}>Add to composition</button><button className="mi" onClick={() => { setMenu(false); setNoting(true); }}>Add a note</button><button className="mi" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); void remove(); }}>Delete</button></div></>}
+      </div>
       <div className="photo">{cur && <Fit p={{ id: cur.id, ar: cur.ar }} />}</div>
       <div className="scale" role="group" aria-label="Rate this photograph">
         {RATINGS.map((x) => (
           <button key={x.value} className={sel === x.value ? 'sel' : ''} onClick={() => rate(x.value)} aria-label={`${x.value}, ${x.label}`}>
-            <span className="e">{x.emoji}</span>
-            <span className="n">{x.value} {x.label}</span>
+            <span className="e">{x.emoji}</span><span className="lbl">{x.label}</span><span className="n">{x.value}</span>
           </button>
         ))}
       </div>
-      <button className="notebtn" onClick={() => setNoting(true)}>N note</button>
-      {cur && (
-        <div style={{ position: 'absolute', top: 24, right: 28, display: 'flex', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
-          {msg && <span className="t2" role="status">{msg}</span>}
-          <button className="pill" onClick={() => setPicker(cur.id)}>Add to composition</button>
-          <button className="pill" onClick={remove}>Delete</button>
-        </div>
-      )}
+      <div className="rhint">Space skip · ← back · N note · A add to composition</div>
       {offer && (
-        <div className="toast" role="status" style={{ top: 'auto', bottom: 150, width: 380 }}>
-          <div style={{ marginBottom: 10 }}>Nice one. Add it to <b style={{ fontWeight: 500 }}>{offer.comp.name}</b>?</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button className="btn primary" style={{ height: 34 }} onClick={addOffer}>Add <span className="mono" style={{ fontSize: 11, opacity: .7, marginLeft: 6 }}>A</span></button>
-            <button className="btn outline" style={{ height: 34 }} onClick={() => { setPicker(offer.id); setOffer(null); }}>Choose…</button>
-            <button className="muted" onClick={() => setOffer(null)}>Not now</button>
+        <div role="status" style={{ position: 'absolute', top: 76, right: 28, width: 300, background: 'var(--raised2)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--float)', fontSize: 13 }}>
+          <div style={{ marginBottom: 12 }}><b style={{ fontWeight: 500 }}>You loved the last one.</b> <span className="muted">Add it to {offer.comp.name}?</span></div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button className="btn primary" style={{ height: 32, padding: '0 14px', fontSize: 13 }} onClick={addOffer}>Add · A</button>
+            <button className="muted" onClick={() => { setPicker(offer.id); setOffer(null); }}>Choose…</button>
           </div>
         </div>
       )}

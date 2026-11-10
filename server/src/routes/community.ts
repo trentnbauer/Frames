@@ -83,7 +83,8 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
 
   app.get('/api/community/next', async (req) => {
     const u = me(req);
-    const all = candidates(u.id);
+    const skipped = String(((req.query ?? {}) as Row).skip ?? '').split(',').map(parse).filter((v): v is { owner: number; photo: number } => !!v).map((v) => `${v.owner}:${v.photo}`);
+    const all = candidates(u.id).filter((c) => !skipped.includes(`${c.owner}:${c.photo}`));
     if (!all.length) return { photo: null, left: 0 };
     const recent = recentOwners(u.id);
     const ok = all.filter((c) => recent.filter((o) => o === c.owner).length < PER_OWNER);
@@ -92,10 +93,12 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     const band = pool.filter((c) => c.n <= min + 1); // the band with the fewest community ratings
     const pick = band[crypto.randomInt(band.length)];
     const t = x.tenants.get(pick.owner);
-    const p = t?.db.prepare('SELECT w, h FROM photos WHERE id = ?').get(pick.photo) as { w: number; h: number } | undefined;
+    const p = t?.db.prepare('SELECT w, h, camera, lens, film, focal_mm FROM photos WHERE id = ?').get(pick.photo) as { w: number; h: number; camera: string; lens: string; film: string; focal_mm: number | null } | undefined;
     const prefs = t ? communityPrefs(t.db) : COMMUNITY_DEFAULT;
     const done = (sys.prepare('SELECT COUNT(*) n FROM community_ratings WHERE reviewer = ? AND ts > ?').get(u.id, new Date(Date.now() - 3_600_000).toISOString()) as { n: number }).n;
-    return { photo: { token: tokenOf(pick.owner, pick.photo), ar: p?.w && p?.h ? p.w / p.h : 1.5 }, written: prefs.written, left: Math.min(all.length, SESSION), doneThisSession: done % SESSION };
+    // What the reviewer is told: an anonymous number for the photographer, and the camera details (never a name, place or file).
+    const anon = `#${(parseInt(crypto.createHash('sha256').update(`${key()}|${pick.owner}`).digest('hex').slice(0, 6), 16) % 9000) + 1000}`;
+    return { photo: { token: tokenOf(pick.owner, pick.photo), ar: p?.w && p?.h ? p.w / p.h : 1.5 }, meta: { anon, details: [p?.camera, p?.focal_mm ? `${Math.round(p.focal_mm)}mm` : '', p?.film].filter(Boolean).join(' · ') }, written: prefs.written, left: Math.min(all.length, SESSION), doneThisSession: done % SESSION };
   });
 
   // The picture, by token only. It checks again that the photograph may be shown, so a stale token never leaks a withdrawn one.

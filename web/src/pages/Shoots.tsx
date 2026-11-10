@@ -42,6 +42,25 @@ export function Shoots() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); setProgress(null); }
   };
 
+  const [find, setFind] = useState('');
+  const [sort, setSort] = useState<'new' | 'old' | 'name'>('new');
+  const [noComp, setNoComp] = useState(false);
+  const [needs, setNeeds] = useState(false);
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const [openSplit, setOpenSplit] = useState<number | null>(null);
+  const colls = useApi<{ photoIds: number[]; printedAt: string | null }[]>('/collections');
+  const lib = useApi<{ photos: { id: number; shootId: number }[] }>('/photos');
+  // How many compositions hold at least one photograph of each shoot.
+  const comps = new Map<number, number>();
+  if (colls.data && lib.data) { const of = new Map(lib.data.photos.map((p) => [p.id, p.shootId])); for (const c of colls.data) for (const sh of new Set(c.photoIds.map((id) => of.get(id)).filter((v): v is number => v !== undefined))) comps.set(sh, (comps.get(sh) ?? 0) + 1); }
+  const all = shoots.data ?? [];
+  const notComposed = all.filter((x) => !comps.get(x.id)).length;
+  const needsReview = all.filter((x) => x.reviewPct < 100).length;
+  const q = find.trim().toLowerCase();
+  const yearOf = (x: Shoot) => (x.dateFrom ?? x.importedAt ?? '').slice(0, 4) || 'Undated';
+  const shown = all.filter((x) => (!q || `${x.name} ${x.place} ${x.dates} ${yearOf(x)}`.toLowerCase().includes(q)) && (!noComp || !comps.get(x.id)) && (!needs || x.reviewPct < 100))
+    .sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : ((a.dateFrom ?? a.importedAt ?? '').localeCompare(b.dateFrom ?? b.importedAt ?? '')) * (sort === 'new' ? -1 : 1)));
+  const years = [...shown.reduce((m, x) => m.set(yearOf(x), [...(m.get(yearOf(x)) ?? []), x]), new Map<string, Shoot[]>())];
   const accept = async (g: Suggestion['groups'][number]) => { await api('/shoots', { body: { name: g.name, photoIds: g.photoIds } }); refreshAll(); };
   const p = pending.data;
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -54,17 +73,16 @@ export function Shoots() {
           <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>Photoshoots</h1>
           {shoots.data && <span className="muted" style={{ fontSize: 13 }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {summary && summary.due > 0 && <Link to="/review" className="btn outline">Start review <span className="mono" style={{ fontSize: 11, background: 'var(--chip)', borderRadius: 999, padding: '1px 7px' }}>{summary.due}</span></Link>}
-          <AddPhotosButton onDone={refreshAll} />
-        </div>
+        <AddPhotosButton big onDone={refreshAll} />
       </div>
       {cloudOnly && <p className="muted" style={{ fontSize: 13, margin: '-12px 0 24px' }}>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings</Link>.</p>}
       {error && <div className="banner" role="alert"><span className="reason">{error}</span></div>}
-      {p && p.count > 0 && !busy && (
-        <div className="banner" role="status">
-          <span><b>{p.count} new {p.count === 1 ? 'photo' : 'photos'} in your library</b> <span className="muted">· {p.folders.slice(0, 3).map((f) => f.folder).join(', ')} · will be filed as</span> <b>{today}</b> <span className="muted">(rename anytime)</span></span>
-          <button className="pill primary" onClick={sync}>Import</button>
+      {p && p.count > 0 && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', borderRadius: 12, padding: '14px 20px', marginBottom: 8 }}>
+          <i style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)', flex: 'none' }} />
+          <span style={{ flex: 1, fontSize: 14 }}><b style={{ fontWeight: 500 }}>{p.count} new file{p.count === 1 ? '' : 's'}</b> <span className="muted">in your library folder</span></span>
+          {p.lastScan && <span className="faint" style={{ fontSize: 13 }}>Synced {fmtDate(p.lastScan, { hour: '2-digit', minute: '2-digit' })}</span>}
+          <button className="btn outline" onClick={sync} disabled={busy}>{busy ? (progress && progress.total ? `Importing ${progress.done} / ${progress.total}` : 'Importing…') : `Import ${p.count}`}</button>
         </div>
       )}
       {uploaded && (
@@ -85,36 +103,50 @@ export function Shoots() {
           <button className="pill" onClick={() => setResult(null)}>Dismiss</button>
         </div>
       )}
-      {(suggestions.data ?? []).map((s) => (
-        <div className="banner suggest" key={s.shootId}>
-          <span><b>“{s.shootName}” looks like {s.groups.length} separate shoots.</b>
-            <span className="sug-list">{s.groups.map((g) => (
-              <button key={g.name} className="pill" onClick={() => accept(g)} title={g.reason}>Split off “{g.name}” ({g.photoIds.length})</button>
-            ))}</span></span>
+      {(suggestions.data ?? []).filter((x) => !dismissed.includes(x.shootId)).map((x) => (
+        <div key={x.shootId} style={{ borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: '9px 20px', marginBottom: 8, fontSize: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{x.shootName}</b> <span className="muted">looks like {x.groups.length} shoots.</span></span>
+            <button onClick={() => setOpenSplit(openSplit === x.shootId ? null : x.shootId)}>Review split →</button>
+            <button aria-label="Dismiss" className="muted" onClick={() => setDismissed((d) => [...d, x.shootId])}>✕</button>
+          </div>
+          {openSplit === x.shootId && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>{x.groups.map((g) => <button key={g.name} className="btn outline" style={{ height: 32 }} onClick={() => accept(g)} title={g.reason}>Split off “{g.name}” ({g.photoIds.length})</button>)}</div>}
         </div>
       ))}
       {(shoots.loading || shoots.error) && <Loading error={shoots.error} />}
       {shoots.data?.length === 0 && <div className="empty">No photoshoots yet. Put photographs in your library folder and press Sync library, or upload some.</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px' }}>{shoots.data?.map((s) => <ShootCard key={s.id} s={s} />)}</div>
+      {shoots.data && shoots.data.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '28px 0 24px', flexWrap: 'wrap' }}>
+          <input className="field-in" style={{ width: 360, height: 40, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a shoot, place or year" aria-label="Find a shoot, place or year" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as 'new' | 'old' | 'name')} aria-label="Sort" style={{ height: 36, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }}><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option></select>
+          <button aria-pressed={noComp} className="chip" style={{ height: 36, padding: '0 14px', background: noComp ? 'var(--chip)' : 'var(--surface)', fontSize: 13.5 }} onClick={() => setNoComp(!noComp)}>Not in a composition · {notComposed}</button>
+          <button aria-pressed={needs} className="chip" style={{ height: 36, padding: '0 14px', background: needs ? 'var(--chip)' : 'var(--surface)', fontSize: 13.5 }} onClick={() => setNeeds(!needs)}>Needs review · {needsReview}</button>
+        </div>
+      )}
+      {years.map(([y, list]) => (
+        <section key={y} style={{ marginBottom: 36 }}>
+          <div className="spread" style={{ alignItems: 'baseline', paddingBottom: 8, borderBottom: '1px solid var(--hair)', marginBottom: 14 }}>
+            <h2 className="serif" style={{ fontSize: 24, margin: 0 }}>{y}</h2>
+            <span className="faint" style={{ fontSize: 13 }}>{list.length} shoots{years.length > 1 ? ` · ${years.filter(([k]) => k !== y).map(([k]) => k).join(' · ')}` : ''}</span>
+          </div>
+          <div className="shoot-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: '24px 12px' }}>{list.map((x) => <ShootCard key={x.id} s={x} inComps={comps.get(x.id) ?? 0} fresh={result?.shootId === x.id ? result.imported : 0} />)}</div>
+        </section>
+      ))}
     </div>
   );
 }
 
-function ShootCard({ s }: { s: Shoot }) {
-  const { openNew } = useUi();
-  const photos = useApi<{ photos: { id: number }[] }>(`/photos?shoot=${s.id}`);
+function ShootCard({ s, inComps, fresh }: { s: Shoot; inComps: number; fresh: number }) {
+  const chip = fresh ? `${fresh} new` : inComps > 0 ? `In ${inComps} composition${inComps === 1 ? '' : 's'}` : s.reviewPct < 100 && s.reviewPct >= 0 && s.sessions > 0 && s.reviewPct < 100 ? 'Needs review' : 'Not composed';
   return (
-    <div>
-      <Link to={`/shoots/${s.id}`} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
-        <div className="cover" style={{ borderRadius: 6, marginBottom: 12 }}>{s.coverId && <Img p={{ id: s.coverId, ar: 2.2 }} style={{ aspectRatio: '2.2', width: '100%', height: '100%' }} />}</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: "400 22px 'Instrument Serif',Georgia,serif" }}>{s.name}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{s.count}</span></div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 10px' }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
-        <div style={{ height: 2, background: 'var(--hair)' }}><i style={{ display: 'block', height: '100%', background: 'var(--text2)', width: `${s.reviewPct}%` }} /></div>
-      </Link>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>{s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</span>
-        <button onClick={() => openNew({ name: s.name, photoIds: (photos.data?.photos ?? []).map((p) => p.id) })} style={{ fontSize: 12.5, color: 'var(--text)' }}>Compose from this →</button>
+    <Link to={`/shoots/${s.id}`} style={{ display: 'block', textAlign: 'left' }}>
+      <div style={{ position: 'relative', aspectRatio: '1.6', borderRadius: 6, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10 }}>
+        {s.coverId && <Img p={{ id: s.coverId, ar: 1.6 }} style={{ aspectRatio: '1.6', width: '100%', height: '100%' }} />}
+        <span style={{ position: 'absolute', left: 8, bottom: 8, fontSize: 12, padding: '3px 9px', borderRadius: 999, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>{chip}</span>
       </div>
-    </div>
+      <div className="spread" style={{ alignItems: 'baseline' }}><span className="serif" style={{ fontSize: 20 }}>{s.name}</span><span className="faint" style={{ fontSize: 12.5 }}>{s.count}</span></div>
+      <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
+    </Link>
   );
 }
+

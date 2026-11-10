@@ -1,7 +1,7 @@
 :root {
   --page: #070707; --bg: #0d0d0d; --review: #000; --surface: #161615; --raised: #1a1a19; --raised2: #1e1e1d; --modal-foot: #161615;
   --text: #efede8; --text2: #a8a59f; --muted: #8f8c86; --faint: #6f6c67; --disabled: #5c5a56;
-  --hair: var(--hair); --outline: var(--outline); --chip: var(--hair); --hover: var(--hover);
+  --hair: rgba(255,255,255,.08); --outline: rgba(255,255,255,.2); --chip: rgba(255,255,255,.08); --hover: rgba(255,255,255,.06);
   --btn-bg: #efede8; --btn-fg: #0d0d0d; --btn-hover: #fff;
   --accent: oklch(0.72 0.15 45); --ok: oklch(0.78 0.12 150); --err: #e79a82; --err-bg: rgba(231,140,120,.1); --danger: oklch(0.75 0.14 28);
   --warn: oklch(0.78 0.11 35);
@@ -9,8 +9,8 @@
   --serif: 'Instrument Serif', Georgia, serif;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --float: 0 0 0 1px var(--hair), 0 12px 30px rgba(0,0,0,.5);
-  --shadow-modal: 0 0 0 1px var(--hair), 0 24px 60px rgba(0,0,0,.6);
+  --float: 0 0 0 1px rgba(255,255,255,.08), 0 12px 30px rgba(0,0,0,.5);
+  --shadow-modal: 0 0 0 1px rgba(255,255,255,.08), 0 24px 60px rgba(0,0,0,.6);
   --env: #b3261e; --env-hover: #c62f26;
   color-scheme: dark;
 }
@@ -198,7 +198,7 @@ select option:disabled { color: var(--faint); }
 .stepper button { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--outline); }
 .stepper b { font: 400 22px var(--serif); min-width: 24px; text-align: center; font-weight: 400; }
 .toggle { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.sw { width: 40px; height: 22px; border-radius: 999px; background: var(--chip); position: relative; flex: none; }
+.sw { width: 40px; height: 22px; border-radius: 999px; background: var(--outline); position: relative; flex: none; }
 .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text2); transition: left .15s; }
 .sw.on { background: var(--text); } .sw.on::after { left: 21px; background: var(--bg); }
 .cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -325,12 +325,12 @@ textarea.area { background: var(--surface); border-radius: 8px; padding: 8px 10p
 .xbtn:hover { background: var(--chip); }
 .mscrim { position: fixed; inset: 0; z-index: 70; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px 16px; overflow: auto; }
 .modal { max-width: 100%; background: var(--raised); border-radius: 16px; box-shadow: var(--shadow-modal); overflow: hidden; outline: none; }
-.mbody { padding: 24px 28px 20px; display: flex; flex-direction: column; gap: 14px; }
+.mbody { padding: 22px 24px 20px; display: flex; flex-direction: column; gap: 18px; }
 .mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.mtitle { font: 400 30px/1.05 var(--serif); margin-top: 0; }
+.mtitle { font: 400 28px/1 var(--serif); margin-top: 0; }
 .eyebrow + .mtitle { margin-top: 12px; }
-.msub { font-size: 13px; color: var(--muted); margin-top: 6px; }
-.mfoot { display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 28px; border-top: 1px solid var(--hair); background: var(--modal-foot); }
+.msub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.mfoot { display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 24px; border-top: 1px solid var(--hair); background: var(--modal-foot); }
 .mfoot .grow { flex: 1; font-size: 12.5px; color: var(--faint); }
 .field-in { height: 44px; border-radius: 10px; border: 0; outline: none; background: var(--bg); box-shadow: inset 0 0 0 1px var(--outline); color: var(--text); padding: 0 14px; font: 400 14px var(--sans); width: 100%; }
 textarea.field-in { height: auto; padding: 12px 14px; line-height: 1.5; resize: vertical; }
@@ -444,3 +444,46 @@ main.auth.terms { width: 640px; }
 .pdot.in { background: var(--text); box-shadow: none; }
 @media (max-width: 767px) { .photo-actions .btn.primary { position: fixed; left: 16px; right: 16px; bottom: 68px; z-index: 29; height: 48px; } }
 .filters { flex-wrap: wrap; row-gap: 10px; } .filters button, .filters .seg button { white-space: nowrap; }
+
+/* the floating bottom bar */
+.bnav { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--raised2); box-shadow: var(--float); font-size: 13.5px; }
+.bnav a, .bnav button { padding: 8px 16px; border-radius: 999px; color: var(--text2); white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+.bnav a:hover, .bnav button:hover { color: var(--text); }
+.bnav a.on { background: var(--chip); color: var(--text); }
+.bnav .bdiv { width: 1px; height: 18px; background: var(--hair); margin: 0 6px; }
+.bnav .bsearch { min-width: 170px; justify-content: space-between; gap: 24px; }
+.bnav .bsearch .mono { color: var(--faint); font-size: 12px; }
+.bnav .btodo { box-shadow: inset 0 0 0 1px var(--outline); color: var(--text); }
+.bnav .btodo b { font-weight: 400; font-size: 12px; background: var(--chip); border-radius: 999px; padding: 1px 8px; }
+@media (max-width: 767px) { .bnav { display: none; } }
+.circ { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; box-shadow: inset 0 0 0 1px var(--outline); color: var(--text2); }
+.circ:hover { background: var(--hover); color: var(--text); }
+
+/* review: progress bars, one rating pill, hint line */
+.review-screen .rbars { position: absolute; top: 0; left: 0; right: 0; display: flex; gap: 2px; padding: 0; }
+.review-screen .rbars i { flex: 1; height: 3px; }
+.review-screen .counter { top: 24px; font: italic 400 24px/1 var(--serif); }
+.review-screen .counter > span span { color: var(--faint); }
+.review-screen .scale { gap: 0; left: 50%; right: auto; transform: translateX(-50%); bottom: 64px; padding: 6px; border-radius: 999px; background: var(--raised2); align-items: center; }
+.review-screen .scale button { flex-direction: row; gap: 8px; padding: 10px 22px; border-radius: 999px; font-size: 13.5px; color: var(--text2); }
+.review-screen .scale button .e { font-size: 22px; opacity: 1; line-height: 1; }
+.review-screen .scale button:hover .e, .review-screen .scale button.sel .e { font-size: 22px; }
+.review-screen .scale button .n { color: var(--faint); }
+.review-screen .scale button.sel { background: var(--chip); color: var(--text); }
+.review-screen .rhint { position: absolute; bottom: 30px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--faint); }
+.review-screen .photo { top: 80px; bottom: 150px; }
+.review-screen { --fit-h: calc(100vh - 240px); }
+@media (max-width: 1199px) { .community-grid { grid-template-columns: 1fr !important; } }
+
+@media (max-width: 1199px) { .comp-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; } .shoot-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; } }
+@media (max-width: 767px) { .comp-grid { grid-template-columns: 1fr !important; } .shoot-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; } }
+
+.sheet-root.inline { position: static !important; background: none !important; padding: 0 !important; display: block !important; z-index: auto !important; }
+.sheet.inline { width: 100% !important; max-height: none !important; box-shadow: none !important; padding: 22px !important; border-radius: 14px !important; background: var(--surface) !important; }
+.editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-bottom: 40px; align-items: start; }
+@media (max-width: 1199px) { .editor-grid { grid-template-columns: 1fr; } }
+
+.sheet-root.inline { position: static !important; background: none !important; padding: 0 !important; display: block !important; z-index: auto !important; }
+.sheet.inline { width: 100% !important; max-height: none !important; box-shadow: none !important; padding: 22px !important; border-radius: 14px !important; background: var(--surface) !important; }
+.editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-bottom: 40px; align-items: start; }
+@media (max-width: 1199px) { .editor-grid { grid-template-columns: 1fr; } }

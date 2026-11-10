@@ -71,7 +71,7 @@ export function ShootDetail() {
           }}>Delete photoshoot</button>
         </span>
       </div>
-      {sharing && <SharePanel kind="shoot" id={s.id} onClose={() => setSharing(false)} />}
+      {sharing && <SharePanel kind="shoot" id={s.id} name={s.name} onClose={() => setSharing(false)} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <input className="serif inline" aria-label="Photoshoot name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onBlur={() => f.name.trim() && f.name !== s.name && save({ name: f.name })} style={{ fontSize: 52, lineHeight: 1, marginBottom: 10 }} />

@@ -106,28 +106,27 @@ export function PhotoDetail() {
   };
 
   return (
-    <div className="page">
-      <Header />
+    <div className="page" style={{ paddingTop: 24 }}>
       <div className="photo-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 13, marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: 'var(--text2)' }}>← {todoKey ? 'To do' : shoot ? shoot.name : 'Library'}</Link>
+          <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: 'var(--text2)', background: 'var(--surface)', borderRadius: 999, height: 32, padding: '0 12px', display: 'inline-flex', alignItems: 'center' }}>← {todoKey ? 'To do' : shoot ? shoot.name : 'Library'}</Link>
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--text2)' }}>
-            <button aria-label="Previous photograph" onClick={() => go(-1)}>←</button>
-            {idx >= 0 && <span className="faint">{idx + 1} of {stepIds.length}</span>}
-            <button aria-label="Next photograph" onClick={() => go(1)}>→</button>
+            <button aria-label="Previous photograph" className="circ" onClick={() => go(-1)}>‹</button>
+            {idx >= 0 && <span className="faint mono" style={{ fontSize: 12 }}>{idx + 1} / {stepIds.length}</span>}
+            <button aria-label="Next photograph" className="circ" onClick={() => go(1)}>›</button>
           </span>
         </span>
         <span className="photo-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
-          <Link to={`/library?similarTo=${p.id}`} className="btn outline" style={{ height: 36 }}>Find similar</Link>
+          <Link to={`/library?similarTo=${p.id}`} style={{ color: 'var(--text2)' }}>Find similar</Link>
           <span className="splitbtn" role="group" aria-label="Portfolio">
             <button title={inPf.data?.state === 'auto' ? 'Added by your score rule. Click to keep it out.' : undefined} onClick={async () => { const st = inPf.data?.state; await api(`/portfolio/photos/${p.id}`, { body: { on: st === 'none' } }); inPf.reload(); setMsg(st === 'none' ? 'Added to your portfolio.' : st === 'auto' ? 'Kept out of your portfolio. The score rule will not add it again.' : 'Taken out of your portfolio.'); }}>
               <i className={'pdot ' + (inPf.data?.state === 'in' ? 'in' : inPf.data?.state === 'auto' ? 'auto' : '')} />
               {inPf.data?.state === 'in' ? 'In portfolio' : inPf.data?.state === 'auto' ? `Auto · score ${inPf.data.score?.toFixed(1)}` : 'Add to portfolio'}
             </button>
-            <button aria-pressed={!!inPf.data?.favourite} aria-label={inPf.data?.favourite ? 'Remove favourite' : 'Favourite (also adds it to your portfolio)'} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { favourite: !inPf.data?.favourite } }); inPf.reload(); }}>{inPf.data?.favourite ? '★' : '☆'}</button>
+            <button aria-pressed={!!inPf.data?.favourite} aria-label={inPf.data?.favourite ? 'Remove favourite' : 'Favourite (also adds it to your portfolio)'} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { favourite: !inPf.data?.favourite } }); inPf.reload(); }}>{inPf.data?.favourite ? '★ Favourite' : '☆ Favourite'}</button>
           </span>
-          {ai && <button className="btn outline" style={{ height: 36 }} onClick={() => patch({ reanalyse: true }, 'Analysing with AI…')} disabled={p.aiStatus === 'pending'}>{p.aiStatus === 'pending' ? <><span className="spin" style={{ width: 12, height: 12 }} /> Analysing…</> : 'Analyze with AI'}</button>}
-          <button className="iconbtn" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)} style={{ boxShadow: 'inset 0 0 0 1px var(--outline)' }}>⋯</button>
+          {ai && <button className="btn outline" style={{ height: 36 }} onClick={() => patch({ reanalyse: true }, 'Analysing with AI…')} disabled={p.aiStatus === 'pending'}>{p.aiStatus === 'pending' ? <><span className="spin" style={{ width: 12, height: 12 }} /> Analysing…</> : '✦ Analyze with AI'}</button>}
+          <button className="circ" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)} style={{ boxShadow: 'inset 0 0 0 1px var(--outline)' }}>⋯</button>
           {more && (<><div className="pop-scrim" onClick={() => setMore(false)} /><div className="popover" style={{ right: 0, top: 42, width: 240 }} role="menu">
             {similar.data?.[0] && <Link className="mi" to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare with the closest match</Link>}
             <a className="mi" href={`/api/photos/${p.id}/original`} download>Download original</a>
@@ -135,7 +134,7 @@ export function PhotoDetail() {
             <button className="mi" onClick={async () => { setMore(false); await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
             <button className="mi" onClick={() => { setMore(false); patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.'); }}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
           </div></>)}
-          <button className="btn primary" onClick={() => setCompOpen(true)}>Add to composition</button>
+          <button className="btn primary lg" onClick={() => setCompOpen(true)}>{inCount ? `In ${inCount} · ` : ''}Add to composition</button>
         </span>
       </div>
       <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start' }}>

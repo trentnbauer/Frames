@@ -176,6 +176,21 @@ export function Header({ right }: { right?: ReactNode }) {
   );
 }
 
+/** The floating bar from the design: Home, Shoots, Library, Compositions, then Search and To do with its count. Desktop and tablet only. */
+export function BottomNav() {
+  const { todo } = useStore();
+  const ui = useUi();
+  const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
+  return (
+    <nav className="bnav" aria-label="Primary">
+      {item('/', 'Home')}{item('/shoots', 'Shoots')}{item('/library', 'Library')}{item('/collections', 'Compositions')}
+      <i className="bdiv" />
+      <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
+      {todo > 0 && <NavLink to="/todo" className="btodo">To do <b className="mono">{todo.toLocaleString()}</b></NavLink>}
+    </nav>
+  );
+}
+
 /** Phone only: the workflow steps live here. */
 export function TabBar() {
   const loc = useLocation();

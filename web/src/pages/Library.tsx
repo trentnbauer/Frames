@@ -25,6 +25,7 @@ export function Library() {
   const [open, setOpen] = useState<string | null>(null);
   const [text, setText] = useState(sp.get('q') ?? '');
   const [selecting, setSelecting] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const nav = useNavigate();
   const group = (['shoot', 'uploaded', 'taken'] as const).find((g) => g === sp.get('group')) ?? 'shoot';
   const [moving, setMoving] = useState(false);
@@ -102,9 +103,23 @@ export function Library() {
     <MenuState.Provider value={{ open, setOpen }}>
     <div className="page">
       <Header />
-      <div className="spread" style={{ alignItems: 'flex-end' }}>
-        <Title count={list.data ? `${count.toLocaleString()} ${count === 1 ? 'photograph' : 'photographs'}${count !== list.data.total ? ` of ${list.data.total.toLocaleString()}` : ''}` : undefined}>Library</Title>
-        <div className="filters" style={{ marginBottom: 28 }}>
+      <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 20 }}>
+        <Title count={list.data ? `${count.toLocaleString()}${count !== list.data.total ? ` of ${list.data.total.toLocaleString()}` : ''}` : undefined}>Library</Title>
+        <AddPhotosButton big onDone={() => { list.reload(); shoots.reload(); }} />
+      </div>
+      <div className="lib-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <button onClick={openSearch} aria-label="Search the library" style={{ flex: '1 1 320px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', borderRadius: 999, padding: '0 18px', height: 40, color: 'var(--muted)', fontSize: 14, textAlign: 'left' }}>
+          {ai ? 'Search or describe a photo' : 'Search filenames, places, tags and metadata'}<span className="faint" style={{ fontSize: 12 }}>⌘K</span>
+        </button>
+        <button className="btn outline" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)} style={{ height: 40 }}>Filters {chips.length > 0 && <span className="mono" style={{ fontSize: 11, background: 'var(--chip)', borderRadius: 999, padding: '1px 7px' }}>{chips.length}</span>}</button>
+        <span className="seg" role="group" aria-label="Group by" style={{ alignSelf: 'auto', height: 40, alignItems: 'center' }}>
+          {([['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']] as const).map(([k, l]) => <button key={k} aria-pressed={group === k} className={group === k ? 'on' : ''} onClick={() => set('group', k === 'shoot' ? null : k)}>{l}</button>)}
+        </span>
+        <select aria-label="Sort" value={sp.get('order') === 'oldest' ? 'oldest' : 'newest'} onChange={(e) => set('order', e.target.value === 'oldest' ? 'oldest' : null)} style={{ height: 40, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }}><option value="newest">Newest</option><option value="oldest">Oldest</option></select>
+        <button className="btn outline" aria-pressed={selecting} style={{ height: 40 }} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done' : 'Select'}</button>
+      </div>
+      {filtersOpen && (
+        <div className="filters" style={{ marginBottom: 16 }}>
           <Menu id="shoot" label="Photoshoot">
             {(shoots.data ?? []).map((s) => <Item key={s.id} on={sp.get('shoot') === String(s.id)} onClick={() => { set('shoot', String(s.id)); setOpen(null); }}>{s.name}</Item>)}
           </Menu>
@@ -135,20 +150,8 @@ export function Library() {
             <label className="menu-field">Place <input value={sp.get('place') ?? ''} placeholder="e.g. Fremantle" onChange={(e) => set('place', e.target.value || null)} /></label>
             <Item on={!!sp.get('gps')} onClick={() => set('gps', sp.get('gps') ? null : '1')}>Only photos with GPS</Item>
           </Menu>
-          <span className="sep" />
-          <button aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>
-          <button onClick={() => set('order', sp.get('order') === 'oldest' ? null : 'oldest')}>{sp.get('order') === 'oldest' ? 'Oldest first' : 'Newest first'}</button>
-          <span className="sep" />
-          <span className="seg" role="group" aria-label="Group by">
-            {([['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']] as const).map(([k, l]) => <button key={k} aria-pressed={group === k} className={group === k ? 'on' : ''} onClick={() => set('group', k === 'shoot' ? null : k)}>{l}</button>)}
-          </span>
-          <AddPhotosButton onDone={() => { list.reload(); shoots.reload(); }} />
         </div>
-      </div>
-
-      <button onClick={openSearch} aria-label="Search the library" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', borderRadius: 999, padding: '11px 18px', color: 'var(--muted)', fontSize: 14, marginBottom: 28, textAlign: 'left' }}>
-        {ai ? "Describe what you're looking for, or search filenames, places and tags" : 'Search filenames, places, tags and metadata'}<span style={{ color: 'var(--faint)', fontSize: 12 }}>⌘K</span>
-      </button>
+      )}
       {(chips.length > 0 || sp.get('q')) && (
         <div className="chips-row">
           {sp.get('q') && <span className="chip">“{sp.get('q')}” <button aria-label="Clear search" onClick={() => { setText(''); set('q', null); }}>✕</button></span>}
@@ -165,12 +168,11 @@ export function Library() {
         <section className="group" key={s.id}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14 }}>
             <div>
-              <h2 style={{ margin: 0 }}>{s.id > 0 ? <Link to={`/shoots/${s.id}`}>{s.name}</Link> : s.name}</h2>
-              <div className="meta" style={{ marginTop: 4, marginBottom: 0 }}>{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</div>
+              <h2 style={{ margin: 0, display: 'inline' }}>{s.id > 0 ? <Link to={`/shoots/${s.id}`}>{s.name}</Link> : s.name}</h2> <span className="muted" style={{ fontSize: 12.5, marginLeft: 10 }}>{[s.place, s.dates === s.name ? '' : s.dates, photos.length].filter(Boolean).join(' · ')}</span>
             </div>
             <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--text2)' }}>
               {selecting && <button onClick={() => setPicked((x) => new Set([...x, ...photos.map((p) => p.id)]))}>Select all {photos.length}</button>}
-              <button style={{ color: 'var(--text)' }} onClick={() => openNew({ name: s.name, photoIds: photos.map((p) => p.id) })}>Compose from these →</button>
+              {!selecting && <button style={{ color: 'var(--text2)' }} onClick={() => { setSelecting(true); setPicked(new Set(photos.map((p) => p.id))); }}>Select all</button>}
             </div>
           </div>
           <Justified {...tiles} badges={badge} photos={photos} />

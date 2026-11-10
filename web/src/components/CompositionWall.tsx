@@ -135,7 +135,8 @@ function CropBox({ photoId, print: sp, onChange }: { photoId: number; print: Pri
 }
 
 /** A print's own settings: size, which way round, one photograph or two, poster or framed (and the frame). */
-export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange, onApplyAll, onDelete, onClose }: {
+export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange, onApplyAll, onDelete, onClose, inline }: {
+  /** Drawn in the page, beside the wall, rather than over it. */ inline?: boolean;
   prints: Print[]; index: number; count: number; ppi?: number; /** The photograph in this print, so its crop can be shown and set. */ photoId?: number | null;
   onChange: (fn: (q: Print) => void) => void; onApplyAll: () => void; onDelete: () => void; onClose: () => void;
 }) {
@@ -149,12 +150,12 @@ export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange,
   const sw = (hex: string, on: boolean, label: string, pick: () => void) => <button key={label} onClick={pick} title={label} aria-label={label} aria-pressed={on} style={{ width: 24, height: 24, borderRadius: '50%', background: hex, boxShadow: on ? '0 0 0 2px #0d0d0d, 0 0 0 4px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.18)' }} />;
   const group = (t: string, children: React.ReactNode) => <div><div style={{ ...eyebrow, marginBottom: 8 }}>{t}</div>{children}</div>;
   return (
-    <div className="sheet-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="sheet" role="dialog" aria-label="Print settings" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 480, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className={'sheet-root' + (inline ? ' inline' : '')} onMouseDown={(e) => !inline && e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className={'sheet' + (inline ? ' inline' : '')} role={inline ? 'region' : 'dialog'} aria-label="Print settings" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 480, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <div style={eyebrow}>Print {index + 1} of {count}</div>
-            <button onClick={onClose} aria-label="Close" style={{ fontSize: 13, color: 'var(--text2)' }}>✕</button>
+            {!inline && <button onClick={onClose} aria-label="Close" style={{ fontSize: 13, color: 'var(--text2)' }}>✕</button>}
           </div>
           <h2 style={{ font: `400 30px/1.1 ${serif}`, margin: 0 }}>{sizeName(sp.size)} {sp.orientation}</h2>
         </div>

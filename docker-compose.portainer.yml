@@ -13,6 +13,14 @@ services:
       AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
       ## Settings, Env file exports every setting and secret as one file for this stack. It sets ALLOW_ENV_EXPORT=false so it cannot be downloaded twice.
+      # Outgoing email (see .env.example). Optional: Settings, Email in the app does the same.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Frames}
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
       TURNSTILE_DISABLE: ${TURNSTILE_DISABLE:-}

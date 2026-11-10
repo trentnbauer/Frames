@@ -22,6 +22,14 @@ services:
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Outgoing email (see .env.example). Optional: Settings, Email in the app does the same.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Frames}
       # An env file exported from Settings, Env file holds the server's settings and secrets as plain variables (SHARED_AI_1_ENDPOINT, AUTH_1_KEY and so on) and
       # the switch that stops a second export. It reaches Frames through env_file below.
       ALLOW_ENV_EXPORT: ${ALLOW_ENV_EXPORT:-true}

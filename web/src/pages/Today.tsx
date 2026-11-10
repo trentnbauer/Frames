@@ -83,10 +83,14 @@ function useCarousel(n: number, ms: number, offset = 0) {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { setI(((to % n) + n) % n); setFade(1); }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300);
   };
+  const first = useRef(true);
   useEffect(() => {
     if (n < 2) return;
-    const t = window.setTimeout(() => { const iv = window.setInterval(() => { if (!paused.current) go(i + 1); }, ms); (t as unknown as { iv: number }).iv = iv; }, offset);
-    return () => window.clearTimeout(t);
+    let iv: number | undefined;
+    const lead = first.current ? offset : 0; // the two carousels start staggered, once
+    first.current = false;
+    const t = window.setTimeout(() => { iv = window.setInterval(() => { if (!paused.current) go(i + 1); }, ms); }, lead);
+    return () => { window.clearTimeout(t); window.clearInterval(iv); };
   }); // eslint-disable-line react-hooks/exhaustive-deps
   return { i: n ? i % n : 0, fade, go, pause: () => { paused.current = true; }, resume: () => { paused.current = false; } };
 }
@@ -104,7 +108,8 @@ function Dots({ n, i, go }: { n: number; i: number; go: (i: number) => void }) {
 
 /** Home: greeting, the review banner, the upload and compose cards, and a way into community review. */
 export function Today() {
-  const { summary: s } = useStore();
+  const { summary: s, me } = useStore();
+  const firstName = (me?.displayName || me?.user?.name || '').split(' ')[0];
   const { openNew } = useUi();
   const nav = useNavigate();
   const status = useStatus();
@@ -161,7 +166,7 @@ export function Today() {
       <Header />
       <GettingStarted />
       <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 24, flexWrap: 'wrap' }}>
-        <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>{greetingFor(new Date().getHours())}</h1>
+        <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>{greetingFor(new Date().getHours())}{firstName ? `, ${firstName}.` : ''}</h1>
         <span className="muted" style={{ fontSize: 13 }}>{(s?.total ?? 0).toLocaleString()} photographs · {total} shoots · {comps.data?.length ?? 0} compositions</span>
       </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useKey } from './components/bits';
-import { EnvBanner, ShellModals, TabBar } from './components/Shell';
+import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
@@ -85,6 +85,7 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
+      {!inReview && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />
       {searching && <Search onClose={() => setSearching(false)} />}

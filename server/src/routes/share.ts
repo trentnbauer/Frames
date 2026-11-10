@@ -71,7 +71,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   const shareDto = (s: Row) => ({
     id: s.id, token: s.token, kind: s.kind, targetId: s.target_id, label: s.label, allowDownload: !!s.allow_download, allowReview: !!s.allow_review,
     expiresAt: s.expires_at, createdAt: s.created_at, status: statusOf(s), views: s.views, downloads: s.downloads,
-    allowSuggest: s.allow_suggest === null || s.allow_suggest === undefined ? !!s.allow_review : !!s.allow_suggest, seeEachOther: !!s.see_each_other, showGuests: !!s.show_guests, askName: !!s.ask_name, pin: s.pin || '',
+    allowSuggest: s.allow_suggest === null || s.allow_suggest === undefined ? !!s.allow_review : !!s.allow_suggest, seeEachOther: !!s.see_each_other, showGuests: !!s.show_guests, onlyWall: !!s.only_wall, askName: !!s.ask_name, pin: s.pin || '',
     reviews: (one('SELECT COUNT(*) n FROM share_reviews WHERE share_id = ?', s.id) as Row).n,
   });
 
@@ -93,6 +93,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     else if (typeof b.pin === 'string' && b.pin) { if (!/^\d{4}$/.test(b.pin) || isWeakPin(b.pin)) return rep.code(400).send({ error: PIN_ERR }); pin = b.pin; }
     const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at, pin, allow_suggest, see_each_other, show_guests, ask_name) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), b.allowDownload ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString(), pin, b.allowSuggest === undefined ? null : b.allowSuggest ? 1 : 0, b.seeEachOther ? 1 : 0, b.showGuests ? 1 : 0, b.askName === false ? 0 : 1).lastInsertRowid);
+    if (b.onlyWall === true) db.prepare('UPDATE shares SET only_wall = 1 WHERE id = ?').run(id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });
   // Change a link: permissions, expiry, ask-for-name, show-guests, the PIN, or turn it on and off. `pin: true` makes a new random one; `pin: ''` removes it.
@@ -103,7 +104,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const sets: string[] = [], args: unknown[] = [];
     const flag = (k: string, col: string) => { if (typeof b[k] === 'boolean') { sets.push(`${col} = ?`); args.push(b[k] ? 1 : 0); } };
-    flag('allowDownload', 'allow_download'); flag('allowReview', 'allow_review'); flag('allowSuggest', 'allow_suggest'); flag('seeEachOther', 'see_each_other'); flag('showGuests', 'show_guests'); flag('askName', 'ask_name');
+    flag('allowDownload', 'allow_download'); flag('allowReview', 'allow_review'); flag('allowSuggest', 'allow_suggest'); flag('seeEachOther', 'see_each_other'); flag('showGuests', 'show_guests'); flag('onlyWall', 'only_wall'); flag('askName', 'ask_name');
     if (typeof b.on === 'boolean') { sets.push('revoked = ?'); args.push(b.on ? 0 : 1); }
     if (b.expiresAt !== undefined) {
       if (b.expiresAt === null || b.expiresAt === '') { sets.push('expires_at = NULL'); }
@@ -239,6 +240,15 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   const canSuggest = (share: Row) => (share.allow_suggest === null || share.allow_suggest === undefined ? !!share.allow_review : !!share.allow_suggest);
   const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${share.id}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
 
+  app.post('/api/shares/:id/regenerate', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
+    const token = `${x.tenant().user.id.toString(36)}_${crypto.randomBytes(16).toString('base64url')}`;
+    db.prepare('UPDATE shares SET token = ? WHERE id = ?').run(token, id);
+    return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
+  });
+  app.delete('/api/shares/:id/invites', async (req) => ({ removed: db.prepare('DELETE FROM share_invites WHERE share_id = ? AND email = ?').run(num((req.params as Row).id), String(((req.query ?? {}) as Row).email ?? '').toLowerCase()).changes }));
+
   // Email invites: the link goes to each address, and the log keeps who it was sent to and whether it arrived. The PIN is never in the email.
   app.get('/api/shares/:id/invites', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -281,7 +291,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       if (!c) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
       const rows = all('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos', share.target_id);
       const t = one('SELECT target FROM collections WHERE id = ?', share.target_id);
-      return { share, name: c.name, description: c.description, photoIds: rows.map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), target: t?.target ? JSON.parse(t.target) : null, layout: x.collectionDto(one('SELECT * FROM collections WHERE id = ?', share.target_id)!).layout };
+      const wallOnly = !!share.only_wall && rows.some((r) => r.chosen);
+      return { share, name: c.name, description: c.description, photoIds: rows.filter((r) => !wallOnly || r.chosen).map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), target: t?.target ? JSON.parse(t.target) : null, layout: x.collectionDto(one('SELECT * FROM collections WHERE id = ?', share.target_id)!).layout };
     }
     const s = one('SELECT name, description FROM shoots WHERE id = ?', share.target_id);
     if (!s) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
