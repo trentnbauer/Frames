@@ -150,7 +150,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const t = turnstileOn(db, 'signin');
     return {
       providers: conf.providers.filter((p) => !p.off).map((p) => ({ id: p.id, name: p.name, type: p.type })),
-      email: emailOn(), password: !!cfg.authPassword, turnstile: t ? { siteKey: t.siteKey } : null,
+      email: emailOn(), password: !!cfg.authPassword, passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
       signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
       signedIn: !!sessionUser(db, req),
     };
