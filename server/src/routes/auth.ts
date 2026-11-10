@@ -14,6 +14,7 @@ import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
 import { authenticationOptions, listPasskeys, registrationOptions, removePasskey, verifyAuthentication, verifyRegistration } from '../passkeys.js';
+import { EMERGENCY_PROVIDER, emergencyActive, removeEmergency, useEmergency } from '../emergency.js';
 import { bindOwner, findByEmail, getUser, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -203,6 +204,21 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     return { ok: true, returnTo: safeReturn(b.returnTo) };
   });
 
+  // ---------- the emergency login: made at start-up, see emergency.ts ----------
+  app.get('/auth/emergency', async (_req, rep) => {
+    if (!emergencyActive()) return rep.code(404).type('text/html').send(auth.messagePage('No emergency login', 'There is none right now. One is made, and written to the server log, each time the server starts, and lasts five minutes.'));
+    return rep.type('text/html').header('Cache-Control', 'no-store').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Emergency sign-in · Frames</title><style>body{margin:0;background:#0d0d0d;color:#d8d5cf;font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}main{width:360px;max-width:90vw}h1{font:400 36px/1.1 Georgia,serif;color:#efede8;margin:0 0 8px}input,button{width:100%;box-sizing:border-box;height:46px;border-radius:999px;border:0;padding:0 18px;font:inherit;margin-bottom:10px}input{background:#161615;color:#efede8;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}button{background:#efede8;color:#0d0d0d;font-weight:500;cursor:pointer}p{color:#8f8c86;font-size:14px}#e{color:#f0877f}</style></head><body><main><h1>Emergency sign-in</h1><p>The username and password are in the server log. They work once, for five minutes.</p><form id="f"><input name="u" placeholder="Username" autocomplete="off" autofocus required><input name="p" type="password" placeholder="Password" autocomplete="off" required><p id="e" role="alert"></p><button>Sign in</button></form></main><script>f.onsubmit=async function(ev){ev.preventDefault();var r=await fetch('/api/public/auth/emergency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:f.u.value,password:f.p.value})});var j=await r.json().catch(function(){return{}});if(r.ok)location.assign('/');else e.textContent=j.error||'That did not work.'}</script></body></html>`);
+  });
+  app.post('/api/public/auth/emergency', async (req, rep) => {
+    if (sendLimited(`em:${req.ip}`, 10, 600_000)) return rep.code(429).send({ error: 'Too many tries. Wait a few minutes.' });
+    const b = (req.body ?? {}) as Row;
+    const r = useEmergency(x, b.username, b.password);
+    if (r === 'none') return rep.code(404).send({ error: 'There is no emergency login right now.' });
+    if (r === 'wrong') return rep.code(401).send({ error: 'That username or password is not right.' });
+    rep.header('Set-Cookie', withDevice(req, getUser(db, r.userId)!, sessionCookie(createSession(db, r.userId), auth.isSecure(req))));
+    return { ok: true };
+  });
+
   // ---------- passkeys ----------
   const where = (req: any) => { const u = new URL(auth.baseUrl(req)); return { rpID: u.hostname, origin: u.origin }; };
   const sessionUserOf = (req: any) => ((req as any).authVia === 'session' ? ((req as any).authUser as User | null) : null);
@@ -265,7 +281,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   app.post('/auth/logout', async (req, rep) => {
+    const who = sessionUser(db, req);
     endSession(db, req);
+    if (who?.provider === EMERGENCY_PROVIDER) removeEmergency(x, who.id); // signing out of the emergency login deletes it
     rep.header('Set-Cookie', sessionCookie(null, auth.isSecure(req)));
     return { ok: true };
   });

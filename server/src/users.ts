@@ -83,7 +83,7 @@ export function ensureOwner(sys: DB): User {
 
 export const getUser = (sys: DB, id: number): User | null => { const r = sys.prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined; return r ? toUser(r) : null; };
 export const listUsers = (sys: DB): User[] => (sys.prepare('SELECT * FROM users ORDER BY id').all() as Row[]).map(toUser);
-export const countAdmins = (sys: DB) => (sys.prepare("SELECT COUNT(*) n FROM users WHERE role = 'admin' AND disabled = 0").get() as { n: number }).n;
+export const countAdmins = (sys: DB) => (sys.prepare("SELECT COUNT(*) n FROM users WHERE role = 'admin' AND disabled = 0 AND provider != 'emergency'").get() as { n: number }).n;
 
 // ---------- the folder under the libraries mount ----------
 const RESERVED = new Set(['users', 'cloud', 'originals', 'derivatives', 'backups', 'tmp', 'lost+found']);

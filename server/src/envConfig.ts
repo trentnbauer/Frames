@@ -30,16 +30,48 @@ export function envConfigLoaded(env: Record<string, string | undefined> = proces
 }
 
 /** Settings that are about what is happening now, not about how Frames is set up. */
-const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState|releasesCache|smtpHealth|mailSent)$/;
+const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState|releasesCache|smtpHealth|mailSent|welcomed|gettingStarted|gearMigrated|batchesDone|aiUsage|shareKey|backupCloudStatus|background:\d+)$/;
 const KEY = /^[\w:.-]{1,200}$/;
 export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k);
+
+/**
+ * Some settings hold what someone chose next to what Frames recorded about it (when the tunnel was last set up, the last problem, when a
+ * cloud folder last synced). Only the choices are carried: the rest is rebuilt by running, so it would be
+ * stale in a file, and would show up as a difference from the app that no one could resolve.
+ */
+const STATE_FIELDS: Record<string, string[]> = {
+  tunnel: ['error', 'appliedAt', 'accessNote', 'orgNote', 'dns', 'protectApplied', 'appPublic', 'env'],
+};
+const CONN_STATE = ['lastSync', 'lastResult', 'needsReconnect'];
+/** Writing a file's choices over a setting must not wipe what Frames recorded in it: put the saved state fields back. */
+export function keepState(key: string, saved: unknown, next: unknown): unknown {
+  if (!next || typeof next !== 'object' || Array.isArray(next) || !saved || typeof saved !== 'object') return next;
+  const s = saved as Record<string, unknown>, o = { ...(next as Record<string, unknown>) };
+  for (const f of STATE_FIELDS[key] ?? []) if (f in s && !(f in o)) o[f] = s[f];
+  if (key === 'cloud' && Array.isArray(o.connections) && Array.isArray(s.connections)) {
+    o.connections = o.connections.map((c) => { const was = (s.connections as Record<string, unknown>[]).find((k) => k.id === (c as Record<string, unknown>).id); const k = { ...(c as Record<string, unknown>) }; if (was) for (const f of CONN_STATE) if (f in was && !(f in k)) k[f] = was[f]; return k; });
+  }
+  return o;
+}
+/** Is this variable (FRAMES_SYSTEM__key__field) about something Frames records rather than a setting? An older file may still hold some. */
+export function isStateVar(name: string): boolean {
+  const [, key, field] = name.split('__');
+  return !!key && (!isConfigKey(key) || !!(field && STATE_FIELDS[key]?.includes(field)));
+}
+export function configOnly(key: string, value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const o = { ...(value as Record<string, unknown>) };
+  for (const f of STATE_FIELDS[key] ?? []) delete o[f];
+  if (key === 'cloud' && Array.isArray(o.connections)) o.connections = o.connections.map((c) => { const k = { ...(c as Record<string, unknown>) }; for (const f of CONN_STATE) delete k[f]; return k; });
+  return o;
+}
 
 /** Every saved setting worth carrying, as a plain object. */
 export function snapshot(db: DB): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const r of db.prepare('SELECT key, value FROM settings ORDER BY key').all() as { key: string; value: string }[]) {
     if (!isConfigKey(r.key) || (r.key.startsWith('secret:') && r.value === '""')) continue; // nothing to carry for an emptied secret
-    try { const v = JSON.parse(r.value); out[r.key] = r.key.startsWith('secret:') ? openSecret(db, v) : v; } catch { /* not ours to export */ }
+    try { const v = JSON.parse(r.value); out[r.key] = r.key.startsWith('secret:') ? openSecret(db, v) : configOnly(r.key, v); } catch { /* not ours to export */ }
   }
   return out;
 }
@@ -76,7 +108,7 @@ export function collectEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.
       const base = all[key] && typeof all[key] === 'object' && !Array.isArray(all[key]) ? (all[key] as Record<string, unknown>) : getSetting<Record<string, unknown>>(db, key, {});
       all[key] = { ...base, ...patch };
     }
-    for (const [k, v] of Object.entries(all)) if (isConfigKey(k)) items.push({ db, scope, key: k, value: v });
+    for (const [k, v] of Object.entries(all)) if (isConfigKey(k)) items.push({ db, scope, key: k, value: configOnly(k, v) });
   }
   return { items, problems };
 }
@@ -85,7 +117,7 @@ export function collectEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.
 export function applyEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.env): { applied: number; problems: string[] } {
   const { items, problems } = collectEnvConfig(sys, ownerDb, env);
   let applied = 0;
-  for (const i of items) { setSetting(i.db, i.key, i.value); applied++; }
+  for (const i of items) { setSetting(i.db, i.key, keepState(i.key, getSetting<unknown>(i.db, i.key, null), i.value)); applied++; }
   if (applied) {
     // What other parts keep in step with these settings: who the owner is, and which hostname is whose.
     const auth = getSetting<Partial<AuthConfig>>(sys, 'auth', {});
