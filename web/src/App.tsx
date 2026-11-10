@@ -10,7 +10,7 @@ import { Home } from './screens/Home';
 import { Library } from './screens/Library';
 import { GoContext } from './proto/runtime';
 import { PhotoDetail } from './pages/PhotoDetail';
-import { Review } from './pages/Review';
+import { Review } from './screens/Review';
 import { Shoots } from './screens/Shoots';
 import { Compositions } from './screens/Compositions';
 import { CollectionDetail } from './pages/Collections';
