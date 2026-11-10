@@ -29,6 +29,8 @@ const take = (id: unknown) => { const c = typeof id === 'string' ? challenges.ge
 
 export const listPasskeys = (sys: DB, userId: number): Passkey[] =>
   (sys.prepare('SELECT id, name, created, last_used FROM passkeys WHERE user_id = ? ORDER BY created').all(userId) as { id: string; name: string; created: string; last_used: string | null }[]).map((r) => ({ id: r.id, name: r.name, created: r.created, lastUsed: r.last_used }));
+/** Renames one of this person's passkeys. False when it is not theirs, or the name is blank. */
+export const renamePasskey = (sys: DB, userId: number, id: string, name: string) => !!name.trim() && sys.prepare('UPDATE passkeys SET name = ? WHERE id = ? AND user_id = ?').run(name.trim().slice(0, 60), id, userId).changes > 0;
 export const removePasskey = (sys: DB, userId: number, id: string) => sys.prepare('DELETE FROM passkeys WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
 export const hasPasskeys = (sys: DB) => (sys.prepare('SELECT COUNT(*) n FROM passkeys').get() as { n: number }).n > 0;
 

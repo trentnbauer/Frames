@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
-import { authenticationOptions, listPasskeys, registrationOptions, removePasskey, verifyAuthentication, verifyRegistration } from '../passkeys.js';
+import { authenticationOptions, listPasskeys, registrationOptions, removePasskey, renamePasskey, verifyAuthentication, verifyRegistration } from '../passkeys.js';
 import { EMERGENCY_PROVIDER, emergencyActive, removeEmergency, useEmergency } from '../emergency.js';
 import { bindOwner, findByEmail, getUser, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
@@ -242,6 +242,11 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const b = (req.body ?? {}) as Row;
     const r = await verifyRegistration(db, where(req), u.id, b.cid, b.response, String(b.name ?? ''));
     return r.ok ? { ok: true, passkeys: listPasskeys(db, u.id) } : rep.code(400).send({ error: r.error });
+  });
+  app.patch('/api/me/passkeys/:id', async (req, rep) => {
+    const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
+    if (!renamePasskey(db, u.id, String((req.params as Row).id), String(((req.body ?? {}) as Row).name ?? ''))) return rep.code(400).send({ error: 'Give the passkey a name.' });
+    return { ok: true, passkeys: listPasskeys(db, u.id) };
   });
   app.delete('/api/me/passkeys/:id', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return { removed: removePasskey(db, u.id, String((req.params as Row).id)) }; });
 
