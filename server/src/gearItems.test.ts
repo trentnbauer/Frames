@@ -34,6 +34,11 @@ describe('gear and wishlist', () => {
     expect(r.own.map((g: any) => g.name)).toContain('Godox flash');
     expect(r.want).toHaveLength(2);
   });
+  it('keeps a system you set when the item is renamed', async () => {
+    const g = (await A.post('/api/gear/items', { kind: 'own', name: 'Pentax body', type: 'camera', system: 'Pentax 67' })).body;
+    expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Pentax 67II' })).body.system).toBe('Pentax 67');
+    expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Mystery box' })).body.system).toBe('Pentax 67');
+  });
   it('checks what it is given', async () => {
     expect((await A.post('/api/gear/items', { name: '' })).status).toBe(400);
     expect((await A.post('/api/gear/items', { name: 'x', price: 'abc' })).status).toBe(400);

@@ -103,7 +103,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const sets: string[] = [], args: unknown[] = [];
     const set = (col: string, v: unknown) => { sets.push(`${col} = ?`); args.push(v); };
-    if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); if (b.system === undefined) set('system', systemOf(b.name)); }
+    if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); if (b.system === undefined) { sets.push("system = CASE WHEN system = '' THEN ? ELSE system END"); args.push(systemOf(b.name)); } }
     if ((TYPES as readonly string[]).includes(b.type)) set('type', b.type);
     if (typeof b.system === 'string') set('system', b.system.trim().slice(0, 60));
     if (b.year !== undefined) { const y = b.year === null || b.year === '' ? null : Number(b.year); if (y !== null && !(Number.isInteger(y) && y > 1800 && y < 2200)) return rep.code(400).send({ error: 'The year must be a number like 2019.' }); set('year', y); }
