@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
+import { authenticationOptions, listPasskeys, registrationOptions, removePasskey, verifyAuthentication, verifyRegistration } from '../passkeys.js';
 import { bindOwner, findByEmail, getUser, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
@@ -149,7 +150,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const t = turnstileOn(db, 'signin');
     return {
       providers: conf.providers.filter((p) => !p.off).map((p) => ({ id: p.id, name: p.name, type: p.type })),
-      email: emailOn(), password: !!cfg.authPassword, turnstile: t ? { siteKey: t.siteKey } : null,
+      email: emailOn(), password: !!cfg.authPassword, passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
       signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
       signedIn: !!sessionUser(db, req),
     };
@@ -200,6 +201,47 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (!user || user.disabled) return rep.code(403).send({ error: 'This address is not allowed to use this Frames. Ask the owner to add it.' });
     rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
     return { ok: true, returnTo: safeReturn(b.returnTo) };
+  });
+
+  // ---------- passkeys ----------
+  const where = (req: any) => { const u = new URL(auth.baseUrl(req)); return { rpID: u.hostname, origin: u.origin }; };
+  const sessionUserOf = (req: any) => ((req as any).authVia === 'session' ? ((req as any).authUser as User | null) : null);
+  app.post('/api/public/auth/passkey/options', async (req, rep) => {
+    if (sendLimited(`pk:${req.ip}`, 60, 600_000)) return rep.code(429).send({ error: 'Too many tries. Wait a few minutes.' });
+    return authenticationOptions(where(req));
+  });
+  app.post('/api/public/auth/passkey/verify', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (sendLimited(`pkv:${req.ip}`, 30, 600_000)) return rep.code(429).send({ error: 'Too many tries. Wait a few minutes.' });
+    const uid = await verifyAuthentication(db, where(req), b.cid, b.response);
+    const user = uid ? getUser(db, uid) : null;
+    if (!user || user.disabled) return rep.code(400).send({ error: 'That passkey did not work. Try another way to sign in.' });
+    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
+    return { ok: true, returnTo: safeReturn(b.returnTo) };
+  });
+  app.get('/api/me/passkeys', async (req, rep) => { const u = sessionUserOf(req); return u ? { passkeys: listPasskeys(db, u.id) } : rep.code(401).send({ error: 'Sign in first.' }); });
+  app.post('/api/me/passkeys/options', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return registrationOptions(db, where(req), u); });
+  app.post('/api/me/passkeys/verify', async (req, rep) => {
+    const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
+    const b = (req.body ?? {}) as Row;
+    const r = await verifyRegistration(db, where(req), u.id, b.cid, b.response, String(b.name ?? ''));
+    return r.ok ? { ok: true, passkeys: listPasskeys(db, u.id) } : rep.code(400).send({ error: r.error });
+  });
+  app.delete('/api/me/passkeys/:id', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return { removed: removePasskey(db, u.id, String((req.params as Row).id)) }; });
+
+  // Every way this person can sign in, the ones the administrator turned on: for Settings, Profile.
+  app.get('/api/me/sign-in-methods', async (req, rep) => {
+    const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
+    const conf = loadAuth(db);
+    const linked = new Set(identitiesOf(db, u.id).map((i) => i.provider));
+    const methods: { id: string; label: string; kind: string; state: 'on' | 'auto' | 'linked' | 'unlinked'; count?: number; canUnlink?: boolean }[] = [];
+    if (conf.email && smtpHealthy(db)) methods.push({ id: 'email', label: 'Email code', kind: 'email', state: 'on' });
+    methods.push({ id: 'passkey', label: 'Passkeys', kind: 'passkey', state: 'on', count: listPasskeys(db, u.id).length });
+    for (const p of conf.providers.filter((q) => !q.off)) {
+      if (p.type === 'cloudflare') methods.push({ id: p.id, label: 'Cloudflare Access', kind: 'access', state: 'auto' });
+      else methods.push({ id: p.id, label: p.name || p.type, kind: 'provider', state: linked.has(p.id) ? 'linked' : 'unlinked', canUnlink: linked.has(p.id) && identitiesOf(db, u.id).length > 1 });
+    }
+    return { methods };
   });
 
   // Add another way to sign in to the person who is signed in now: they pass through the provider once, and that account is then theirs too.

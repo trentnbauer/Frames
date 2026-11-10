@@ -1,8 +1,8 @@
-import { crashHost, crashUrl } from '../crash.js';
 import { readLog, setLogLevel } from '../logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { zipOne } from '../zip.js';
 import { setSessionDays, cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, type DB } from '../db.js';
@@ -120,14 +120,25 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
 
   // ---------- choices that apply to the whole server ----------
   type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean; defaultRole?: 'member' | 'guest'; signups?: boolean };
-  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), crashHost: crashHost(), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
+  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
   app.get('/api/admin/instance', async () => instance());
   // The server's own log (start-up lines, warnings, errors), for the last week, as a text file.
   app.get('/api/admin/logs/info', async () => ({ bytes: readLog(7).bytes }));
+  // The newest lines, parsed, for the log window: { time, level, message }. A continuation line stays with the line before it.
+  app.get('/api/admin/logs/tail', async (req) => {
+    const n = Math.max(1, Math.min(2000, Number(((req.query ?? {}) as Row).tail) || 200));
+    const { text, bytes } = readLog(7);
+    const lines: { time: string; level: string; message: string }[] = [];
+    for (const raw of text.split('\n')) {
+      const m = /^(\d{4}-\d\d-\d\dT[\d:.]+Z) (INFO|DEBUG|WARN|ERROR) (.*)$/.exec(raw);
+      if (m) lines.push({ time: m[1], level: m[2], message: m[3] }); else if (raw.trim() && lines.length) lines[lines.length - 1].message += `\n${raw.trim()}`;
+    }
+    return { lines: lines.slice(-n), bytes, level: (instance() as unknown as { logLevel?: string }).logLevel ?? 'info' };
+  });
+  app.get('/api/admin/logs/download', async (_req, rep) => rep.header('Content-Type', 'application/zip').header('Content-Disposition', 'attachment; filename="frames-logs.zip"').header('Cache-Control', 'no-store').send(zipOne('frames.log', Buffer.from(readLog(7).text || 'Nothing logged yet.\n'))));
   app.get('/api/admin/logs', async (_req, rep) => rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.log"').header('Cache-Control', 'no-store').send(readLog(7).text || 'Nothing logged yet.\n'));
   app.put('/api/admin/instance', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
-    if (b.crashReports === true && !crashUrl()) return rep.code(400).send({ error: 'No place to send reports to is set. The person running the server sets CRASH_REPORT_URL first.' });
     const cur = getSetting<Instance>(sys, 'instance', {});
     setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}), ...(typeof b.signups === 'boolean' ? { signups: b.signups } : {}), ...policyPatch(b) });
     setSessionDays(policyOf(sys).sessionDays);

@@ -8,7 +8,8 @@ import { SignInMethods } from '../pages/SignInMethods';
 import { usePrefs } from './hooks';
 import { DeleteSuggestions, Vocabulary, Metadata } from './old';
 import type { Ctx } from './sections';
-import type { Section } from './ui';
+import type { R, Section } from './ui';
+import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
 const COUNTRIES = ['Australia', 'New Zealand', 'South Africa', 'Argentina', 'Brazil', 'Chile', 'Canada', 'France', 'Germany', 'Ireland', 'Japan', 'Netherlands', 'United Kingdom', 'United States'];
@@ -16,15 +17,47 @@ const close = (ctx: Ctx) => () => ctx.modal(null);
 
 /* ------------------------------------------------------------------ Profile */
 type P = { displayName: string; hasAvatar: boolean; signedInAs: string; country: string };
+
+/** Passkeys on this account: the devices that can sign in as you, add this device, remove one. */
+function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
+  const list = useApi<{ passkeys: { id: string; name: string; created: string; lastUsed: string | null }[] }>('/me/passkeys');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const add = async () => {
+    setBusy(true); setErr('');
+    try {
+      if (!window.PublicKeyCredential) throw new Error('This browser or address does not support passkeys. Passkeys need https (or localhost).');
+      const { options, cid } = await api<{ options: PublicKeyCredentialCreationOptionsJSON; cid: string }>('/me/passkeys/options', { method: 'POST', body: {} });
+      const response = await startRegistration({ optionsJSON: options });
+      await api('/me/passkeys/verify', { method: 'POST', body: { cid, response, name: navigator.platform || 'This device' } });
+      list.reload(); onChange(); ctx.toast('Passkey added');
+    } catch (e) { const m = (e as Error).message; setErr(/cancel|abort|NotAllowed/i.test(m) ? 'Cancelled. Nothing was added.' : m); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="Passkeys" sub="Devices that can sign in as you, with a fingerprint, face or device PIN." width={560} onClose={close(ctx)} foot={<><span className="grow" style={{ fontSize: 12.5, color: '#e79a82' }}>{err}</span><button className="btn" onClick={close(ctx)}>Done</button><button className="btn primary" disabled={busy} onClick={add}>{busy ? 'Waiting for your device…' : 'Add this device'}</button></>}>
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 12 }}>
+        {(list.data?.passkeys ?? []).length === 0 && <span style={{ fontSize: 13.5, color: '#8f8c86' }}>No passkeys yet.</span>}
+        {(list.data?.passkeys ?? []).map((k) => (
+          <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 14 }}>
+            <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: '#8f8c86' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
+            <button style={{ color: 'oklch(0.75 0.14 28)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); }}>Remove</button>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 export function useProfile(ctx: Ctx): Section {
   const p = useApi<P>('/profile');
-  const ids = useApi<{ identities: { id: number }[] }>(ctx.me?.user ? '/me/identities' : null);
+  const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user ? '/me/identities' : null);
   const prefs = usePrefs('user');
   const { refreshMe } = useStore();
   const [theme, setThemeNow] = useState(getTheme());
   const save = async (body: object) => { try { await api('/profile', { method: 'PUT', body }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } p.reload(); refreshMe(); };
   const d = p.data;
   const countries = d?.country && !COUNTRIES.includes(d.country) ? [d.country, ...COUNTRIES] : COUNTRIES;
+  const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user ? '/me/sign-in-methods' : null);
   const n = ids.data?.identities.length ?? 0;
   const details = () => ctx.modal(<Modal title="Your details" sub="Picture, name, country, seasons and time zone." width={620} onClose={close(ctx)}><Profile /></Modal>);
   return {
@@ -35,8 +68,16 @@ export function useProfile(ctx: Ctx): Section {
         { id: 'name', t: 'text', label: 'Display name', value: d?.displayName ?? '', ph: d?.signedInAs || 'Your name', set: (v) => void save({ displayName: v }) },
         { id: 'country', t: 'select', label: 'Country', hint: 'Sets your hemisphere, so photo seasons are right. Shown on your portfolio.', opts: countries, value: d?.country || 'Australia', set: (v) => void save({ country: v }) },
         { id: 'email', t: 'text', label: 'Email', hint: 'For sign-in and guest replies.', value: ctx.me?.user?.email ?? '', disabled: true },
-        { id: 'password', t: 'button', label: 'Passkeys', hint: n ? `${n} ${n === 1 ? 'way' : 'ways'} to sign in` : 'Ways to sign in as you', meta: 'Manage', act: () => ctx.modal(<Modal title="Ways to sign in" sub="The accounts and devices that are you." width={620} onClose={close(ctx)}><SignInMethods /></Modal>) },
       ] },
+      { title: 'Sign-in methods · the ones your admin turned on', rows: (methods.data?.methods ?? []).map((m): R => {
+        if (m.kind === 'email') return { id: 'sm_email', t: 'link', label: m.label, hint: 'Always on. A code is emailed to you when you sign in.' };
+        if (m.kind === 'passkey') return { id: 'sm_passkey', t: 'button', label: m.label, hint: m.count ? `${m.count} ${m.count === 1 ? 'device' : 'devices'}` : 'Sign in with a fingerprint, face or device PIN', meta: 'Manage', act: () => ctx.modal(<Passkeys ctx={ctx} onChange={() => methods.reload()} />) };
+        if (m.kind === 'access') return { id: 'sm_access', t: 'link', label: m.label, hint: 'Automatic. Cloudflare signs you in.' };
+        const idn = ids.data?.identities.find((i) => i.provider === m.id);
+        return m.state === 'linked'
+          ? { id: `sm_${m.id}`, t: 'button', label: m.label, hint: idn?.email ? `Linked · ${idn.email}` : 'Linked', meta: m.canUnlink ? 'Unlink' : 'In use', act: async () => { if (!m.canUnlink || !idn) return; if (!window.confirm(`Stop signing in with ${m.label}?`)) return; await api(`/me/identities/${idn.id}`, { method: 'DELETE' }); methods.reload(); ids.reload(); ctx.toast('Unlinked'); } }
+          : { id: `sm_${m.id}`, t: 'button', label: m.label, hint: 'Not linked', meta: 'Link', act: () => window.location.assign(`/auth/link/${m.id}`) };
+      }) },
       { title: 'Preferences', rows: [
         { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); setThemeNow(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
         { id: 'start', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },

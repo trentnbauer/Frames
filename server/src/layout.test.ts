@@ -10,10 +10,11 @@ describe('layout rules', () => {
 
   it('keeps a look-only crop on a print with a photograph, clamped, and drops it when there is nothing to crop', () => {
     const got = (o: object) => parseLayout({ prints: [print(o)] }, members)!.prints[0];
-    expect(got({ photoId: 1, crop: { zoom: 2.5, fx: 0.2, fy: 0.9 } }).crop).toEqual({ zoom: 2.5, fx: 0.2, fy: 0.9 });
-    expect(got({ photoId: 1, crop: { zoom: 99, fx: -4, fy: 7 } }).crop).toEqual({ zoom: 4, fx: 0, fy: 1 });
-    expect(got({ photoId: 1, crop: { zoom: 1, fx: 0.5, fy: 0.5 } }).crop).toBeUndefined(); // fill is the default
-    expect(got({ photoId: null, crop: { zoom: 2, fx: 0.5, fy: 0.5 } }).crop).toBeUndefined();
+    expect(got({ photoId: 1, crop: { zoom: 2.5, shiftX: -20, shiftY: 40 } }).crop).toEqual({ zoom: 2.5, shiftX: -20, shiftY: 40 });
+    expect(got({ photoId: 1, crop: { zoom: 2, fx: 0.2, fy: 0.9 } }).crop).toEqual({ zoom: 2, shiftX: -30, shiftY: 40 }); // an older focal-point save
+    expect(got({ photoId: 1, crop: { zoom: 99, shiftX: -400, shiftY: 700 } }).crop).toEqual({ zoom: 2.5, shiftX: -50, shiftY: 50 });
+    expect(got({ photoId: 1, crop: { zoom: 1, shiftX: 0, shiftY: 0 } }).crop).toBeUndefined(); // fill is the default
+    expect(got({ photoId: null, crop: { zoom: 2, shiftX: 0, shiftY: 0 } }).crop).toBeUndefined();
     expect(got({ photoId: 1, crop: 'x' }).crop).toBeUndefined();
   });
 

@@ -9,7 +9,7 @@ export type PhotoLite = {
   id: number; title: string; file: string; shootId: number; w: number; h: number; ar: number; hasImage: boolean;
   capturedAt: string | null; addedAt: string; dateEdit: string | null; camera: string; lens: string; exposure: string; iso: number | null; aperture: number | null; shutter: string; focalMm: number | null; medium: '' | 'digital' | 'film'; film: string; fileType: string; sizeMb: number;
   archived: boolean; missing: boolean; lastReviewedAt: string; nextReviewAt: string | null; reviewCount: number; avgRating: number;
-  lat: number | null; lon: number | null; place: string; parentId: number | null;
+  lat: number | null; lon: number | null; place: string; placeAddress: string; placeKind: string; placePrecision: 'exact' | 'suburb' | 'city'; parentId: number | null;
   palette: Swatch[]; brightness: number | null; contrast: number | null; saturation: number | null;
   xmpRating: number | null; aiStatus: string | null; similarity?: number;
 };

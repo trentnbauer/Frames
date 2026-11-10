@@ -45,7 +45,6 @@ services:
       PORTFOLIO_HOSTNAME: ${PORTFOLIO_HOSTNAME:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-}
       TURNSTILE_DISABLE: ${TURNSTILE_DISABLE:-}
-      CRASH_REPORT_URL: ${CRASH_REPORT_URL:-}
       BACKUP_DIR: /backups
     volumes:
       # Your photographs. Read-only: Frames never writes to them.

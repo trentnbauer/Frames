@@ -102,7 +102,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
 }
 
 function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
-  const { me } = useStore();
+  const { me, summary, todo } = useStore();
   const nav = useNavigate();
   const [theme, setT] = useState(getTheme());
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
@@ -126,20 +126,20 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
               <div style={{ minWidth: 0, flex: 1 }}><b>{name}</b><span className="em">{me?.user?.email || (me?.mode === 'password' ? 'Signed in with the shared password' : '')}</span></div>
               {me?.role === 'admin' && <span className="eyebrow pillish">Admin</span>}
             </div>
-            {item('Settings', go('/settings'))}
+            {item('Settings', go('/settings'), '⌘ ,')}
             {item('View my portfolio', () => { close(); window.open('/portfolio/', '_blank', 'noopener'); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
-            {item(theme === 'dark' ? 'Light mode' : 'Dark mode', toggleTheme)}
+            {item(theme === 'dark' ? 'Light mode' : 'Dark mode', toggleTheme, theme === 'dark' ? '☼' : '☾')}
             <div className="msep" />
-            {item('Your stats', go('/stats'))}
-            {item('To do', go('/todo'))}
+            {item('Your stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
+            {item('To do', go('/todo'), todo ? todo.toLocaleString() : '')}
             {item('Community review', go('/community'))}
             {item('Near-duplicates', go('/duplicates'))}
             <div className="msep" />
             {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); })}
             {item('Welcome tour', go('/welcome'))}
-            {item('Privacy', () => { close(); window.open('/privacy', '_blank', 'noopener'); }, '↗')}
-            {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); })}
+            {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
+            {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
             {me?.user && <><div className="msep" />{item('Sign out', signOut)}</>}
           </div>
         </>
@@ -157,18 +157,9 @@ export function Header({ right }: { right?: ReactNode }) {
   return (
     <header className="shell-head">
       <Link to="/" className="lockup" aria-label="Frames home"><Mark />Frames</Link>
-      <nav className="steps" aria-label="Workflow">
-        <Link to="/shoots" title="Photoshoots" className={step === 1 ? 'on' : ''} aria-current={step === 1 ? 'step' : undefined}>1<span className="lbl"> Upload</span></Link>
-        <span className="arrow" aria-hidden>→</span>
-        <Link to="/collections" title="Compositions" className={step === 2 ? 'on' : ''} aria-current={step === 2 ? 'step' : undefined}>2<span className="lbl"> Compose</span></Link>
-        <span className="arrow" aria-hidden>→</span>
-        <Link to="/collections?filter=ready" title="Compositions ready to export" className={step === 3 ? 'on' : ''}>3<span className="lbl"> Export</span></Link>
-      </nav>
+      <span />
       <div className="head-right">
         {right}
-        <button className="iconbtn" title="Search (⌘K)" aria-label="Search" onClick={ui.openSearch}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5" /></svg>
-        </button>
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
       </div>

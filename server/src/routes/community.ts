@@ -99,7 +99,8 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     const done = (sys.prepare('SELECT COUNT(*) n FROM community_ratings WHERE reviewer = ? AND ts > ?').get(u.id, new Date(Date.now() - 3_600_000).toISOString()) as { n: number }).n;
     // What the reviewer is told: an anonymous number for the photographer, and the camera details (never a name, place or file).
     const anon = `#${(parseInt(crypto.createHash('sha256').update(`${key()}|${pick.owner}`).digest('hex').slice(0, 6), 16) % 9000) + 1000}`;
-    return { photo: { token: tokenOf(pick.owner, pick.photo), ar: p?.w && p?.h ? p.w / p.h : 1.5 }, meta: { anon, details: [p?.camera, p?.focal_mm ? `${Math.round(p.focal_mm)}mm` : '', p?.film].filter(Boolean).join(' · ') }, written: prefs.written, left: Math.min(all.length, SESSION), doneThisSession: done % SESSION };
+    const seen = sys.prepare('SELECT COUNT(*) n, AVG(rating) a FROM community_ratings WHERE owner = ? AND photo = ?').get(pick.owner, pick.photo) as { n: number; a: number | null };
+    return { others: { n: seen.n, avg: seen.a }, photo: { token: tokenOf(pick.owner, pick.photo), ar: p?.w && p?.h ? p.w / p.h : 1.5 }, meta: { anon, details: [p?.camera, p?.focal_mm ? `${Math.round(p.focal_mm)}mm` : '', p?.film].filter(Boolean).join(' · ') }, written: prefs.written, left: Math.min(all.length, SESSION), doneThisSession: done % SESSION };
   });
 
   // The picture, by token only. It checks again that the photograph may be shown, so a stale token never leaks a withdrawn one.
@@ -128,7 +129,7 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     return { ok: true };
   });
 
-  const REASONS = ['nudity', 'violence', 'harassment', 'not-mine-to-share', 'other'];
+  const REASONS = ['nudity', 'violence', 'adult', 'stolen', 'spam', 'harassment', 'not-mine-to-share', 'other'];
   app.post('/api/community/report', async (req, rep) => {
     const u = me(req);
     const b = (req.body ?? {}) as Row;

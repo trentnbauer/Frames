@@ -106,6 +106,19 @@ describe('signing in with a code', () => {
     expect(sent).toHaveLength(0);
     expect((await call('POST', '/api/public/auth/email/verify', { email: 'stranger@elsewhere.test', code: 'ABCDEF' })).status).toBe(400);
   });
+  it('lets someone from a share link make a guest account with a code, though they are not on the list', async () => {
+    sent.length = 0;
+    const g = { email: 'visitor@elsewhere.test', guest: true, returnTo: '/s/abc123' };
+    expect((await call('POST', '/api/public/auth/email/send', g)).body).toEqual({ ok: true });
+    expect(sent).toHaveLength(1);
+    const v = await call('POST', '/api/public/auth/email/verify', { ...g, code: lastCode() });
+    expect(v.status).toBe(200);
+    expect(v.body.returnTo).toBe('/s/abc123');
+    const cookie = String(v.headers['set-cookie']).split(';')[0];
+    const me = (await call('GET', '/api/me', undefined, { cookie })).body;
+    expect(me.user).toMatchObject({ email: 'visitor@elsewhere.test' });
+    expect(me.role).toBe('guest');
+  });
   it('limits how many codes one address can ask for', async () => {
     let last = 200;
     for (let i = 0; i < 7; i++) last = (await call('POST', '/api/public/auth/email/send', { email: 'owner@x.test' })).status;

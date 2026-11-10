@@ -114,34 +114,7 @@ describe('limits and rules an administrator sets', () => {
   });
 });
 
-describe('crash reports, idle jobs and shared AI first', () => {
-  it('a report is cut down to what is safe, sent only when on and given a place, and not repeated', async () => {
-    const { buildReport, crashUrl, reportCrash, scrub } = await import('./crash.js');
-    expect(scrub('failed for mia@example.com at /home/mia/photos/secret/x.js:10:5')).toBe('failed for [email] at x.js:10:5');
-    expect(scrub('key ' + 'a'.repeat(30))).toBe('key [token]');
-    const r = buildReport(new Error('boom in /srv/frames/data/library/a.jpg'), 'uncaughtException', '1.2.3');
-    expect(r).toMatchObject({ app: 'frames', version: '1.2.3', kind: 'uncaughtException', message: 'boom in a.jpg' });
-    expect(JSON.stringify(r)).not.toContain('/srv/');
-    expect(crashUrl({})).toBe('');
-    expect(crashUrl({ CRASH_REPORT_URL: 'ftp://x' })).toBe('');
-    const env = { CRASH_REPORT_URL: 'https://reports.example.test/in' };
-    const calls: { url: string; body: string }[] = [];
-    const fetcher = (async (url: string, init: { body: string }) => { calls.push({ url, body: init.body }); return { ok: true }; }) as never;
-    expect(await reportCrash(new Error('one'), 'k', { enabled: false, version: 'v', env, fetcher })).toBe(false); // off
-    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env: {}, fetcher })).toBe(false); // nowhere to send
-    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env, fetcher, now: 1000 })).toBe(true);
-    expect(await reportCrash(new Error('one'), 'k', { enabled: true, version: 'v', env, fetcher, now: 2000 })).toBe(false); // the same one
-    expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('https://reports.example.test/in');
-  });
-  it('cannot be switched on without a place to send to', async () => {
-    delete process.env.CRASH_REPORT_URL;
-    expect((await A.put('/api/admin/instance', { crashReports: true })).status).toBe(400);
-    process.env.CRASH_REPORT_URL = 'https://reports.example.test/in';
-    expect((await A.put('/api/admin/instance', { crashReports: true })).body).toMatchObject({ crashReports: true, crashHost: 'reports.example.test' });
-    await A.put('/api/admin/instance', { crashReports: false });
-    delete process.env.CRASH_REPORT_URL;
-  });
+describe('idle jobs and shared AI first', () => {
   it('heavy jobs wait for quiet only when set to idle', async () => {
     const { waitIdle, noteUse } = await import('./activity.js');
     await A.put('/api/admin/instance', { heavyJobs: 'always' });

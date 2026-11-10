@@ -41,13 +41,17 @@ describe('gear and wishlist', () => {
     expect((await A.put('/api/gear/prefs', { arrange: 'sideways' })).status).toBe(400);
     expect((await A.put('/api/gear/order', { ids: ['a'] })).status).toBe(400);
   });
-  it('syncs to the portfolio Gear page in the chosen arrangement, with want-to-buy first only when on', async () => {
+  it('syncs to the portfolio Gear page in the chosen arrangement, with want-to-buy last, and only when on', async () => {
     await A.put('/api/gear/prefs', { arrange: 'system', showWant: false });
     expect(gearMarkdown(env.db)).toContain('## Fujifilm X');
     expect(gearMarkdown(env.db)).not.toContain('Want to buy');
     await A.put('/api/gear/prefs', { showWant: true, arrange: 'type' });
     const md = gearMarkdown(env.db);
     expect(md.indexOf('## Want to buy')).toBeGreaterThan(-1);
-    expect(md.indexOf('## Want to buy')).toBeLessThan(md.indexOf('## camera'));
+    expect(md.indexOf('## Want to buy')).toBeGreaterThan(md.indexOf('## camera')); // after everything that is owned
+    await A.put('/api/gear/prefs', { currency: '€' });
+    expect((await A.get('/api/gear/items')).body.prefs.currency).toBe('€');
+    await A.put('/api/gear/prefs', { currency: 'zzz' }); // refused
+    expect((await A.get('/api/gear/items')).body.prefs.currency).toBe('€');
   });
 });

@@ -1,0 +1,222 @@
+.framesprototype-h1:hover{color:var(--text) !important}
+.framesprototype-h2:hover{color:var(--text) !important}
+.framesprototype-h3:hover{background:var(--hover) !important}
+.framesprototype-h4:hover{background:#c62f26 !important}
+.framesprototype-h5:hover{background:var(--hair) !important}
+.framesprototype-h6:hover{color:var(--text) !important}
+.framesprototype-h7:hover{background:var(--hair) !important}
+.framesprototype-h8:focus{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 40%, transparent) !important}
+.framesprototype-h9:focus{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 40%, transparent) !important}
+.framesprototype-h10:hover{background:var(--hover) !important}
+.framesprototype-h11:hover{background:var(--hover) !important}
+.framesprototype-h12:hover{color:var(--text) !important}
+.protoauth-h1:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h2:hover{background:var(--hover) !important}
+.protoauth-h3:hover{color:var(--text) !important}
+.protoauth-h4:hover{color:var(--text) !important}
+.protoauth-h5:hover{color:var(--text) !important}
+.protoauth-h6:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h7:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h8:hover{background:var(--hover) !important}
+.protoauth-h9:hover{color:var(--text) !important}
+.protoauth-h10:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h11:hover{color:var(--text) !important}
+.protoauth-h12:hover{color:var(--text) !important}
+.protoauth-h13:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h14:hover{color:var(--text) !important}
+.protoauth-h15:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h16:hover{color:var(--text) !important}
+.protoauth-h17:hover{background:var(--hover) !important}
+.protoauth-h18:hover{background:var(--hover) !important}
+.protoauth-h19:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h20:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoauth-h21:hover{background:var(--hover) !important}
+.protoauth-h22:hover{background:var(--hover) !important}
+.protoauth-h23:hover{background:var(--hover) !important}
+.protocommunity-h1:hover{background:var(--hair) !important}
+.protocommunity-h2:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protocommunity-h3:hover{background:var(--hair) !important}
+.protocommunity-h4:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protocommunity-h5:hover{color:var(--text) !important}
+.protocommunity-h6:hover{color:oklch(0.78 0.14 28) !important}
+.protocompositions-h1:hover{color:var(--text) !important}
+.protocompositions-h2:hover{background:var(--hover) !important}
+.protocomppicker-h1:hover{background:var(--hair) !important}
+.protocomppicker-h2:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protocomppicker-h3:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protocomppicker-h4:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoeditor-h1:hover{background:var(--hair) !important}
+.protoeditor-h2:hover{color:var(--text) !important}
+.protoeditor-h3:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoeditor-h4:hover{color:var(--text) !important}
+.protoeditor-h5:hover{color:var(--text) !important}
+.protoeditor-h6:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoeditor-h7:hover{background:var(--hair) !important}
+.protoeditor-h8:hover{color:var(--text) !important}
+.protoeditor-h9:hover{background:var(--hover) !important}
+.protoeditor-h10:hover{background:var(--hair) !important}
+.protoeditor-h11:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoeditor-h12:hover{background:var(--hover) !important;color:oklch(0.75 0.14 28) !important}
+.protoeditor-h13:hover{background:var(--hover) !important}
+.protoeditor-h14:hover{background:var(--hover) !important}
+.protoeditor-h15:hover{color:var(--text) !important}
+.protoeditor-h16:hover{background:var(--hover) !important}
+.protoeditor-h17:hover{color:var(--text) !important}
+.protoeditor-h18:hover{background:var(--hover) !important}
+.protoeditor-h19:hover{color:oklch(0.8 0.15 28) !important}
+.protoeditor-h20:hover{background:rgba(13,13,13,.85) !important}
+.protoeditor-h21:hover{background:rgba(13,13,13,.85) !important}
+.protoeditor-h22:hover{background:rgba(13,13,13,.85) !important}
+.protoeditor-h23:hover{color:var(--text) !important}
+.protoeditor-h24:hover{background:var(--hover) !important}
+.protoeditor-h25:hover{color:var(--text) !important}
+.protoeditor-h26:hover{background:var(--hover) !important}
+.protoeditor-h27:hover{color:oklch(0.8 0.15 28) !important}
+.protoeditor-h28:hover{background:var(--raised2) !important}
+.protogear-h1:hover{background:var(--hair) !important}
+.protogear-h2:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h3:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h4:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h5:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h6:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h7:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h8:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protogear-h9:hover{background:color-mix(in srgb, var(--text) 3%, transparent) !important}
+.protogear-h10:hover{background:color-mix(in srgb, var(--text) 4%, transparent) !important}
+.protogear-h11:focus{background:var(--bg) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protogear-h12:hover{background:color-mix(in srgb, var(--text) 4%, transparent) !important}
+.protogear-h13:focus{background:var(--bg) !important;color:var(--text) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protogear-h14:hover{color:var(--text) !important}
+.protogear-h15:hover{background:var(--hair) !important}
+.protogear-h16:hover{background:var(--hair) !important}
+.protogear-h17:hover{color:var(--text) !important;background:var(--hover) !important}
+.protogear-h18:hover{color:var(--text) !important}
+.protogear-h19:hover{background:color-mix(in srgb, var(--text) 3%, transparent) !important}
+.protogear-h20:focus{background:var(--surface) !important;color:var(--text) !important;box-shadow:inset 0 0 0 1px var(--outline) !important}
+.protogear-h21:hover{background:var(--hover) !important}
+.protogear-h22:focus{background:var(--bg) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protogear-h23:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent) !important}
+.protogear-h24:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protogear-h25:focus{background:var(--surface) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protogear-h26:hover{color:var(--text) !important;background:var(--hair) !important}
+.protogear-h27:hover{background:var(--hover) !important;color:var(--text) !important}
+.protogear-h28:focus{background:var(--surface) !important;color:var(--text) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protogear-h29:hover{color:var(--text) !important;background:var(--hover) !important}
+.protogear-h30:hover{color:var(--text) !important;background:color-mix(in srgb, var(--text) 3%, transparent) !important}
+.protogear-h31:hover{color:var(--text) !important;background:color-mix(in srgb, var(--text) 3%, transparent) !important}
+.protohome-h1:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protohome-h2:focus{background:var(--bg) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent) !important}
+.protohome-h3:hover{background:color-mix(in srgb, var(--text) 2%, transparent) !important}
+.protolibrary-h1:hover{background:var(--hover) !important}
+.protolibrary-h2:hover{background:oklch(0.62 0.17 28 / .15) !important}
+.protolibrary-h3:hover{color:var(--text) !important}
+.protolibrary-h4:hover{background:var(--hair) !important}
+.protolibrary-h5:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protolibrary-h6:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protolibrary-h7:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protolibrary-h8:hover{background:var(--hover) !important}
+.protomore-h1:hover{background:var(--hover) !important}
+.protomore-h2:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protomore-h3:hover{color:var(--text) !important}
+.protomore-h4:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protomore-h5:hover{background:var(--hover) !important}
+.protomore-h6:hover{color:var(--text) !important}
+.protomore-h7:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protomore-h8:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protomore-h9:hover{color:var(--text) !important}
+.protomore-h10:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protomore-h11:hover{background:var(--hair) !important}
+.protomore-h12:hover{background:var(--hair) !important}
+.protomore-h13:hover{background:var(--hover) !important}
+.protophoto-h1:hover{background:var(--hair) !important}
+.protophoto-h2:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protophoto-h3:hover{background:var(--hover) !important}
+.protophoto-h4:hover{color:var(--text) !important}
+.protophoto-h5:hover{background:var(--hover) !important}
+.protophoto-h6:hover{background:var(--hover) !important}
+.protophoto-h7:hover{background:var(--hover) !important}
+.protophoto-h8:hover{background:var(--hover) !important;color:var(--text) !important}
+.protophoto-h9:hover{background:var(--hover) !important}
+.protophoto-h10:hover{background:var(--hover) !important}
+.protophoto-h11:hover{background:var(--hover) !important}
+.protophoto-h12:hover{background:var(--hover) !important}
+.protophoto-h13:hover{background:var(--hover) !important}
+.protophoto-h14:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent) !important}
+.protophoto-h15:focus{background:var(--surface) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent) !important}
+.protophoto-h16:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important;color:var(--text) !important}
+.protophoto-h17:focus{background:var(--surface) !important;color:var(--text) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent) !important}
+.protophoto-h18:hover{color:var(--text) !important}
+.protophoto-h19:hover{background:var(--hair) !important}
+.protophoto-h20:hover{background:var(--hair) !important}
+.protophoto-h21:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protophoto-h22:hover{color:var(--text) !important}
+.protophoto-h23:hover{background:var(--hover) !important;color:var(--text) !important}
+.protophoto-h24:hover{background:var(--hover) !important;color:var(--text) !important}
+.protophoto-h25:focus{background:var(--bg) !important;color:var(--text) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent) !important}
+.protophoto-h26:hover{background:var(--hover) !important}
+.protophoto-h27:hover{background:var(--hover) !important}
+.protophoto-h28:hover{background:var(--hover) !important}
+.protoportfolio-h1:hover{opacity:.7 !important}
+.protoportfolio-h2:hover{opacity:.7 !important}
+.protoreview-h1:hover{color:var(--text) !important}
+.protoreview-h2:hover{background:var(--hair) !important}
+.protoreview-h3:hover{background:var(--hover) !important}
+.protoreview-h4:hover{color:var(--text) !important}
+.protosearch-h1:hover{color:var(--text) !important}
+.protosearch-h2:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protosearch-h3:hover{background:var(--hover) !important}
+.protoshoots-h1:hover{background:var(--hair) !important}
+.protoshoots-h2:hover{background:color-mix(in srgb, var(--text) 4%, transparent) !important}
+.protoshoots-h3:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoshoots-h4:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protoshoots-h5:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent) !important}
+.protoshoots-h6:focus{background:var(--surface) !important;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent) !important}
+.protoshoots-h7:hover{background:var(--hover) !important}
+.protoshoots-h8:hover{background:var(--hover) !important}
+.protoshoots-h9:hover{color:var(--text) !important}
+.protoshoots-h10:hover{background:var(--hair) !important}
+.protoshoots-h11:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoshoots-h12:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.protoshoots-h13:hover{background:color-mix(in srgb, var(--text) 5%, transparent) !important}
+.protoshoots-h14:hover{background:var(--hover) !important}
+.settingsinteractive-h1:hover{background:var(--hair) !important}
+.settingsinteractive-h2:hover{background:var(--hair) !important}
+.settingsinteractive-h3:hover{color:var(--text) !important}
+.settingsinteractive-h4:hover{background:var(--hover) !important}
+.settingsinteractive-h5:hover{background:var(--hair) !important}
+.settingsinteractive-h6:hover{color:var(--text) !important}
+.settingsinteractive-h7:hover{background:var(--hair) !important}
+.settingsinteractive-h8:hover{background:var(--hair) !important}
+.settingsinteractive-h9:hover{color:var(--text) !important}
+.settingsinteractive-h10:hover{background:var(--hover) !important}
+.settingsinteractive-h11:hover{background:var(--hair) !important}
+.settingsinteractive-h12:focus{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 35%, transparent) !important}
+.settingsinteractive-h13:hover{background:var(--hover) !important}
+.settingsinteractive-h14:hover{background:var(--hair) !important}
+.settingsinteractive-h15:hover{background:color-mix(in srgb, var(--text) 4%, transparent) !important}
+.settingsinteractive-h16:hover{background:var(--hair) !important}
+.settingsinteractive-h17:hover{background:var(--hair) !important}
+.settingsinteractive-h18:hover{background:var(--hover) !important;color:var(--text) !important}
+.settingsinteractive-h19:hover{background:var(--hair) !important}
+.settingsinteractive-h20:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent) !important}
+.settingsinteractive-h21:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.settingsinteractive-h22:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.settingsinteractive-h23:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.settingsinteractive-h24:hover{background:var(--hair) !important}
+.settingsinteractive-h25:hover{color:var(--text) !important}
+.settingsinteractive-h26:hover{color:var(--text) !important}
+.settingsinteractive-h27:hover{background:#ffffff !important}
+.settingsinteractive-h28:hover{background:var(--hover) !important}
+.settingsinteractive-h29:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.settingsinteractive-h30:hover{color:var(--text) !important}
+.settingsinteractive-h31:hover{background:var(--hover) !important}
+.settingsinteractive-h32:hover{background:color-mix(in srgb, var(--text) 12%, transparent) !important}
+.settingsinteractive-h33:hover{background:color-mix(in srgb, var(--text) 10%, transparent) !important;color:var(--text) !important}
+.settingsinteractive-h34:hover{color:var(--text) !important}
+.settingsinteractive-h35:focus{box-shadow:inset 0 0 0 1px var(--text) !important}
+.settingsinteractive-h36:hover{color:var(--text) !important}
+.settingsinteractive-h37:hover{background:var(--hover) !important}
+.settingsinteractive-h38:hover{color:var(--text) !important}
+.settingsinteractive-h39:hover{background:var(--hover) !important}
+.protoheader-h1:hover{background:var(--hover) !important}
+.protoheader-h2:hover{background:var(--hover) !important}

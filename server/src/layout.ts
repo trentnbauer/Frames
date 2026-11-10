@@ -13,8 +13,8 @@ export const MAX_PRINTS = 12;
 
 export type Frame = { size: string; mat: string; color: string };
 /** A print holds one photograph, or (stack) two: two landscape photographs one above the other make a portrait print, two portrait ones side by side make a landscape one. */
-/** A look-only crop: zoom 1 to 4 around the point (fx, fy), each 0 to 1. The original file is never changed. */
-export type Crop = { zoom: number; fx: number; fy: number };
+/** A look-only crop: zoom 1 to 2.5, shifted by shiftX/shiftY (-50 to 50, percent). The original file is never changed. */
+export type Crop = { zoom: number; shiftX: number; shiftY: number };
 export type Print = { crop?: Crop; id: number; size: string; orientation: 'portrait' | 'landscape'; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
 /** `ppi` is the sharpness the photographer wants (pixels per inch at print size); a photograph with fewer is still allowed, with a warning. Absent means 300. */
 export type Layout = { mode: (typeof MODES)[number]; prints: Print[]; ppi?: number;
@@ -52,8 +52,11 @@ export function parseLayout(raw: unknown, members: Set<number>): Layout | null {
     const photoId = pick(p.photoId);
     const photoId2 = stack ? pick(p.photoId2) : null;
     const c = p.crop && typeof p.crop === 'object' ? (p.crop as Record<string, unknown>) : null;
-    const zoom = c ? Math.min(4, Math.max(1, num(c.zoom, 1))) : 1;
-    const crop: Crop | undefined = c && zoom > 1.005 && !stack && photoId !== null ? { zoom: Math.round(zoom * 100) / 100, fx: Math.round(Math.min(1, Math.max(0, num(c.fx, 0.5))) * 1000) / 1000, fy: Math.round(Math.min(1, Math.max(0, num(c.fy, 0.5))) * 1000) / 1000 } : undefined;
+    const zoom = c ? Math.min(2.5, Math.max(1, num(c.zoom, 1))) : 1;
+    // Older saves kept a focal point (fx, fy in 0..1): read it as the equivalent shift.
+    const sh = (v: unknown, old: unknown) => Math.round(Math.min(50, Math.max(-50, v !== undefined ? num(v, 0) : old !== undefined ? (num(old, 0.5) - 0.5) * 100 : 0)));
+    const shiftX = c ? sh(c.shiftX, c.fx) : 0, shiftY = c ? sh(c.shiftY, c.fy) : 0;
+    const crop: Crop | undefined = c && (zoom > 1.005 || shiftX || shiftY) && !stack && photoId !== null ? { zoom: Math.round(zoom * 100) / 100, shiftX, shiftY } : undefined;
     prints.push({ ...(crop ? { crop } : {}), id: Math.max(1, Math.round(num(p.id, nextId))), size, orientation, frame, photoId, stack, photoId2, x: Math.max(-20000, Math.min(20000, Math.round(num(p.x)))), y: Math.max(-20000, Math.min(20000, Math.round(num(p.y)))) });
     nextId = Math.max(nextId, prints[prints.length - 1].id) + 1;
   }

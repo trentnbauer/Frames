@@ -5,22 +5,22 @@ import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
-import { Todo } from './pages/Todo';
-import { Today } from './pages/Today';
-import { Library } from './pages/Library';
-import { PhotoDetail } from './pages/PhotoDetail';
-import { Review } from './pages/Review';
-import { Shoots } from './pages/Shoots';
-import { Collections, CollectionDetail } from './pages/Collections';
-import { Stats } from './pages/Stats';
+import { TodoPage as Todo } from './screens/Todo';
+import { Home } from './screens/Home';
+import { Library } from './screens/Library';
+import { GoContext } from './proto/runtime';
+import { Photo as PhotoDetail } from './screens/Photo';
+import { Review } from './screens/Review';
+import { Shoots } from './screens/Shoots';
+import { Compositions } from './screens/Compositions';
+import { Editor as CollectionDetail } from './screens/Editor';
+import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
-import { ShootDetail } from './pages/ShootDetail';
-import { Compare } from './pages/Compare';
-import { Duplicates } from './pages/Duplicates';
+import { Compare, Duplicates } from './screens/Compare';
 import { SharePage } from './pages/SharePage';
-import { Welcome } from './pages/Welcome';
-import { Community } from './pages/Community';
-import { Gear } from './pages/Gear';
+import { Welcome } from './screens/Welcome';
+import { Community } from './screens/Community';
+import { Gear } from './screens/Gear';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
@@ -63,18 +63,22 @@ function Shell() {
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
+    <GoContext.Provider value={(to) => {
+      const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', portfolio: '/portfolio/', editor: '/collections' };
+      if (to === 'search') setSearching(true); else if (to.startsWith('/')) nav(to); else if (map[to]) nav(map[to]);
+    }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
       <Routes>
-        <Route path="/" element={<Today />} />
+        <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
         <Route path="/shoots" element={<Shoots />} />
-        <Route path="/shoots/:id" element={<ShootDetail />} />
+        <Route path="/shoots/:id" element={<Shoots />} />
         <Route path="/compare" element={<Compare />} />
         <Route path="/duplicates" element={<Duplicates />} />
-        <Route path="/collections" element={<Collections />} />
+        <Route path="/collections" element={<Compositions />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
         <Route path="/gear" element={<Gear />} />
@@ -83,7 +87,7 @@ function Shell() {
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
-        <Route path="*" element={<Today />} />
+        <Route path="*" element={<Home />} />
       </Routes>
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
@@ -91,6 +95,7 @@ function Shell() {
       {searching && <Search onClose={() => setSearching(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>
+    </GoContext.Provider>
   );
 }
 

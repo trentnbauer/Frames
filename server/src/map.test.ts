@@ -45,7 +45,8 @@ describe('searching for a business', () => {
       return new Response(JSON.stringify(q === 'Mill Market, Geelong' ? [{ display_name: 'Mill Market, Geelong, Victoria', lat: '-38.14', lon: '144.35' }] : []), { status: 200 });
     };
     const r = await A.get('/api/map/search?q=Geelong%20Mill%20Market');
-    expect(r.body).toEqual([{ name: 'Mill Market, Geelong, Victoria', lat: -38.14, lon: 144.35 }]);
+    expect(r.body).toMatchObject([{ lat: -38.14, lon: 144.35 }]);
+    expect(r.body[0].address).toContain('Geelong');
     expect(asked).toEqual(['Geelong Mill Market', 'Mill Market, Geelong']); // stops at the first that finds something
   });
 
@@ -63,7 +64,7 @@ describe('the map proxy', () => {
     const r = await env.app.inject({ method: 'GET', url: '/api/map/tile/3/2/1' });
     expect(r.statusCode).toBe(200);
     expect(r.headers['content-type']).toBe('image/png');
-    expect(seen).toMatchObject({ url: 'https://tile.openstreetmap.org/3/2/1.png' });
+    expect(seen).toMatchObject({ url: 'https://a.basemaps.cartocdn.com/dark_all/3/2/1.png' });
     expect(seen!.ua).toContain('Frames');
     for (const u of ['/api/map/tile/3/8/0', '/api/map/tile/20/0/0', '/api/map/tile/x/0/0', '/api/map/tile/2/-1/0']) expect((await env.app.inject({ method: 'GET', url: u })).statusCode).toBe(404);
   });
@@ -71,7 +72,7 @@ describe('the map proxy', () => {
   it('searches by name, and says so when the service is down', async () => {
     await new Promise((r) => setTimeout(r, 1100)); // the one-a-second limit
     mapSource.fetch = async () => new Response(JSON.stringify([{ display_name: 'Geelong, Victoria, Australia', lat: '-38.14', lon: '144.36' }, { display_name: 'Nowhere', lat: '999', lon: '0' }]), { status: 200 });
-    expect((await A.get('/api/map/search?q=Geelong')).body).toEqual([{ name: 'Geelong, Victoria, Australia', lat: -38.14, lon: 144.36 }]);
+    expect((await A.get('/api/map/search?q=Geelong')).body).toMatchObject([{ name: 'Geelong', lat: -38.14, lon: 144.36 }]);
     await new Promise((r) => setTimeout(r, 1100));
     mapSource.fetch = async () => { throw new Error('down'); };
     expect((await A.get('/api/map/search?q=Geelong')).status).toBe(404);

@@ -303,6 +303,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       screen TEXT NOT NULL DEFAULT '', anchor TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '');
       CREATE INDEX IF NOT EXISTS notifications_created ON notifications(created_at);`);
   },
+  // where a photograph was taken, in full: the address and kind of place, and how much the public may see (exact, suburb or city)
+  (db) => { addColumn(db, 'photos', 'place_address', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_kind', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_precision', "TEXT NOT NULL DEFAULT 'exact'"); },
 ];
 
 export function migrate(db: DB) {
