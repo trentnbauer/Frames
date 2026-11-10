@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
-import { bindOwner, findByEmail, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
+import { bindOwner, findByEmail, getUser, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
@@ -239,7 +239,11 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
 
   // ---------- behind the sign-in: who am I, and the owner's settings ----------
   // A guest's "Shared with you": the share links they opened while signed in (see the onRequest hook in app.ts).
-  app.get('/api/guest/links', async (req) => ({ links: db.prepare('SELECT token, label, kind, seen FROM guest_links WHERE user_id = ? ORDER BY seen DESC LIMIT 200').all(((req as any).authUser as User).id) }));
+  app.get('/api/guest/links', async (req) => ({
+    // The first part of a link names whose it is, so a guest can see who shared what.
+    links: (db.prepare('SELECT token, label, kind, seen FROM guest_links WHERE user_id = ? ORDER BY seen DESC LIMIT 200').all(((req as any).authUser as User).id) as { token: string; label: string; kind: string; seen: string }[])
+      .map((l) => ({ ...l, from: (getUser(x.sys, parseInt(l.token.split('_')[0], 36))?.name ?? '').split(' ')[0] })),
+  }));
   app.get('/api/me', async (req) => {
     const u = (req as any).authUser as User | null;
     const signedIn = (req as any).authVia === 'session';

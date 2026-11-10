@@ -5,7 +5,9 @@
   function applyTheme(theme) {
     root.setAttribute('data-theme', theme);
     const label = document.getElementById('theme-label');
-    if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    const icon = document.getElementById('theme-icon');
+    if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+    if (icon) icon.textContent = theme === 'dark' ? '\u2600' : '\u263E';
   }
 
   function initTheme() {
@@ -80,14 +82,14 @@
     if (data && !data.empty) {
       let html = data.intro ? '<p class="gear-intro">' + esc(data.intro) + '</p>' : '';
       if (data.showWant) {
-        html += '<div class="gear-block"><div class="gear-head"><h2>Want to buy</h2><span>' + data.want.length + '</span></div>' +
+        html += '<div class="gear-block"><div class="gear-head"><h2>Want to buy</h2><span>' + data.want.length + ' ' + (data.want.length === 1 ? 'item' : 'items') + '</span></div><div class="gear-list">' +
           data.want.map((w) => {
-            const inner = '<span class="n">' + w.n + '</span><span>' + esc(w.name) + (w.url ? ' ↗' : '') + '</span><span class="note">' + (w.price ? '$' + esc(w.price) : '') + '</span>';
+            const inner = '<span class="n">' + w.n + '</span><span>' + esc(w.name) + (w.url ? ' \u2197' : '') + '</span><span class="price">' + (w.price ? '$' + esc(w.price) : '') + '</span>';
             return w.url ? '<a class="gear-row want" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>' : '<div class="gear-row want">' + inner + '</div>';
-          }).join('') + '</div>';
+          }).join('') + '</div></div>';
       }
-      html += data.groups.map((g) => '<div class="gear-block"><div class="gear-head"><h2>' + esc(g.title) + '</h2><span>' + g.count + '</span></div>' +
-        g.items.map((it) => '<div class="gear-row"><div><span>' + esc(it.name) + '</span>' + (it.note ? '<span class="note">' + esc(it.note) + '</span>' : '') + '</div><span class="tag">' + esc(it.tag) + '</span></div>').join('') + '</div>').join('');
+      html += data.groups.map((g) => '<div class="gear-block"><div class="gear-head"><h2>' + esc(g.title) + '</h2><span>' + g.count + '</span></div><div class="gear-list">' +
+        g.items.map((it) => '<div class="gear-row"><div><span>' + esc(it.name) + '</span>' + (it.note ? '<span class="note">' + esc(it.note) + '</span>' : '') + '</div><span class="tag">' + esc(it.tag) + '</span></div>').join('') + '</div></div>').join('');
       content.innerHTML = html;
       return;
     }
@@ -108,7 +110,7 @@
       nav.querySelectorAll('button').forEach((b) => b.setAttribute('aria-current', b.dataset.page === which ? 'page' : 'false'));
     };
     const tab = (label, page) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.page = page; b.textContent = label; b.addEventListener('click', () => show(page)); nav.appendChild(b); };
-    tab('Photographs', 'work');
+    tab('Index', 'work');
     if (hasGear) tab('Gear', 'gear');
     (config.buttons || []).forEach((btn) => {
       if (!btn || !btn.url) return;
@@ -117,7 +119,7 @@
       if (!/^mailto:/i.test(btn.url)) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
       a.setAttribute('aria-label', btn.name || btn.short);
       a.title = btn.name || '';
-      a.textContent = btn.name || btn.short;
+      a.textContent = (btn.name || btn.short) + ' \u2197';
       nav.appendChild(a);
     });
     show('work');
@@ -126,18 +128,14 @@
   function renderHero(config) {
     const name = config.photographerName || 'Your Name Here';
     document.title = `${name} — Photography`;
-    document.getElementById('photographer-name').textContent = name;
-    // The photographer's profile picture, if they set one, shown beside the name.
     const nameEl = document.getElementById('photographer-name');
-    if (config.avatar && !document.getElementById('photographer-avatar')) {
-      const img = document.createElement('img');
-      img.id = 'photographer-avatar';
-      img.src = config.avatar;
-      img.alt = '';
-      img.width = img.height = 72;
-      img.style.cssText = 'border-radius:50%;object-fit:cover;display:block;margin:24px 0 0';
-      nameEl.parentNode.insertBefore(img, nameEl);
-    }
+    const parts = name.trim().split(/\s+/);
+    nameEl.textContent = '';
+    nameEl.appendChild(document.createTextNode(parts[0]));
+    if (parts.length > 1) { nameEl.appendChild(document.createElement('br')); nameEl.appendChild(document.createTextNode(parts.slice(1).join(' '))); }
+    // The photographer's profile picture, if they set one, shown beside the name.
+    const avatar = document.getElementById('photographer-avatar');
+    if (config.avatar) { avatar.src = config.avatar; avatar.hidden = false; } else avatar.hidden = true;
 
     const taglineEl = document.getElementById('tagline');
     taglineEl.textContent = config.tagline || '';
@@ -238,23 +236,23 @@
     if (manifest && manifest.length) {
       hint.hidden = true;
       manifest.forEach((entry) => {
+        const ar = entry.width && entry.height ? entry.width / entry.height : 1.5;
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'photo-item';
         item.title = 'View full-size photo';
+        item.style.flex = `${Math.round(ar * 100)} 1 ${Math.round(ar * 220)}px`;
+        item.style.aspectRatio = String(ar);
 
         const img = document.createElement('img');
         img.src = entry.file;
         img.loading = 'lazy';
         img.alt = entry.alt || '';
-        if (entry.width && entry.height) {
-          img.width = entry.width;
-          img.height = entry.height;
-        }
         item.appendChild(img);
         item.addEventListener('click', () => openLightbox(entry));
         gallery.appendChild(item);
       });
+      gallery.appendChild(document.createElement('i')); // keeps a short last row from stretching across the page
       return;
     }
 
@@ -263,7 +261,9 @@
     heights.forEach((h, i) => {
       const item = document.createElement('div');
       item.className = 'placeholder-item';
-      item.style.height = `${h}px`;
+      const par = [1.5, 1.33, 0.67, 1.5, 1, 1.5][i % 6];
+      item.style.flex = `${par * 100} 1 ${par * 220}px`;
+      item.style.aspectRatio = String(par);
       const label = document.createElement('div');
       label.className = 'placeholder-label';
       label.textContent = `image ${String(i + 1).padStart(2, '0')}`;
