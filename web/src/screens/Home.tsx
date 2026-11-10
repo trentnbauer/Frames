@@ -90,7 +90,7 @@ export function Home() {
     revCta: s?.resumable ? 'Resume review' : due === 0 ? 'Review anyway' : 'Begin review', revThumbs: s?.nextId ? [thumb(s.nextId)] : [],
     begin: () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review'),
     pendingN: pn, pendingText: pn > 0 ? `${pn} new file${pn === 1 ? '' : 's'} are waiting in your library folder.` : 'Upload from this computer or sync from the cloud.',
-    canAdd: !status.data || status.data.storage.local || status.data.storage.cloud, addPhotos: () => setAdding(true),
+    canAdd: !status.data || status.data.storage.local || status.data.storage.cloud, addPhotos: () => nav('/shoots?upload=1'),
     cloudOn: !!batches.data && batches.data.batches.length > 0, cloudLeft: left ? `${left} batch${left === 1 ? '' : 'es'}` : 'All sorted ✓',
     batches: (batches.data?.batches ?? []).map((b) => {
       const isDone = !!done[b.id] || b.done, sp = !!splits[b.id], nm = (names[b.id] ?? '').trim() || b.name;

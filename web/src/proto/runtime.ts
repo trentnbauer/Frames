@@ -51,6 +51,7 @@ export class DCLogic {
   }
   componentDidMount?(): void;
   componentWillUnmount?(): void;
+  componentDidUpdate?(prevProps: Record<string, any>): void;
   renderVals(): Record<string, any> { return {}; }
 }
 export function useDCLogic<T extends DCLogic>(Ctor: new () => T, props: Record<string, any>): Record<string, any> {
@@ -58,7 +59,9 @@ export function useDCLogic<T extends DCLogic>(Ctor: new () => T, props: Record<s
   const ref = useRef<T | null>(null);
   if (!ref.current) { ref.current = new Ctor(); ref.current.__update = () => force(); }
   const inst = ref.current;
+  const prev = useRef(props);
   inst.props = props;
+  useEffect(() => { if (prev.current !== props) inst.componentDidUpdate?.(prev.current); prev.current = props; });
   useEffect(() => { inst.componentDidMount?.(); return () => inst.componentWillUnmount?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return inst.renderVals();
 }

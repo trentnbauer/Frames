@@ -146,7 +146,7 @@ export function Library() {
         groupsFor={(by: 'shoot' | 'uploaded' | 'taken') => (flat ? flatGroups() : groupsFor(by))}
         photoOf={(id: number) => { const p = byId.get(id); const n = inComps.get(id) ?? 0; return { src: imgUrl(id, 'thumb'), ar: p?.ar ?? 1, badge: n ? `In ${n}` : '' }; }}
         countLabel={list.data ? `${count.toLocaleString()}${count !== list.data.total ? ` of ${list.data.total.toLocaleString()}` : ''}` : ''}
-        canAdd={!status.data || status.data.storage.local || status.data.storage.cloud} onAddPhotos={() => setAdding(true)}
+        canAdd={!status.data || status.data.storage.local || status.data.storage.cloud} onAddPhotos={() => nav('/shoots?upload=1')}
         searchPh={ai ? 'Search or describe a photo' : 'Search filenames, places, tags and metadata'}
         chips={chips} onClear={clear} onToggleFilters={() => setFiltersOpen(!filtersOpen)} filtersPanel={filtersPanel}
         orderLabel={newest ? 'Newest' : 'Oldest'} toggleOrder={() => set('order', newest ? 'oldest' : null)}

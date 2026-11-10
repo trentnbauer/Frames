@@ -11,11 +11,10 @@ import { Library } from './screens/Library';
 import { GoContext } from './proto/runtime';
 import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
-import { Shoots } from './pages/Shoots';
+import { Shoots } from './screens/Shoots';
 import { Collections, CollectionDetail } from './pages/Collections';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './settings/SettingsPage';
-import { ShootDetail } from './pages/ShootDetail';
 import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
@@ -76,7 +75,7 @@ function Shell() {
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
         <Route path="/shoots" element={<Shoots />} />
-        <Route path="/shoots/:id" element={<ShootDetail />} />
+        <Route path="/shoots/:id" element={<Shoots />} />
         <Route path="/compare" element={<Compare />} />
         <Route path="/duplicates" element={<Duplicates />} />
         <Route path="/collections" element={<Collections />} />
