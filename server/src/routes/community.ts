@@ -183,7 +183,12 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     const cur = communityPrefs(db);
     const next: CommunityPrefs = { ...cur };
     for (const k of ['optIn', 'written', 'showOnHome'] as const) if (typeof b[k] === 'boolean') next[k] = b[k] as boolean;
-    if (b.share !== undefined) { if (!['any', 'portfolio', 'rated4'].includes(String(b.share))) return rep.code(400).send({ error: 'Choose any photo, portfolio photos or photos rated 4 and up.' }); next.share = b.share as CommunityPrefs['share']; }
+    if (b.share !== undefined) {
+      // take the value from our own list, not the request: String(['any']) would pass an includes() check
+      const share = (['any', 'portfolio', 'rated4'] as const).find((v) => v === b.share);
+      if (!share) return rep.code(400).send({ error: 'Choose any photo, portfolio photos or photos rated 4 and up.' });
+      next.share = share;
+    }
     setSetting(db, 'community', next);
     return next;
   });
