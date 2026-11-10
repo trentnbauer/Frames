@@ -35,8 +35,9 @@ describe('Cloudflare Access as a sign-in provider', () => {
   });
   it('shows the usual sign-in page to someone with no Access token', async () => {
     const r = await get('/', { accept: 'text/html' });
-    expect(r.statusCode).toBe(401);
-    expect(r.body).toContain('Continue with Cloudflare Access');
+    expect(r.statusCode).toBe(302);
+    expect(r.headers.location).toBe('/signin');
+    expect((await get('/api/public/auth')).json().providers).toEqual([expect.objectContaining({ type: 'cloudflare', name: 'Cloudflare Access' })]);
   });
   it('signs someone in by the email in a valid token, with no sign-in screen, and lands them where they were going', async () => {
     const h = { 'cf-access-jwt-assertion': await token({ name: 'Alice A' }), accept: 'text/html' };

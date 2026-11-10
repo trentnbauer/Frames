@@ -34,13 +34,15 @@ export type Provider = {
 export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
 export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null;
   /** Anyone who signs in with a provider is let in (and gets their own library), whatever the allowed list says. The list is kept. */
-  open?: boolean };
+  open?: boolean;
+  /** Sign in with an emailed code. Offered on the sign-in page only while SMTP is configured and passing its health check. */
+  email?: boolean };
 
 const EMPTY: AuthConfig = { enabled: false, providers: [], allow: [], publicUrl: '', testedBy: null };
 export const loadAuth = (db: DB): AuthConfig => ({ ...EMPTY, ...getSetting<Partial<AuthConfig>>(db, 'auth', {}) });
 export const saveAuth = (db: DB, c: AuthConfig) => setSetting(db, 'auth', c);
 /** Is OAuth sign-in switched on, with at least one provider? */
-export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && a.providers.length > 0; };
+export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && (a.providers.length > 0 || !!a.email); };
 
 export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
   dropbox: { authUrl: 'https://www.dropbox.com/oauth2/authorize', tokenUrl: 'https://api.dropboxapi.com/oauth2/token', userUrl: 'https://api.dropboxapi.com/2/users/get_current_account', emailsUrl: '' },
@@ -338,7 +340,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
       // Behind Cloudflare Access there is no screen to show: the signed token in the request is the sign-in.
       const cf = loadAuth(db).providers.find((p) => p.type === 'cloudflare');
       if (cf && req.headers['cf-access-jwt-assertion'] && wantsHtml(req)) return rep.redirect(`/auth/login/${cf.id}?returnTo=${encodeURIComponent(req.url)}`);
-      if (wantsHtml(req)) return rep.code(401).type('text/html').send(signinPage());
+      if (wantsHtml(req)) return rep.redirect(`/signin${req.url !== '/' && /^\/(?!\/)[\w\-./?=&%]*$/.test(req.url) ? `?returnTo=${encodeURIComponent(req.url)}` : ''}`);
       return rep.code(401).send({ error: 'Sign in required', signIn: true });
     }
     return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });

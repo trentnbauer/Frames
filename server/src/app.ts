@@ -22,6 +22,7 @@ import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
 import { registerNotifications } from './routes/notifications.js';
+import { registerSystem, startEmailHealth } from './routes/system.js';
 import { registerInsights } from './routes/insights.js';
 import { parseGear } from './gear.js';
 import { registerTodo } from './routes/todo.js';
@@ -528,6 +529,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerAuth(app, ctx, auth);
   registerProfile(app, ctx);
   registerNotifications(app, ctx);
+  registerSystem(app, ctx);
+  startEmailHealth(ctx, (fn) => app.addHook('onClose', async () => fn()));
   registerCloud(app, ctx);
   registerAdmin(app, ctx);
   registerPrivacy(app, ctx);

@@ -16,7 +16,7 @@ import { isPublicPath } from './routes/share.js';
  */
 
 /** What Cloudflare Access is told to leave public, written as it wants them (path prefixes with a * wildcard). */
-export const PUBLIC_DESTINATIONS = ['/s/*', '/api/s/*', '/assets/*', '/icon.svg', '/portfolio', '/portfolio/*', '/privacy'];
+export const PUBLIC_DESTINATIONS = ['/s/*', '/api/s/*', '/assets/*', '/icon.svg', '/portfolio', '/portfolio/*', '/privacy', '/signin', '/signup', '/terms', '/api/public/auth/*'];
 
 export type AccessState = { appHost: string; aud: string; authDomain: string; emails: string[] };
 export const ACCESS_KEY = 'accessState';

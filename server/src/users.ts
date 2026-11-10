@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS guest_links (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', seen TEXT NOT NULL,
   PRIMARY KEY (user_id, token)
 );
+CREATE TABLE IF NOT EXISTS email_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, recipient TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', retry TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS email_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS email_codes_email ON email_codes(email);
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 `;
 
@@ -85,6 +91,15 @@ export function uniqueFolder(sys: DB, email: string, name: string): string {
 export function findByIdentity(sys: DB, provider: string, sub: string): User | null {
   const r = (sys.prepare('SELECT * FROM users WHERE provider = ? AND sub = ?').get(provider, sub)
     ?? sys.prepare('SELECT u.* FROM identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.sub = ?').get(provider, sub)) as Row | undefined;
+  return r ? toUser(r) : null;
+}
+
+/** The account whose address this is (the one they started with, or one linked later), however they signed in before. */
+export function findByEmail(sys: DB, email: string): User | null {
+  const e = email.trim().toLowerCase();
+  if (!e) return null;
+  const r = (sys.prepare("SELECT * FROM users WHERE lower(email) = ? AND provider != 'local' ORDER BY id LIMIT 1").get(e)
+    ?? sys.prepare('SELECT u.* FROM identities i JOIN users u ON u.id = i.user_id WHERE lower(i.email) = ? ORDER BY u.id LIMIT 1').get(e)) as Row | undefined;
   return r ? toUser(r) : null;
 }
 
