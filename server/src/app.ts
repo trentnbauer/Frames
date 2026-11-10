@@ -40,7 +40,7 @@ import { registerCloud } from './routes/cloud.js';
 import { registerPrivacy } from './privacy.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
-import { createPortfolioGate, isPortfolioPath, registerPortfolio } from './portfolio.js';
+import { createPortfolioGate, isPortfolioPath, portfolioHandleRewrite, registerPortfolio } from './portfolio.js';
 import { registerPhotos } from './routes/photos.js';
 import { createTunnelRunner, loadTunnel, registerTunnel } from './tunnel.js';
 import { applyEnvTunnel, readEnvTunnel, seedTunnelFromEnv } from './tunnelEnv.js';
@@ -62,7 +62,9 @@ const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
-  const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy });
+  // A person's portfolio can live at /handle/ (answered as /portfolio/ for them). The system database is opened below, so the rewrite looks it up when called.
+  let handleRewrite: (raw: { url?: string }) => string = (raw) => raw.url ?? '';
+  const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy, rewriteUrl: (raw) => handleRewrite(raw) });
   // A ceiling per visitor on everything, high enough that a grid of thousands of thumbnails never meets it, low enough to stop a flood.
   // (The sign-in, password and share-link routes have their own, much stricter limits.)
   void app.register(rateLimit, { global: false, max: 6000, timeWindow: '1 minute', allowList: (req) => req.url === '/api/health' });
@@ -81,6 +83,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   for (const p of applyEnvConfig(sys, ownerDb).problems) console.error(p);
   const db = tenantProxy<DB>(() => tenants.current().db);
   const cfg = tenantProxy<AppCfg>(() => tenants.currentOrNull()?.cfg ?? baseCfg);
+  handleRewrite = portfolioHandleRewrite(sys);
   const portfolioGate = createPortfolioGate(sys, tenants, baseCfg.webDir);
   const auth = createAuth(sys, baseCfg);
   const access = createAccessGate(sys, baseCfg.accessCertsBase);
