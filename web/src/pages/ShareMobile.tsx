@@ -27,7 +27,7 @@ export function usePhone(): boolean {
 
 type Props = {
   token: string;
-  d: { name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; layout?: Layout | null; viewer?: Viewer };
+  d: { name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; layout?: Layout | null; viewer?: Viewer; owner?: string };
   photos: SharedPhoto[]; wallPrints: Print[]; others: SharedPhoto[]; reviewer: string;
   withName: (then: (name: string) => void) => void; changeName: () => void;
   /** The guest's version, kept by the page: print's own photograph -> the candidate put in its place, and print id -> frame colour. */
@@ -209,7 +209,7 @@ export function ShareMobile(p: Props) {
         )}
         {canReview && (p.dirty || p.sendNote) && (
           <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5, color: p.sendNote && !p.sendNote.ok ? 'oklch(0.78 0.11 35)' : 'var(--text2)' }}>
-            {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send back to the photographer · ${p.changes}`}</button>}
+            {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send to ${p.d.owner || 'them'} · ${p.changes}`}</button>}
             {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Discard</button>}
             {p.sendNote && <span style={{ flex: '1 1 100%' }}>{p.sendNote.text}</span>}
           </div>
@@ -294,7 +294,7 @@ export function ShareMobile(p: Props) {
             <div role="dialog" aria-label="Suggest another" style={{ width: '100%', maxHeight: '82%', overflowY: 'auto', background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 16px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-                <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Suggest another</h2>
+                <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Try a different photo</h2>
                 <button onClick={() => setPicking(null)} style={{ minHeight: 44, fontSize: 14, color: 'var(--text2)' }}>Close</button>
               </div>
               <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>

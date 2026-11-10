@@ -26,4 +26,14 @@ describe('which AI does what', () => {
     await A.put('/api/ai/jobs/ideas', { on: false });
     expect(orderFor(env.db, 'ideas')).toEqual([]); // off means none
   });
+  it('tries the next provider when the first one errors, and throws only when all do', async () => {
+    const { tryEach } = await import('./ai.js');
+    await A.put('/api/ai/jobs/search', { order: ['a', 'b'], skip: [], on: true });
+    const used: string[] = [];
+    expect(await tryEach(env.db, 'search', async (c) => { used.push(c.name); if (c.name === 'One') throw new Error('offline'); return c.name; })).toBe('Two');
+    expect(used).toEqual(['One', 'Two']);
+    await expect(tryEach(env.db, 'search', async () => { throw new Error('down'); })).rejects.toThrow('down');
+    await A.put('/api/ai/jobs/search', { on: false });
+    expect(await tryEach(env.db, 'search', async (c) => c.name)).toBeNull(); // off: no AI
+  });
 });

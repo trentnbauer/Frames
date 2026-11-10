@@ -4,6 +4,9 @@ import { sessionUser, cleanAllow, createSession, endAllSessions, endSession, get
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
+import { notify } from '../notifications.js';
+import { queueMail } from '../mailEvents.js';
+import crypto from 'node:crypto';
 import { checkCode, checkSmtp, footer, issueCode, sendMail, smtpHealthy } from '../email.js';
 import { humanCookie } from '../turnstile.js';
 import fs from 'node:fs';
@@ -53,6 +56,33 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
   });
 
+  /**
+   * A sign-in from a device this person has not used before tells them (the bell, and an email if they asked for it; always for
+   * administrators). The first device ever is not news. Returns the cookies to set: the session, and the device marker.
+   */
+  const seenCookie = (req: any) => /(?:^|;\s*)frames_seen=([A-Za-z0-9_-]{16,40})/.exec(String(req.headers.cookie ?? ''))?.[1];
+  const withDevice = (req: any, user: User, session: string): string[] => {
+    const cookies = [session];
+    let dev = seenCookie(req);
+    if (!dev) { dev = crypto.randomBytes(16).toString('base64url'); cookies.push(`frames_seen=${dev}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${365 * 86400}${auth.isSecure(req) ? '; Secure' : ''}`); }
+    try {
+      db.exec('CREATE TABLE IF NOT EXISTS known_devices (user_id INTEGER NOT NULL, dev TEXT NOT NULL, first_seen TEXT NOT NULL, PRIMARY KEY (user_id, dev))');
+      const had = (db.prepare('SELECT COUNT(*) n FROM known_devices WHERE user_id = ?').get(user.id) as { n: number }).n;
+      const known = !!db.prepare('SELECT 1 FROM known_devices WHERE user_id = ? AND dev = ?').get(user.id, dev);
+      if (!known) {
+        db.prepare('INSERT INTO known_devices (user_id, dev, first_seen) VALUES (?,?,?)').run(user.id, dev, new Date().toISOString());
+        const t = had > 0 ? x.tenants.get(user.id) : null;
+        if (t) {
+          const ua = String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a new device';
+          const base = (loadAuth(db).publicUrl || auth.baseUrl(req)).replace(/\/+$/, '');
+          notify(t.db, 'sign-in', 'Someone signed in to your account from a new device', { screen: '/settings?section=profile' }, `si:${dev}`);
+          queueMail(x, t, 'sign-in', { type: 'signin', baseUrl: base, params: { subject: 'New sign-in to Frames', preheader: 'A new device signed in', eyebrow: 'Security', title: 'New sign-in', body: `Your account was just signed in on ${ua}. If that was you, there is nothing to do. If not, open Settings and sign out everywhere.`, button_label: 'Review your account', button_url: `${base}/settings?section=profile`, fine_print: 'You get this when a device you have not used before signs in.', image_url: '', image_alt: '', note: '', note_from: '' } });
+        }
+      }
+    } catch { /* never stop a sign-in over a notice */ }
+    return cookies;
+  };
+
   /** Lets an identity in (or not) and sets the session: the part of every sign-in that comes after "who is this". */
   const admit = (req: any, rep: any, who: Who, flow: { test?: boolean; returnTo: string; linkUser?: number; guest?: boolean }, via: 'redirect' | 'json' = 'redirect') => {
     const conf = loadAuth(db);
@@ -81,7 +111,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     // A signed-in session even for a test, so turning sign-in on never signs the person who tested it out.
     const token = createSession(db, user.id);
-    rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
+    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(token, auth.isSecure(req))));
     return rep.redirect(flow.test ? '/settings?section=access&access=tested' : flow.returnTo);
   };
 
@@ -131,7 +161,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (!emailOn()) return rep.code(404).send({ error: 'Signing in with an emailed code is not available here.' });
     const email = okEmail(b.email);
     if (!email) return rep.code(400).send({ error: 'Enter a valid email address.' });
-    if (sendLimited(`ip:${req.ip}`, 10, 600_000) || sendLimited(`e:${email}`, 5, 600_000)) return rep.code(429).send({ error: 'Too many codes asked for. Wait a few minutes and try again.' });
+    if (sendLimited(`ip:${req.ip}`, 20, 600_000) || sendLimited(`e:${email}`, 5, 600_000)) return rep.code(429).send({ error: 'Too many codes asked for. Wait a few minutes and try again.' });
     if (turnstileOn(db, 'signin') && !isHuman(db, req)) {
       const v = await verifyToken(db, b.turnstile, req.ip, cfg.turnstileUrl);
       if (v === 'bad') return rep.code(400).send({ error: 'Please complete the check to show you are a person.' });
@@ -168,7 +198,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const listed = !!conf.open || isAllowed(who, conf.allow) || invited;
     const user = existing ?? (listed || guestFlow(b) ? resolveUser(db, who, signupsOn(db, cfg.allowSignups !== false), !listed) : null);
     if (!user || user.disabled) return rep.code(403).send({ error: 'This address is not allowed to use this Frames. Ask the owner to add it.' });
-    rep.header('Set-Cookie', sessionCookie(createSession(db, user.id), auth.isSecure(req)));
+    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
     return { ok: true, returnTo: safeReturn(b.returnTo) };
   });
 

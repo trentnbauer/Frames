@@ -32,7 +32,25 @@ const SHAPES: Record<number, [string, Rect[], Mode, ('portrait' | 'landscape')[]
 export function optionsFor(n: number): Opt[] {
   const shapes = SHAPES[n];
   if (!shapes) return [{ key: `row${n}`, label: 'Row', mode: 'row', prints: Array.from({ length: n }, () => ['A5', 'portrait', 'A4'] as [string, 'portrait' | 'landscape', string | null]), rects: row(n) }];
-  return shapes.map(([label, rects, mode, orient], i) => ({ key: `s${n}-${i}`, label, mode, rects, prints: orient.map((o, k) => [mode === 'feature' && k === 0 ? 'A2' : n <= 2 ? 'A3' : 'A4', o, mode === 'feature' && k === 0 ? 'A2' : n <= 2 ? 'A3' : 'A3'] as [string, 'portrait' | 'landscape', string | null]) }));
+  return shapes.map(([label, rects, mode, orient], i) => ({ key: `s${n}-${i}`, label, mode, rects, prints: orient.map((o, k) => [mode === 'feature' && k === 0 ? 'A2' : n <= 2 ? 'A3' : 'A4', o, mode === 'feature' && k === 0 ? 'A2' : 'A3'] as [string, 'portrait' | 'landscape', string | null]) }));
+}
+
+/** The next larger frame size for a print (the frame the design shows around it). */
+const FRAME_FOR: Record<string, string> = { A5: 'A4', A4: 'A3', A3: 'A2', A2: 'A1', A1: 'A1' };
+
+/**
+ * The wall exactly as the card draws it: each rectangle becomes the standard size closest to it (its longer side in the same scale),
+ * in the right orientation, hung at the rectangle's place. Rows of seven or more have no picture and keep the plain row.
+ */
+export function wallFromRects(rects: Rect[]): Print[] {
+  const longest = Math.max(...rects.map(([, , w, h]) => Math.max(w, h)));
+  const k = 420 / longest; // the biggest print is about A3-A2 sized
+  const SIZES: [string, number][] = [['A5', 210], ['A4', 297], ['A3', 420], ['A2', 594], ['A1', 841]];
+  return rects.map(([x, y, w, h]) => {
+    const long = Math.max(w, h) * k;
+    const size = SIZES.reduce((best, c) => (Math.abs(c[1] - long) < Math.abs(best[1] - long) ? c : best))[0];
+    return { id: newPrintId(), size, orientation: h >= w ? 'portrait' : 'landscape', frame: { size: FRAME_FOR[size], mat: 'white', color: 'black' }, photoId: null, photoId2: null, stack: false, x: Math.round(x * k), y: Math.round(y * k) } as Print;
+  });
 }
 
 type Kind = 'subject' | 'tag' | 'colour';
@@ -84,9 +102,9 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const [name, setName] = useState(start.name ?? '');
   const [count, setCount] = useState(3);
   const [preset, setPreset] = useState<string>('row-p3');
-  const [mode, setMode] = useState<Mode>('row');
-  const [prints, setPrints] = useState<Print[]>(() => fromPreset(optionsFor(3)[0] as never));
-  const choose = (o: Opt) => { setPreset(o.key); setMode(o.mode); setPrints(fromPreset(o as never)); };
+  const [mode, setMode] = useState<Mode>('free');
+  const [prints, setPrints] = useState<Print[]>(() => wallFromRects(optionsFor(3)[0].rects));
+  const choose = (o: Opt) => { setPreset(o.key); if (SHAPES[o.prints.length]) { setMode('free'); setPrints(wallFromRects(o.rects)); } else { setMode(o.mode); setPrints(fromPreset(o as never)); } };
   const setN = (n: number) => { const c = Math.max(1, Math.min(12, n)); setCount(c); choose(optionsFor(c)[0]); };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -123,7 +141,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
       setAiMsg(n ? `The AI added ${n}. Take any away with ✕.` : 'The AI found nothing more that fits.');
     } catch (e) { setAiMsg((e as Error).message); } finally { setAiBusy(false); }
   };
-  const laid = arrange(prints, mode), wall = frameOf(laid, 0);
+  const laid = mode === 'free' ? prints : arrange(prints, mode), wall = frameOf(laid, 0);
   // Changing a print by hand makes the layout "custom"; a grid needs three prints or more.
   const custom = (fn: (q: Print[]) => void) => { const q = prints.map((p) => ({ ...p, frame: p.frame ? { ...p.frame } : null })); fn(q); setPreset('custom'); setPrints(q); setCount(q.length); if (mode === 'free' || (mode === 'grid' && q.length < 3)) setMode('row'); };
   const [found, setFound] = useState<number[]>([]);
@@ -147,7 +165,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     setBusy(true); setErr('');
     let created: Collection | null = null;
     try {
-      await api<Collection>('/collections', { body: { name: name.trim() || 'Untitled composition', photoIds: ids, layout: { mode, prints: arrange(prints, mode) } } }).then((c) => { created = c; });
+      await api<Collection>('/collections', { body: { name: name.trim() || 'Untitled composition', photoIds: ids, layout: { mode, prints: mode === 'free' ? prints : arrange(prints, mode) } } }).then((c) => { created = c; });
       onClose(); nav(`/collections/${created!.id}${ids.length ? '' : '?add=1'}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };

@@ -6,7 +6,7 @@ import { Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
 import { HumanCheck } from '../components/HumanCheck';
-import { WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
+import { FRAMES, WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
 import { PinGate } from './Auth';
@@ -34,6 +34,7 @@ export function SharePage() {
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
   const [over, setOver] = useState<number | null>(null); // the print a candidate is being dragged over
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
+  const [selPrint, setSelPrint] = useState(0);
   const [mine, setMine] = useState<Record<number, number>>({}); // print -> the candidate this guest suggested
   const [sugErr, setSugErr] = useState('');
   // The guest's version of the composition: photographs swapped in and frame colours changed. It lives here, on this page, and is shown on the
@@ -195,32 +196,47 @@ export function SharePage() {
           {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
           {sendNote && <div role="status" className={sendNote.ok ? 'muted' : 'reason'} style={{ marginBottom: 12, fontSize: 13 }}>{sendNote.text}</div>}
           {wallPrints.length > 0 && (
-            <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-              <Wall prints={viewPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
+            <div className="editor-grid">
+              <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 380, backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+                <Wall prints={viewPrints} mode="free" editing={false} sel={Math.min(selPrint, viewPrints.length - 1)} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => setSelPrint(i)} onEdit={(i) => setSelPrint(i)} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
+              </div>
+              {(() => {
+                const i = Math.min(selPrint, viewPrints.length - 1), pr = viewPrints[i], orig = wallPrints[i];
+                const pid = photosOf(pr)[0];
+                const cur = pid !== undefined ? photos.find((x) => x.id === pid) : undefined;
+                const swapped = pid !== undefined && Object.values(mine).includes(pid);
+                return (
+                  <aside aria-label="This print" style={{ background: 'var(--surface)', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="spread" style={{ alignItems: 'baseline' }}><span className="serif" style={{ fontSize: 28 }}>Print {i + 1}</span><span className="muted" style={{ fontSize: 13 }}>{cur ? cur.title : 'empty'}</span></div>
+                    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                      {cur ? <img src={imgUrl(cur.id, 'thumb', token)} alt="" style={{ height: 56, borderRadius: 3 }} /> : <i style={{ width: 44, height: 56, background: 'var(--bg)', borderRadius: 3 }} />}
+                      <span className="muted" style={{ fontSize: 13 }}>{d.allowReview && viewOthers.length ? 'Click a candidate below, or drag one onto the print.' : 'This is the print.'}</span>
+                    </div>
+                    {swapped && <button className="t2" style={{ textAlign: 'left', textDecoration: 'underline' }} onClick={() => { const o = photosOf(orig)[0]; if (o !== undefined) swap(o, null); }}>Put the original photo back</button>}
+                    <div className="spread"><span className="eyebrow">Print size</span><span style={{ fontSize: 14 }}>{sizeLabel(pr)}</span></div>
+                    <div className="spread"><span className="eyebrow">Orientation</span><span style={{ fontSize: 14, textTransform: 'capitalize' }}>{pr.orientation}</span></div>
+                    {pr.frame ? (
+                      <>
+                        <div className="spread" style={{ alignItems: 'center' }}><span style={{ fontSize: 14 }}>Colour</span>
+                          <span style={{ display: 'flex', gap: 8 }}>{Object.keys(FRAMES).map((k) => <button key={k} title={k} aria-label={`${k} frame`} aria-pressed={pr.frame!.color === k} disabled={!d.allowReview || !d.allowSuggest} onClick={() => setFrame(pr.id, orig.frame && orig.frame.color === k ? null : k)} style={{ width: 24, height: 24, borderRadius: '50%', background: FRAMES[k], boxShadow: pr.frame!.color === k ? '0 0 0 2px var(--surface), 0 0 0 4px var(--text)' : 'inset 0 0 0 1px var(--hair)', opacity: d.allowReview && d.allowSuggest ? 1 : 0.6 }} />)}</span>
+                        </div>
+                        <div className="muted" style={{ fontSize: 13 }}>{pr.frame.color} {sizeLabel({ ...pr, size: pr.frame.size })} frame, {pr.frame.mat} mat around the {sizeLabel(pr)} print</div>
+                      </>
+                    ) : <div className="muted" style={{ fontSize: 13 }}>Hung as a poster, no frame.</div>}
+                    {d.allowReview && d.allowSuggest && d.layout && <button className="btn outline" style={{ alignSelf: 'flex-start' }} onClick={() => withName(() => setRelayout(true))}>{relayoutSent ? 'Layout idea sent' : 'Suggest a different layout…'}</button>}
+                  </aside>
+                );
+              })()}
             </div>
           )}
-          {d.allowReview && viewOthers.length > 0 && <p className="muted" style={{ fontSize: 12.5, margin: '0 0 16px' }}>Drag a photograph from the candidates onto a print to try it there.</p>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
-            {wallPrints.flatMap((pr, n) => photosOf(pr).map((pid) => ({ pr, n, p: photos.find((x) => x.id === pid) })).filter((x) => !!x.p)).map(({ n, p }) => {
-              const sug = mine[p!.id] !== undefined ? photos.find((x) => x.id === mine[p!.id]) : null;
-              return (
-                <div key={p!.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5 }}>
-                  <button onClick={() => setLook(photos.indexOf(p!))} aria-label={`Open ${p!.title}`}><img src={imgUrl(p!.id, 'thumb', token)} alt="" style={{ height: 40, borderRadius: 3, display: 'block' }} /></button>
-                  <span className="muted">Print {n + 1} · {sizeLabel(wallPrints[n])} · {p!.title}</span>
-                  {d.allowReview && viewOthers.length > 0 && (sug ? (
-                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><img src={imgUrl(sug.id, 'thumb', token)} alt="" style={{ height: 28, borderRadius: 3 }} /><span className="muted">In your version instead</span><button className="t2" onClick={() => swap(p!.id, null)}>Undo</button></span>
-                  ) : <button className="t2" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => withName(() => setPicking(p!.id))}>Suggest another</button>)}
-                </div>
-              );
-            })}
-          </div>
+          {d.allowReview && viewOthers.length > 0 && <p className="muted" style={{ fontSize: 13, margin: '12px 0 14px' }}>The photos {d.owner || 'they'} shortlisted · click one to put it in Print {Math.min(selPrint, viewPrints.length - 1) + 1}, or drag it onto a print.</p>}
           {sugErr && <p className="reason" role="alert">{sugErr}</p>}
           {viewOthers.length > 0 && <div className="label" style={{ marginBottom: 12 }}>Other candidates</div>}
         </>
       )}
       <div className="just">
         {(showPrints ? viewOthers : photos).map((p) => (
-          <button key={p.id} draggable={d.allowReview && showPrints} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(p.id)); e.dataTransfer.effectAllowed = 'move'; }} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => setLook(photos.indexOf(p))} aria-label={`Open ${p.title}`}><Img p={p} /></button>
+          <button key={p.id} draggable={d.allowReview && showPrints} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(p.id)); e.dataTransfer.effectAllowed = 'move'; }} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar) }} onClick={() => { const target = showPrints && d.allowReview && d.allowSuggest ? photosOf(wallPrints[Math.min(selPrint, wallPrints.length - 1)] ?? { photoId: null, photoId2: null, stack: false } as never)[0] : undefined; if (target !== undefined) withName(() => swap(target, p.id)); else setLook(photos.indexOf(p)); }} aria-label={`Open ${p.title}`}><Img p={p} /></button>
         ))}
         <i />
       </div>

@@ -26,7 +26,7 @@ export function queueMail(x: Ctx, t: Tenant, kind: Kind, m: { type: MailType; pa
   const email = t.user.email;
   if (!email || !smtpHealthy(x.sys)) return false;
   const prefs = prefsOf(t.db);
-  if (prefs.email[kind] !== true) return false;
+  if (prefs.email[kind] !== true && !(kind === 'sign-in' && t.user.role === 'admin')) return false; // a new sign-in is always told to an administrator
   ensureOutbox(x.sys);
   const owner = x.tenants.owner().user.name;
   const params = { ...footer(x.sys, owner, m.baseUrl), name: (t.user.name || '').split(' ')[0] || 'there', ...m.params };

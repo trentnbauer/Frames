@@ -363,6 +363,15 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const existing = chosen ? undefined : getSession();
     if (existing && existing.index < existing.queue.length) return existing;
     let ids = chosen ?? dueIds(); // oldest review first
+    if (!chosen) {
+      const st = loadSettings(db);
+      // New shoots first: photographs from the newest photoshoots jump the queue (the order inside a shoot is kept).
+      if (st.newShootsFirst && ids.length > 1) {
+        const at = new Map((db.prepare('SELECT p.id, s.imported_at t FROM photos p JOIN shoots s ON s.id = p.shoot_id').all() as { id: number; t: string }[]).map((r) => [r.id, r.t]));
+        ids = [...ids].sort((x, y) => String(at.get(y) ?? '').localeCompare(String(at.get(x) ?? '')));
+      }
+      ids = ids.slice(0, st.reviewSize); // one review is a short session
+    }
     if (!chosen && ids.length === 0 && body.early === true) ids = oldestIds(); // nothing due, and the person asked to begin anyway
     const s: Session = {
       runId: crypto.randomUUID(), index: 0, ratings: {}, notes: {},
