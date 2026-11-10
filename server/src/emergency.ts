@@ -13,7 +13,9 @@ export const EMERGENCY_PROVIDER = 'emergency';
 export const EMERGENCY_MINUTES = 5;
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const word = (n: number) => Array.from(crypto.randomBytes(n), (b) => ALPHABET[b % ALPHABET.length]).join('');
-const hashOf = (s: string) => crypto.createHash('sha256').update(s).digest();
+// A slow, salted hash, even though the password is long and random: it is the one thing here that stands in for a sign-in.
+const SALT = crypto.randomBytes(16);
+const hashOf = (s: string) => crypto.scryptSync(s, SALT, 32);
 
 type Live = { userId: number; username: string; hash: Buffer; used: boolean; wrong: number; timer: NodeJS.Timeout };
 let live: Live | null = null;
