@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
-import { FRAMES, MATS, or } from '../layout';
+import { miniWall, printsSummary } from './walls';
 import { useStore } from '../store';
 import { Header } from '../components/Shell';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
@@ -37,19 +37,6 @@ function useCarousel(n: number, ms: number, offset = 0) {
   }); // eslint-disable-line react-hooks/exhaustive-deps
   return { i: n ? i % n : 0, fade, go, pause: () => { paused.current = true; }, resume: () => { paused.current = false; } };
 }
-
-/** The miniature wall in "Pick up where you left off": the prints at a common scale, with their frames, mats and photographs. */
-function miniWall(c: Collection) {
-  const prints = c.layout.prints;
-  const totalW = prints.reduce((n, p) => n + or(p.size, p.orientation)[0], 0);
-  const k = Math.min(0.2, 340 / Math.max(totalW, 1));
-  return prints.map((p) => {
-    const [w, h] = or(p.size, p.orientation);
-    const fr = p.frame;
-    return { w: `${Math.round(w * k)}px`, h: `${Math.round(h * k)}px`, frame: fr && fr.color !== 'none' ? FRAMES[fr.color] : 'transparent', mat: fr ? MATS[fr.mat] : 'transparent', matPad: fr && fr.size !== p.size ? '7px' : '0', img: p.photoId ? `url(${thumb(p.photoId)}) center/cover` : 'rgba(0,0,0,.18)', empty: p.photoId ? 'none' : 'inset 0 0 0 1px rgba(239,237,232,.6)' };
-  });
-}
-const printsSummary = (c: Collection) => { const sizes = new Map<string, number>(); c.layout.prints.forEach((p) => sizes.set(p.size, (sizes.get(p.size) ?? 0) + 1)); return [...sizes].map(([s, n]) => (n > 1 ? `${n} × ${s}` : s)).join(' + '); };
 
 export function Home() {
   const { summary: s, me } = useStore();

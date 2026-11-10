@@ -17,6 +17,7 @@ import type { AppCfg, Ctx, Row } from './ctx.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, pending, scan } from './ingest.js';
 import { parseTarget } from './target.js';
+import { printSheetPdf, type SheetLine } from './printSheet.js';
 import { chosenOf, deriveLayout, parseLayout, targetOf, type Layout } from './layout.js';
 import { addDays, nextIntervalDays } from './schedule.js';
 import { remoteOriginal } from './cloud.js';
@@ -443,6 +444,20 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.get('/api/collections/:id', async (req, rep) => {
     const c = one('SELECT * FROM collections WHERE id = ?', num((req.params as Row).id));
     return c ? collectionDto(c) : notFound(rep);
+  });
+  // The print sheet: what to order, print by print (sizes, frames, the photograph in each), as a one-page PDF.
+  app.get('/api/collections/:id/print-sheet', async (req, rep) => {
+    const c = one('SELECT * FROM collections WHERE id = ?', num((req.params as Row).id));
+    if (!c) return notFound(rep);
+    const dto = collectionDto(c);
+    const lines: SheetLine[] = [{ text: dto.name, size: 20, bold: true }, { text: `Print sheet - ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}`, size: 10 }, { text: '' }];
+    dto.layout.prints.forEach((p, i) => {
+      const ph = p.photoId ? one('SELECT title, file, w, h FROM photos WHERE id = ?', p.photoId) : undefined;
+      const frame = p.frame ? `${p.frame.color} ${p.frame.size} frame${p.frame.size !== p.size ? `, ${p.frame.mat} mat` : ', no mat'}` : 'poster, no frame';
+      lines.push({ text: `Print ${i + 1}: ${p.size} ${p.orientation}${p.stack ? ' (two stacked)' : ''} - ${frame}`, bold: true });
+      lines.push({ text: ph ? `   ${ph.title || ph.file} (${ph.w} x ${ph.h} px)` : '   No photograph chosen yet' });
+    });
+    return rep.header('Content-Type', 'application/pdf').header('Content-Disposition', `attachment; filename="${String(dto.name).replace(/[^\w .-]/g, '_')} print sheet.pdf"`).header('Cache-Control', 'no-store').send(printSheetPdf(lines));
   });
   app.patch('/api/collections/:id', async (req, rep) => {
     const id = num((req.params as Row).id);

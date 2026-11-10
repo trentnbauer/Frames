@@ -198,3 +198,6 @@ export function findPhoto(prints: Print[], pid: number): { index: number; slot: 
 }
 /** Every photograph the layout holds, in print order. */
 export const chosenIn = (prints: Print[]): number[] => prints.flatMap(photosOf);
+
+/** Every print holds all the photographs it takes: the composition is ready to export. */
+export const isFull = (prints: Print[]) => prints.length > 0 && prints.every((p) => photosOf(p).length === (p.stack ? 2 : 1));

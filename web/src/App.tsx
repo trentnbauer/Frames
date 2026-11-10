@@ -12,7 +12,8 @@ import { GoContext } from './proto/runtime';
 import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
 import { Shoots } from './screens/Shoots';
-import { Collections, CollectionDetail } from './pages/Collections';
+import { Compositions } from './screens/Compositions';
+import { CollectionDetail } from './pages/Collections';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare } from './pages/Compare';
@@ -78,7 +79,7 @@ function Shell() {
         <Route path="/shoots/:id" element={<Shoots />} />
         <Route path="/compare" element={<Compare />} />
         <Route path="/duplicates" element={<Duplicates />} />
-        <Route path="/collections" element={<Collections />} />
+        <Route path="/collections" element={<Compositions />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
         <Route path="/gear" element={<Gear />} />
