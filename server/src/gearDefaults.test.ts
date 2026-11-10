@@ -65,3 +65,14 @@ describe('camera defaults', () => {
     expect(await dto(0)).toMatchObject({ medium: 'digital', film: '', camera: 'Holga' }); // hand-set digital: no film stock
   });
 });
+
+describe('changing a shoot\'s place or camera for every photograph', () => {
+  it('overwrites photographs that had their own value, only when asked', async () => {
+    await A.post(`/api/shoots/${shootA}/move`, { photoIds: [ids[0], ids[1]] });
+    await A.patch(`/api/photos/${ids[1]}`, { camera: 'Own Camera', place: 'Own Place' });
+    await A.patch(`/api/shoots/${shootA}`, { place: 'Mill Market', gear: { camera: 'Noritsu', lens: '', medium: '', film: '' } });
+    expect(await dto(1)).toMatchObject({ camera: 'Own Camera', place: 'Own Place' }); // without the flag a photograph's own value stays
+    await A.patch(`/api/shoots/${shootA}`, { place: 'Mill Market', gear: { camera: 'Noritsu', lens: '', medium: '', film: '' }, overwrite: true });
+    for (const k of [0, 1]) expect(await dto(k)).toMatchObject({ camera: 'Noritsu', place: 'Mill Market' });
+  });
+});

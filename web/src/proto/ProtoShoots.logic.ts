@@ -8,7 +8,7 @@ import { DCLogic } from './runtime';
 const spin = () => React.createElement('i', { style: { width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block', flex: 'none' } });
 
 export class Logic extends DCLogic {
-  state = { selMode: false, picked: [], mv: null, up: false, phase: 'pick', prog: 0, mode: 'new', name: '', split: false, existing: null, src: null, clouds: {}, cs: 'idle', found: 0, drag: false, shootFilter: 'all', shootSort: 'time', shootName: null, toast: '', tOp: 0 };
+  state = { selMode: false, picked: [], mv: null, up: false, phase: 'pick', prog: 0, mode: 'new', name: '', split: false, existing: null, src: null, clouds: {}, cs: 'idle', found: 0, drag: false, shootFilter: 'all', shootSort: 'time', shootName: null, shootEdit: null, toast: '', tOp: 0 };
   componentDidMount() { if (this.props.uploadReq) this.open(); }
   componentDidUpdate(pp) { if (this.props.uploadReq && this.props.uploadReq !== pp.uploadReq) this.open(); }
   componentWillUnmount() { clearTimeout(this.tT); }
@@ -68,7 +68,15 @@ export class Logic extends DCLogic {
       inShoot: true,
       sv: {
         name: S.shootName != null ? S.shootName : sh.name, onName: (e) => this.setState({ shootName: e.target.value }), onNameBlur: () => { if (S.shootName != null && S.shootName.trim() && S.shootName !== sh.name) P.onRename(S.shootName.trim()); },
-        place: sh.place, dates: sh.dates, kit: sh.kit, unrated: photos.length - rated.length,
+        place: sh.place, dates: sh.dates, kit: sh.kit,
+        ...(() => { // the place and camera in the heading: click to edit, saved on leaving the box, and applied to every photograph in the shoot
+          const ed = S.shootEdit && S.shootEdit.id === sh.id ? S.shootEdit : { id: sh.id };
+          const set = (k, v) => this.setState({ shootEdit: { ...ed, id: sh.id, [k]: v } });
+          const done = (k, cur, save) => { const v = ed[k]; if (v != null && v.trim() !== cur) save(v.trim()); };
+          return { placeVal: ed.place ?? sh.placeVal, onPlace: (e) => set('place', e.target.value), onPlaceBlur: () => done('place', sh.placeVal, P.onPlace),
+            camVal: ed.cam ?? sh.camVal, onCam: (e) => set('cam', e.target.value), onCamBlur: () => done('cam', sh.camVal, P.onCamera),
+            onEnter: (e) => { if (e.key === 'Enter') e.target.blur(); }, kitRest: sh.kitRest }; })(),
+        unrated: photos.length - rated.length,
         aiLabel: ai === 'busy' ? 'Analyzing…' : ai === 'done' ? '✓ Analyzed' : '✦ Analyze with AI', aiFg: ai === 'busy' ? 'var(--text2)' : 'var(--text)', aiSpin: ai === 'busy' ? spin() : null,
         ai: async () => { if (ai === 'busy' || !P.aiOn) { if (!P.aiOn) this.flash('AI is off. Turn it on in Settings.'); return; } const msg = await P.onAnalyse(); if (msg) this.flash(msg); },
         startReview: () => P.onStartReview(), compose: () => P.onCompose(),
