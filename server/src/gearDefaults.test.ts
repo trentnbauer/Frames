@@ -74,5 +74,7 @@ describe('changing a shoot\'s place or camera for every photograph', () => {
     expect(await dto(1)).toMatchObject({ camera: 'Own Camera', place: 'Own Place' }); // without the flag a photograph's own value stays
     await A.patch(`/api/shoots/${shootA}`, { place: 'Mill Market', gear: { camera: 'Noritsu', lens: '', medium: '', film: '' }, overwrite: true });
     for (const k of [0, 1]) expect(await dto(k)).toMatchObject({ camera: 'Noritsu', place: 'Mill Market' });
+    await A.patch(`/api/shoots/${shootA}`, { place: 'Geelong Mill', placeInfo: { address: '1 Mill St', kind: 'business', lat: -38.1, lon: 144.3, precision: 'suburb' }, overwrite: true });
+    expect(await dto(1)).toMatchObject({ place: 'Geelong Mill', placeAddress: '1 Mill St', placeKind: 'business', placePrecision: 'suburb' });
   });
 });
