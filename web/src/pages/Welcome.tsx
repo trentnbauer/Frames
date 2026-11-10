@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { Header } from '../components/bits';
+import { Mark } from '../components/bits';
 import { useStore } from '../store';
 
 /** A short tour for someone new: bringing photographs in, photoshoots and compositions, how reviewing works, and sharing for others to review. */
@@ -67,19 +67,17 @@ export function Welcome() {
   const last = i === steps.length - 1;
   return (
     <div className="page">
-      <Header />
+      <div className="lockup" style={{ marginBottom: 8 }}><Mark />Frames</div>
       <div style={{ maxWidth: 640, marginTop: 24 }}>
         <div className="faint" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>Welcome to Frames · {i + 1} of {steps.length}</div>
         <h1 className="serif" style={{ fontSize: 52, lineHeight: 1.05, margin: '10px 0 18px' }}>{s.title}</h1>
         <div className="t2" style={{ fontSize: 14.5, lineHeight: 1.6 }}>{s.body}</div>
-        {s.actions && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0 6px' }}>{s.actions}</div>}
         <div style={{ display: 'flex', gap: 8, margin: '26px 0 18px' }} role="tablist" aria-label="Steps">
           {steps.map((_, k) => <button key={k} role="tab" aria-selected={k === i} aria-label={`Step ${k + 1}`} onClick={() => setI(k)} style={{ width: 8, height: 8, borderRadius: '50%', background: k === i ? 'var(--text)' : 'var(--outline)' }} />)}
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          {i > 0 && <button className="pill" onClick={() => setI(i - 1)}>Back</button>}
+          {i > 0 ? <button className="pill" onClick={() => setI(i - 1)}>Back</button> : <button className="pill" onClick={finish}>Skip</button>}
           {last ? <button className="pill primary" onClick={finish}>Start using Frames</button> : <button className="pill primary" onClick={() => setI(i + 1)}>Next</button>}
-          {!last && <button className="t2" onClick={finish}>Skip the tour</button>}
         </div>
       </div>
     </div>

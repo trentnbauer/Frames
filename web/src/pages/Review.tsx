@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, useApi } from '../api';
 import { RATINGS } from '../data';
 import { useStore } from '../store';
 import { Fit, Loading, useKey } from '../components/bits';
-import { AddToComposition } from '../components/AddToComposition';
+import { CompPicker } from '../components/AddToComposition';
+import type { Collection } from '../data';
 
 type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
 
@@ -26,6 +27,13 @@ export function Review() {
     })().then(setS).catch((e: Error) => setError(e.message));
   }, []);
 
+  const colls = useApi<Collection[]>('/collections');
+  // After a high rating, offer the best-fit composition: the open one worked on most recently that does not hold the photo yet.
+  const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
+  const [picker, setPicker] = useState<number | null>(null);
+  const bestFit = (photoId: number) => [...(colls.data ?? [])].filter((c) => !c.printedAt && !c.photoIds.includes(photoId)).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id)[0] ?? null;
+  const addOffer = async () => { if (!offer) return; await api(`/collections/${offer.comp.id}/photos/${offer.id}`, { method: 'PUT' }); setMsg(`Added to “${offer.comp.name}” as a candidate.`); setOffer(null); colls.reload(); };
+  useEffect(() => { if (!offer) return; const t = setTimeout(() => setOffer(null), 6000); return () => clearTimeout(t); }, [offer]);
   const done = !!s && s.index >= s.queue.length;
   const cur = s && !done ? s.queue[s.index] : null;
 
@@ -38,6 +46,8 @@ export function Review() {
     const before = s;
     setNoting(false); setMsg('');
     setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
+    const fit = n >= 4 ? bestFit(cur.id) : null;
+    setOffer(fit ? { id: cur.id, comp: fit } : null);
     api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } })
       .then(() => refreshSummary())
       .catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
@@ -57,12 +67,13 @@ export function Review() {
   useKey((e) => {
     if (!s || (e.target as HTMLElement)?.tagName === 'INPUT') return; // typing a composition name
     if (done) { if (e.key === 'Escape') leave(); return; }
-    if (/^[1-5]$/.test(e.key)) rate(Number(e.key));
+    if (e.key.toLowerCase() === 'a' && offer) { e.preventDefault(); void addOffer(); }
+    else if (/^[1-5]$/.test(e.key)) rate(Number(e.key));
     else if (e.key.toLowerCase() === 'n') { e.preventDefault(); setNoting(true); }
     else if (e.key === 'ArrowLeft') move(Math.max(0, s.index - 1));
     else if (e.key === ' ') { e.preventDefault(); move(s.index + 1); }
     else if (e.key === 'Escape') leave(); // progress is already saved
-  }, [s, done]);
+  }, [s, done, offer]);
 
   if (error) return <div className="review-screen"><Loading error={error} /></div>;
   if (!s) return <div className="review-screen"><Loading /></div>;
@@ -114,10 +125,21 @@ export function Review() {
       {cur && (
         <div style={{ position: 'absolute', top: 24, right: 28, display: 'flex', gap: 10, alignItems: 'center', fontSize: 12.5 }}>
           {msg && <span className="t2" role="status">{msg}</span>}
-          <AddToComposition label="Add to composition" ids={[cur.id]} onDone={setMsg} />
+          <button className="pill" onClick={() => setPicker(cur.id)}>Add to composition</button>
           <button className="pill" onClick={remove}>Delete</button>
         </div>
       )}
+      {offer && (
+        <div className="toast" role="status" style={{ top: 'auto', bottom: 150, width: 380 }}>
+          <div style={{ marginBottom: 10 }}>Nice one. Add it to <b style={{ fontWeight: 500 }}>{offer.comp.name}</b>?</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button className="btn primary" style={{ height: 34 }} onClick={addOffer}>Add <span className="mono" style={{ fontSize: 11, opacity: .7, marginLeft: 6 }}>A</span></button>
+            <button className="btn outline" style={{ height: 34 }} onClick={() => { setPicker(offer.id); setOffer(null); }}>Choose…</button>
+            <button className="muted" onClick={() => setOffer(null)}>Not now</button>
+          </div>
+        </div>
+      )}
+      {picker !== null && <CompPicker ids={[picker]} onClose={() => setPicker(null)} onDone={(m) => { setMsg(m); colls.reload(); }} />}
       {saveErr && <div className="reason" role="alert" style={{ position: 'absolute', bottom: 100, left: 0, right: 0, textAlign: 'center' }}>{saveErr}</div>}
       {noting && cur && (
         <div className="notebox">

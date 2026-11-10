@@ -9,6 +9,7 @@ import { useUi } from '../ui';
 
 type Parsed = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
 type Chip = { key: string; label: string };
+type Meta = { chips: { key: string; kind: string; label: string; param: string; value: string }[]; files: { id: number; file: string; camera: string; date: string }[] };
 
 /**
  * AI off: filename, metadata, tag and place search.
@@ -31,6 +32,7 @@ export function Search({ onClose }: { onClose: () => void }) {
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [note, setNote] = useState('');
   const places = useApi<{ name: string; n: number }[]>('/places');
+  const [meta, setMeta] = useState<Meta>({ chips: [], files: [] });
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
   useEffect(() => {
@@ -50,11 +52,13 @@ export function Search({ onClose }: { onClose: () => void }) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const placeHits = words.length ? (places.data ?? []).filter((p) => words.every((w) => p.name.toLowerCase().includes(w))).slice(0, 6) : [];
   const live = chips.filter((c) => !removed.includes(c.key));
+  const metaLive = meta.chips.filter((c) => !removed.includes(c.key));
 
-  const params = () => {
+  const params = (metaNow: Meta['chips'] = metaLive) => {
     const p = new URLSearchParams();
     const text = parsed?.text || q;
-    if (text.trim()) p.set('q', text.trim());
+    if (text.trim() && metaNow.length === 0) p.set('q', text.trim());
+    for (const c of metaNow) p.set(c.param, c.value);
     if (parsed) {
       if (!removed.includes('subjects') && parsed.subjects.length) p.set('subject', parsed.subjects.join(','));
       if (!removed.includes('exclude') && parsed.exclude.length) p.set('exclude', parsed.exclude.join(','));
@@ -67,16 +71,18 @@ export function Search({ onClose }: { onClose: () => void }) {
 
   // Debounced: understand the sentence, then search.
   useEffect(() => {
-    if (!q.trim()) { setResults([]); setParsed(null); setCount(0); return; }
+    if (!q.trim()) { setResults([]); setParsed(null); setCount(0); setMeta({ chips: [], files: [] }); return; }
     setBusy(true);
     const t = setTimeout(async () => {
       try {
+        const mm = await api<Meta>(`/search/meta?q=${encodeURIComponent(q)}`).catch(() => ({ chips: [], files: [] } as Meta));
+        setMeta(mm);
         let pr = parsed;
         if (ai && !parsed) {
           pr = (await api<{ parsed: Parsed | null }>('/search/parse', { body: { q } }).catch(() => ({ parsed: null }))).parsed;
           setParsed(pr);
         }
-        const p = params();
+        const p = params(mm.chips.filter((c) => !removed.includes(c.key)));
         // Subject chips narrow the search; the sentence itself still ranks by meaning.
         const r = await api<{ photos: PhotoLite[]; count: number; semantic: boolean }>(`/photos?${p}`);
         setResults(r.photos); setCount(r.count); setSemantic(r.semantic);
@@ -95,7 +101,9 @@ export function Search({ onClose }: { onClose: () => void }) {
         <input ref={ref} value={q} onChange={(e) => { setQ(e.target.value); setParsed(null); setRemoved([]); }} onKeyDown={(e) => { if (e.key === 'Enter') openAll(); }}
           placeholder={ai ? 'Describe what you are looking for…' : 'Search filenames, metadata, places and tags…'} aria-label="Search query"
           style={{ width: '100%', background: 'none', border: 0, outline: 'none', font: "400 30px/1.2 'Instrument Serif',Georgia,serif", marginBottom: 14, padding: 0 }} />
+        {(live.length > 0 || metaLive.length > 0) && <div className="eyebrow" style={{ marginBottom: 8 }}>Understood as</div>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {metaLive.map((c) => <span key={c.key} className="chip">{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved((r) => [...r, c.key])}>✕</button></span>)}
           {live.map((c) => <span key={c.key} style={{ display: 'inline-flex', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)' }}>{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved([...removed, c.key])} style={{ color: 'var(--muted)' }}>✕</button></span>)}
         </div>
         {placeHits.length > 0 && (
@@ -108,6 +116,13 @@ export function Search({ onClose }: { onClose: () => void }) {
           {results.length > 0 && <button style={{ color: 'var(--text2)' }} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>}
           <span style={{ color: 'var(--faint)' }}>{ai ? (semantic ? 'Ranked by meaning' : 'AI on · text match') : 'AI off · filename, metadata, place and tag search'}</span>
         </div>
+        {meta.files.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Files</div>
+            {meta.files.slice(0, 6).map((f) => <button key={f.id} className="mi" style={{ height: 32 }} onClick={() => { onClose(); nav(`/photo/${f.id}`); }}><span className="mono" style={{ fontSize: 12.5 }}>{f.file}</span><span className="meta">{[f.camera, f.date].filter(Boolean).join(' · ')}</span></button>)}
+          </div>
+        )}
+        {!busy && q.trim() && results.length === 0 && meta.files.length === 0 && <p className="muted" style={{ margin: '12px 0', fontSize: 13.5 }}>Nothing matches. Try fewer words, or remove a filter.</p>}
         {results.length ? <Justified photos={results.slice(0, 10)} h={110} {...(selecting ? { picked, onTick: (p: PhotoLite) => setPicked((x) => { const n = new Set(x); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }) } : { onPick: (p: PhotoLite) => { onClose(); nav(`/photo/${p.id}`); } })} /> : <div className="empty">{q.trim() && !busy ? 'Nothing matches.' : 'Start typing to search.'}</div>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--hair)' }}>
           <button disabled={ids.length === 0} onClick={() => { onClose(); openNew({ name: (parsed?.text || q).trim().replace(/^./, (c) => c.toUpperCase()) || 'From search', photoIds: ids }); }} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: ids.length ? 1 : 0.5 }}>Create composition from {ids.length} {picked.size ? 'selected' : ids.length === 1 ? 'result' : 'results'}</button>
