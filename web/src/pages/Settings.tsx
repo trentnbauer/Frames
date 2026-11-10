@@ -13,7 +13,7 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
-import { CloudOriginalsAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
+import { AiJobs, CloudOriginalsAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
 import { GearDefaults } from '../components/GearDefaults';
 
 type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
@@ -166,7 +166,7 @@ export function SettingsPage() {
           {shown === 'Notifications' && <NotificationSettings />}
           {shown === 'Email' && <EmailSettings />}
           {shown === 'Reviews' && <><Reviews s={s} save={save} /><CommunitySettings /></>}
-          {shown === 'AI' && <AiSettings />}
+          {shown === 'AI' && <><AiSettings /><AiJobs /></>}
           {shown === 'Shared AI' && <AiSettings server />}
           {shown === 'Libraries & storage' && <><Libraries /><CloudOriginalsAdmin /></>}
           {shown === 'Portfolio' && <PortfolioSettings />}

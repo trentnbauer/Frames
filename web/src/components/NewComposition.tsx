@@ -13,27 +13,26 @@ const ring = 'inset 0 0 0 1px var(--outline)';
 const opt = (on: boolean) => ({ background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
 
 
-type Opt = { key: string; label: string; mode: Mode; prints: [string, 'portrait' | 'landscape', string | null][] };
+type Rect = [number, number, number, number];
+type Opt = { key: string; label: string; mode: Mode; prints: [string, 'portrait' | 'landscape', string | null][]; /** The picture on the card, in a 100 x 64 box. */ rects: Rect[] };
+const row = (k: number): Rect[] => { const g = 1.2, w = Math.min(14, (96 - g * (k - 1)) / k), h = Math.min(w * 1.4, 40), x0 = (100 - (w * k + g * (k - 1))) / 2; return Array.from({ length: k }, (_, i) => [x0 + i * (w + g), (64 - h) / 2, w, h] as Rect); };
+/** [label, picture, layout mode, orientation of each print] for 1 to 6 prints, as the design draws them. */
+const SHAPES: Record<number, [string, Rect[], Mode, ('portrait' | 'landscape')[]][]> = {
+  1: [['Portrait', [[33, 8, 34, 48]], 'row', ['portrait']], ['Landscape', [[22, 12, 56, 40]], 'row', ['landscape']], ['Square', [[30, 12, 40, 40]], 'row', ['portrait']], ['Panorama', [[8, 20, 84, 24]], 'row', ['landscape']]],
+  2: [['Side by side', [[22, 10, 26, 44], [52, 10, 26, 44]], 'row', ['portrait', 'portrait']], ['Stacked', [[32, 3, 36, 27], [32, 34, 36, 27]], 'grid', ['landscape', 'landscape']], ['Big and small', [[18, 6, 38, 52], [60, 26, 22, 32]], 'feature', ['portrait', 'portrait']], ['Landscape pair', [[8, 16, 40, 30], [52, 16, 40, 30]], 'row', ['landscape', 'landscape']]],
+  3: [['Row', [[12, 14, 22, 36], [39, 14, 22, 36], [66, 14, 22, 36]], 'row', ['portrait', 'portrait', 'portrait']], ['Column', [[36, 2, 28, 18], [36, 23, 28, 18], [36, 44, 28, 18]], 'grid', ['landscape', 'landscape', 'landscape']], ['Feature + 2', [[14, 6, 40, 52], [58, 6, 26, 24], [58, 34, 26, 24]], 'feature', ['landscape', 'portrait', 'portrait']], ['Centre feature', [[8, 18, 22, 28], [34, 6, 32, 52], [70, 18, 22, 28]], 'feature', ['portrait', 'portrait', 'portrait']]],
+  4: [['Grid 2 × 2', [[28, 2, 20, 28], [52, 2, 20, 28], [28, 34, 20, 28], [52, 34, 20, 28]], 'grid', ['portrait', 'portrait', 'portrait', 'portrait']], ['Row', [[6, 16, 20, 32], [29, 16, 20, 32], [52, 16, 20, 32], [75, 16, 20, 32]], 'row', ['portrait', 'portrait', 'portrait', 'portrait']], ['Feature + 3', [[14, 4, 40, 56], [58, 4, 26, 17], [58, 23.5, 26, 17], [58, 43, 26, 17]], 'feature', ['portrait', 'landscape', 'landscape', 'landscape']], ['Landscape grid', [[18, 6, 30, 24], [52, 6, 30, 24], [18, 34, 30, 24], [52, 34, 30, 24]], 'grid', ['landscape', 'landscape', 'landscape', 'landscape']]],
+  5: [['Feature + 4', [[30, 8, 40, 48], [8, 8, 18, 22], [8, 34, 18, 22], [74, 8, 18, 22], [74, 34, 18, 22]], 'feature', ['portrait', 'portrait', 'portrait', 'portrait', 'portrait']], ['3 over 2', [[14, 2, 22, 28], [39, 2, 22, 28], [64, 2, 22, 28], [26, 34, 22, 28], [52, 34, 22, 28]], 'grid', ['portrait', 'portrait', 'portrait', 'portrait', 'portrait']], ['Row', [[4, 18, 16, 28], [23, 18, 16, 28], [42, 18, 16, 28], [61, 18, 16, 28], [80, 18, 16, 28]], 'row', ['portrait', 'portrait', 'portrait', 'portrait', 'portrait']], ['Cross', [[40, 2, 20, 18], [40, 23, 20, 18], [40, 44, 20, 18], [16, 23, 20, 18], [64, 23, 20, 18]], 'grid', ['landscape', 'landscape', 'landscape', 'landscape', 'landscape']]],
+  6: [['Grid 3 × 2', [[18, 2, 20, 28], [40, 2, 20, 28], [62, 2, 20, 28], [18, 34, 20, 28], [40, 34, 20, 28], [62, 34, 20, 28]], 'grid', ['portrait', 'portrait', 'portrait', 'portrait', 'portrait', 'portrait']], ['Grid 2 × 3', [[26, 2, 23, 18], [51, 2, 23, 18], [26, 23, 23, 18], [51, 23, 23, 18], [26, 44, 23, 18], [51, 44, 23, 18]], 'grid', ['landscape', 'landscape', 'landscape', 'landscape', 'landscape', 'landscape']], ['Row', [[3, 20, 13, 24], [19.5, 20, 13, 24], [36, 20, 13, 24], [52.5, 20, 13, 24], [69, 20, 13, 24], [85.5, 20, 13, 24]], 'row', ['portrait', 'portrait', 'portrait', 'portrait', 'portrait', 'portrait']], ['Salon', [[6, 4, 26, 34], [36, 4, 26, 18], [66, 4, 28, 26], [6, 42, 26, 20], [36, 26, 26, 36], [66, 34, 28, 28]], 'feature', ['landscape', 'landscape', 'landscape', 'landscape', 'landscape', 'landscape']]],
+};
 /**
- * The layouts offered for a number of prints. 1 to 6 prints get four options each, drawn at the right shape (4 is a 2 x 2 grid, not a row);
- * 7 to 12 get a row only.
+ * The layouts offered for a number of prints, named and drawn as in the design. 1 to 6 prints get four options each; 7 to 12 get a row only.
+ * The wall is built in the nearest layout mode (row, grid or feature) and can be rearranged by hand in the editor.
  */
 export function optionsFor(n: number): Opt[] {
-  const rep = (size: string, o: 'portrait' | 'landscape', frame: string | null, k: number) => Array.from({ length: k }, () => [size, o, frame] as [string, 'portrait' | 'landscape', string | null]);
-  if (n >= 7) return [{ key: `row${n}`, label: 'Row', mode: 'row', prints: rep('A5', 'portrait', 'A4', n) }];
-  if (n === 1) return [
-    { key: 'one-l', label: 'Landscape', mode: 'row', prints: rep('A2', 'landscape', 'A2', 1) }, { key: 'one-p', label: 'Portrait', mode: 'row', prints: rep('A2', 'portrait', 'A2', 1) },
-    { key: 'one-pl', label: 'Poster landscape', mode: 'row', prints: rep('50×70', 'landscape', null, 1) }, { key: 'one-pp', label: 'Poster portrait', mode: 'row', prints: rep('50×70', 'portrait', null, 1) },
-  ];
-  if (n === 2) return [
-    { key: 'row-p', label: 'Row · portrait', mode: 'row', prints: rep('A4', 'portrait', 'A3', 2) }, { key: 'row-l', label: 'Row · landscape', mode: 'row', prints: rep('A4', 'landscape', 'A3', 2) },
-    { key: 'row-m', label: 'Mixed', mode: 'row', prints: [['A3', 'portrait', 'A3'], ['A3', 'landscape', 'A3']] }, { key: 'row-b', label: 'Big and small', mode: 'row', prints: [['A2', 'portrait', 'A2'], ['A4', 'portrait', 'A3']] },
-  ];
-  return [
-    { key: `row-p${n}`, label: 'Row · portrait', mode: 'row', prints: rep('A4', 'portrait', 'A3', n) }, { key: `row-l${n}`, label: 'Row · landscape', mode: 'row', prints: rep('A4', 'landscape', 'A3', n) },
-    { key: `grid${n}`, label: 'Grid', mode: 'grid', prints: rep('A4', 'landscape', 'A4', n) },
-    { key: `feat${n}`, label: 'Feature', mode: 'feature', prints: [['A2', 'landscape', 'A2'], ...rep('A5', 'portrait', 'A4', n - 1)] },
-  ];
+  const shapes = SHAPES[n];
+  if (!shapes) return [{ key: `row${n}`, label: 'Row', mode: 'row', prints: Array.from({ length: n }, () => ['A5', 'portrait', 'A4'] as [string, 'portrait' | 'landscape', string | null]), rects: row(n) }];
+  return shapes.map(([label, rects, mode, orient], i) => ({ key: `s${n}-${i}`, label, mode, rects, prints: orient.map((o, k) => [mode === 'feature' && k === 0 ? 'A2' : n <= 2 ? 'A3' : 'A4', o, mode === 'feature' && k === 0 ? 'A2' : n <= 2 ? 'A3' : 'A3'] as [string, 'portrait' | 'landscape', string | null]) }));
 }
 
 type Kind = 'subject' | 'tag' | 'colour';
@@ -166,11 +165,11 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={label}>Layout</div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, optionsFor(count).length)},minmax(0,1fr))`, gap: 6, marginBottom: 18 }}>
           {optionsFor(count).map((pr) => {
-            const laid = arrange(fromPreset(pr as never), pr.mode), f = frameOf(laid, 0), on = preset === pr.key;
+            const on = preset === pr.key;
             return (
-              <button key={pr.key} aria-pressed={on} onClick={() => choose(pr)} style={{ borderRadius: 8, padding: '10px 6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, background: on ? 'var(--btn-bg)' : 'var(--bg)', color: on ? 'var(--btn-fg)' : 'var(--text2)', boxShadow: on ? 'none' : ring }}>
-                <span style={{ position: 'relative', display: 'block', width: `min(100%, ${Math.round((34 * f.W) / f.H)}px)`, aspectRatio: String(f.W / f.H), maxHeight: 34 }}>
-                  {rectsIn(laid, f).map((r, i) => <i key={i} style={{ position: 'absolute', ...r, background: on ? 'var(--btn-fg)' : 'var(--text2)' }} />)}
+              <button key={pr.key} aria-pressed={on} onClick={() => choose(pr)} style={{ borderRadius: 10, padding: 8, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, fontSize: 13, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text)', boxShadow: on ? 'none' : ring }}>
+                <span style={{ position: 'relative', display: 'block', aspectRatio: '100 / 64', borderRadius: 6, background: on ? 'rgba(0,0,0,.08)' : 'var(--bg)' }}>
+                  {pr.rects.map(([x, y, w, h], i) => <i key={i} style={{ position: 'absolute', left: `${x}%`, top: `${(y / 64) * 100}%`, width: `${w}%`, height: `${(h / 64) * 100}%`, background: on ? 'var(--btn-fg)' : 'var(--faint)' }} />)}
                 </span>
                 {pr.label}
               </button>

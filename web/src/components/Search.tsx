@@ -5,6 +5,8 @@ import type { PhotoLite } from '../data';
 import { useStore } from '../store';
 import { Justified } from './bits';
 import { AddToComposition } from './AddToComposition';
+import type { Collection, Shoot } from '../data';
+import { imgUrl } from '../api';
 import { useUi } from '../ui';
 
 type Parsed = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
@@ -32,6 +34,9 @@ export function Search({ onClose }: { onClose: () => void }) {
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [note, setNote] = useState('');
   const places = useApi<{ name: string; n: number }[]>('/places');
+  const shootList = useApi<Shoot[]>('/shoots');
+  const compList = useApi<Collection[]>('/collections');
+  const [sel, setSel] = useState(0);
   const [meta, setMeta] = useState<Meta>({ chips: [], files: [] });
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => ref.current?.focus(), []);
@@ -94,41 +99,75 @@ export function Search({ onClose }: { onClose: () => void }) {
   const shoots = new Set(results.map((p) => p.shootId)).size;
   const openAll = () => { onClose(); nav(`/library?${params()}`); };
   const ids = picked.size ? [...picked] : results.map((p) => p.id);
-  const ring = 'inset 0 0 0 1px var(--outline)';
+  // Shoots and compositions whose name has every word typed. Up and down move through them, Enter opens.
+  type Hit = { key: string; name: string; kind: string; to: string; cover: number | null };
+  const hits: Hit[] = (words.length ? [
+    ...(shootList.data ?? []).filter((x) => words.every((w) => x.name.toLowerCase().includes(w))).map((x) => ({ key: `s${x.id}`, name: x.name, kind: `Shoot · ${x.count}`, to: `/shoots/${x.id}`, cover: x.coverId })),
+    ...(compList.data ?? []).filter((x) => words.every((w) => x.name.toLowerCase().includes(w))).map((x) => ({ key: `c${x.id}`, name: x.name, kind: `Composition · ${x.layout.prints.length} × ${x.layout.prints[0]?.size ?? ''}`, to: `/collections/${x.id}`, cover: x.chosenIds[0] ?? x.photoIds[0] ?? null })),
+  ] : []).slice(0, 5);
+  useEffect(() => { setSel(0); }, [q]);
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' && hits.length) { e.preventDefault(); setSel((i) => (i + 1) % hits.length); }
+      if (e.key === 'ArrowUp' && hits.length) { e.preventDefault(); setSel((i) => (i + hits.length - 1) % hits.length); }
+      if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') { e.preventDefault(); e.stopPropagation(); if (hits[sel]) { onClose(); nav(hits[sel].to); } else if (results.length) openAll(); }
+    };
+    window.addEventListener('keydown', f, true);
+    return () => window.removeEventListener('keydown', f, true);
+  });
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,.7)', zIndex: 40, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', padding: '20px 20px 90px' }}>
-      <div role="dialog" aria-label="Search" style={{ width: 860, maxWidth: '100%', maxHeight: 'calc(100vh - 140px)', overflow: 'auto', borderRadius: 22, background: 'var(--raised)', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', padding: '26px 30px 18px' }}>
-        <input ref={ref} value={q} onChange={(e) => { setQ(e.target.value); setParsed(null); setRemoved([]); }} onKeyDown={(e) => { if (e.key === 'Enter') openAll(); }}
-          placeholder={ai ? 'Describe what you are looking for…' : 'Search filenames, metadata, places and tags…'} aria-label="Search query"
-          style={{ width: '100%', background: 'none', border: 0, outline: 'none', font: "400 30px/1.2 'Instrument Serif',Georgia,serif", marginBottom: 14, padding: 0 }} />
-        {(live.length > 0 || metaLive.length > 0) && <div className="eyebrow" style={{ marginBottom: 8 }}>Understood as</div>}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          {metaLive.map((c) => <span key={c.key} className="chip">{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved((r) => [...r, c.key])}>✕</button></span>)}
-          {live.map((c) => <span key={c.key} style={{ display: 'inline-flex', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)' }}>{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved([...removed, c.key])} style={{ color: 'var(--muted)' }}>✕</button></span>)}
+    <div className="mscrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ paddingTop: 120 }}>
+      <div className="modal" role="dialog" aria-label="Search" style={{ width: 860, maxHeight: 'calc(100vh - 160px)', overflow: 'auto' }}>
+        <div style={{ padding: '22px 24px 16px' }}>
+          <input ref={ref} value={q} onChange={(e) => { setQ(e.target.value); setParsed(null); setRemoved([]); }}
+            placeholder={ai ? 'Describe what you are looking for…' : 'Search filenames, metadata, places and tags…'} aria-label="Search query"
+            style={{ width: '100%', background: 'none', border: 0, outline: 'none', font: "400 28px/1.2 var(--serif)", padding: 0, marginBottom: 12, color: 'var(--text)' }} />
+          {(live.length > 0 || metaLive.length > 0) && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className="muted" style={{ fontSize: 13 }}>Understood as</span>
+              {metaLive.map((c) => <span key={c.key} className="chip">{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved((r) => [...r, c.key])}>✕</button></span>)}
+              {live.map((c) => <span key={c.key} className="chip">{c.label} <button aria-label={`Remove ${c.label}`} onClick={() => setRemoved((r) => [...r, c.key])}>✕</button></span>)}
+            </div>
+          )}
         </div>
-        {placeHits.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }} aria-label="Places">
-            {placeHits.map((p) => <button key={p.name} onClick={() => { onClose(); nav(`/library?place=${encodeURIComponent(p.name)}`); }} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)' }}>Place: {p.name}</button>)}
+        {(hits.length > 0 || meta.files.length > 0 || results.length > 0 || (!busy && q.trim())) && (
+          <div style={{ borderTop: '1px solid var(--hair)', padding: '16px 24px 8px' }}>
+            {hits.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Shoots &amp; compositions</div>
+                {hits.map((h, i) => (
+                  <button key={h.key} className="mi" style={{ height: 44, padding: '0 10px', background: i === sel ? 'var(--chip)' : undefined, gap: 12, justifyContent: 'flex-start' }} onMouseEnter={() => setSel(i)} onClick={() => { onClose(); nav(h.to); }}>
+                    {h.cover ? <img src={imgUrl(h.cover, 'thumb')} alt="" width={40} height={28} style={{ objectFit: 'cover', borderRadius: 3 }} /> : <i style={{ width: 40, height: 28, background: 'var(--surface)', borderRadius: 3 }} />}
+                    <span style={{ flex: 1, textAlign: 'left', color: 'var(--text)' }}>{h.name}</span><span className="meta">{h.kind}{i === sel ? '  ↵' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {meta.files.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>Files</div>
+                {meta.files.slice(0, 6).map((f) => <button key={f.id} className="mi" style={{ height: 32 }} onClick={() => { onClose(); nav(`/photo/${f.id}`); }}><span className="mono" style={{ fontSize: 12.5 }}>{f.file}</span><span className="meta">{[f.camera, f.date].filter(Boolean).join(' · ')}</span></button>)}
+              </div>
+            )}
+            {!busy && q.trim() && results.length === 0 && meta.files.length === 0 && hits.length === 0 && <p className="muted" style={{ margin: '4px 0 14px', fontSize: 13.5 }}>Nothing matches. Try fewer words, or remove a filter.</p>}
+            {results.length > 0 && (
+              <>
+                <div className="spread" style={{ marginBottom: 8 }}>
+                  <span className="eyebrow">{busy ? 'Searching…' : `Photos · ${count} from ${shoots} shoot${shoots === 1 ? '' : 's'}`}</span>
+                  <span style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+                    <button className="muted" style={{ fontSize: 12.5 }} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>
+                    <button className="muted" style={{ fontSize: 12.5 }} onClick={openAll}>See all in Library →</button>
+                  </span>
+                </div>
+                <Justified photos={results.slice(0, 10)} h={110} {...(selecting ? { picked, onTick: (p: PhotoLite) => setPicked((x) => { const n = new Set(x); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }) } : { onPick: (p: PhotoLite) => { onClose(); nav(`/photo/${p.id}`); } })} />
+              </>
+            )}
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 12.5 }}>
-          <span style={{ color: 'var(--text2)' }}>{busy ? 'Searching…' : `${count} ${count === 1 ? 'photograph' : 'photographs'} · ${shoots} ${shoots === 1 ? 'shoot' : 'shoots'}`}</span>
-          {results.length > 0 && <button style={{ color: 'var(--text2)' }} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setPicked(new Set()); setNote(''); }}>{selecting ? 'Done selecting' : 'Select'}</button>}
-          <span style={{ color: 'var(--faint)' }}>{ai ? (semantic ? 'Ranked by meaning' : 'AI on · text match') : 'AI off · filename, metadata, place and tag search'}</span>
-        </div>
-        {meta.files.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>Files</div>
-            {meta.files.slice(0, 6).map((f) => <button key={f.id} className="mi" style={{ height: 32 }} onClick={() => { onClose(); nav(`/photo/${f.id}`); }}><span className="mono" style={{ fontSize: 12.5 }}>{f.file}</span><span className="meta">{[f.camera, f.date].filter(Boolean).join(' · ')}</span></button>)}
-          </div>
-        )}
-        {!busy && q.trim() && results.length === 0 && meta.files.length === 0 && <p className="muted" style={{ margin: '12px 0', fontSize: 13.5 }}>Nothing matches. Try fewer words, or remove a filter.</p>}
-        {results.length ? <Justified photos={results.slice(0, 10)} h={110} {...(selecting ? { picked, onTick: (p: PhotoLite) => setPicked((x) => { const n = new Set(x); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }) } : { onPick: (p: PhotoLite) => { onClose(); nav(`/photo/${p.id}`); } })} /> : <div className="empty">{q.trim() && !busy ? 'Nothing matches.' : 'Start typing to search.'}</div>}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--hair)' }}>
-          <button disabled={ids.length === 0} onClick={() => { onClose(); openNew({ name: (parsed?.text || q).trim().replace(/^./, (c) => c.toUpperCase()) || 'From search', photoIds: ids }); }} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: ids.length ? 1 : 0.5 }}>Create composition from {ids.length} {picked.size ? 'selected' : ids.length === 1 ? 'result' : 'results'}</button>
-          <span style={{ borderRadius: 999, boxShadow: ring }}><AddToComposition up label="Add to a composition…" ids={ids} onDone={(m) => { setNote(m); setPicked(new Set()); }} /></span>
-          {note && <span className="muted" role="status" style={{ fontSize: 12.5 }}>{note}</span>}
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--faint)', display: 'flex', gap: 20 }}><span>↵ open in Library</span><span>Esc close</span></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 16px 12px 24px', borderTop: '1px solid var(--hair)', background: 'var(--modal-foot)', flexWrap: 'wrap' }}>
+          <span className="faint" style={{ fontSize: 12, flex: 1, display: 'flex', gap: 18, flexWrap: 'wrap' }}>{note ? <span role="status">{note}</span> : <><span>Try “x-t5 f/1.2” or “DSCF”</span><span>↑↓ move</span><span>↵ open</span><span>Esc close</span></>}</span>
+          <AddToComposition up label="Add to composition…" ids={ids} onDone={(m) => { setNote(m); setPicked(new Set()); }} />
+          <button className="btn primary" disabled={results.length === 0} onClick={openAll}>Pick from these {picked.size || count}</button>
         </div>
       </div>
     </div>

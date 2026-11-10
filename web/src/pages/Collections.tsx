@@ -211,6 +211,7 @@ export function CollectionDetail() {
   const [qs] = useSearchParams();
   const [adding, setAdding] = useState(qs.get('add') === '1'); // a new, empty composition opens with the photographs to choose from
   const [tab, setTab] = useState<'ranked' | 'face'>('ranked');
+  const [candFilter, setCandFilter] = useState<'best' | 'fits' | 'unrated'>('best');
   const [fo, setFo] = useState<Fo | null>(null);
   const [dl, setDl] = useState<Dl | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -531,17 +532,24 @@ export function CollectionDetail() {
       {c.photoIds.length === 0 && !adding && <div className="empty">This composition is empty. Use Add photos, or Add to composition on a photograph.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: 40 }}>
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => setTab('ranked')} style={{ padding: '6px 14px', borderRadius: 999, fontSize: 13, background: tab === 'ranked' ? 'var(--hair)' : 'transparent' }}>Ranked · {c.photoIds.length}</button>
-              <button onClick={() => { setTab('face'); setFo(null); }} style={{ padding: '6px 14px', borderRadius: 999, fontSize: 13, background: tab === 'face' ? 'var(--hair)' : 'transparent' }}>Help me decide</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <h2 className="serif" style={{ fontSize: 28 }}>Candidates</h2>
+              {([['best', `Best first · ${c.photoIds.length}`], ['fits', `Fits ${sp ? printSize(sp.size) : ''} · ${order.filter((pid) => !problemOf(pid)).length}`], ['unrated', `Unrated · ${unrated}`]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => { setCandFilter(k); setTab('ranked'); }} aria-pressed={tab === 'ranked' && candFilter === k} style={{ padding: '6px 14px', borderRadius: 999, fontSize: 13.5, background: tab === 'ranked' && candFilter === k ? 'var(--chip)' : 'transparent', color: tab === 'ranked' && candFilter === k ? 'var(--text)' : 'var(--text2)' }}>{l}</button>
+              ))}
             </div>
-            {order.length > 0 && <Link to={`/review?ids=${(unrated > 0 ? order.filter((pid) => !rankOf.get(pid)?.mineN) : order).join(',')}`} style={{ fontSize: 13, color: 'var(--text2)' }}>Rate these candidates ({unrated} not yet rated by you)</Link>}
+            <div style={{ display: 'flex', gap: 18, fontSize: 13.5, color: 'var(--text2)' }}>
+              <button onClick={() => { setTab('face'); setFo(null); }} aria-pressed={tab === 'face'} style={{ color: tab === 'face' ? 'var(--text)' : undefined }}>Help me decide</button>
+              {order.length > 0 && <Link to={`/review?ids=${(unrated > 0 ? order.filter((pid) => !rankOf.get(pid)?.mineN) : order).join(',')}`}>Rate these</Link>}
+              <button onClick={() => setAdding(!adding)}>{adding ? 'Done adding' : '+ Add photos'}</button>
+            </div>
           </div>
+          {tab === 'ranked' && !printed && wallPrints.length > 0 && <p className="muted" style={{ fontSize: 13, margin: '0 0 14px' }}>Click a photo to put it in Print {sel + 1}. If it’s already on the wall, the two swap.</p>}
 
           {tab === 'ranked' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: '18px 14px' }}>
-              {order.map((pid, i) => {
+              {order.filter((pid) => candFilter === 'fits' ? !problemOf(pid) : candFilter === 'unrated' ? !rankOf.get(pid)?.mineN : true).map((pid, i) => {
                 const p = byId.get(pid); const r = rankOf.get(pid);
                 if (!p) return null;
                 const at = findPhoto(wallPrints, pid); const on = !!at;

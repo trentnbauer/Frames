@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, type Cfg } from './ingest.js';
 import { activeConfig, type AiCfg } from './aisources.js';
+import { orderFor } from './aiJobs.js';
 import { loadSettings } from './settings.js';
 
 /**
@@ -21,7 +22,7 @@ export type ParsedQuery = { text: string; subjects: string[]; exclude: string[];
 export const getSecret = (db: DB, name: string) => getSetting<string>(db, `secret:${name}`, '');
 export const setSecret = (db: DB, name: string, v: string) => setSetting(db, `secret:${name}`, v);
 
-export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, loadSettings(db).aiActive);
+export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, (getSetting<unknown>(db, 'aiJobs', null) ? orderFor(db, 'describe')[0] : undefined) ?? loadSettings(db).aiActive);
 
 /**
  * Tags and subjects from the model: a list, or text separated by commas, semicolons or new lines. Some models run the whole list together

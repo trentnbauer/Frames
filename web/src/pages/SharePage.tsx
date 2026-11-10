@@ -160,7 +160,20 @@ export function SharePage() {
 
   return (
     <Shell>
-      <h1 className="title" style={{ marginBottom: 8 }}>{d.name}</h1>
+      {showPrints && d.allowReview && (
+        <div className="guest-head" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div className="muted" style={{ fontSize: 13 }}>{d.owner ? `${d.owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 44, lineHeight: 1 }}>{d.name}</h1><span className="faint" style={{ fontSize: 12.5, fontFamily: 'var(--mono)' }}>{count} print{count === 1 ? '' : 's'}</span></div>
+          </div>
+          <nav className="steps" aria-label="Your steps" style={{ order: -1, width: '100%', justifyContent: 'center', marginBottom: 8 }}>
+            <span style={{ padding: '6px 12px' }}>✓ 1 Rate</span><span className="arrow">→</span><span className={dirty ? '' : 'on'} style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? undefined : 'var(--hover)', color: dirty ? undefined : 'var(--text)' }}>2 Try changes</span><span className="arrow">→</span><span style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? 'var(--hover)' : undefined, color: dirty ? 'var(--text)' : undefined }}>3 Send to {d.owner || 'them'}</span>
+          </nav>
+          <button className="muted" style={{ opacity: dirty ? 1 : 0.5 }} onClick={discard} disabled={!dirty}>Undo my changes</button>
+          <button className="btn primary lg" onClick={sendBack} disabled={!dirty || sending}>{sending ? 'Sending…' : `Send to ${d.owner || 'them'}${dirty ? ` · ${changes}` : ''}`}</button>
+        </div>
+      )}
+      {!(showPrints && d.allowReview) && <h1 className="title" style={{ marginBottom: 8 }}>{d.name}</h1>}
       {d.description && <p className="t2" style={{ fontSize: 14, maxWidth: 620, margin: '0 0 8px' }}>{d.description}</p>}
       <p className="muted" style={{ fontSize: 12.5, margin: '0 0 24px' }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}`}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
@@ -180,14 +193,7 @@ export function SharePage() {
             {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
           </div>
           {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
-          {d.allowReview && (dirty || sendNote) && (
-            <div role="status" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', fontSize: 13 }}>
-              {dirty && <span>You have changed {changes} {changes === 1 ? 'thing' : 'things'} on the wall. Nothing is sent until you send it back.</span>}
-              {dirty && <button className="pill primary" onClick={sendBack} disabled={sending}>{sending ? 'Sending…' : 'Send back to the photographer'}</button>}
-              {dirty && <button className="t2" onClick={discard}>Discard</button>}
-              {sendNote && <span className={sendNote.ok ? 'muted' : 'reason'} role={sendNote.ok ? 'status' : 'alert'}>{sendNote.text}</span>}
-            </div>
-          )}
+          {sendNote && <div role="status" className={sendNote.ok ? 'muted' : 'reason'} style={{ marginBottom: 12, fontSize: 13 }}>{sendNote.text}</div>}
           {wallPrints.length > 0 && (
             <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <Wall prints={viewPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />

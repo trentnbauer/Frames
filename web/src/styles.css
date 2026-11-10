@@ -502,3 +502,6 @@ main.auth.terms { width: 640px; }
 .lists { gap: 16px; }
 .lists > div { background: var(--surface); border-radius: 14px; padding: 22px 24px; }
 .lists .label { font: 500 11px var(--mono); letter-spacing: .08em; }
+@media (max-width: 1199px) { .welcome-grid { grid-template-columns: 1fr !important; gap: 32px !important; } .welcome-grid h1 { font-size: 44px !important; } }
+.cmp-table { background: var(--surface); border-radius: 14px; padding: 8px 24px; border-collapse: separate; border-spacing: 0; }
+.cmp-table th, .cmp-table td { padding: 12px 14px 12px 0; }

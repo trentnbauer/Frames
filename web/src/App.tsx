@@ -85,7 +85,7 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
-      {!inReview && <BottomNav />}
+      {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />
       {searching && <Search onClose={() => setSearching(false)} />}

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
 import { Header, Img, Loading, Title } from '../components/bits';
 
 type S = {
+  year: string; years: string[];
   photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;
   dist: { value: number; n: number }[]; perShoot: { id: number; name: string; n: number }[]; top: PhotoLite[];
   subjects: { name: string; n: number }[]; tags: { name: string; n: number }[];
@@ -67,12 +69,18 @@ function CommunityStats() {
 }
 
 export function Stats() {
-  const st = useApi<S>('/stats');
+  const [year, setYear] = useState('');
+  const st = useApi<S>(`/stats${year ? `?year=${year}` : ''}`);
   const d = st.data;
   return (
     <div className="page">
       <Header />
-      <Title>Stats</Title>
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <Title>Stats</Title>
+        <div role="tablist" aria-label="Range" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)', marginBottom: 28 }}>
+          {['', ...((d?.years ?? []).slice(0, 2))].map((y) => <button key={y || 'all'} role="tab" aria-selected={year === y} onClick={() => setYear(y)} style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13.5, background: year === y ? 'var(--btn-bg)' : 'transparent', color: year === y ? 'var(--btn-fg)' : 'var(--text2)' }}>{y || 'All time'}</button>)}
+        </div>
+      </div>
       {(st.loading || st.error) && <Loading error={st.error} />}
       {d && (
         <>

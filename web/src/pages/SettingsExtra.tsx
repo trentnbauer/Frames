@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
-import { Spinner } from '../components/Modal';
+import { Modal, Spinner } from '../components/Modal';
 
 const Sw = ({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) => <button role="switch" aria-checked={on} aria-label={label} className={'sw' + (on ? ' on' : '')} onClick={onClick} />;
 const Row = ({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) => (
@@ -232,6 +232,53 @@ export function CloudOriginalsAdmin() {
       <h3>Allow original resolution from the cloud</h3>
       <p>When off, every person’s “Save original resolution” shows as off and disabled, and all cloud imports are stored as 4096 px copies.</p>
       <Row title="Allow original resolution from the cloud"><Sw label="Allow original resolution from the cloud" on={r.data.allow} onClick={() => api('/admin/cloud-originals', { method: 'PUT', body: { allow: !r.data!.allow } }).then(r.reload)} /></Row>
+    </div>
+  );
+}
+
+const JOB_LABEL: Record<string, [string, string]> = { search: ['Search', 'Understand what you type in the search box'], describe: ['Describe & tag', 'Titles, descriptions, subjects and tags'], sensitive: ['Sensitive flagging', 'Suggest nudity, violence or adult tags'], ideas: ['Composition ideas', 'Sets that belong together'] };
+type JobCfg = { on: boolean; order: string[]; skip: string[] };
+
+/** Settings, AI: which AI does what, tried in order. Each job has a switch and an order button that opens the order list. */
+export function AiJobs() {
+  const j = useApi<{ jobs: Record<string, JobCfg> }>('/ai/jobs');
+  const src = useApi<{ sources: { id: string; name: string; model?: string; shared?: boolean }[] }>('/ai/sources');
+  const [open, setOpen] = useState<string | null>(null);
+  if (!j.data || !src.data || src.data.sources.length === 0) return null;
+  const name = (id: string) => { const s = src.data!.sources.find((x) => x.id === id); return s ? (s.name || id) + (s.model ? ` · ${s.model}` : '') : id; };
+  const put = (job: string, body: object) => api(`/ai/jobs/${job}`, { method: 'PUT', body }).then(j.reload).catch(() => undefined);
+  const cfg = open ? j.data.jobs[open] : null;
+  const move = (i: number, by: number) => { if (!cfg || !open) return; const o = [...cfg.order]; const k = i + by; if (k < 0 || k >= o.length) return; [o[i], o[k]] = [o[k], o[i]]; void put(open, { order: o }); };
+  return (
+    <div className="field">
+      <h3>Which AI does what · tried in order</h3>
+      <p>Each job uses the first provider in its order. If that one is offline, errors or has hit its limit, the next takes over. New providers join the end of every list.</p>
+      {Object.entries(JOB_LABEL).map(([k, [title, hint]]) => {
+        const c = j.data!.jobs[k];
+        const active = c.order.filter((i) => !c.skip.includes(i));
+        return (
+          <Row key={k} title={title} hint={hint}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {c.on && <button className="btn outline" style={{ height: 32, fontSize: 13 }} onClick={() => setOpen(k)} aria-label={`Order for ${title}`}>{active.length ? `1 ${name(active[0]).split(' · ')[0]}${active.length > 1 ? ` · then ${active.length - 1} more` : ''}` : 'None'} ↕</button>}
+              <Sw label={title} on={c.on} onClick={() => put(k, { on: !c.on })} />
+            </div>
+          </Row>
+        );
+      })}
+      {open && cfg && (
+        <Modal title={`${JOB_LABEL[open][0]} · order`} sub="Top to bottom. The job uses #1; if it fails, the next takes over." width={520} onClose={() => setOpen(null)} foot={<><span className="grow" /><button className="btn primary" onClick={() => setOpen(null)}>Done</button></>}>
+          {cfg.order.map((id, i) => {
+            const skipped = cfg.skip.includes(id);
+            return (
+              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: i ? '1px solid var(--hair)' : 0, opacity: skipped ? 0.5 : 1 }}>
+                <span className="mono faint" style={{ width: 18 }}>{i + 1}</span><span style={{ flex: 1 }}>{name(id)}</span>
+                <button aria-label="Move up" disabled={i === 0} className="faint" onClick={() => move(i, -1)}>▲</button><button aria-label="Move down" disabled={i === cfg.order.length - 1} className="faint" onClick={() => move(i, 1)}>▼</button>
+                <button className="btn outline" style={{ height: 30, fontSize: 12.5 }} onClick={() => put(open, { skip: skipped ? cfg.skip.filter((x) => x !== id) : [...cfg.skip, id] })}>{skipped ? 'Use' : 'Skip'}</button>
+              </div>
+            );
+          })}
+        </Modal>
+      )}
     </div>
   );
 }
