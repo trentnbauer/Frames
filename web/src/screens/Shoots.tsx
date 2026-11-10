@@ -85,8 +85,12 @@ export function Shoots() {
   const inComp = new Set((colls.data ?? []).flatMap((c) => c.photoIds));
   const view = sh ? {
     id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates,
+    placeVal: sh.place,
+    camVal: sh.gear?.camera || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
+    kitRest: [sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · '),
     kit: [sh.gear?.camera, sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · ') || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
   } : null;
+  const askAll = (what: string, v: string) => !v || window.confirm(`Set the ${what} to “${v}” on all ${ph.length} photos in this shoot?`);
   const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.capturedAt) }));
 
   const place = async (r: ScanResult, o: { mode: string; name: string; existingId: number | null; split: boolean }) => {
@@ -137,6 +141,8 @@ export function Shoots() {
           if (m.mode === 'new') { const s = await api<Shoot>('/shoots', { body: { name: m.name || todayName(), photoIds: ids } }); dest = s.name; } else { await api(`/shoots/${m.shootId}/move`, { body: { photoIds: ids } }); dest = all.find((s) => s.id === m.shootId)?.name ?? ''; }
           reloadAll(); return dest;
         }}
+        onPlace={async (place: string) => { if (askAll('location', place)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        onCamera={async (camera: string) => { if (askAll('camera', camera)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { gear: { camera, lens: sh?.gear?.lens ?? '', medium: sh?.gear?.medium ?? '', film: sh?.gear?.film ?? '' }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
         aiOn={!!settings && settings.ai !== 'off'}
         onAnalyse={async () => { try { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; } catch (e) { return (e as Error).message; } }}

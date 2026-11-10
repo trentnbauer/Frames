@@ -16,7 +16,7 @@ import { IMAGE_EXT, internalDir, rebuild, reindex } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting } from '../db.js';
-import { applyGear, applyShootGear, cleanGear } from '../gear.js';
+import { applyGear, applyShootGear, cleanGear, syncGearTags } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
 /**
@@ -111,10 +111,12 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
-    if (typeof b.place === 'string' && b.place.slice(0, 120) !== before.place) {
+    const everyPhoto = b.overwrite === true; // the person chose to change every photograph in the shoot, even ones with their own value
+    if (typeof b.place === 'string' && (b.place.slice(0, 120) !== before.place || everyPhoto)) {
       const place = b.place.slice(0, 120);
-      // Photographs that had the shoot's old place (or none) take the new one; a place a photograph has of its own is left.
-      db.prepare("UPDATE photos SET place = ? WHERE shoot_id = ? AND (place = '' OR place = ?)").run(place, id, before.place);
+      // Photographs that had the shoot's old place (or none) take the new one; a place a photograph has of its own is left (unless everyPhoto).
+      if (everyPhoto) db.prepare('UPDATE photos SET place = ? WHERE shoot_id = ?').run(place, id);
+      else db.prepare("UPDATE photos SET place = ? WHERE shoot_id = ? AND (place = '' OR place = ?)").run(place, id, before.place);
       db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(place, id);
     }
     if ('subjects' in b || 'tags' in b) {
@@ -126,7 +128,17 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       applyShoot(id);
     }
     // The photoshoot's camera defaults: photographs in it with a blank take them, and follow a later change.
-    if ('gear' in b) { db.prepare('UPDATE shoots SET gear = ? WHERE id = ?').run(JSON.stringify(cleanGear(b.gear)), id); applyShootGear(db, id); }
+    if ('gear' in b) { db.prepare('UPDATE shoots SET gear = ? WHERE id = ?').run(JSON.stringify(cleanGear(b.gear)), id); applyShootGear(db, id);
+      const camera = cleanGear(b.gear).camera;
+      if (everyPhoto && camera) {
+        // Every photograph takes the shoot's camera, and goes on following it (it is no longer "typed by hand").
+        const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
+        for (const r of db.prepare('SELECT id, user_fields, gear_src FROM photos WHERE shoot_id = ?').all(id) as Row[]) {
+          db.prepare('UPDATE photos SET camera = ?, user_fields = ?, gear_src = ? WHERE id = ?').run(camera, csv(r.user_fields).filter((f) => f !== 'camera').join(','), [...new Set([...csv(r.gear_src), 'camera'])].join(','), r.id);
+          syncGearTags(db, r.id);
+        }
+      }
+    }
     if (typeof b.description === 'string') db.prepare('UPDATE shoots SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if ('dateFrom' in b) db.prepare('UPDATE shoots SET date_from = ? WHERE id = ?').run(validDate(b.dateFrom), id);
     if ('dateTo' in b) db.prepare('UPDATE shoots SET date_to = ? WHERE id = ?').run(validDate(b.dateTo), id);
