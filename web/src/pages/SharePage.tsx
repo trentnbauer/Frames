@@ -10,6 +10,7 @@ import { FRAMES, WALL_BG, arrange, bounds, metres, newPrintId, photosOf, sizeLab
 import type { Target } from '../target';
 import { imgUrl } from '../api';
 import { PinGate } from './Auth';
+import { GuestEditor } from '../screens/GuestEditor';
 
 type G = { id: number; title: string; ar: number; n: number };
 type Shared = { askName?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
@@ -179,6 +180,16 @@ export function SharePage() {
     );
   }
 
+  // The design's guest view: the wall, the shortlisted candidates, try changes, send them back.
+  if (d.kind === 'collection' && d.layout && d.allowReview && d.allowSuggest && wallPrints.length > 0 && view === 'grid') {
+    return (
+      <Shell who={reviewer}>
+        <div style={{ marginBottom: 12, fontSize: 13 }} className="muted">{reviewer.trim() ? `You’re ${reviewer.trim()}. ` : ''}<button className="t2" style={{ textDecoration: 'underline' }} onClick={() => withName(() => setView('review'))}>Rate these photos</button>{d.allowDownload && <> · <button className="t2" style={{ textDecoration: 'underline' }} onClick={download}>Download files</button></>}</div>
+        <GuestEditor token={token} name={d.name} owner={d.owner} layout={d.layout} chosenIds={d.chosenIds ?? []} photos={photos} askName={withName} />
+        {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+      </Shell>
+    );
+  }
   if (view === 'review') return <GuestReview token={token} photos={photos} reviewer={reviewer} onDone={() => setView('grid')} />;
 
   return (

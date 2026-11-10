@@ -21,9 +21,9 @@ const expOf = (iso: string | null) => (!iso ? 'Never' : EXPIRY.filter(([, n]) =>
 const expLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : 'never');
 
 /** The design's print: centred on the wall in cm, sizes by name, orientation P or L, frame and crop as flat fields. */
-type DPrint = { id: number; x: number; y: number; size: string; or: 'P' | 'L'; photo: number | null; framed: boolean; colour: string; frame: string; mat: string; zoom?: number; sx?: number; sy?: number };
-const toDesign = (ps: Print[], origin: { x: number; y: number }): DPrint[] => ps.map((p) => { const [W, H] = dims(p); return { id: p.id, x: Math.round(((p.x + W / 2 - origin.x) / 10) * 10) / 10, y: Math.round(((p.y + H / 2 - origin.y) / 10) * 10) / 10, size: p.size, or: p.orientation === 'portrait' ? 'P' : 'L', photo: p.photoId, framed: !!p.frame, colour: p.frame ? cap(p.frame.color) : 'Black', frame: p.frame ? p.frame.size : p.size, mat: p.frame && p.frame.size !== p.size ? cap(p.frame.mat) : 'None', zoom: p.crop?.zoom, sx: p.crop?.shiftX, sy: p.crop?.shiftY }; });
-const fromDesign = (ds: DPrint[], orig: Print[], origin: { x: number; y: number }): Print[] => ds.map((d) => {
+export type DPrint = { id: number; x: number; y: number; size: string; or: 'P' | 'L'; photo: number | null; framed: boolean; colour: string; frame: string; mat: string; zoom?: number; sx?: number; sy?: number };
+export const toDesign = (ps: Print[], origin: { x: number; y: number }): DPrint[] => ps.map((p) => { const [W, H] = dims(p); return { id: p.id, x: Math.round(((p.x + W / 2 - origin.x) / 10) * 10) / 10, y: Math.round(((p.y + H / 2 - origin.y) / 10) * 10) / 10, size: p.size, or: p.orientation === 'portrait' ? 'P' : 'L', photo: p.photoId, framed: !!p.frame, colour: p.frame ? cap(p.frame.color) : 'Black', frame: p.frame ? p.frame.size : p.size, mat: p.frame && p.frame.size !== p.size ? cap(p.frame.mat) : 'None', zoom: p.crop?.zoom, sx: p.crop?.shiftX, sy: p.crop?.shiftY }; });
+export const fromDesign = (ds: DPrint[], orig: Print[], origin: { x: number; y: number }): Print[] => ds.map((d) => {
   const o = orig.find((p) => p.id === d.id);
   const base: Print = { id: d.id, size: d.size, orientation: d.or === 'P' ? 'portrait' : 'landscape', frame: d.framed ? { size: d.frame, mat: (d.mat === 'None' ? o?.frame?.mat ?? 'white' : d.mat.toLowerCase()) as never, color: d.colour.toLowerCase() as never } : null, photoId: d.photo, stack: o?.stack ?? false, photoId2: o?.photoId2 ?? null, x: 0, y: 0 };
   const [W, H] = dims(base);
@@ -31,7 +31,7 @@ const fromDesign = (ds: DPrint[], orig: Print[], origin: { x: number; y: number 
   if ((d.zoom && d.zoom > 1) || d.sx || d.sy) out.crop = { zoom: d.zoom ?? 1, shiftX: d.sx ?? 0, shiftY: d.sy ?? 0 };
   return out;
 });
-const centreOf = (ps: Print[]) => { if (!ps.length) return { x: 0, y: 0 }; let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const p of ps) { const [W, H] = dims(p); a = Math.min(a, p.x); b = Math.max(b, p.x + W); c = Math.min(c, p.y); d = Math.max(d, p.y + H); } return { x: (a + b) / 2, y: (c + d) / 2 }; };
+export const centreOf = (ps: Print[]) => { if (!ps.length) return { x: 0, y: 0 }; let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const p of ps) { const [W, H] = dims(p); a = Math.min(a, p.x); b = Math.max(b, p.x + W); c = Math.min(c, p.y); d = Math.max(d, p.y + H); } return { x: (a + b) / 2, y: (c + d) / 2 }; };
 
 /** The composition editor (design: Proto Editor, host). Prints are saved as you place them. */
 export function Editor() {

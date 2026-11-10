@@ -177,8 +177,34 @@ export class Logic extends DCLogic {
       gPeople: G.people.map((q) => { const on = !off.includes(q.name); return { name: q.name, initial: q.initial, when: q.when, pct: q.pct + '%', rated: q.pct + '%', avg: q.avg, tick: on ? '✓' : '', boxBg: on ? '#efede8' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px rgba(255,255,255,.3)', toggle: () => this.setState({ gOff: on ? [...off, q.name] : off.filter((x) => x !== q.name) }) }; }),
     };
   }
+  /** The guest's version against the photographer's: what they changed, as the lines the send window lists. */
+  guestModeVals() {
+    const S = this.state, P = this.props; const guest = !!P.guest;
+    const base = P.basePrints || []; const cur = this.pr(); const ch = [];
+    cur.forEach((p, i) => {
+      const o = base.find((x) => x.id === p.id); const n = 'Print ' + (i + 1);
+      if (!o) { ch.push(['Added', n + (p.photo ? ' · ' + this.ph(p.photo)[0] : '')]); return; }
+      if (o.photo !== p.photo) ch.push(['Photo', n + ' → ' + (p.photo ? this.ph(p.photo)[0] : 'empty')]);
+      if (o.framed !== p.framed || o.colour !== p.colour || o.frame !== p.frame || o.mat !== p.mat) ch.push(['Frame', n + ' · ' + (p.framed ? [p.colour, p.frame + ' frame', p.mat && p.mat !== 'None' ? p.mat.toLowerCase() + ' mat' : ''].filter(Boolean).join(', ') : 'no frame')]);
+      if (o.size !== p.size || o.or !== p.or) ch.push(['Size', n + ' · ' + p.size + (p.or === 'L' ? ' landscape' : ' portrait')]);
+      if (o.x !== p.x || o.y !== p.y) ch.push(['Moved', n]);
+    });
+    base.forEach((o) => { if (!cur.some((p) => p.id === o.id)) ch.push(['Removed', 'A print']); });
+    const moved = ch.filter((c) => c[0] === 'Moved').length; const list = [...ch.filter((c) => c[0] !== 'Moved'), ...(moved ? [['Layout', moved + (moved === 1 ? ' print moved' : ' prints moved')]] : [])];
+    const n = list.length; const sd = S.sendState; const owner = P.owner || 'them';
+    return {
+      isGuest: guest, isHost: !guest,
+      gSteps: [['✓ 1 Rate', 'done'], ['2 Try changes', S.sentOnce ? 'done' : 'cur'], [(S.sentOnce ? '✓ ' : '') + '3 Send to ' + owner, S.sentOnce ? 'cur' : 'todo']].map(([label, st], i) => ({ label, bg: st === 'cur' ? 'rgba(255,255,255,.08)' : 'transparent', fg: st === 'todo' ? '#8f8c86' : '#efede8', arrow: i < 2 ? 'inline' : 'none' })),
+      gChangeN: String(n), gChangeShow: n ? 'inline' : 'none', gDiscardOp: n ? 1 : 0.35, gDiscard: () => { if (n) { this.state = { ...this.state, prints: base }; this.__update(); this.flash('Back to ' + owner + '’s version'); } },
+      sendOpen: !!sd, sendForm: sd === 'form', sendDone: sd === 'done', openSend: () => this.setState({ sendState: 'form' }), closeSend: () => this.setState({ sendState: null }),
+      sendSub: n ? n + (n === 1 ? ' change' : ' changes') + ' to ' + P.name : 'No changes. ' + owner + ' will see you’re happy with their version.',
+      sendList: (n ? list : [['', 'Looks good as it is']]).map(([what, text], i, a) => ({ what, text, border: i < a.length - 1 ? '1px solid rgba(255,255,255,.06)' : 'none' })),
+      sendNote: S.sendNote || '', onSendNote: (e) => this.setState({ sendNote: e.target.value }), sendLabel: n ? 'Send my version' : 'Send “looks good”',
+      doSend: async () => { try { await P.onSend(S.sendNote || ''); this.setState({ sendState: 'done', sentOnce: true }); } catch (e) { this.flash(e.message || 'Could not send'); } },
+    };
+  }
   renderVals() {
     const P = this.props;
-    return { isGuest: false, isHost: true, ...this.wallVals(), ...this.selVals(), ...this.candVals(), ...this.shareVals(), ...this.guestVals(), delOpen: !!this.state.delOpen, openDel: () => this.setState({ delOpen: true }), closeDel: () => this.setState({ delOpen: false }), confirmDel: async () => { this.setState({ delOpen: false }); await P.onDelete(); }, toast: this.state.toast || '', toastOp: this.state.tOp || 0 };
+    return { ...this.guestModeVals(), ...this.wallVals(), ...this.selVals(), ...this.candVals(), ...this.shareVals(), ...this.guestVals(), delOpen: !!this.state.delOpen, openDel: () => this.setState({ delOpen: true }), closeDel: () => this.setState({ delOpen: false }), confirmDel: async () => { this.setState({ delOpen: false }); await P.onDelete(); }, toast: this.state.toast || '', toastOp: this.state.tOp || 0 };
   }
 }
