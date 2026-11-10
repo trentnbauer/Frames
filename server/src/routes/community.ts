@@ -183,7 +183,7 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const cur = communityPrefs(db);
     const next: CommunityPrefs = { ...cur };
-    for (const k of ['optIn', 'written', 'showOnHome'] as const) if (typeof b[k] === 'boolean') next[k] = b[k] as boolean;
+    for (const k of ['optIn', 'written', 'showOnHome'] as const) if (typeof b[k] === 'boolean') next[k] = b[k] === true;
     if (b.share !== undefined) {
       // take the value from our own list, not the request: String(['any']) would pass an includes() check
       const share = (['any', 'portfolio', 'rated4'] as const).find((v) => v === b.share);
@@ -191,7 +191,7 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
       next.share = share;
     }
     setSetting(db, 'community', next);
-    return next;
+    return communityPrefs(db); // what was saved, not what was sent
   });
 
   // ---------- Stats: the community section ----------
