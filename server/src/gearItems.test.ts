@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { gearMarkdown, systemOf } from './routes/gearitems.js';
+import { gearMarkdown } from './routes/gearitems.js';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
 
 let env: Env, A: ReturnType<typeof api>;
@@ -7,17 +7,8 @@ beforeAll(() => { env = makeEnv(); A = api(env); });
 afterAll(() => { env.app.close(); cleanup(env); });
 
 describe('gear and wishlist', () => {
-  it('works out a camera system or lens mount from a name', () => {
-    expect(systemOf('Fujifilm X-T5')).toBe('Fujifilm X');
-    expect(systemOf('XF35mmF1.4 R')).toBe('Fujifilm X');
-    expect(systemOf('Sony A7 IV')).toBe('Sony E');
-    expect(systemOf('Canon EOS R6')).toBe('Canon RF');
-    expect(systemOf('Nikon Z 6')).toBe('Nikon Z');
-    expect(systemOf('Leica M6')).toBe('Leica M');
-    expect(systemOf('Mystery box')).toBe('');
-  });
   it('owns, wants, reorders, and moves a bought item to what you own', async () => {
-    const x100 = (await A.post('/api/gear/items', { kind: 'own', name: 'Fujifilm X-T5', type: 'camera', year: 2022 })).body;
+    const x100 = (await A.post('/api/gear/items', { kind: 'own', name: 'Fujifilm X-T5', type: 'camera', year: 2022, system: 'Fujifilm X' })).body;
     expect(x100.system).toBe('Fujifilm X');
     const a = (await A.post('/api/gear/items', { kind: 'want', name: 'XF 90mm', type: 'lens', price: 1500, why: 'portraits' })).body;
     const b = (await A.post('/api/gear/items', { kind: 'want', name: 'Godox flash', type: 'light', price: 200 })).body;
@@ -34,10 +25,10 @@ describe('gear and wishlist', () => {
     expect(r.own.map((g: any) => g.name)).toContain('Godox flash');
     expect(r.want).toHaveLength(2);
   });
-  it('keeps a system you set when the item is renamed', async () => {
+  it('never guesses a system, and keeps the one you set on rename', async () => {
     const g = (await A.post('/api/gear/items', { kind: 'own', name: 'Pentax body', type: 'camera', system: 'Pentax 67' })).body;
     expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Pentax 67II' })).body.system).toBe('Pentax 67');
-    expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Mystery box' })).body.system).toBe('Pentax 67');
+    expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Fujifilm X-T5' })).body.system).toBe('Pentax 67');
   });
   it('checks what it is given', async () => {
     expect((await A.post('/api/gear/items', { name: '' })).status).toBe(400);

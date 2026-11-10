@@ -12,16 +12,6 @@ export const ARRANGE = ['system', 'type', 'used', 'era'] as const;
 export const CURRENCIES = ['$', '€', '£', '¥', '₹', 'kr', 'CHF'] as const;
 export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string; currency?: string };
 
-/** A lens mount or camera system from a model name, or '' when unknown. Case and punctuation do not matter. */
-const SYSTEMS: [RegExp, string][] = [
-  [/\bgfx\b|\bgf\s?\d|\bfujinon\s+gf/i, 'Fujifilm G'], [/\bx-?(t|h|s|e|pro|m)\d|\bxf\d|\bxf\s?\d|\bfujinon\s+xf|\bxc\d|\bfujifilm x\b/i, 'Fujifilm X'],
-  [/\bfe\s?\d|\bilce|\ba7|\ba9|\ba1\b|\bzv-?e|\bsony e\b|\bα\s?7/i, 'Sony E'],
-  [/\brf\s?\d|\beos r|\bcanon rf\b/i, 'Canon RF'], [/\bef(-s|-m)?\s?\d|\beos (\d|rebel|[a-z]?\d)|\bcanon ef\b/i, 'Canon EF'],
-  [/\bnikkor z\b|\bz\s?\d{1,2}\b|\bnikon z\b/i, 'Nikon Z'], [/\bnikkor|\baf-[sd]\b|\bnikon d\d|\bnikon f\b/i, 'Nikon F'],
-  [/\bleica (sl|tl|cl|q)|\bl-mount\b/i, 'Leica L'], [/\bleica m|\bsummi(cron|lux)|\belmar|\bnoctilux|\bm-rokkor/i, 'Leica M'],
-  [/\bm\.?zuiko|\blumix g|\bgh\d|\bom-?\d|\bmicro four|\bmft\b|\bg\d{1,2}\b.*panasonic/i, 'Micro Four Thirds'], [/\bpentax|\bsmc-?(da|fa)|\bsmc pentax/i, 'Pentax K'],
-];
-export const systemOf = (name: string): string => { const n = name.replace(/[._]/g, ' '); for (const [re, sys] of SYSTEMS) if (re.test(n)) return sys; return ''; };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -70,7 +60,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
   const add = (kind: 'own' | 'want', name: string, type: GearType, extra: Row = {}) => {
     const rank = kind === 'want' ? (extra.front ? ((one("SELECT MIN(rank) m FROM gear_items WHERE kind = 'want'") as Row).m ?? 1) - 1 : ((one("SELECT MAX(rank) m FROM gear_items WHERE kind = 'want'") as Row).m ?? 0) + 1) : 0;
     return Number(db.prepare('INSERT INTO gear_items(kind, name, type, system, year, why, link, price, rank, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-      .run(kind, name.slice(0, 120), type, extra.system ?? systemOf(name), extra.year ?? null, clean(extra.why, 200), clean(extra.link, 300), extra.price ?? null, rank, new Date().toISOString()).lastInsertRowid);
+      .run(kind, name.slice(0, 120), type, extra.system ?? '', extra.year ?? null, clean(extra.why, 200), clean(extra.link, 300), extra.price ?? null, rank, new Date().toISOString()).lastInsertRowid);
   };
 
   app.get('/api/gear/items', async () => {
@@ -103,7 +93,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const sets: string[] = [], args: unknown[] = [];
     const set = (col: string, v: unknown) => { sets.push(`${col} = ?`); args.push(v); };
-    if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); if (b.system === undefined) { sets.push("system = CASE WHEN system = '' THEN ? ELSE system END"); args.push(systemOf(b.name)); } }
+    if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); }
     if ((TYPES as readonly string[]).includes(b.type)) set('type', b.type);
     if (typeof b.system === 'string') set('system', b.system.trim().slice(0, 60));
     if (b.year !== undefined) { const y = b.year === null || b.year === '' ? null : Number(b.year); if (y !== null && !(Number.isInteger(y) && y > 1800 && y < 2200)) return rep.code(400).send({ error: 'The year must be a number like 2019.' }); set('year', y); }
