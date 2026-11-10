@@ -85,10 +85,11 @@ export function ShootDetail() {
           <button onClick={() => openNew({ name: s.name, photoIds: list.map((p) => p.id) })} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Compose from this shoot</button>
         </div>
       </div>
-      <div className="form" style={{ margin: '14px 0 6px' }}>
-        <label>Place <input aria-label="Place" value={f.place} onChange={(e) => setF({ ...f, place: e.target.value })} onBlur={() => f.place !== s.place && save({ place: f.place })} /></label>
-        <label>From <input type="date" aria-label="From date" value={f.dateFrom} onChange={(e) => { setF({ ...f, dateFrom: e.target.value }); save({ dateFrom: e.target.value || null }); }} /></label>
-        <label>To <input type="date" aria-label="To date" value={f.dateTo} onChange={(e) => { setF({ ...f, dateTo: e.target.value }); save({ dateTo: e.target.value || null }); }} /></label>
+      <div className="scard" style={{ padding: '20px 24px', margin: '14px 0 24px', maxWidth: 760 }}>
+      <div className="form" style={{ margin: '0 0 14px' }}>
+        <label>Place <input className="pin" style={{ width: 200 }} aria-label="Place" value={f.place} onChange={(e) => setF({ ...f, place: e.target.value })} onBlur={() => f.place !== s.place && save({ place: f.place })} /></label>
+        <label>From <input className="pin" style={{ width: 150 }} type="date" aria-label="From date" value={f.dateFrom} onChange={(e) => { setF({ ...f, dateFrom: e.target.value }); save({ dateFrom: e.target.value || null }); }} /></label>
+        <label>To <input className="pin" style={{ width: 150 }} type="date" aria-label="To date" value={f.dateTo} onChange={(e) => { setF({ ...f, dateTo: e.target.value }); save({ dateTo: e.target.value || null }); }} /></label>
         <span className="muted">{s.dates} · {s.count} {s.count === 1 ? 'photograph' : 'photographs'}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '0 0 16px' }}>
@@ -104,7 +105,8 @@ export function ShootDetail() {
         <p className="muted" style={{ fontSize: 12.5 }}>For photographs in this shoot whose file has no camera details (a roll of film, say). They win over your own defaults, and photographs added or moved here follow them. Nothing the file says or you typed is replaced.</p>
         <GearDefaults label="Photoshoot camera defaults" value={s.gear} onSave={(gear) => save({ gear })} />
       </details>
-      <textarea className="area" aria-label="Description" rows={2} placeholder="Describe this photoshoot" value={f.description} style={{ maxWidth: 640, marginBottom: 20 }} onChange={(e) => setF({ ...f, description: e.target.value })} onBlur={() => f.description !== s.description && save({ description: f.description })} />
+      <textarea className="area" aria-label="Description" rows={2} placeholder="Describe this photoshoot" value={f.description} style={{ maxWidth: 640, width: '100%' }} onChange={(e) => setF({ ...f, description: e.target.value })} onBlur={() => f.description !== s.description && save({ description: f.description })} />
+      </div>
       {msg && <div className="muted" role="status" style={{ fontSize: 13, marginBottom: 14 }}>{msg}</div>}
       <div className="just">
         {list.map((p) => {
