@@ -9,7 +9,8 @@ import type { Ctx, Row } from '../ctx.js';
 export const TYPES = ['camera', 'lens', 'film', 'light', 'app', 'other'] as const;
 export type GearType = (typeof TYPES)[number];
 export const ARRANGE = ['system', 'type', 'used', 'era'] as const;
-export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string };
+export const CURRENCIES = ['$', '€', '£', '¥', '₹', 'kr', 'CHF'] as const;
+export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string; currency?: string };
 
 /** A lens mount or camera system from a model name, or '' when unknown. Case and punctuation do not matter. */
 const SYSTEMS: [RegExp, string][] = [
@@ -33,8 +34,9 @@ export function gearMarkdown(db: DB): string {
   const by = new Map<string, Row[]>();
   for (const g of own) (by.get(group(g)) ?? by.set(group(g), []).get(group(g))!).push(g);
   const out: string[] = ['# My gear', ''];
-  if (prefs.showWant && want.length) { out.push('## Want to buy', '', ...want.slice(0, 6).map((g, i) => `${i + 1}. ${g.name}${g.why ? ` — ${g.why}` : ''}`), ''); }
   for (const [h, items] of [...by.entries()].sort()) out.push(`## ${h}`, '', ...items.map((g) => `- ${g.name}${g.year ? ` (${g.year})` : ''}`), '');
+  // Want to buy comes last, after everything that is owned.
+  if (prefs.showWant && want.length) { out.push('## Want to buy', '', ...want.slice(0, 6).map((g, i) => `${i + 1}. ${g.name}${g.why ? ` — ${g.why}` : ''}`), ''); }
   return out.length > 2 ? out.join('\n').trim() : '# My gear\n\nNothing listed yet.';
 }
 
@@ -48,7 +50,7 @@ export function gearJson(db: DB) {
   const by = new Map<string, Row[]>();
   for (const g of own) (by.get(key(g)) ?? by.set(key(g), []).get(key(g))!).push(g);
   const groups = [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([title, items]) => ({ title, count: items.length, items: items.sort((a, b) => Number(b.type === 'camera') - Number(a.type === 'camera')).map((g) => ({ name: g.name, note: g.year ? String(g.year) : '', tag: TYPE[g.type] ?? '' })) }));
-  return { intro: prefs.intro ?? '', showWant: prefs.showWant && want.length > 0, want: want.map((w, i) => ({ n: i + 1, name: w.name, price: w.price === null ? '' : String(Math.round(w.price)), url: /^https?:\/\//.test(w.link) ? w.link : '' })), groups, empty: own.length === 0 && want.length === 0 };
+  return { currency: prefs.currency ?? '$', intro: prefs.intro ?? '', showWant: prefs.showWant && want.length > 0, want: want.map((w, i) => ({ n: i + 1, name: w.name, price: w.price === null ? '' : String(Math.round(w.price)), url: /^https?:\/\//.test(w.link) ? w.link : '' })), groups, empty: own.length === 0 && want.length === 0 };
 }
 
 export function registerGearItems(app: FastifyInstance, x: Ctx) {
@@ -112,6 +114,13 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.delete('/api/gear/items/:id', async (req) => ({ removed: db.prepare('DELETE FROM gear_items WHERE id = ?').run(num((req.params as Row).id)).changes }));
+  // Renaming a system renames it on every item in it.
+  app.post('/api/gear/systems/rename', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    const from = clean(b.from, 60), to = clean(b.to, 60);
+    if (!from || !to) return rep.code(400).send({ error: 'Give the system a name.' });
+    return { renamed: db.prepare("UPDATE gear_items SET system = ? WHERE kind = 'own' AND system = ?").run(to, from).changes };
+  });
   // "Bought it": the wished-for item becomes something you own.
   app.post('/api/gear/items/:id/bought', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -131,6 +140,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const next = prefs();
     if (typeof b.showWant === 'boolean') next.showWant = b.showWant;
     if (typeof b.intro === 'string') next.intro = b.intro.trim().slice(0, 300);
+    if (b.currency !== undefined) { if (!(CURRENCIES as readonly string[]).includes(b.currency)) return rep.code(400).send({ error: 'Choose one of $ € £ ¥ ₹ kr CHF.' }); next.currency = b.currency; }
     if (b.arrange !== undefined) { if (!(ARRANGE as readonly string[]).includes(b.arrange)) return rep.code(400).send({ error: 'Choose system, type, most used or era.' }); next.arrange = b.arrange; }
     setSetting(db, 'gearPrefs', next);
     return next;

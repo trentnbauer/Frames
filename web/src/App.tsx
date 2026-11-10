@@ -21,7 +21,7 @@ import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
 import { Community } from './screens/Community';
-import { Gear } from './pages/Gear';
+import { Gear } from './screens/Gear';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
