@@ -9,7 +9,7 @@ import { Todo } from './pages/Todo';
 import { Home } from './screens/Home';
 import { Library } from './screens/Library';
 import { GoContext } from './proto/runtime';
-import { PhotoDetail } from './pages/PhotoDetail';
+import { Photo as PhotoDetail } from './screens/Photo';
 import { Review } from './screens/Review';
 import { Shoots } from './screens/Shoots';
 import { Compositions } from './screens/Compositions';

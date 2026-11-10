@@ -189,7 +189,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       // When it was last reviewed; a photograph never reviewed counts from when it was added.
       lastReviewedAt: agg ? (g?.d ?? p.added_at) : ((one('SELECT MAX(date) d FROM reviews WHERE photo_id = ?', p.id)?.d as string | undefined) ?? p.added_at),
       nextReviewAt: p.next_review_at, reviewCount: g ? g.n : ratings.length, avgRating: g ? g.a : avgOf(ratings),
-      lat: p.lat, lon: p.lon, place: p.place, parentId: p.parent_id,
+      lat: p.lat, lon: p.lon, place: p.place, placeAddress: p.place_address ?? '', placeKind: p.place_kind ?? '', placePrecision: p.place_precision ?? 'exact', parentId: p.parent_id,
       palette: p.palette ? JSON.parse(p.palette) : [], brightness: p.brightness, contrast: p.contrast, saturation: p.saturation,
       xmpRating: p.xmp_rating, aiStatus: p.ai_status,
       ...(full ? {

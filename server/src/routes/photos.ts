@@ -255,6 +255,9 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       set("DELETE FROM xmp_conflicts WHERE photo_id = ? AND field = 'description'", id);
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
+    if (typeof b.placeAddress === 'string') set('UPDATE photos SET place_address = ? WHERE id = ?', b.placeAddress.trim().slice(0, 240), id);
+    if (typeof b.placeKind === 'string') set('UPDATE photos SET place_kind = ? WHERE id = ?', b.placeKind.trim().slice(0, 40), id);
+    if (b.placePrecision === 'exact' || b.placePrecision === 'suburb' || b.placePrecision === 'city') set('UPDATE photos SET place_precision = ? WHERE id = ?', b.placePrecision, id);
     // The date shown for the photograph: edited by hand, or null to go back to the camera date (else the upload date).
     if (b.dateEdit !== undefined) {
       if (b.dateEdit === null || b.dateEdit === '') set('UPDATE photos SET date_edit = NULL WHERE id = ?', id);
