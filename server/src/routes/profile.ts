@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
+import { hemisphere, type Seasons } from '../seasons.js';
 
 /**
  * A person's profile: the name and picture that stand for them, and that their portfolio shows.
@@ -18,7 +19,8 @@ export function registerProfile(app: FastifyInstance, x: Ctx) {
   const { db, cfg } = x;
   const state = (req: any) => {
     const u = req.authUser as { name?: string; email?: string } | null;
-    return { displayName: displayNameOf(db), hasAvatar: fs.existsSync(avatarPath(cfg.dataDir)), signedInAs: u ? (u.name || u.email || '') : '' };
+    const pr = getSetting<{ country?: string; seasons?: string; tz?: string }>(db, 'profile', {});
+    return { country: pr.country ?? '', seasons: pr.seasons ?? 'auto', hemisphere: hemisphere(pr.country ?? '', (pr.seasons as Seasons) ?? 'auto'), tz: pr.tz ?? '', displayName: displayNameOf(db), hasAvatar: fs.existsSync(avatarPath(cfg.dataDir)), signedInAs: u ? (u.name || u.email || '') : '' };
   };
 
   app.get('/api/profile', async (req) => state(req));
@@ -27,6 +29,18 @@ export function registerProfile(app: FastifyInstance, x: Ctx) {
     if (b.displayName !== undefined) {
       if (typeof b.displayName !== 'string') return rep.code(400).send({ error: 'The name must be text.' });
       setSetting(db, 'profile', { ...getSetting<Row>(db, 'profile', {}), displayName: b.displayName.trim().slice(0, 80) });
+    }
+    if (b.country !== undefined) {
+      if (typeof b.country !== 'string') return rep.code(400).send({ error: 'The country must be text.' });
+      setSetting(db, 'profile', { ...getSetting<Row>(db, 'profile', {}), country: b.country.trim().slice(0, 80) });
+    }
+    if (b.seasons !== undefined) {
+      if (!['auto', 'north', 'south', 'off'].includes(String(b.seasons))) return rep.code(400).send({ error: 'Choose Auto, Northern, Southern or No seasons.' });
+      setSetting(db, 'profile', { ...getSetting<Row>(db, 'profile', {}), seasons: b.seasons });
+    }
+    if (b.tz !== undefined) {
+      try { new Intl.DateTimeFormat('en-GB', { timeZone: String(b.tz) }); } catch { return rep.code(400).send({ error: 'That time zone is not known.' }); }
+      setSetting(db, 'profile', { ...getSetting<Row>(db, 'profile', {}), tz: String(b.tz) });
     }
     return state(req);
   });

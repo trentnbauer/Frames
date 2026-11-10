@@ -290,6 +290,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       year INTEGER, why TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '', price REAL, rank INTEGER NOT NULL DEFAULT 0, bought_at TEXT, created_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS gear_items_kind ON gear_items(kind, rank)`);
   },
+  // a date the person set by hand on a photograph (the camera date and the upload date stay as they were)
+  (db) => { addColumn(db, 'photos', 'date_edit', 'TEXT'); },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

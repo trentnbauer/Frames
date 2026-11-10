@@ -60,8 +60,8 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
       let rows: Row[] = [];
       try {
         rows = t.db.prepare(`SELECT p.id FROM photos p WHERE p.missing = 0 AND p.has_derivs = 1 AND p.archived = 0 ${where}
-          AND NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND lower(g.name) IN (${SENSITIVE.map(() => '?').join(',')})) LIMIT 3000`).all(...SENSITIVE) as Row[];
-      } catch { try { rows = t.db.prepare(`SELECT p.id FROM photos p WHERE p.missing = 0 AND p.archived = 0 AND NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND lower(g.name) IN (${SENSITIVE.map(() => '?').join(',')})) LIMIT 3000`).all(...SENSITIVE) as Row[]; } catch { rows = []; } }
+          AND NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND g.accepted != -1 AND lower(g.name) IN (${SENSITIVE.map(() => '?').join(',')})) LIMIT 3000`).all(...SENSITIVE) as Row[];
+      } catch { try { rows = t.db.prepare(`SELECT p.id FROM photos p WHERE p.missing = 0 AND p.archived = 0 AND NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND g.accepted != -1 AND lower(g.name) IN (${SENSITIVE.map(() => '?').join(',')})) LIMIT 3000`).all(...SENSITIVE) as Row[]; } catch { rows = []; } }
       for (const r of rows) {
         const k = `${t.user.id}:${r.id}`;
         if (rated.has(k) || hiddenFor(t.user.id, r.id as number, viewer)) continue;

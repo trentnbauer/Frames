@@ -5,6 +5,8 @@ import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
 import { applyGear, syncGearTags } from '../gear.js';
+import { hemisphere, monthsOf, type Season, type Seasons } from '../seasons.js';
+import { getSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
@@ -43,13 +45,19 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(s);
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.from ?? ''))) { where.push('substr(COALESCE(p.captured_at, p.added_at), 1, 10) >= ?'); args.push(q.from); }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.to ?? ''))) { where.push('substr(COALESCE(p.captured_at, p.added_at), 1, 10) <= ?'); args.push(q.to); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.from ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) >= ?'); args.push(q.from); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.to ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) <= ?'); args.push(q.to); }
     if (q.place) {
       const w = String(q.place).toLowerCase();
       where.push("(lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND lower(s.place) LIKE ? ESCAPE '\\'))"); args.push(like(w), like(w));
     }
     if (q.gps === '1') where.push('p.lat IS NOT NULL AND p.lon IS NOT NULL');
+    // A season, by the person's hemisphere (Settings, Profile, Country).
+    if (['winter', 'spring', 'summer', 'autumn'].includes(String(q.season))) {
+      const pr = getSetting<{ country?: string; seasons?: Seasons }>(db, 'profile', {});
+      const h = hemisphere(pr.country ?? '', pr.seasons ?? 'auto');
+      if (h !== 'none') { const ms = monthsOf(q.season as Season, h); where.push(`CAST(strftime('%m', COALESCE(p.date_edit, p.captured_at, p.added_at)) AS INTEGER) IN (${ms.join(',')})`); }
+    }
     let near: { lat: number; lon: number; km: number } | null = null;
     const nm = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(String(q.near ?? ''));
     if (nm) {
@@ -198,6 +206,12 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       set("DELETE FROM xmp_conflicts WHERE photo_id = ? AND field = 'description'", id);
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
+    // The date shown for the photograph: edited by hand, or null to go back to the camera date (else the upload date).
+    if (b.dateEdit !== undefined) {
+      if (b.dateEdit === null || b.dateEdit === '') set('UPDATE photos SET date_edit = NULL WHERE id = ?', id);
+      else if (typeof b.dateEdit === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.dateEdit) && !Number.isNaN(Date.parse(b.dateEdit))) set('UPDATE photos SET date_edit = ? WHERE id = ?', b.dateEdit, id);
+      else return rep.code(400).send({ error: 'Use a date like 2026-03-14.' });
+    }
     // A pin on the map: both numbers, or null for both to clear it.
     const unsrc = (field: string) => { const cur = String((one('SELECT gear_src g FROM photos WHERE id = ?', id) as Row).g ?? '').split(',').filter((x) => x && x !== field); set('UPDATE photos SET gear_src = ? WHERE id = ?', cur.join(','), id); };
     const mark = (field: string) => { unsrc(field); const cur = new Set(String((one('SELECT user_fields f FROM photos WHERE id = ?', id) as Row).f ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };
