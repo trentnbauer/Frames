@@ -271,6 +271,13 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'photos', 'focal35', 'REAL');
     addColumn(db, 'photos', 'gear_sig', "TEXT NOT NULL DEFAULT ''");
   },
+  // notifications (the bell): what happened, where it leads, and whether it has been read
+  (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0,
+      screen TEXT NOT NULL DEFAULT '', anchor TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '');
+      CREATE INDEX IF NOT EXISTS notifications_created ON notifications(created_at);`);
+  },
 ];
 
 export function migrate(db: DB) {

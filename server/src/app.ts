@@ -21,6 +21,7 @@ import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
+import { registerNotifications } from './routes/notifications.js';
 import { registerInsights } from './routes/insights.js';
 import { parseGear } from './gear.js';
 import { registerTodo } from './routes/todo.js';
@@ -43,9 +44,9 @@ const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0);
 const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 
-// Fonts come from Google Fonts. Everything else must be same-origin.
+// Fonts are bundled with the app. Everything must be same-origin.
 const CSP_TS = (c: string) => c.replace("script-src 'self'", "script-src 'self' https://challenges.cloudflare.com").replace("connect-src 'self'", "connect-src 'self' https://challenges.cloudflare.com") + '; frame-src https://challenges.cloudflare.com';
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin|cloud\/client)(\/|\?|$)/;
 /** The only signed-in addresses a guest may use: who they are, their list of shared links, and the welcome check the app makes. */
@@ -526,6 +527,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   registerProfile(app, ctx);
+  registerNotifications(app, ctx);
   registerCloud(app, ctx);
   registerAdmin(app, ctx);
   registerPrivacy(app, ctx);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { BottomNav, useKey } from './components/bits';
-import { Changelog } from './components/Changelog';
+import { useKey } from './components/bits';
+import { EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
@@ -62,6 +62,7 @@ function Shell() {
 
   return (
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
+      {!inReview && <EnvBanner />}
       <Routes>
         <Route path="/" element={<Today />} />
         <Route path="/library" element={<Library />} />
@@ -81,8 +82,8 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
-      {!inReview && <BottomNav onSearch={() => setSearching(true)} onNew={() => setCreating({})} />}
-      {!inReview && <Changelog />}
+      {!inReview && <TabBar />}
+      <ShellModals />
       {searching && <Search onClose={() => setSearching(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>

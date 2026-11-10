@@ -256,7 +256,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
   // What the saved settings would write to the file, against what this container was actually started with. Names and verdicts only:
   // a value, a secret above all, is never sent.
-  app.get('/api/admin/env/compare', async () => {
+  const envCompare = () => {
     const pairs: [string, string][] = [];
     buildEnvFile(sys, x.tenants.owner().db, { pairs });
     const env = process.env;
@@ -273,7 +273,10 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       rows.push({ name, secret: secret(name), status: 'env only', env: show(name, env[name]) });
     }
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };
-  });
+  };
+  app.get('/api/admin/env/compare', async () => envCompare());
+  // Just whether the app and the env file disagree, for the banner every administrator sees.
+  app.get('/api/admin/env/drift', async () => { const c = envCompare().counts; return { drift: envConfigLoaded().system ? c.differs + c.appOnly : 0, differs: c.differs, appOnly: c.appOnly }; });
   app.get('/api/admin/env/export', async (req, rep) => {
     if (!envExportOn() && x.cfg.allowEnvExport !== false) return rep.code(403).send({ error: 'Export is switched off. Turn it on in Settings, Env file (you will be asked to sign in again).' });
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });

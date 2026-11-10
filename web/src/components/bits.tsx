@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { imgUrl } from '../api';
 import type { PhotoLite } from '../data';
@@ -38,47 +38,7 @@ export function Swatches({ palette }: { palette: { hex: string; pct: number; nam
   );
 }
 
-export function Mark({ w = 24 }: { w?: number }) {
-  const s = w / 24;
-  return (
-    <svg width={24 * s} height={20 * s} viewBox="0 0 24 20" aria-hidden>
-      <rect x="5.6" y="5.6" width="18" height="14" fill="none" stroke="#efede8" strokeOpacity=".4" strokeWidth="1.25" />
-      <rect x="0" y="0" width="18" height="14" fill="#efede8" />
-    </svg>
-  );
-}
-
-export function Header({ right }: { right?: ReactNode }) {
-  const { me } = useStore();
-  const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
-  const links = (
-    <nav className="toplinks">
-      <NavLink to="/stats" className={({ isActive }) => (isActive ? 'active' : '')}>Stats</NavLink>
-    </nav>
-  );
-  return (
-    <header className="header">
-      <Link to="/" className="lockup" aria-label="Frames home">
-        <Mark />
-        Frames
-      </Link>
-      <div style={{ display: 'flex', gap: 20, alignItems: 'baseline' }}>
-        <span className="t2" style={{ fontSize: 13 }}>{new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-        {right}
-        {links}
-        {/* Always there when someone is signed in with OAuth, whatever the page puts on the right. */}
-        {me && (
-          <NavLink to="/settings?section=profile" className="toplinks" aria-label="Your profile and settings" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="Your profile and settings">
-            {me.hasAvatar && <img src="/api/profile/avatar" alt="" width={22} height={22} style={{ borderRadius: '50%', objectFit: 'cover' }} />}
-            {me.displayName || me.user?.name || me.user?.email || 'You'}{me.role === 'admin' && me.user ? ' · admin' : ''}
-          </NavLink>
-        )}
-        {me && !me.user && me.mode === 'password' && <span className="faint" style={{ fontSize: 13 }} title="Signed in with the shared password">Shared password</span>}
-        {me?.user && <button className="toplinks" style={{ fontSize: 13 }} onClick={signOut} title={me.user.email || me.user.name}>Sign out</button>}
-      </div>
-    </header>
-  );
-}
+export { Mark, Header } from './Shell';
 
 export function Title({ children, count }: { children: ReactNode; count?: string }) {
   return (
@@ -90,28 +50,6 @@ export function Title({ children, count }: { children: ReactNode; count?: string
 }
 
 export const Loading = ({ error }: { error?: string | null }) => <div className="empty" role={error ? 'alert' : 'status'}>{error ? `Something went wrong: ${error}` : 'Loading…'}</div>;
-
-export function BottomNav({ onSearch, onNew }: { onSearch: () => void; onNew: () => void }) {
-  const { summary, todo } = useStore();
-  const nav = useNavigate();
-  const item = (to: string, label: string) => (
-    <NavLink to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>{label}</NavLink>
-  );
-  return (
-    <nav className="nav" aria-label="Primary">
-      {item('/', 'Home')}
-      {item('/library', 'Library')}
-      {item('/shoots', 'Shoots')}
-      {item('/collections', 'Compositions')}
-      {item('/for-you', 'For you')}
-      <span className="div" />
-      <button className="search" onClick={onSearch}>Search or ask… <span>⌘K</span></button>
-      <button className="review" onClick={() => nav('/review')}>Review · {summary?.due ?? 0}</button>
-      <button className="newcomp" onClick={onNew}>+ Composition</button>
-      {todo > 0 && <NavLink to="/todo" className={({ isActive }) => 'todo' + (isActive ? ' active' : '')}>To do · {todo}</NavLink>}
-    </nav>
-  );
-}
 
 /** Justified rows: no cropping. Each tile grows by its aspect ratio. */
 export function Justified({ photos, h = 190, onPick, captions, badges, picked, onTick, hrefOf }: { hrefOf?: (p: PhotoLite) => string; photos: PhotoLite[]; h?: number; onPick?: (p: PhotoLite) => void; captions?: (p: PhotoLite) => string; badges?: (p: PhotoLite) => string | undefined; picked?: Set<number>; onTick?: (p: PhotoLite) => void }) {
