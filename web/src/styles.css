@@ -590,3 +590,18 @@ main.auth.terms { width: 640px; }
   .dc-root div[style*="display: flex"]:not([style*="column"]):not([style*="position: absolute"]):not([style*="overflow-x"]) { flex-wrap: wrap; }
   .dc-root { overflow-x: hidden; }
 }
+
+@media (max-width: 767px) {
+  div:has(> div[style*="flex: 0 0 auto"]):not([style*="column"]) { flex-wrap: wrap; }
+  div[style*="flex: 0 0 auto"] { flex: 0 1 auto !important; max-width: 100%; flex-wrap: wrap; }
+  .stext { width: 100% !important; max-width: 100%; }
+}
+
+@media (max-width: 899px) {
+  .settings-wrap { grid-template-columns: minmax(0, 1fr) !important; gap: 20px !important; }
+  .settings-wrap > aside { flex-direction: row !important; flex-wrap: wrap; gap: 4px !important; }
+  .settings-wrap > aside > div { flex: 1 0 100%; }
+}
+@media (max-width: 767px) {
+  .settings-wrap h1, .settings-wrap h2 { font-size: 30px !important; }
+}
