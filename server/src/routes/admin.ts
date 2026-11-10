@@ -9,6 +9,7 @@ import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSou
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
 import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
+import { footer, sendMail, smtpHealthy } from '../email.js';
 import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
 import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeCloudDest, removeS3, s3State, saveCloudDest, saveS3, storeOf } from '../backupS3.js';
@@ -295,7 +296,15 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const conf = loadAuth(sys);
     const already = isAllowed({ provider: '', sub: '', email, emailVerified: true }, conf.allow);
     if (!already) saveAuth(sys, { ...conf, allow: cleanAllow([...conf.allow, email]) });
-    return rep.code(201).send({ ...dto(u), allowedList: already ? 'already' : 'added' }); // whether they had to be put on the allowed list
+    // If mail works, tell them: a general email with the address to sign in at.
+    let emailed = false;
+    const base = (conf.publicUrl || '').replace(/\/+$/, '');
+    if (smtpHealthy(sys) && base && b.notify !== false) {
+      const inviter = me(req);
+      const r = await sendMail(sys, { to: email, template: 'general', type: 'invite', params: { ...footer(sys, inviter.name, base), subject: `${inviter.name} invited you to Frames`, preheader: 'You have been invited to a photography archive', eyebrow: 'Invitation', title: 'You’re invited', name: email.split('@')[0], body: `${inviter.name} invited you to their Frames, a private place to keep, rate and plan prints of photographs. Sign in with this email address: you will be sent a one-time code, no password needed.`, button_label: 'Open Frames', button_url: `${base}/signin`, fine_print: 'If you were not expecting this, you can ignore it.', image_url: '', image_alt: '', note: typeof b.note === 'string' ? b.note.slice(0, 400) : '', note_from: typeof b.note === 'string' && b.note ? inviter.name : '' } });
+      emailed = r.ok;
+    }
+    return rep.code(201).send({ ...dto(u), allowedList: already ? 'already' : 'added', emailed }); // whether they had to be put on the allowed list
   });
 
   app.patch('/api/admin/users/:id', async (req, rep) => {

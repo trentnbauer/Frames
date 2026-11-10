@@ -292,6 +292,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // a date the person set by hand on a photograph (the camera date and the upload date stay as they were)
   (db) => { addColumn(db, 'photos', 'date_edit', 'TEXT'); },
+  // who a share link was emailed to, and whether it arrived
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS share_invites (id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE, email TEXT NOT NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT \'\', at TEXT NOT NULL)'); },
   // notifications (the bell): what happened, where it leads, and whether it has been read
   (db) => {
     db.exec(`CREATE TABLE IF NOT EXISTS notifications (

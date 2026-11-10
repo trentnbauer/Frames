@@ -6,6 +6,9 @@ import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
 import { getSetting, setSetting } from '../db.js';
+import { footer, sendMail, smtpHealthy } from '../email.js';
+import { notify } from '../notifications.js';
+import { queueMail } from '../mailEvents.js';
 import { serveDerivative } from '../imageServe.js';
 import { humanCookie, verifyToken } from '../turnstile.js';
 import { FRAME_COLOURS, parseLayout } from '../layout.js';
@@ -201,6 +204,17 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     return [...by.values()].map((p) => ({ ...p, n: p.entries.length, avg: p.entries.reduce((a, e) => a + e.rating, 0) / p.entries.length }));
   });
 
+  /** Tells the owner a guest did something: the bell, and an email if they turned that on. */
+  const tell = (share: Row, who: string, kind: 'guest-rating' | 'guest-suggestion', what: string) => {
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const target = share.kind === 'collection' ? `/collections/${share.target_id}?guests=${kind === 'guest-suggestion' ? 'suggestions' : 'ratings'}` : `/shoots/${share.target_id}`;
+      const text = `${who} ${what}`;
+      if (!notify(db, kind, text, { screen: target }, `${kind}:${share.id}:${who}:${day}`)) return;
+      queueMail(x, x.tenant(), kind === 'guest-rating' ? 'guest-reply' : 'guest-suggestion', { type: 'guest', baseUrl: (loadAuth(x.sys).publicUrl || '').replace(/\/+$/, ''), params: { subject: text, preheader: text, eyebrow: 'Guest reply', title: text, body: 'Open it to see what they said and to approve or decline suggestions.', button_label: 'See it', button_url: `${(loadAuth(x.sys).publicUrl || '').replace(/\/+$/, '')}${target}`, fine_print: 'Turn these emails off in Settings, Notifications.', image_url: '', image_alt: '', note: '', note_from: '' } });
+    } catch { /* telling the owner must never break a guest's request */ }
+  };
+
   // ---------- the PIN gate ----------
   // A device is a cookie we hand out; five wrong PINs lock the link on that device for 15 minutes. The cookie that says "PIN passed" is signed,
   // names the link and the PIN it was for, so changing the PIN signs everyone out.
@@ -223,6 +237,35 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   };
   const canSuggest = (share: Row) => (share.allow_suggest === null || share.allow_suggest === undefined ? !!share.allow_review : !!share.allow_suggest);
   const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${share.id}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
+
+  // Email invites: the link goes to each address, and the log keeps who it was sent to and whether it arrived. The PIN is never in the email.
+  app.get('/api/shares/:id/invites', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
+    return { invites: all('SELECT email, status, error, at FROM share_invites WHERE share_id = ? ORDER BY id DESC LIMIT 100', id), canEmail: smtpHealthy(x.sys) };
+  });
+  app.post('/api/shares/:id/invites', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const s = one('SELECT * FROM shares WHERE id = ?', id);
+    if (!s) return notFound(rep);
+    if (!smtpHealthy(x.sys)) return rep.code(400).send({ error: 'Email is not set up on this server. Copy the link instead.' });
+    if (statusOf(s) !== 'active') return rep.code(400).send({ error: 'Turn the link on first.' });
+    const b = (req.body ?? {}) as Row;
+    const emails = [...new Set((Array.isArray(b.emails) ? b.emails : []).map((e) => String(e).trim().toLowerCase()).filter((e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e)))].slice(0, 20);
+    if (!emails.length) return rep.code(400).send({ error: 'Enter at least one email address.' });
+    const base = (loadAuth(x.sys).publicUrl || x.baseUrl(req)).replace(/\/+$/, '');
+    const name = (one(`SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, s.target_id) ?? { name: 'a set of photographs' }).name as string;
+    const owner = x.tenant().user;
+    const first = one('SELECT photo_id FROM collection_photos WHERE collection_id = ? ORDER BY pos LIMIT 1', s.target_id);
+    const hero = !s.pin && s.kind === 'collection' && first ? `${base}/api/s/${s.token}/photos/${first.photo_id}/thumb` : '';
+    const out: { email: string; ok: boolean; error: string }[] = [];
+    for (const to of emails) {
+      const r = await sendMail(x.sys, { to, template: 'general', type: 'share', params: { ...footer(x.sys, owner.name, base), subject: `${owner.name} shared “${name}” with you`, preheader: 'Take a look and tell them what you think', eyebrow: 'Shared with you', title: name, name: to.split('@')[0], body: `${owner.name} wants your opinion. ${s.allow_review ? 'You can rate the photographs and suggest changes.' : 'Have a look.'}${s.pin ? ' They will give you the PIN separately.' : ''}`, button_label: 'Open', button_url: `${base}/s/${s.token}`, fine_print: s.expires_at ? `This link works until ${new Date(s.expires_at).toDateString()}.` : 'You can ignore this if you were not expecting it.', image_url: hero, image_alt: name, note: typeof b.note === 'string' ? b.note.slice(0, 400) : '', note_from: typeof b.note === 'string' && b.note ? owner.name : '' } });
+      db.prepare('INSERT INTO share_invites(share_id, email, status, error, at) VALUES(?,?,?,?,?)').run(id, to, r.ok ? 'sent' : 'failed', r.error, new Date().toISOString());
+      out.push({ email: to, ok: r.ok, error: r.error });
+    }
+    return { results: out };
+  });
 
   // ---------- public side (no login) ----------
   type Resolved = { share: Row; name: string; description: string; photoIds: number[]; chosenIds?: number[]; target?: unknown; layout?: unknown };
@@ -324,6 +367,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if ((one('SELECT COUNT(*) n FROM share_suggestions WHERE share_id = ?', r.share.id) as Row).n >= MAX_SUGGESTIONS) return rep.code(429).send({ error: 'This link has reached its suggestion limit' });
     const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, 500) : null;
     db.prepare('INSERT INTO share_suggestions(share_id, reviewer, for_id, photo_id, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, reviewer, forId, photoId, note, new Date().toISOString());
+    tell(r.share, reviewer, 'guest-suggestion', 'suggested a change');
     return { ok: true };
   });
 
@@ -458,6 +502,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     // One rating per person per photograph: rating again replaces the earlier one.
     db.prepare('DELETE FROM share_reviews WHERE share_id = ? AND photo_id = ? AND reviewer = ?').run(r.share.id, photoId, reviewer);
     db.prepare('INSERT INTO share_reviews(share_id, photo_id, reviewer, rating, note, ts) VALUES(?, ?, ?, ?, ?, ?)').run(r.share.id, photoId, reviewer, rating, note, new Date().toISOString());
+    tell(r.share, reviewer, 'guest-rating', 'rated your photos');
     return { ok: true };
   });
 }

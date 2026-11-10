@@ -13,27 +13,30 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
+import { CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
 import { GearDefaults } from '../components/GearDefaults';
 
-type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
-  | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
+type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
+  | 'Notifications' | 'Email' | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
 
 // One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
 const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
-  { title: 'You', items: ['Profile'] },
+  { title: 'You', items: ['Profile', 'Notifications'] },
   { title: 'Your library', items: ['Reviews', 'Tags & subjects', 'Metadata & XMP'] },
   { title: 'Connections', items: ['AI', 'Cloud sync', 'Portfolio'] },
   { title: 'Your account', items: ['Your data'] },
 ];
 const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
-  { title: 'People & sign-in', items: ['People', 'Access'] },
+  { title: 'People & sign-in', items: ['People', 'Access', 'Email'] },
   { title: 'Storage', items: ['Libraries & storage', 'Backup', 'Env file'] },
   { title: 'Shared services', items: ['Shared AI', 'Cloud services', 'Cloudflare tunnel'] },
 ];
 /** What each section is called on screen (the others are called what they are named here). */
 const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
 const DESC: Record<Sec, string> = {
-  Profile: 'Your display name and picture, and the ways you can sign in as you.',
+  Profile: 'Your display name and picture, where you are, and the ways you can sign in as you.',
+  Notifications: 'What the bell shows, what is emailed, and quiet hours.',
+  Email: 'Outgoing mail, the sign-in code option and a log of what was sent.',
   Reviews: 'How often each photograph comes back for a rating.',
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
@@ -53,7 +56,9 @@ const DESC: Record<Sec, string> = {
 };
 /** The headings inside each section, so the finder can find a setting and not only a section. */
 const HEADINGS: Partial<Record<Sec, string[]>> = {
-  Profile: ['Display picture', 'Display name', 'Signed in as', 'Ways to sign in as you'],
+  Profile: ['Display picture', 'Display name', 'Country', 'Seasons', 'Time zone', 'Signed in as', 'Ways to sign in as you'],
+  Notifications: ['What you are told about', 'Review reminder', 'Quiet hours'],
+  Email: ['Outgoing mail (SMTP)', 'Send a test email', 'Sign in with an emailed code', 'Email log'],
   Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
   'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
   'Metadata & XMP': ['Camera defaults', 'Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
@@ -157,7 +162,9 @@ export function SettingsPage() {
           {me?.envConfig && shown !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
           {shown === 'Profile' && <Profile />}
-          {shown === 'Reviews' && <Reviews s={s} save={save} />}
+          {shown === 'Notifications' && <NotificationSettings />}
+          {shown === 'Email' && <EmailSettings />}
+          {shown === 'Reviews' && <><Reviews s={s} save={save} /><CommunitySettings /></>}
           {shown === 'AI' && <AiSettings />}
           {shown === 'Shared AI' && <AiSettings server />}
           {shown === 'Libraries & storage' && <Libraries />}
@@ -165,7 +172,7 @@ export function SettingsPage() {
           {shown === 'Cloud sync' && <CloudSettings />}
           {shown === 'Cloud services' && <CloudServices />}
           {shown === 'Cloudflare tunnel' && <TunnelSettings />}
-          {shown === 'People' && <People />}
+          {shown === 'People' && <><People /><ReportsQueue /></>}
           {shown === 'Env file' && <EnvExport />}
           {shown === 'Your data' && <YourData />}
           {shown === 'Access' && <Access />}

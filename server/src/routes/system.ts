@@ -5,6 +5,7 @@ import type { Ctx, Row } from '../ctx.js';
 import { checkCode, checkSmtp, footer, getSmtp, healthOf, issueCode, logCsv, logRows, retryFailed, saveSmtp, sendMail, smtpConfigured, smtpHealthy, smtpPassword } from '../email.js';
 import { displayNameOf } from './profile.js';
 import { getUser, type User } from '../users.js';
+import { ensureOutbox, flushOutbox, remindersFor } from '../mailEvents.js';
 
 /** What the screens need to know about how this server is set up, and the administrator's Email settings. */
 export function registerSystem(app: FastifyInstance, x: Ctx) {
@@ -75,9 +76,20 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
   app.post('/api/admin/email/log/retry', async () => ({ sent: await retryFailed(sys) }));
 }
 
-/** Re-checks SMTP every ten minutes, so the sign-in option follows the mail server's health. Never throws. */
+/** Re-checks SMTP every ten minutes, and every minute sends what is due (held mail, reminders, the monthly summary). Never throws. */
 export function startEmailHealth(x: Ctx, onClose: (fn: () => void) => void) {
-  const t = setInterval(() => { if (smtpConfigured(x.sys)) void checkSmtp(x.sys).catch(() => undefined); }, 600_000);
+  let n = 0;
+  const t = setInterval(() => {
+    try {
+      n++;
+      if (n % 10 === 0 && smtpConfigured(x.sys)) void checkSmtp(x.sys).catch(() => undefined);
+      if (!smtpHealthy(x.sys)) return;
+      ensureOutbox(x.sys);
+      const base = (loadAuth(x.sys).publicUrl || '').replace(/\/+$/, '');
+      if (base) for (const tenant of x.tenants.all()) { try { remindersFor(x, tenant, base); } catch (e) { console.error('Reminder failed for one person', (e as Error).message); } }
+      void flushOutbox(x).catch(() => undefined);
+    } catch (e) { console.error('Mail timer', (e as Error).message); }
+  }, 60_000);
   t.unref();
   onClose(() => clearInterval(t));
 }
