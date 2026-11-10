@@ -563,3 +563,30 @@ main.auth.terms { width: 640px; }
 
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; background: var(--bg); }
 .auth-shell > div { max-width: 100%; }
+
+/* Responsive rules for the screens built from the design (answers.md §4): desktop 1200 and up, tablet 768 to 1199, phone under 768. */
+.dc-root { max-width: 100%; }
+.dc-root img, .dc-root svg { max-width: 100%; }
+@media (max-width: 1199px) {
+  .dc-root [style*="grid-template-columns: repeat(5"], .dc-root [style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .dc-root [style*="grid-template-columns: 420px"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .dc-root [style*="grid-template-columns: minmax(0, 1fr) 360px"], .dc-root [style*="grid-template-columns: minmax(0, 1fr) 340px"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .dc-root [style*="grid-template-columns: minmax(0, 1fr) minmax(0, 2fr)"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .dc-root [style*="grid-template-columns: repeat(auto-fill, minmax(400px"] { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important; }
+}
+@media (max-width: 767px) {
+  .dc-root [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .dc-root [style*="grid-template-columns: repeat(5"], .dc-root [style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .dc-root h1 { font-size: 32px !important; }
+  .dc-root [style*="padding: 0px 56px"], .dc-root [style*="padding: 0 56px"] { padding-left: 16px !important; padding-right: 16px !important; }
+  /* modals become full-screen sheets */
+  .dc-root div[style*="position: fixed"][style*="inset: 0px"] > div[style*="width:"], div[style*="position: fixed"][style*="inset: 0px"] > div[style*="width: 4"], div[style*="position: fixed"][style*="inset: 0px"] > div[style*="width: 5"], div[style*="position: fixed"][style*="inset: 0px"] > div[style*="width: 6"], div[style*="position: fixed"][style*="inset: 0px"] > div[style*="width: 8"] { width: 100% !important; max-width: 100% !important; min-height: 100vh; border-radius: 0 !important; }
+  div[style*="position: fixed"][style*="inset: 0px"][style*="padding-top"] { padding-top: 0 !important; }
+  .dc-root main { width: 100% !important; }
+  .dc-root [style*="min-width"] { min-width: 0 !important; }
+}
+
+@media (max-width: 767px) {
+  .dc-root div[style*="display: flex"]:not([style*="column"]):not([style*="position: absolute"]):not([style*="overflow-x"]) { flex-wrap: wrap; }
+  .dc-root { overflow-x: hidden; }
+}
