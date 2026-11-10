@@ -1,3 +1,4 @@
+import { readLog, setLogLevel } from '../logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -14,7 +15,8 @@ import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
 import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeCloudDest, removeS3, s3State, saveCloudDest, saveS3, storeOf } from '../backupS3.js';
 import { beginConnect, CloudError, finishBackupConnect, isProvider, pendingPurpose } from '../cloud.js';
-import { policyOf, policyPatch } from '../policy.js';
+import { applyRuntime, policyOf, policyPatch } from '../policy.js';
+import { trimCache } from '../cache.js';
 import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore, writeServerArchive } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
@@ -119,11 +121,17 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean; defaultRole?: 'member' | 'guest'; signups?: boolean };
   const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
   app.get('/api/admin/instance', async () => instance());
+  // The server's own log (start-up lines, warnings, errors), for the last week, as a text file.
+  app.get('/api/admin/logs/info', async () => ({ bytes: readLog(7).bytes }));
+  app.get('/api/admin/logs', async (_req, rep) => rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.log"').header('Cache-Control', 'no-store').send(readLog(7).text || 'Nothing logged yet.\n'));
   app.put('/api/admin/instance', async (req) => {
     const b = (req.body ?? {}) as Row;
     const cur = getSetting<Instance>(sys, 'instance', {});
     setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}), ...(typeof b.signups === 'boolean' ? { signups: b.signups } : {}), ...policyPatch(b) });
     setSessionDays(policyOf(sys).sessionDays);
+    applyRuntime(sys);
+    setLogLevel(policyOf(sys).logLevel);
+    { const p = policyOf(sys); if (p.cacheLimitGb) trimCache(x.tenants.all().map((t) => t.cfg as never), p.cacheLimitGb * 1073741824); }
     return instance();
   });
 

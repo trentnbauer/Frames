@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { api, cleanup, makeEnv, type Env } from './testutil.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { madeWithin, policyPatch } from './policy.js';
+import { trimCache } from './cache.js';
+import { readLog, startLogger } from './logger.js';
+import { sharedUsage } from './ai.js';
 
 let env: Env, A: ReturnType<typeof api>;
 beforeAll(() => { env = makeEnv(); A = api(env); });
@@ -54,5 +60,56 @@ describe('system information', () => {
     expect(r.cache.bytes).toBeGreaterThanOrEqual(0);
     expect(r.checks.map((c) => c.name)).toEqual(['database', 'library folder', 'cache', 'email']);
     expect(r.checks.find((c) => c.name === 'database')!.ok).toBe(true);
+  });
+});
+
+describe('limits and rules an administrator sets', () => {
+  it('start at safe defaults and keep only valid values', async () => {
+    expect((await A.get('/api/admin/instance')).body).toMatchObject({ cacheLimitGb: 0, previewPx: 2400, workers: 0, logLevel: 'info', updateChannel: 'stable', cloudWho: 'members', cloudMinSyncMin: 15, cloudQuotaGb: 0, membersSeeShoots: false, aiMonthlyLimit: 0, aiMembersOwn: true });
+    expect(policyPatch({ cacheLimitGb: 7, previewPx: 99, workers: 99, logLevel: 'loud', updateChannel: 'nightly', cloudWho: 'everyone', cloudMinSyncMin: 5, aiMonthlyLimit: 3 })).toEqual({});
+    const r = await A.put('/api/admin/instance', { cacheLimitGb: 50, previewPx: 3072, workers: 4, logLevel: 'warnings', updateChannel: 'beta', cloudWho: 'admins', cloudMinSyncMin: 60, cloudQuotaGb: 100, membersSeeShoots: true, aiMonthlyLimit: 500, aiMembersOwn: false });
+    expect(r.body).toMatchObject({ cacheLimitGb: 50, previewPx: 3072, workers: 4, logLevel: 'warnings', updateChannel: 'beta', cloudWho: 'admins', cloudMinSyncMin: 60, cloudQuotaGb: 100, membersSeeShoots: true, aiMonthlyLimit: 500, aiMembersOwn: false });
+  });
+  it('a cache over its limit loses the previews opened longest ago, and keeps thumbnails', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-cache-'));
+    const mk = (id: number, ageDays: number) => {
+      const d = path.join(dir, 'derivatives', String(id)); fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, 'thumb.jpg'), Buffer.alloc(100)); fs.writeFileSync(path.join(d, 'preview.jpg'), Buffer.alloc(1000));
+      const at = new Date(Date.now() - ageDays * 86_400_000); fs.utimesSync(path.join(d, 'preview.jpg'), at, at);
+    };
+    mk(1, 30); mk(2, 10); mk(3, 1);
+    expect(trimCache([{ dataDir: dir } as never], 0)).toBe(0); // no limit
+    expect(trimCache([{ dataDir: dir } as never], 2500)).toBe(1); // 3300 in total: the oldest preview goes
+    expect(fs.existsSync(path.join(dir, 'derivatives', '1', 'preview.jpg'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'derivatives', '1', 'thumb.jpg'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'derivatives', '3', 'preview.jpg'))).toBe(true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  it('the log keeps only what the level allows, and can be read back by age', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-log-'));
+    startLogger(dir, 'warnings');
+    console.log('chatter'); console.warn('careful'); console.error('broken');
+    const t = readLog(7).text;
+    expect(t).not.toContain('chatter');
+    expect(t).toContain('WARN careful');
+    expect(t).toContain('ERROR broken');
+    fs.appendFileSync(path.join(dir, 'logs', 'frames.log'), '2020-01-01T00:00:00.000Z WARN ancient\n');
+    expect(readLog(7).text).not.toContain('ancient');
+    expect(readLog(100000).text).toContain('ancient');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  it('other members’ shoots are listed only when allowed', async () => {
+    await A.put('/api/admin/instance', { membersSeeShoots: false });
+    expect((await A.get('/api/shoots/others')).body).toEqual({ enabled: false, shoots: [] });
+    await A.put('/api/admin/instance', { membersSeeShoots: true });
+    expect((await A.get('/api/shoots/others')).body).toMatchObject({ enabled: true });
+  });
+  it('counts shared AI use against the monthly limit', async () => {
+    await A.put('/api/admin/instance', { aiMonthlyLimit: 100 });
+    expect(sharedUsage(env.db)).toMatchObject({ used: 0, limit: 100 });
+  });
+  it('lets an administrator download the log', async () => {
+    const r = await A.get('/api/admin/logs/info');
+    expect(typeof (r.body as { bytes: number }).bytes).toBe('number');
   });
 });

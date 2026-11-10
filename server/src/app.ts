@@ -1,3 +1,4 @@
+import { ensureDeriv } from './cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -324,7 +325,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const id = num(req.params.id);
     const f = derivPath(cfg, id, kind);
     const row = one('SELECT hash FROM photos WHERE id = ?', id); // a derivative with no photograph behind it is never sent
-    if (!row || !fs.existsSync(f)) return notFound(rep, 'No preview available');
+    if (!row || !(await ensureDeriv(db, cfg, id, kind))) return notFound(rep, 'No preview available');
     return serveDerivative(req, rep, f, String(row.hash), kind);
   };
   app.get('/api/photos/:id/thumb', sendImage('thumb'));

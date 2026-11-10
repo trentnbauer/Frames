@@ -5,6 +5,7 @@ import { derivPath, type Cfg } from './ingest.js';
 import { activeConfig, type AiCfg } from './aisources.js';
 import { orderFor, type Job } from './aiJobs.js';
 import { loadSettings } from './settings.js';
+import { policyOf } from './policy.js';
 
 /**
  * Optional AI analysis, through whichever source is active (see aisources.ts). Three ways of talking to one:
@@ -27,11 +28,21 @@ export function aiConfigsFor(db: DB, job: Job): AiCfg[] {
   if (!getSetting<unknown>(db, 'aiJobs', null)) { const c = activeConfig(db, loadSettings(db).aiActive); return c ? [c] : []; }
   return orderFor(db, job).map((id) => activeConfig(db, id)).filter((c): c is AiCfg => !!c);
 }
+const monthOf = () => new Date().toISOString().slice(0, 7);
+const usedShared = (db: DB) => { const u = getSetting<{ m: string; n: number }>(db, 'aiUsage', { m: monthOf(), n: 0 }); return u.m === monthOf() ? u.n : 0; };
+const countShared = (db: DB) => setSetting(db, 'aiUsage', { m: monthOf(), n: usedShared(db) + 1 });
+/** How many requests this person has made to shared paid AIs this month, and the limit (0: none). */
+export const sharedUsage = (db: DB) => { const s = (db as unknown as { sys?: DB }).sys; return { used: usedShared(db), limit: s ? policyOf(s).aiMonthlyLimit : 0 }; };
+const sharedOverLimit = (db: DB) => { const u = sharedUsage(db); return u.limit > 0 && u.used >= u.limit; };
 /** Runs `fn` with the first AI for the job; if it errors, the next one takes over. Null when no AI is set up for the job; throws the last error if all fail. */
 export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>): Promise<T | null> {
   const list = aiConfigsFor(db, job);
   let last: unknown = null;
-  for (const c of list) { try { return await fn(c); } catch (e) { last = e; } }
+  for (const c of list) {
+    // A paid shared AI stops after the monthly number of requests the administrator allows each person; the next AI in the order takes over.
+    if (c.shared && !c.local && sharedOverLimit(db)) { last = new Error('The monthly limit for the shared AI has been reached.'); continue; }
+    try { const r = await fn(c); if (c.shared && !c.local) countShared(db); return r; } catch (e) { if (c.shared && !c.local) countShared(db); last = e; }
+  }
   if (list.length) throw last;
   return null;
 }

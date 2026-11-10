@@ -1,3 +1,4 @@
+import { runtime } from './policy.js';
 import { addDays, intervalDays } from './schedule.js';
 import { loadSettings } from './settings.js';
 import crypto from 'node:crypto';
@@ -142,7 +143,7 @@ async function makeDerivatives(cfg: Cfg, id: number, file: string, isRaw: boolea
   const base = sharp(input, { failOn: 'none' }).rotate();
   const meta = await base.clone().metadata();
   await base.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(derivPath(cfg, id, 'thumb'));
-  await base.clone().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 88 }).toFile(derivPath(cfg, id, 'preview'));
+  await base.clone().resize({ width: runtime.previewPx, height: runtime.previewPx, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 88 }).toFile(derivPath(cfg, id, 'preview'));
   return meta;
 }
 
@@ -297,10 +298,14 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
 /** Regenerates previews and analysis for photos that lack them (or all of them). */
 export async function rebuild(db: DB, cfg: Cfg, all: boolean, onProgress?: (done: number, total: number) => void) {
   const rows = db.prepare(`SELECT id, path FROM photos WHERE missing = 0 ${all ? '' : 'AND (has_derivs = 0 OR dhash IS NULL)'}`).all() as { id: number; path: string }[];
-  let done = 0, fixed = 0;
-  for (const r of rows) {
-    try { if (await processPhoto(db, cfg, r.id, r.path)) fixed++; } catch { /* leave it for next time */ }
-    onProgress?.(++done, rows.length);
-  }
+  let done = 0, fixed = 0, next = 0;
+  const lanes = Math.max(1, runtime.workers || 2); // the Storage & processing setting: how many photographs at once
+  await Promise.all(Array.from({ length: Math.min(lanes, rows.length) }, async () => {
+    while (next < rows.length) {
+      const r = rows[next++];
+      try { if (await processPhoto(db, cfg, r.id, r.path)) fixed++; } catch { /* leave it for next time */ }
+      onProgress?.(++done, rows.length);
+    }
+  }));
   return { checked: rows.length, rebuilt: fixed };
 }

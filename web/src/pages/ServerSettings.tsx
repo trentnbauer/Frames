@@ -130,7 +130,7 @@ function CloudBackup() {
 }
 
 
-type Inst = { allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always'; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number };
+type Inst = { allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always'; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number; cacheLimitGb: number; previewPx: number; workers: number; logLevel: 'errors' | 'warnings' | 'info'; updateChannel: 'stable' | 'beta'; cloudWho: 'admins' | 'members'; cloudMinSyncMin: number; cloudQuotaGb: number; membersSeeShoots: boolean; aiMonthlyLimit: number; aiMembersOwn: boolean };
 type SysInfo = { version: string; image: string; libraryDisk: { path: string; total: number; free: number }; dataDisk: { path: string; total: number; free: number }; cache: { path: string; bytes: number }; checks: { name: string; ok: boolean }[]; libraries: number };
 
 /** Settings, Server, Photos & storage: where originals live, the XMP sidecar choice, the originals rules and the cloud services members can use. */
@@ -179,6 +179,14 @@ export function PhotosStorage() {
       </SCard>
 
       <CloudServices />
+
+      <Eyebrow>Cloud rules</Eyebrow>
+      <SCard>
+        <SRow title="Who can connect cloud storage" hint="Guests never can."><PSelect label="Who can connect cloud storage" value={inst.data?.cloudWho ?? 'members'} options={[['admins', 'Admins only'], ['members', 'Admins and members']]} set={(v) => put({ cloudWho: v })} /></SRow>
+        <SRow title="Fastest sync allowed" hint="Members can’t set a connection to check more often than this."><PSelect label="Fastest sync allowed" value={inst.data?.cloudMinSyncMin ?? 15} options={[[15, 'Every 15 min'], [30, 'Every 30 min'], [60, 'Every hour'], [360, 'Every 6 hours'], [1440, 'Every day']]} set={(v) => put({ cloudMinSyncMin: v })} /></SRow>
+        <SRow title="Storage per person from the cloud" hint="A sync stops when someone’s cloud copies reach this. Nothing already copied is removed."><PSelect label="Storage per person from the cloud" value={inst.data?.cloudQuotaGb ?? 0} options={[[0, 'No limit'], [50, '50 GB'], [100, '100 GB'], [200, '200 GB'], [500, '500 GB']]} set={(v) => put({ cloudQuotaGb: v })} /></SRow>
+        <SRow title="Read-only" hint="Frames only copies from cloud storage. It never deletes, moves or changes files there." />
+      </SCard>
     </>
   );
 }
@@ -232,14 +240,24 @@ export function StorageProcessing() {
   const rb = useApi<{ running: boolean; done: number; total: number; result: null | { checked: number; rebuilt: number } }>('/library/rebuild/status');
   const [msg, setMsg] = useState('');
   const run = async (path: string, ok: string) => { setMsg(''); try { await api(path, { body: {} }); setMsg(ok); scan.reload(); rb.reload(); } catch (e) { setMsg((e as Error).message); } };
+  const inst = useApi<Inst>('/admin/instance');
+  const put = (body: Record<string, unknown>) => api('/admin/instance', { method: 'PUT', body }).then(() => { inst.reload(); sys.reload(); }).catch(() => undefined);
   const c = sys.data?.cache;
+  const limit = (inst.data?.cacheLimitGb ?? 0) * 1073741824;
   return (
     <>
       <Eyebrow>Cache</Eyebrow>
       <SCard>
         <SRow title="Cache folder" hint="Thumbnails and previews. Safe to delete; they rebuild."><span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere', textAlign: 'right' }}>{c?.path ?? '…'}</span></SRow>
-        <SRow title="Cache size" hint={`${sys.data?.libraries ?? 0} ${sys.data?.libraries === 1 ? 'library' : 'libraries'}`}><span style={{ fontSize: 13.5 }}>{c ? gb(c.bytes) : '…'}</span></SRow>
+        <SRow title="Cache size" hint={`${sys.data?.libraries ?? 0} ${sys.data?.libraries === 1 ? 'library' : 'libraries'}`}>{c && limit > 0 ? <Bar used={c.bytes} total={limit} text={`${gb(c.bytes)} of ${gb(limit)} limit`} /> : <span style={{ fontSize: 13.5 }}>{c ? gb(c.bytes) : '…'}</span>}</SRow>
+        <SRow title="Cache limit" hint="When the cache is over this, the previews opened longest ago are deleted. They are made again when opened."><PSelect label="Cache limit" value={inst.data?.cacheLimitGb ?? 0} options={[[0, 'No limit'], [10, '10 GB'], [25, '25 GB'], [50, '50 GB'], [100, '100 GB'], [250, '250 GB']]} set={(v) => put({ cacheLimitGb: v })} /></SRow>
+        <SRow title="Preview size" hint="What you see on the Photo page and in Review. Applies to previews made from now on; Rebuild thumbnails remakes the rest."><PSelect label="Preview size" value={inst.data?.previewPx ?? 2400} options={[[1600, '1600 px'], [2400, '2400 px'], [3072, '3072 px'], [4096, '4096 px']]} set={(v) => put({ previewPx: v })} /></SRow>
         {sys.data && sys.data.dataDisk.total > 0 && <SRow title="Disk" hint={sys.data.dataDisk.path}><Bar used={sys.data.dataDisk.total - sys.data.dataDisk.free} total={sys.data.dataDisk.total} text={`${gb(sys.data.dataDisk.total - sys.data.dataDisk.free)} of ${gb(sys.data.dataDisk.total)}`} /></SRow>}
+      </SCard>
+
+      <Eyebrow>Processing</Eyebrow>
+      <SCard>
+        <SRow title="Background workers" hint="How many photographs are processed at once. More is faster, but uses more CPU while you work."><PSelect label="Background workers" value={inst.data?.workers ?? 0} options={[[0, 'Automatic'], ...[1, 2, 3, 4, 6, 8].map((n) => [n, String(n)] as [number, string])]} set={(v) => put({ workers: v })} /></SRow>
       </SCard>
 
       <Eyebrow>Jobs</Eyebrow>
@@ -255,6 +273,9 @@ export function StorageProcessing() {
 /** Settings, Server, Updates & system: the version, health checks, the env file and restart. */
 export function UpdatesSystem() {
   const sys = useApi<SysInfo>('/admin/system');
+  const inst = useApi<Inst>('/admin/instance');
+  const logs = useApi<{ bytes: number }>('/admin/logs/info');
+  const put = (body: Record<string, unknown>) => api('/admin/instance', { method: 'PUT', body }).then(() => { inst.reload(); rel.reload(); }).catch(() => undefined);
   const rel = useApi<{ current: string; releases: { name: string }[]; source: string }>('/releases');
   const [checked, setChecked] = useState(false);
   const [msg, setMsg] = useState('');
@@ -271,12 +292,15 @@ export function UpdatesSystem() {
         <SRow title="Version" hint={`${sys.data ? (sys.data.version === 'dev' ? 'development build' : `v${sys.data.version.replace(/^v/, '')}`) : '…'} · ${sys.data?.image ?? ''}${checked ? (newer ? ` · latest release: ${newer.name}` : rel.data?.source === 'none' ? ' · could not reach GitHub' : ' · up to date') : ''}`}>
           <button className="ghost" onClick={() => { rel.reload(); setChecked(true); }}>Check now</button>
         </SRow>
+        <SRow title="Update channel" hint="Beta also offers pre-releases."><PSeg label="Update channel" value={inst.data?.updateChannel ?? 'stable'} options={[['stable', 'Stable'], ['beta', 'Beta']]} set={(v) => put({ updateChannel: v })} /></SRow>
         <SRow title="What’s new" hint="Release notes from GitHub, shown to admins after an update."><Link to="/settings?section=about" className="ghost plain">About Frames →</Link></SRow>
       </SCard>
 
       <Eyebrow>Logs & health</Eyebrow>
       <SCard>
         <SRow title="Health" hint={sys.data ? (bad.length ? `Needs attention: ${bad.map((c) => c.name).join(', ')}` : `All good · ${sys.data.checks.map((c) => c.name).join(', ')}`) : 'Checking…'}><button className="ghost" onClick={() => sys.reload()}>Run checks</button></SRow>
+        <SRow title="Log level" hint="What the server keeps in its log. Errors only is the quietest."><PSelect label="Log level" value={inst.data?.logLevel ?? 'info'} options={[['errors', 'Errors'], ['warnings', 'Warnings'], ['info', 'Everything']]} set={(v) => put({ logLevel: v })} /></SRow>
+        <SRow title="Logs" hint={`Last 7 days · ${logs.data ? (logs.data.bytes > 1048576 ? `${(logs.data.bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(logs.data.bytes / 1024))} KB`) : '…'}`}><a className="ghost" href="/api/admin/logs" download="frames.log">Download</a></SRow>
       </SCard>
 
       <Eyebrow>Advanced</Eyebrow>

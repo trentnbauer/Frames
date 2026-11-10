@@ -1,3 +1,6 @@
+import { startLogger } from './logger.js';
+import { applyRuntime } from './policy.js';
+import { startCacheTrim } from './cache.js';
 import { applyPendingRestore, startServerBackup } from './serverBackup.js';
 import { startDerivativeCheck } from './derivCheck.js';
 import fs from 'node:fs';
@@ -56,6 +59,9 @@ startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: 
 startDerivativeCheck(() => frames.tenants.all() as any);
 startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), backupDir, () => { const p = policyOf(frames.sys); return { auto: p.backupAuto, everyDays: p.backupEveryDays, keep: p.backupKeep }; });
 setSessionDays(policyOf(frames.sys).sessionDays);
+applyRuntime(frames.sys);
+startLogger(dataDir, policyOf(frames.sys).logLevel);
+startCacheTrim(() => ({ cfgs: frames.tenants.all().map((t) => t.cfg as never), limitGb: policyOf(frames.sys).cacheLimitGb }));
 (frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authDisabled ? 'DISABLED' : [authPassword && 'password', oauthEnabled(frames.sys) && 'oauth'].filter(Boolean).join('+') || 'OFF'})`);

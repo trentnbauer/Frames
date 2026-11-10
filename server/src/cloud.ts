@@ -1,3 +1,5 @@
+import { policyOf } from './policy.js';
+import { dirBytes } from './cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -404,6 +406,9 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const tmpDir = path.join(cfg.dataDir, 'tmp');
   fs.mkdirSync(dest, { recursive: true });
   fs.mkdirSync(tmpDir, { recursive: true });
+  const sysDb = (cfg as { sys?: DB }).sys;
+  const quota = sysDb ? policyOf(sysDb).cloudQuotaGb * 1073741824 : 0; // 0: no limit
+  let used = quota ? dirBytes(path.join(cfg.dataDir, 'cloud')) : 0;
   const a = adapters[c0.provider];
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
@@ -482,6 +487,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         if (taken.get(id, rel)) { const x = path.extname(name); name = `${name.slice(0, name.length - x.length)} (${e.id.replace(/\W/g, '').slice(-6)})${x}`; rel = [...f.rel, name].join('/'); }
         const target = path.join(dest, ...rel.split('/'));
         if (!path.resolve(target).startsWith(dest + path.sep)) { res.errors.push(`${e.name}: unsafe name`); continue; }
+        if (quota && used + (e.size || 0) > quota) throw new CloudError(`Stopped: your cloud copies would pass the ${quota / 1073741824} GB the administrator allows each person. Nothing already copied was removed.`);
         progress.current = e.name;
         const part = path.join(tmpDir, `cloud-${crypto.randomBytes(6).toString('hex')}.part`);
         try {
@@ -500,7 +506,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
             if (sh) { finalRel = path.relative(dest, sh.file).split(path.sep).join('/'); shrunk = 1; ow = meta?.width ?? sh.w; oh = meta?.height ?? sh.h; keptSize = sh.after; res.shrunk = (res.shrunk ?? 0) + 1; res.freed = (res.freed ?? 0) + (sh.before - sh.after); }
           }
           add.run(id, e.id, finalRel, e.version, keptSize, new Date().toISOString(), shrunk, got, ow, oh, e.name);
-          res.downloaded++; res.bytes += got; progress.downloaded = res.downloaded;
+          res.downloaded++; res.bytes += got; used += keptSize; progress.downloaded = res.downloaded;
         } catch (err) {
           fs.rmSync(part, { force: true });
           if (err instanceof CloudError && err.reconnect) throw err;

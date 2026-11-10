@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
 import { useStore } from '../store';
-import { Badge, Bar, Eyebrow, gb, initials, PSelect, SCard, SRow } from '../components/srow';
+import { Badge, Bar, Eyebrow, gb, initials, PSelect, PSwitch, SCard, SRow } from '../components/srow';
 
 type Person = { id: number; name: string; email: string; provider: string; role: 'admin' | 'member' | 'guest'; folder: string; disabled: boolean; invited: boolean; created: string; photos: number; bytes: number };
 type Data = { users: Person[]; signups: boolean; libraryRoots: string[] };
@@ -12,6 +12,7 @@ const size = (n: number) => (n > 1073741824 ? `${(n / 1073741824).toFixed(1)} GB
 export function People({ onInvite }: { onInvite?: (open: () => void) => void }) {
   const d = useApi<Data>('/admin/users');
   const sys = useApi<{ dataDisk: { total: number; free: number } }>('/admin/system');
+  const inst = useApi<{ membersSeeShoots: boolean }>('/admin/instance');
   const { me } = useStore();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [email, setEmail] = useState('');
@@ -68,6 +69,10 @@ export function People({ onInvite }: { onInvite?: (open: () => void) => void }) 
             </div>
           );
         })}
+      </SCard>
+      <Eyebrow>Defaults</Eyebrow>
+      <SCard>
+        <SRow title="Members can see each other’s shoots" hint="Names, dates and counts of other members’ photoshoots, on the Photoshoots page. Never the photographs."><PSwitch label="Members can see each other’s shoots" on={!!inst.data?.membersSeeShoots} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { membersSeeShoots: v } }); inst.reload(); }} /></SRow>
       </SCard>
       <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>A member’s photographs are read from <span className="mono">{root}/&lt;their folder&gt;</span>; they can also upload and use cloud sync. {d.data.signups ? 'New people on the allow-list get an account the first time they sign in.' : 'New accounts are closed (Sign-in & access): only the people added here, and those who already have one, can sign in.'}</p>
 

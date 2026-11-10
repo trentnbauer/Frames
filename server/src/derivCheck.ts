@@ -17,9 +17,10 @@ export async function verifyDerivatives(db: DB, cfg: Cfg): Promise<{ checked: nu
   for (const r of rows) {
     const thumb = derivPath(cfg, r.id, 'thumb'), preview = derivPath(cfg, r.id, 'preview');
     try {
-      if (!fs.existsSync(thumb) || !fs.existsSync(preview)) { wrong.push(r.id); continue; }
+      if (!fs.existsSync(thumb)) { wrong.push(r.id); continue; }
       const t = await dHash(thumb);
-      if (hamming(t, r.dhash) > 4 || hamming(await dHash(preview), t) > 10) wrong.push(r.id);
+      // A preview the cache limit removed is not wrong: it is made again when the photograph is opened.
+      if (hamming(t, r.dhash) > 4 || (fs.existsSync(preview) && hamming(await dHash(preview), t) > 10)) wrong.push(r.id);
     } catch { wrong.push(r.id); } // a file that cannot be read is no good either
   }
   for (const id of wrong) {

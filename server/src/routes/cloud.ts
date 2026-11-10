@@ -1,3 +1,4 @@
+import { policyOf } from '../policy.js';
 import type { FastifyInstance } from 'fastify';
 import { saveCloudDest } from '../backupS3.js';
 import { refetching, shrunkStats, beginConnect, finishBackupConnect, pendingPurpose, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
@@ -75,6 +76,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   app.post('/api/cloud/connect/:provider', async (req, rep) => {
     const { provider } = req.params as Row;
     if (!isProvider(provider)) return x.notFound(rep);
+    if (policyOf(x.sys).cloudWho === 'admins' && ((req as any).authUser?.role ?? 'admin') !== 'admin') return rep.code(403).send({ error: 'Only an administrator can connect cloud storage on this server.' });
     try { return { url: beginConnect(db, cfg, provider, redirect(req)) }; } catch (e) { return fail(rep, e); }
   });
   app.get('/api/cloud/callback', async (req, rep) => {
@@ -126,7 +128,8 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     }
     if (b.intervalMin !== undefined) {
       const n = Number(b.intervalMin);
-      if (!Number.isInteger(n) || (n !== 0 && (n < 15 || n > 10080))) return rep.code(400).send({ error: 'Choose off, or every 15 minutes to every week.' });
+      const floor = policyOf(x.sys).cloudMinSyncMin;
+      if (!Number.isInteger(n) || (n !== 0 && (n < floor || n > 10080))) return rep.code(400).send({ error: `Choose off, or every ${floor >= 60 ? `${floor / 60} hour${floor === 60 ? '' : 's'}` : `${floor} minutes`} to every week. The administrator has set the fastest allowed.` });
       c.intervalMin = n;
     }
     if (b.enabled !== undefined) {
@@ -170,7 +173,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
         x.tenants.run(t, () => {
           if (progressOf(cfg).running) return;
           const now = Date.now();
-          const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= c.intervalMin * 60_000));
+          const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= Math.max(c.intervalMin, policyOf(x.sys).cloudMinSyncMin) * 60_000));
           if (due) run(due.id).catch(() => {});
         });
       } catch (e) { console.error(`Scheduled cloud sync could not run for person ${t.user.id}`, e); } // one person's problem never stops the others

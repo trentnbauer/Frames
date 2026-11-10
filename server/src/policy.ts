@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import type { DB } from './db.js';
 import { getSetting } from './db.js';
 
@@ -10,6 +11,17 @@ export type Policy = {
   backupAuto: boolean;
   backupEveryDays: 1 | 7;
   backupKeep: number;
+  cacheLimitGb: number; // 0 = no limit
+  previewPx: number;
+  workers: number;
+  logLevel: 'errors' | 'warnings' | 'info';
+  updateChannel: 'stable' | 'beta';
+  cloudWho: 'admins' | 'members';
+  cloudMinSyncMin: number;
+  cloudQuotaGb: number; // 0 = none
+  membersSeeShoots: boolean;
+  aiMonthlyLimit: number; // requests to a shared AI per person per month, 0 = none
+  aiMembersOwn: boolean;
 };
 type Stored = Partial<Record<keyof Policy, unknown>>;
 
@@ -25,6 +37,17 @@ export function policyOf(sys: DB): Policy {
     backupAuto: i.backupAuto !== false,
     backupEveryDays: i.backupEveryDays === 7 ? 7 : 1,
     backupKeep: int(i.backupKeep, 1, 60, 7),
+    cacheLimitGb: [0, 10, 25, 50, 100, 250].includes(i.cacheLimitGb as number) ? (i.cacheLimitGb as number) : 0,
+    previewPx: [1600, 2400, 3072, 4096].includes(i.previewPx as number) ? (i.previewPx as number) : 2400,
+    workers: int(i.workers, 0, 8, 0), // 0 = as many as there are processors
+    logLevel: i.logLevel === 'errors' || i.logLevel === 'warnings' ? i.logLevel : 'info',
+    updateChannel: i.updateChannel === 'beta' ? 'beta' : 'stable',
+    cloudWho: i.cloudWho === 'admins' ? 'admins' : 'members',
+    cloudMinSyncMin: [15, 30, 60, 360, 1440].includes(i.cloudMinSyncMin as number) ? (i.cloudMinSyncMin as number) : 15,
+    cloudQuotaGb: [0, 50, 100, 200, 500].includes(i.cloudQuotaGb as number) ? (i.cloudQuotaGb as number) : 0,
+    membersSeeShoots: i.membersSeeShoots === true,
+    aiMonthlyLimit: [0, 100, 500, 2000, 10000].includes(i.aiMonthlyLimit as number) ? (i.aiMonthlyLimit as number) : 0,
+    aiMembersOwn: i.aiMembersOwn !== false,
   };
 }
 
@@ -38,8 +61,19 @@ export function policyPatch(b: Record<string, unknown>): Stored {
   if (typeof b.backupAuto === 'boolean') o.backupAuto = b.backupAuto;
   if (b.backupEveryDays === 1 || b.backupEveryDays === 7) o.backupEveryDays = b.backupEveryDays;
   if (typeof b.backupKeep === 'number' && Number.isInteger(b.backupKeep) && b.backupKeep >= 1 && b.backupKeep <= 60) o.backupKeep = b.backupKeep;
+  const pick = (k: string, allowed: unknown[]) => { if (allowed.includes(b[k])) o[k as keyof Policy] = b[k]; };
+  pick('cacheLimitGb', [0, 10, 25, 50, 100, 250]); pick('previewPx', [1600, 2400, 3072, 4096]);
+  if (typeof b.workers === 'number' && Number.isInteger(b.workers) && b.workers >= 0 && b.workers <= 8) o.workers = b.workers;
+  pick('logLevel', ['errors', 'warnings', 'info']); pick('updateChannel', ['stable', 'beta']); pick('cloudWho', ['admins', 'members']);
+  pick('cloudMinSyncMin', [15, 30, 60, 360, 1440]); pick('cloudQuotaGb', [0, 50, 100, 200, 500]); pick('aiMonthlyLimit', [0, 100, 500, 2000, 10000]);
+  if (typeof b.membersSeeShoots === 'boolean') o.membersSeeShoots = b.membersSeeShoots;
+  if (typeof b.aiMembersOwn === 'boolean') o.aiMembersOwn = b.aiMembersOwn;
   return o;
 }
+
+/** Values read on every use by code that has no database in hand (image making). Set at start-up and whenever the choices change. */
+export const runtime = { previewPx: 2400, workers: 0 };
+export function applyRuntime(sys: DB) { const p = policyOf(sys); runtime.previewPx = p.previewPx; runtime.workers = p.workers; sharp.concurrency(p.workers); }
 
 /** True when a file newer than `days` days exists, so a weekly schedule skips the days in between. */
 export function madeWithin(files: { mtimeMs: number }[], days: number, now = Date.now()): boolean {

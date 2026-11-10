@@ -1,3 +1,4 @@
+import { ensureDeriv } from '../cache.js';
 import { policyOf } from '../policy.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -323,7 +324,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!r.photoIds.includes(id)) return notFound(rep); // only this link's own photographs
     const f = derivPath(x.cfg, id, kind);
     const row = one('SELECT hash FROM photos WHERE id = ?', id);
-    if (!row || !fs.existsSync(f)) return notFound(rep, 'No preview available');
+    if (!row || !(await ensureDeriv(x.db, x.cfg, id, kind))) return notFound(rep, 'No preview available');
     noindex(rep);
     return serveDerivative(req, rep, f, String(row.hash), kind);
   };

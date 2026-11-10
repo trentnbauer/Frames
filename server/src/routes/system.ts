@@ -1,3 +1,5 @@
+import { policyOf } from '../policy.js';
+import { dirBytes } from '../cache.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -28,11 +30,6 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
 
 
   // ---------- Settings, Server, Storage & processing and Updates & system ----------
-  const dirBytes = (dir: string): number => {
-    let n = 0;
-    try { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); n += e.isDirectory() ? dirBytes(p) : fs.statSync(p).size; } } catch { /* a folder that is not there holds nothing */ }
-    return n;
-  };
   const disk = (dir: string) => { try { const f = fs.statfsSync(dir); return { path: dir, total: f.blocks * f.bsize, free: f.bavail * f.bsize }; } catch { return { path: dir, total: 0, free: 0 }; } };
   app.get('/api/admin/system', async () => {
     const owner = x.tenants.owner();
@@ -46,6 +43,26 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
       { name: 'email', ok: !smtpConfigured(sys) || smtpHealthy(sys) },
     ];
     return { version: cfg.version ?? 'dev', image: process.env.FRAMES_IMAGE ?? 'ghcr.io/trentnbauer/frames', libraryDisk: disk(folder), dataDisk: disk(owner.cfg.dataDir), cache: { path: path.join(owner.cfg.dataDir, 'derivatives'), bytes: cacheBytes }, checks, libraries: all.length };
+  });
+
+  // Other members' photoshoots, read-only, when the administrator allows it (Settings, Server, Members). Names, dates and counts only:
+  // the photographs themselves stay in their own library.
+  app.get('/api/shoots/others', async () => {
+    if (!policyOf(sys).membersSeeShoots) return { enabled: false, shoots: [] };
+    const me = x.tenant().user.id;
+    const out: { owner: string; id: number; name: string; dates: string; count: number; place: string }[] = [];
+    for (const t of x.tenants.all()) {
+      if (t.user.id === me || t.user.role === 'guest' || t.user.disabled) continue;
+      try {
+        const rows = t.db.prepare('SELECT s.id, s.name, s.place, s.imported_at, s.date_from, s.date_to, COUNT(p.id) n, MIN(p.captured_at) a, MAX(p.captured_at) b FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id AND p.missing = 0 GROUP BY s.id ORDER BY s.imported_at DESC LIMIT 100').all() as Row[];
+        const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+        for (const r of rows) {
+          const from = r.date_from ?? r.a, to = r.date_to ?? r.b;
+          out.push({ owner: (t.user.name || t.user.email || 'Someone').split(' ')[0], id: r.id, name: r.name, place: r.place, count: r.n, dates: from ? (!to || String(from).slice(0, 10) === String(to).slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(r.imported_at) });
+        }
+      } catch { /* one person's library that cannot be read never hides the others */ }
+    }
+    return { enabled: true, shoots: out };
   });
 
   // ---------- Settings, Server, Email ----------

@@ -1,3 +1,4 @@
+import { ensureDeriv } from '../cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
@@ -109,7 +110,7 @@ export function registerCommunity(app: FastifyInstance, x: Ctx) {
     if (!t || !owner || t.owner === u.id || !communityPrefs(owner.db).optIn || hiddenFor(t.owner, t.photo, u.id)) return rep.code(404).send({ error: 'Not found' });
     const row = owner.db.prepare('SELECT hash FROM photos WHERE id = ? AND missing = 0').get(t.photo) as { hash: string } | undefined;
     const f = derivPath(owner.cfg, t.photo, 'preview');
-    if (!row || !fs.existsSync(f)) return rep.code(404).send({ error: 'No preview' });
+    if (!row || !(await ensureDeriv(owner.db, owner.cfg, t.photo, 'preview'))) return rep.code(404).send({ error: 'No preview' });
     return serveDerivative(req, rep, f, String(row.hash), 'preview');
   });
 

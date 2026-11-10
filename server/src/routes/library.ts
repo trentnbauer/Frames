@@ -1,10 +1,11 @@
+import { policyOf } from '../policy.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
-import { aiConfig, aiCounts, ping } from '../ai.js';
+import { aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
@@ -310,7 +311,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.get('/api/library/rebuild/status', async () => rb);
 
   // ---------- AI ----------
-  const aiStatus = () => ({ enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state });
+  const aiStatus = () => ({ enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, sharedUsage: sharedUsage(db) });
   app.get('/api/ai/status', async () => aiStatus());
   app.post('/api/ai/run', async (req, rep) => {
     if (!aiConfig(db)) return rep.code(400).send({ error: 'AI is off or not fully set up' });
@@ -341,6 +342,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   const cfgOf = (src: AiSource): AiCfg => { const t = aiType(src.type)!; return { protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(db, src.id) }; };
   app.get('/api/ai/sources', async () => sourcesDto());
   app.post('/api/ai/sources', async (req, rep) => {
+    if (!policyOf(x.sys).aiMembersOwn && ((req as any).authUser?.role ?? 'admin') !== 'admin') return rep.code(403).send({ error: 'The administrator has switched off adding your own AI. Use the shared one.' });
     const b = (req.body ?? {}) as Row;
     try {
       const src = newSource(String(b.type ?? ''), b);

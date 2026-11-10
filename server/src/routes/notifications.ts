@@ -1,3 +1,4 @@
+import { policyOf } from '../policy.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -57,19 +58,20 @@ export function registerNotifications(app: FastifyInstance, x: Ctx) {
 
   // The update pop-up for administrators: the server asks GitHub (so a browser behind a firewall still works, and GitHub's limits
   // are shared) and keeps the last good answer to fall back on.
-  let cache: { at: number; list: Release[] } | null = null;
+  let cache: { at: number; list: Release[]; channel: string } | null = null;
   app.get('/api/releases', async (req) => {
     const current = x.cfg.version ?? 'dev';
-    if (!cache || Date.now() - cache.at > 3_600_000) {
+    const channel = policyOf(x.sys).updateChannel;
+    if (!cache || cache.channel !== channel || Date.now() - cache.at > 3_600_000) {
       try {
         const r = await fetch(RELEASES_URL, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Frames' }, signal: AbortSignal.timeout(8000) });
         if (!r.ok) throw new Error(String(r.status));
         const data = (await r.json()) as Row[];
-        const list = data.filter((d) => !d.draft && /^https:\/\//.test(String(d.html_url))).map((d) => ({ name: String(d.name || d.tag_name).slice(0, 100), tag: String(d.tag_name), date: String(d.published_at ?? '').slice(0, 10), url: String(d.html_url), items: releaseItems(String(d.body ?? '')) }));
-        cache = { at: Date.now(), list };
+        const list = data.filter((d) => !d.draft && (channel === 'beta' || !d.prerelease) && /^https:\/\//.test(String(d.html_url))).map((d) => ({ name: String(d.name || d.tag_name).slice(0, 100), tag: String(d.tag_name), date: String(d.published_at ?? '').slice(0, 10), url: String(d.html_url), items: releaseItems(String(d.body ?? '')) }));
+        cache = { at: Date.now(), list, channel };
         setSetting(x.sys, 'releasesCache', list);
       } catch {
-        if (!cache) cache = { at: Date.now() - 3_000_000, list: getSetting<(Release & { tag: string })[]>(x.sys, 'releasesCache', []) }; // try again in ~10 minutes; show the last known list meanwhile
+        if (!cache || cache.channel !== channel) cache = { channel, at: Date.now() - 3_000_000, list: getSetting<(Release & { tag: string })[]>(x.sys, 'releasesCache', []) }; // try again in ~10 minutes; show the last known list meanwhile
       }
     }
     const list = (cache?.list ?? []) as (Release & { tag: string })[];
