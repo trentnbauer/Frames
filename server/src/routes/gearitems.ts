@@ -38,6 +38,19 @@ export function gearMarkdown(db: DB): string {
   return out.length > 2 ? out.join('\n').trim() : '# My gear\n\nNothing listed yet.';
 }
 
+/** The portfolio's Gear page as data: want-to-buy first (only when switched on), then what is owned in the chosen arrangement ("Most used" falls back to type). */
+export function gearJson(db: DB) {
+  const prefs = getSetting<Prefs>(db, 'gearPrefs', { showWant: false, arrange: 'system' });
+  const own = db.prepare("SELECT * FROM gear_items WHERE kind = 'own' ORDER BY name COLLATE NOCASE").all() as Row[];
+  const want = (db.prepare("SELECT * FROM gear_items WHERE kind = 'want' ORDER BY rank, id").all() as Row[]).slice(0, 6);
+  const TYPE: Record<string, string> = { camera: 'Cameras', lens: 'Lenses', film: 'Film', light: 'Light & meter', app: 'Apps', other: 'Other' };
+  const key = prefs.arrange === 'era' ? (g: Row) => (g.year ? `${Math.floor(g.year / 10) * 10}s` : 'Undated') : prefs.arrange === 'system' ? (g: Row) => g.system || 'Other' : (g: Row) => TYPE[g.type] ?? 'Other';
+  const by = new Map<string, Row[]>();
+  for (const g of own) (by.get(key(g)) ?? by.set(key(g), []).get(key(g))!).push(g);
+  const groups = [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([title, items]) => ({ title, count: items.length, items: items.sort((a, b) => Number(b.type === 'camera') - Number(a.type === 'camera')).map((g) => ({ name: g.name, note: g.year ? String(g.year) : '', tag: TYPE[g.type] ?? '' })) }));
+  return { showWant: prefs.showWant && want.length > 0, want: want.map((w, i) => ({ n: i + 1, name: w.name, price: w.price === null ? '' : String(Math.round(w.price)), url: /^https?:\/\//.test(w.link) ? w.link : '' })), groups, empty: own.length === 0 && want.length === 0 };
+}
+
 export function registerGearItems(app: FastifyInstance, x: Ctx) {
   const { db, all, one, num, notFound } = x;
   const prefs = (): Prefs => ({ showWant: false, arrange: 'system', ...getSetting<Partial<Prefs>>(db, 'gearPrefs', {}) });

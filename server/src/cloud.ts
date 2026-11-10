@@ -297,6 +297,18 @@ export function safeName(n: string): string {
 
 // ---------- smaller copies ----------
 /** The administrator can require smaller copies for everyone (Settings, Photo folders); otherwise it is each connection's own choice. */
+/**
+ * Cloud import resolution. Each person chooses whether imports keep the full-size file (default on); an administrator can switch full size off
+ * for everyone (default on). Off means a 4096 px long-edge copy is stored instead. Frames never changes anything in the cloud account.
+ */
+export const COPY_EDGE = 4096;
+export const adminAllowsOriginals = (db: DB): boolean => {
+  const sys = (db as unknown as { sys?: DB }).sys ?? db;
+  return getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false;
+};
+export const userWantsOriginals = (db: DB): boolean => getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false;
+export const fullSizeEffective = (db: DB, sys?: DB): boolean => (sys ? getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false : adminAllowsOriginals(db)) && userWantsOriginals(db);
+
 export const shrinkEnforced = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys;
   if (!sys) return false;
@@ -329,7 +341,7 @@ async function shrinkFile(file: string): Promise<{ file: string; before: number;
     const meta = await sharp(file, { failOn: 'none' }).metadata();
     let img = sharp(file, { failOn: 'none' });
     if (ext === '.png') img = img.flatten({ background: '#ffffff' });
-    await img.jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
+    await img.rotate().resize({ width: COPY_EDGE, height: COPY_EDGE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
     const after = fs.statSync(tmp).size;
     if (after >= before * 0.9) { fs.rmSync(tmp, { force: true }); return null; }
     const out = ext === '.jpg' || ext === '.jpeg' ? file : file.slice(0, -ext.length) + '.jpg';
@@ -390,7 +402,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const a = adapters[c0.provider];
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
-  const shrinkOn = !!c0.shrink || shrinkEnforced(db);
+  const shrinkOn = !!c0.shrink || shrinkEnforced(db) || !fullSizeEffective(db, (cfg as { sys?: DB }).sys);
   const known = db.prepare('SELECT version, rel, shrunk FROM cloud_files WHERE conn_id = ? AND remote_id = ?');
   const taken = db.prepare('SELECT remote_id FROM cloud_files WHERE conn_id = ? AND rel = ?');
   const add = db.prepare('INSERT INTO cloud_files (conn_id, remote_id, rel, version, size, synced, shrunk, orig_size, orig_w, orig_h, remote_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');

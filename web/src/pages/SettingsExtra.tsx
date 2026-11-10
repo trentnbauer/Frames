@@ -208,3 +208,30 @@ export function ReportsQueue() {
     </div>
   );
 }
+
+/** Settings, Cloud sync: save the full-size original, or a 4096 px copy. Frames never changes anything in the cloud account. */
+export function CloudResolution() {
+  const r = useApi<{ saveOriginal: boolean; want: boolean; lockedByAdmin: boolean }>('/cloud/resolution');
+  if (!r.data) return null;
+  const d = r.data;
+  return (
+    <div className="field">
+      <h3>Save original resolution</h3>
+      <p>On: imports from the cloud keep the full-size file. Off: Frames stores a copy up to 4096 px on its long edge. This only affects photos imported from now on. Frames never deletes, moves or edits anything in your cloud account.</p>
+      <Row title="Save original resolution" hint={d.lockedByAdmin ? 'Turned off by an admin' : undefined}><Sw label="Save original resolution" on={d.saveOriginal} onClick={() => !d.lockedByAdmin && api('/cloud/resolution', { method: 'PUT', body: { saveOriginal: !d.want } }).then(r.reload)} /></Row>
+    </div>
+  );
+}
+
+/** Settings, Server, Photos & storage: the administrator's switch for full-size cloud imports. */
+export function CloudOriginalsAdmin() {
+  const r = useApi<{ allow: boolean }>('/admin/cloud-originals');
+  if (!r.data) return null;
+  return (
+    <div className="field">
+      <h3>Allow original resolution from the cloud</h3>
+      <p>When off, every person’s “Save original resolution” shows as off and disabled, and all cloud imports are stored as 4096 px copies.</p>
+      <Row title="Allow original resolution from the cloud"><Sw label="Allow original resolution from the cloud" on={r.data.allow} onClick={() => api('/admin/cloud-originals', { method: 'PUT', body: { allow: !r.data!.allow } }).then(r.reload)} /></Row>
+    </div>
+  );
+}

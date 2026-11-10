@@ -13,7 +13,7 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
-import { CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
+import { CloudOriginalsAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
 import { GearDefaults } from '../components/GearDefaults';
 
 type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
@@ -167,9 +167,9 @@ export function SettingsPage() {
           {shown === 'Reviews' && <><Reviews s={s} save={save} /><CommunitySettings /></>}
           {shown === 'AI' && <AiSettings />}
           {shown === 'Shared AI' && <AiSettings server />}
-          {shown === 'Libraries & storage' && <Libraries />}
+          {shown === 'Libraries & storage' && <><Libraries /><CloudOriginalsAdmin /></>}
           {shown === 'Portfolio' && <PortfolioSettings />}
-          {shown === 'Cloud sync' && <CloudSettings />}
+          {shown === 'Cloud sync' && <><CloudSettings /><CloudResolution /></>}
           {shown === 'Cloud services' && <CloudServices />}
           {shown === 'Cloudflare tunnel' && <TunnelSettings />}
           {shown === 'People' && <><People /><ReportsQueue /></>}

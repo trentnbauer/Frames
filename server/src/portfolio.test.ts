@@ -94,9 +94,14 @@ describe('the public site', () => {
   it('serves the page and its config', async () => {
     expect((await get('/portfolio/')).body).toContain('Portfolio page');
     expect((await get('/portfolio')).statusCode).toBe(302);
-    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
+    expect((await get('/portfolio/config.json')).json()).toEqual({ country: '', photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
     expect((await get('/portfolio/gear.md')).body).toBe('# Gear\n- Leica');
     expect((await get('/portfolio/css/style.css')).statusCode).toBe(200);
+    // The gear page as data: nothing owned yet, so it is empty; and the files the new design needs are public.
+    expect((await get('/portfolio/gear.json')).json()).toMatchObject({ empty: true, showWant: false });
+    expect(isPortfolioPath('/portfolio/js/theme.js')).toBe(true);
+    expect(isPortfolioPath('/portfolio/fonts/ibm-plex-sans-400.woff2')).toBe(true);
+    expect(isPortfolioPath('/portfolio/fonts/../../etc/passwd')).toBe(false);
   });
   it('lists the collection in its own order, with only what the page needs', async () => {
     const m = (await get('/portfolio/images/manifest.json')).json() as any[];

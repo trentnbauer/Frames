@@ -6,43 +6,33 @@
 <!-- Frames serves this page at /portfolio/ and, on the portfolio hostname, at /. Everything below is relative to this base. -->
 <base href="/portfolio/">
 <title>Photography Portfolio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script src="js/theme.js"></script>
 </head>
 <body>
 <div class="page">
   <header class="hero">
-    <div class="hero-inner">
-      <div class="hero-row">
-        <h1 id="photographer-name" class="hero-title">&nbsp;</h1>
-        <div class="hero-actions">
-          <nav id="social-row" class="social-row" aria-label="Social links"></nav>
-          <button id="gear-toggle" class="gear-toggle" type="button">My Gear</button>
-          <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" type="button">
-            <span class="theme-icon" aria-hidden="true"></span>
-          </button>
-        </div>
-      </div>
-      <p id="tagline" class="hero-tagline" hidden></p>
+    <div class="hero-top">
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme"><span id="theme-icon" aria-hidden="true"></span><span id="theme-label"></span></button>
     </div>
+    <div class="hero-row">
+      <h1 id="photographer-name" class="hero-title">&nbsp;</h1>
+    </div>
+    <p id="tagline" class="hero-tagline" hidden></p>
+    <p id="country" class="hero-country" hidden><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M6 13s4.5-4 4.5-7.3A4.5 4.5 0 0 0 1.5 5.7C1.5 9 6 13 6 13z"/><circle cx="6" cy="5.5" r="1.6"/></svg><span id="country-name"></span></p>
+    <nav id="site-nav" class="site-nav" aria-label="Site"></nav>
   </header>
 
   <main id="work" class="gallery-section">
-    <p id="empty-hint" class="empty-hint" hidden>
-      No photos yet &mdash; add photos to the portfolio collection in Frames. This placeholder gallery shows what the layout will look like.
-    </p>
+    <p id="empty-hint" class="empty-hint" hidden>No photos yet. Add photos to the portfolio in Frames. This placeholder shows what the layout will look like.</p>
     <div id="gallery" class="masonry"></div>
   </main>
 
-  <footer id="site-footer" class="site-footer" hidden></footer>
-</div>
-<div id="gear-modal" class="gear-modal" hidden>
-  <div class="gear-panel">
-    <button id="gear-close" class="gear-close" aria-label="Close" type="button">&times;</button>
+  <section id="gear" class="gear-page" hidden>
     <div id="gear-content" class="gear-content"></div>
-  </div>
+  </section>
+
+  <footer id="site-footer" class="site-footer" hidden></footer>
 </div>
 <div id="lightbox" class="lightbox" hidden>
   <button id="lightbox-close" class="lightbox-close" aria-label="Close" type="button">&times;</button>

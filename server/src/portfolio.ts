@@ -65,7 +65,7 @@ const BROWSER_TYPES: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': '
 /** The exact addresses that anyone may fetch, whatever the host. Nothing else of the app is reachable this way. */
 export const isPortfolioPath = (url: string): boolean => {
   const p = url.split('?')[0];
-  return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|avatar\.jpg|css\/style\.css|js\/app\.js|images\/manifest\.json|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
+  return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|avatar\.jpg|css\/style\.css|js\/(app|theme)\.js|images\/manifest\.json|gear\.json|fonts\/[\w.-]{1,60}\.woff2|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
 };
 
 /** "2026-Autumn-KonicaAutoS2-FujiC200-R01-0024" gives camera "Konica Auto S 2" and film "Fuji C 200". Same rule as the old build. */
@@ -102,7 +102,7 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
   };
 }
 
-import { gearMarkdown } from './routes/gearitems.js';
+import { gearJson, gearMarkdown } from './routes/gearitems.js';
 export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
@@ -148,13 +148,24 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   app.get('/portfolio/config.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
     // The name and picture are the person's profile (Settings, Profile); a name typed here by an older version is used only until they set one.
-    return open(rep).send({ photographerName: displayNameOf(db) || c.photographerName, avatar: fs.existsSync(avatarPath(cfg.dataDir)) ? 'avatar.jpg' : '', tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
+    return open(rep).send({ country: String(getSetting<{ country?: string }>(db, 'profile', {}).country ?? ''), photographerName: displayNameOf(db) || c.photographerName, avatar: fs.existsSync(avatarPath(cfg.dataDir)) ? 'avatar.jpg' : '', tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
   });
   app.get('/portfolio/avatar.jpg', async (_req, rep) => {
     if (!live(rep)) return;
     const f = avatarPath(cfg.dataDir);
     if (!fs.existsSync(f)) return notFound(rep);
     return open(rep).type('image/jpeg').send(fs.readFileSync(f));
+  });
+  app.get('/portfolio/gear.json', async (_req, rep) => {
+    const c = live(rep); if (!c) return;
+    return open(rep).send(gearJson(db));
+  });
+  app.get('/portfolio/fonts/:name', async (req, rep) => {
+    if (!live(rep)) return;
+    const n = String((req.params as Row).name);
+    const f = path.join(cfg.webDir ?? '', 'portfolio', 'fonts', n);
+    if (!/^[\w.-]{1,60}\.woff2$/.test(n) || !fs.existsSync(f)) return notFound(rep);
+    return rep.header('Cache-Control', 'public, max-age=86400').type('font/woff2').send(fs.readFileSync(f));
   });
   app.get('/portfolio/gear.md', async (_req, rep) => {
     const c = live(rep); if (!c) return;
