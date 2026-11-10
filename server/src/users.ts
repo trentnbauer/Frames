@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS community_reports (
 );
 CREATE INDEX IF NOT EXISTS community_reports_photo ON community_reports(owner, photo);
 CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS portfolio_handles (handle TEXT PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE);
 `;
 
 import { PASSKEY_SCHEMA } from './passkeys.js';

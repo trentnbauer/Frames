@@ -166,7 +166,7 @@ export function useCloud(ctx: Ctx): Section {
 }
 
 /* --------------------------------------------------------------- Portfolio */
-type PF = { config: { enabled: boolean; host: string; tagline: string; accentColor: string; buttons: { short: string; name: string; url: string }[]; fullSize: 'resized' | 'original' | 'none'; order: string; autoAdd: boolean; autoThreshold: number }; status: { photoCount: number }; dnsTarget: string; originalsAllowed: boolean };
+type PF = { config: { enabled: boolean; host: string; tagline: string; accentColor: string; buttons: { short: string; name: string; url: string }[]; fullSize: 'resized' | 'original' | 'none'; order: string; autoAdd: boolean; autoThreshold: number }; status: { photoCount: number }; dnsTarget: string; handle: string; originalsAllowed: boolean };
 const ACCENTS: [string, string][] = [['Clay', 'oklch(0.58 0.13 35)'], ['Blue', 'oklch(0.55 0.11 250)'], ['Green', 'oklch(0.58 0.1 150)'], ['Ink', '#2a2a28']];
 const ORDERS: [string, string][] = [['Newest taken first', 'captured'], ['Newest added first', 'newest'], ['Oldest first', 'oldest'], ['By score', 'score']];
 const FULL: [string, string][] = [['Resized', 'resized'], ['Original', 'original'], ['Nothing', 'none']];
@@ -191,10 +191,11 @@ export function usePortfolio(ctx: Ctx): Section {
   const names = (c?.buttons ?? []).map((b) => `${b.name} ↗`);
   return {
     key: 'portfolio', name: 'Portfolio', hint: 'A public website of your best work.',
-    action: { label: 'View site ↗', act: () => window.open('/portfolio/', '_blank', 'noopener') },
+    action: { label: 'View site ↗', act: () => window.open(d.data?.handle ? `/${d.data.handle}/` : '/portfolio/', '_blank', 'noopener') },
     groups: [
       { rows: [
-        { id: 'pfLive', t: 'toggle', label: 'Published', hint: c?.enabled ? `Live at ${c.host || '/portfolio/'} · ${d.data?.status.photoCount ?? 0} photos` : 'Not published', value: !!c?.enabled, set: (v) => void save({ enabled: v }) },
+        { id: 'pfLive', t: 'toggle', label: 'Published', hint: c?.enabled ? `Live at ${c.host || (d.data?.handle ? `/${d.data.handle}/` : '/portfolio/')} · ${d.data?.status.photoCount ?? 0} photos` : 'Not published', value: !!c?.enabled, set: (v) => void save({ enabled: v }) },
+        { id: 'pfHandle', t: 'text', label: 'Name in the address', hint: `Your portfolio is at ${window.location.origin}/${d.data?.handle || 'your-name'}/. 3 to 30 letters, numbers or hyphens.`, dep: 'pfLive', value: d.data?.handle ?? '', ph: 'your-name', set: (v) => void save({ handle: v }) },
         { id: 'pfHost', t: 'text', label: 'Web address', hint: `Shows only the portfolio. At your DNS provider, add a CNAME record for ${host} pointing to ${app}.`, dep: 'pfLive', value: c?.host ?? '', ph: 'photography.example.com', set: (v) => void save({ host: v }) },
       ] },
       { title: 'What’s shown', rows: [

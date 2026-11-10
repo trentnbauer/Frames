@@ -242,3 +242,32 @@ describe('the three fixed links of an earlier version', () => {
     expect(c.social).toBeUndefined();
   });
 });
+
+describe('a portfolio at /name', () => {
+  beforeAll(async () => { await on(); });
+  it('refuses a name that is invalid, reserved or taken', async () => {
+    for (const h of ['a', 'Bad Name!', 'api', 'settings', 'portfolio']) expect((await A.put('/api/portfolio', { handle: h })).status, h).toBe(400);
+  });
+  it('serves the portfolio under that name, and the old address sends the owner there', async () => {
+    expect((await A.put('/api/portfolio', { handle: 'Trent-B' })).body.handle).toBe('trent-b');
+    expect((await get('/trent-b/')).body).toContain('Portfolio page');
+    expect((await get('/trent-b')).statusCode).toBe(200);
+    expect((await get('/trent-b/images/manifest.json')).statusCode).toBe(200);
+    expect((await get(`/trent-b/images/${ids['plain.jpg']}.jpg`)).statusCode).toBe(200);
+    const old = await get('/portfolio/');
+    expect(old.statusCode).toBe(301);
+    expect(old.headers.location).toBe('/trent-b/');
+  });
+  it('shows only the portfolio there, and nothing of the app', async () => {
+    for (const u of ['/trent-b/api/photos', '/trent-b/settings', '/trent-b/gear.json/x']) expect((await get(u)).statusCode, u).toBe(404);
+    expect((await env.app.inject({ method: 'POST', url: '/trent-b/images/manifest.json', payload: {} })).statusCode).toBe(404);
+    expect((await get('/nobody-here/')).body).toContain('The app'); // an unclaimed name is a normal address
+  });
+  it('shows nothing while the portfolio is off, and nothing once the name is released', async () => {
+    await A.put('/api/portfolio', { enabled: false });
+    expect((await get('/trent-b/')).statusCode).toBe(404);
+    await A.put('/api/portfolio', { enabled: true, handle: '' });
+    expect((await get('/trent-b/')).body).toContain('The app');
+    expect((await get('/portfolio/')).statusCode).toBe(200);
+  });
+});
