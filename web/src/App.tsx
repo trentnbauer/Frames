@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { useKey } from './components/bits';
 import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
+import { ShortcutHelp } from './components/shortcuts';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
 import { TodoPage as Todo } from './screens/Todo';
@@ -35,6 +36,7 @@ const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
 
 function Shell() {
   const [searching, setSearching] = useState(false);
+  const [help, setHelp] = useState(false);
   const [creating, setCreating] = useState<NewCompositionStart | null>(null);
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
@@ -58,6 +60,9 @@ function Shell() {
     return () => window.removeEventListener('keydown', f);
   }, []);
   useKey((e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('[role=dialog]')) return;
+    if (e.key === '?' && !inReview && !searching) { e.preventDefault(); setHelp(true); return; }
+    if (e.key === '/' && !inReview && !searching) { e.preventDefault(); setSearching(true); return; }
     if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav(summary && summary.due === 0 && !summary.resumable && summary.early > 0 ? '/review?early' : '/review'); // nothing due: begin anyway
   }, [inReview, searching, summary]);
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
@@ -93,6 +98,7 @@ function Shell() {
       {!inReview && <TabBar />}
       <ShellModals />
       {searching && <Search onClose={() => setSearching(false)} />}
+      {help && <ShortcutHelp onClose={() => setHelp(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>
     </GoContext.Provider>

@@ -5,7 +5,7 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { miniWall, printsSummary } from './walls';
 import { useStore } from '../store';
 import { Header } from '../components/Shell';
-import { useKey } from '../components/bits';
+import { useShortcuts } from '../components/shortcuts';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { Today, greetingFor } from '../pages/Today';
 import ProtoHome from '../proto/ProtoHome';
@@ -116,13 +116,11 @@ export function Home() {
   };
 
   // Keyboard shortcuts shown on the buttons: A add photos, S start this composition, C continue one. (R, for the review, is in App.tsx.)
-  useKey((e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey || adding) return;
-    const k = e.key.toLowerCase();
-    if (k === 'a' && v.canAdd) v.addPhotos();
-    else if (k === 's' && idea) void v.startIdea();
-    else if (k === 'c' && wall) v.wall?.open();
-  }, [v, adding, idea, wall]);
+  useShortcuts([
+    { key: 'a', label: 'Add photos', run: () => v.addPhotos(), off: !v.canAdd || adding },
+    { key: 's', label: 'Start this composition', run: () => void v.startIdea(), off: !idea },
+    { key: 'c', label: 'Continue composition', run: () => v.wall?.open(), off: !wall },
+  ]);
 
   if (s && s.total === 0) return <Today />;
   return (

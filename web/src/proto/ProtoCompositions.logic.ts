@@ -3,10 +3,12 @@
 // Ported from the logic class in design_handoff_frames/prototype/Proto Compositions.dc.html. Behaviour is the spec; the data and the actions come in through props
 // (see screens/Compositions.tsx). Each composition: { id, name, prints, status, pct, gap, wall: [{ w, h, frame, mat, matPad, img, empty }], ... }.
 import { DCLogic } from './runtime';
+import { addShortcuts } from '../components/shortcuts';
 
 export class Logic extends DCLogic {
   state = { tab: 'prog', toast: '', tOp: 0, exp: {} };
-  componentWillUnmount() { clearTimeout(this.tT); }
+  componentDidMount() { this.offKeys = addShortcuts(() => [{ key: 'n', label: 'New composition', run: () => this.props.onNew() }]); }
+  componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); }
   flash(t) { this.setState({ toast: t, tOp: 1 }); clearTimeout(this.tT); this.tT = setTimeout(() => this.setState({ tOp: 0 }), 2200); }
   renderVals() {
     const S = this.state, P = this.props;

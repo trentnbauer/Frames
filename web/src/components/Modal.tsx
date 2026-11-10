@@ -9,7 +9,16 @@ export function Modal({ title, sub, onClose, children, foot, width = 560, eyebro
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const f = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    const f = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      // Enter, with nothing in the dialog being typed in or focused as a button, does its main action (the top dialog only).
+      const t = e.target as HTMLElement;
+      if (e.key !== 'Enter' || e.defaultPrevented || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(t.tagName)) return;
+      const modals = document.querySelectorAll('.modal');
+      if (modals[modals.length - 1] !== ref.current) return;
+      const go = ref.current?.querySelector<HTMLButtonElement>('.mfoot .btn.primary:not([disabled])');
+      if (go) { e.preventDefault(); go.click(); }
+    };
     window.addEventListener('keydown', f);
     return () => { window.removeEventListener('keydown', f); before?.focus?.(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
