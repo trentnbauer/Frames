@@ -20,7 +20,7 @@ import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
-import { Community } from './pages/Community';
+import { Community } from './screens/Community';
 import { Gear } from './pages/Gear';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
