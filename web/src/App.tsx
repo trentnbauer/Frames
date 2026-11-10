@@ -6,7 +6,7 @@ import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
 import { Todo } from './pages/Todo';
-import { Today } from './pages/Today';
+import { Home } from './screens/Home';
 import { Library } from './pages/Library';
 import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
@@ -66,7 +66,7 @@ function Shell() {
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
       <Routes>
-        <Route path="/" element={<Today />} />
+        <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
@@ -83,7 +83,7 @@ function Shell() {
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
-        <Route path="*" element={<Today />} />
+        <Route path="*" element={<Home />} />
       </Routes>
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
