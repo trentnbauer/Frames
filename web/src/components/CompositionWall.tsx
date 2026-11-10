@@ -66,7 +66,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   return (
     <div ref={ref} style={{ position: 'relative', width: fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(${stage ? 560 : 430}px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), ...(stage ? { backgroundImage: `url(${stage.url})`, backgroundSize: '100% 100%' } : { backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }) }} data-mode={mode}>
       {shown.map((p, i) => {
-        const [W, H] = dims(p), on = editing && i === sel, isOver = over === i;
+        const [W, H] = dims(p), on = i === sel, isOver = over === i;
         const [pw, phh] = or(p.size, p.orientation), fm = mouldOf(p);
         const [fw, fh] = p.frame ? or(p.frame.size, p.orientation) : [pw, phh];
         const held = [p.photoId, p.stack ? p.photoId2 : null];
@@ -90,8 +90,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
                 );
               })}
             </div>
-            <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', whiteSpace: 'nowrap', font: `400 10.5px ${mono}`, color: on ? 'var(--text)' : 'var(--muted)' }}>{label}{warn?.[i] && <span style={{ color: 'oklch(0.78 0.11 35)' }}> · ⚠ {warn[i]}</span>}</div>
-            {editing && !locked && <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onEdit(i); }} aria-label="Edit print" style={{ position: 'absolute', top: 6, right: 6, zIndex: 1, borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 500, background: 'rgba(13,13,13,.78)', color: 'var(--text)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.25)', cursor: 'pointer' }}>Edit</button>}
+            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 10px)', whiteSpace: 'nowrap', textAlign: 'center', font: `400 10.5px ${mono}`, color: sel === i ? 'var(--text)' : 'var(--muted)' }}>{compact ? label : <>Print {i + 1} · {sizeName(p.size)}{p.stack ? ' · two stacked' : ''}<div style={{ fontStyle: 'italic', color: warn?.[i] ? 'oklch(0.78 0.11 35)' : 'var(--faint)', marginTop: 2 }}>{p.frame ? (p.frame.size === p.size ? 'framed' : `${sizeName(p.frame.size)} frame`) : 'poster'}{warn?.[i] ? ` · ⚠ ${warn[i]}` : ''}</div></>}</div>
           </div>
         );
       })}
@@ -101,6 +100,17 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
 
 /** A photograph fills its print (the edges beyond the paper are cut off); a crop zooms in on a chosen point. Only how it looks here. */
 export const cropStyle = (c?: Crop) => ({ objectFit: 'cover' as const, ...(c ? { transform: `scale(${c.zoom})`, transformOrigin: `${c.fx * 100}% ${c.fy * 100}%` } : {}) });
+
+/** The crop controls, folded away until asked for: most prints are not cropped. */
+function CropFold({ photoId, print: sp, onChange }: { photoId: number; print: Print; onChange: (fn: (q: Print) => void) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button aria-expanded={open} onClick={() => setOpen(!open)} style={{ fontSize: 13, color: 'var(--text2)' }}>{open ? '▾' : '▸'} Crop{sp.crop ? ` · zoom ${Math.round(sp.crop.zoom * 100)}%` : ''}</button>
+      {open && <div style={{ marginTop: 10 }}><CropBox photoId={photoId} print={sp} onChange={onChange} /></div>}
+    </div>
+  );
+}
 
 /** Zoom in on the photograph and drag it around, to see how the print would look cropped. */
 function CropBox({ photoId, print: sp, onChange }: { photoId: number; print: Print; onChange: (fn: (q: Print) => void) => void }) {
@@ -135,8 +145,9 @@ function CropBox({ photoId, print: sp, onChange }: { photoId: number; print: Pri
 }
 
 /** A print's own settings: size, which way round, one photograph or two, poster or framed (and the frame). */
-export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange, onApplyAll, onDelete, onClose, inline }: {
+export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange, onApplyAll, onDelete, onClose, inline, title, thumb, hint, ranking, sharpness }: {
   /** Drawn in the page, beside the wall, rather than over it. */ inline?: boolean;
+  /** For the inline panel: the photograph's title, its picture, a line of help, the ranking weights and the sharpness note. */ title?: string; thumb?: string; hint?: string; ranking?: React.ReactNode; sharpness?: React.ReactNode;
   prints: Print[]; index: number; count: number; ppi?: number; /** The photograph in this print, so its crop can be shown and set. */ photoId?: number | null;
   onChange: (fn: (q: Print) => void) => void; onApplyAll: () => void; onDelete: () => void; onClose: () => void;
 }) {
@@ -149,6 +160,58 @@ export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange,
   const [cw, ch] = cellOf(sp);
   const sw = (hex: string, on: boolean, label: string, pick: () => void) => <button key={label} onClick={pick} title={label} aria-label={label} aria-pressed={on} style={{ width: 24, height: 24, borderRadius: '50%', background: hex, boxShadow: on ? '0 0 0 2px #0d0d0d, 0 0 0 4px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.18)' }} />;
   const group = (t: string, children: React.ReactNode) => <div><div style={{ ...eyebrow, marginBottom: 8 }}>{t}</div>{children}</div>;
+  if (inline) {
+    const row = (label: React.ReactNode, control: React.ReactNode, mono = false) => <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}><span style={mono ? eyebrow : { fontSize: 14 }}>{label}</span>{control}</div>;
+    const mats: [string, string][] = [['none', 'None'], ['white', 'White'], ['ivory', 'Ivory'], ['black', 'Black']];
+    const matNow = !fr ? 'none' : fr.size === sp.size ? 'none' : fr.mat;
+    const setMat = (m: string) => onChange((q) => { if (!q.frame) return; if (m === 'none') q.frame.size = q.size; else { if (q.frame.size === q.size) q.frame.size = nextUp(q.size); q.frame.mat = m; } });
+    const [ow, oh] = fr ? or(fr.size, sp.orientation) : [pw, ph];
+    return (
+      <div className="pp" role="region" aria-label="Print settings" style={{ background: 'var(--surface)', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}><span style={{ font: `400 28px/1 ${serif}` }}>Print {index + 1}</span><span style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'right' }}>{title || 'empty'}</span></div>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          {thumb ? <img src={thumb} alt="" style={{ height: 56, maxWidth: 84, objectFit: 'cover', borderRadius: 3 }} /> : <i style={{ width: 44, height: 56, background: 'var(--bg)', borderRadius: 3, boxShadow: 'inset 0 0 0 1px var(--hair)', flex: 'none' }} />}
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{hint ?? 'Click a candidate below, or drag one onto the print.'}</span>
+        </div>
+        {row('Print size', (
+          <select className="psel" aria-label="Print size" value={sp.size} onChange={(e) => { const k = e.target.value; onChange((q) => { q.size = k; if (q.frame && !fits(q.frame.size, k)) q.frame.size = nextUp(k); }); }}>
+            {GROUPS.map(([g, ks]) => <optgroup key={g} label={g}>{ks.map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>)}
+          </select>
+        ), true)}
+        {row('Orientation', (
+          <div className="seg" role="group" aria-label="Orientation" style={{ alignSelf: 'auto' }}>
+            {(['portrait', 'landscape'] as const).map((o) => <button key={o} aria-pressed={sp.orientation === o} className={sp.orientation === o ? 'on' : ''} onClick={() => onChange((q) => { q.orientation = o; })}>{o === 'portrait' ? '▯ Portrait' : '▭ Landscape'}</button>)}
+          </div>
+        ), true)}
+        {row('Frame', (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14 }}>Framed<button className={'sw' + (fr ? ' on' : '')} role="switch" aria-checked={!!fr} aria-label="Framed" onClick={() => onChange((q) => { q.frame = q.frame ? null : { size: nextUp(q.size), mat: 'white', color: 'black' }; })} /></span>
+        ), true)}
+        {fr && (
+          <>
+            {row('Colour', <div style={{ display: 'flex', gap: 10 }}>{Object.entries(FRAMES).map(([k, c]) => sw(c, fr.color === k, cap(k), () => onChange((q) => { q.frame!.color = k; })))}</div>)}
+            {row('Frame size', (
+              <select className="psel" aria-label="Frame size" value={fr.size} onChange={(e) => { const k = e.target.value; onChange((q) => { q.frame!.size = k; }); }}>
+                {Object.keys(PAPER).filter((k) => fits(k, sp.size)).sort((x, y) => area(x) - area(y)).map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+            ))}
+            {row('Mat', <div className="seg" role="group" aria-label="Mat" style={{ alignSelf: 'auto' }}>{mats.map(([k, l]) => <button key={k} aria-pressed={matNow === k} className={matNow === k ? 'on' : ''} onClick={() => setMat(k)}>{l}</button>)}</div>)}
+            <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.45 }}>{cap(fr.color)} {fr.size} frame{matNow !== 'none' ? `, ${matNow} mat around the ${sp.size} print` : `, no mat`} · outside {Math.round(ow / 10)} × {Math.round(oh / 10)} cm <button onClick={onApplyAll} style={{ color: 'var(--muted)', textDecoration: 'underline', textUnderlineOffset: 3, marginLeft: 6, fontSize: 12 }}>Use on every print</button></div>
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+          <span style={eyebrow}>Photographs</span>
+          <div className="seg" role="group" aria-label="Photographs" style={{ alignSelf: 'auto' }}>{[false, true].map((st) => <button key={String(st)} aria-pressed={sp.stack === st} className={sp.stack === st ? 'on' : ''} onClick={() => onChange((q) => { q.stack = st; if (!st) q.photoId2 = null; })}>{st ? 'Two stacked' : 'One'}</button>)}</div>
+        </div>
+        {sp.stack && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -6 }}>{sp.orientation === 'portrait' ? 'Two landscape photographs, one above the other.' : 'Two portrait photographs, side by side.'} Each fills {Math.round(cw)} × {Math.round(ch)} mm. The originals are exported as they are, never joined.</div>}
+        {photoId != null && !sp.stack && <CropFold photoId={photoId} print={sp} onChange={onChange} />}
+        <div style={{ borderTop: '1px solid var(--hair)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: 'var(--muted)' }}>
+          <span>Sharpness: {sharpness ?? `${nw} × ${nh} px needed at ${ppi} PPI`}</span>
+          {ranking && <span>Ranking: {ranking}</span>}
+        </div>
+        <button onClick={onDelete} disabled={count <= 1} style={{ alignSelf: 'flex-end', fontSize: 13, color: 'oklch(0.78 0.11 35)', opacity: count <= 1 ? 0.4 : 1 }}>⚠ Remove this print</button>
+      </div>
+    );
+  }
   return (
     <div className={'sheet-root' + (inline ? ' inline' : '')} onMouseDown={(e) => !inline && e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className={'sheet' + (inline ? ' inline' : '')} role={inline ? 'region' : 'dialog'} aria-label="Print settings" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 480, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 20 }}>

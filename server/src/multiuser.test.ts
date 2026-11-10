@@ -215,3 +215,24 @@ describe('upgrading from one library', () => {
     } finally { e.app.close(); cleanup(e); }
   });
 });
+
+describe('server rules for members', () => {
+  it('members see each other’s shoots only when the administrator allows it', async () => {
+    env.db.prepare("INSERT INTO shoots(name, source, place, imported_at) VALUES('Owner trip', '', 'Hobart', '2026-01-01T00:00:00.000Z')").run();
+    expect((await call('GET', '/api/shoots/others', a)).body).toEqual({ enabled: false, shoots: [] });
+    expect((await call('PUT', '/api/admin/instance', me, { membersSeeShoots: true })).status).toBe(200);
+    const r = (await call('GET', '/api/shoots/others', a)).body as { enabled: boolean; shoots: { owner: string; name: string }[] };
+    expect(r.enabled).toBe(true);
+    expect(r.shoots.some((s) => s.name === 'Owner trip' && s.owner === 'Owner')).toBe(true);
+    expect(r.shoots.every((s) => s.owner !== 'Alice')).toBe(true); // never your own
+    await call('PUT', '/api/admin/instance', me, { membersSeeShoots: false });
+  });
+  it('only an administrator may connect cloud storage or add their own AI when that is switched off', async () => {
+    await call('PUT', '/api/admin/instance', me, { cloudWho: 'admins', aiMembersOwn: false });
+    expect((await call('POST', '/api/cloud/connect/dropbox', a, {})).status).toBe(403);
+    expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(403);
+    expect((await call('POST', '/api/ai/sources', me, { type: 'ollama' })).status).toBe(201);
+    await call('PUT', '/api/admin/instance', me, { cloudWho: 'members', aiMembersOwn: true });
+    expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(201);
+  });
+});

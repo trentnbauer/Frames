@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
-import { bindOwner, findByEmail, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
+import { bindOwner, findByEmail, getUser, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
@@ -36,7 +36,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
 
   app.get('/auth/login/:id', async (req, rep) => {
     if (tooMany(req.ip)) return rep.code(429).type('text/html').send(auth.messagePage('Slow down', 'Too many sign-in attempts. Try again in a minute.'));
-    const p = loadAuth(db).providers.find((v) => v.id === (req.params as Row).id);
+    const p = loadAuth(db).providers.find((v) => v.id === (req.params as Row).id && !v.off);
     if (!p || !loadAuth(db).providers.length) return rep.code(404).type('text/html').send(auth.messagePage('Not set up', 'That sign-in method is not set up.'));
     const q = req.query as Row;
     // The Turnstile check, when it is on for sign-in: a person who has passed it (the cookie) or who brings its answer gets through. The test
@@ -148,7 +148,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const conf = loadAuth(db);
     const t = turnstileOn(db, 'signin');
     return {
-      providers: conf.providers.map((p) => ({ id: p.id, name: p.name, type: p.type })),
+      providers: conf.providers.filter((p) => !p.off).map((p) => ({ id: p.id, name: p.name, type: p.type })),
       email: emailOn(), password: !!cfg.authPassword, turnstile: t ? { siteKey: t.siteKey } : null,
       signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
       signedIn: !!sessionUser(db, req),
@@ -239,7 +239,24 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
 
   // ---------- behind the sign-in: who am I, and the owner's settings ----------
   // A guest's "Shared with you": the share links they opened while signed in (see the onRequest hook in app.ts).
-  app.get('/api/guest/links', async (req) => ({ links: db.prepare('SELECT token, label, kind, seen FROM guest_links WHERE user_id = ? ORDER BY seen DESC LIMIT 200').all(((req as any).authUser as User).id) }));
+  // Settings, Server, Sign-in & access: switch a set-up method on or off without losing its client ID and secret. Never the last way in while sign-in is required.
+  app.put('/api/auth/methods/:id', async (req, rep) => {
+    const on = ((req.body ?? {}) as Row).on;
+    if (typeof on !== 'boolean') return rep.code(400).send({ error: 'on must be true or false' });
+    const conf = loadAuth(db);
+    const p = conf.providers.find((v) => v.id === (req.params as Row).id);
+    if (!p) return rep.code(404).send({ error: 'That method is not set up yet. Use Configure first.' });
+    const next = conf.providers.map((v) => (v.id === p.id ? { ...v, off: on ? undefined : true } : v));
+    if (!on && conf.enabled && !next.some((v) => !v.off) && !conf.email) return rep.code(400).send({ error: 'That is the only way in while sign-in is required. Turn on another method first, or turn sign-in off.' });
+    if (!on && conf.enabled && conf.testedBy?.provider === p.id && !next.some((v) => !v.off && v.id !== p.id)) return rep.code(400).send({ error: 'The account that tested sign-in used this method. Test another method first.' });
+    saveAuth(db, { ...conf, providers: next as typeof conf.providers });
+    return { ok: true };
+  });
+  app.get('/api/guest/links', async (req) => ({
+    // The first part of a link names whose it is, so a guest can see who shared what.
+    links: (db.prepare('SELECT token, label, kind, seen FROM guest_links WHERE user_id = ? ORDER BY seen DESC LIMIT 200').all(((req as any).authUser as User).id) as { token: string; label: string; kind: string; seen: string }[])
+      .map((l) => ({ ...l, from: (getUser(x.sys, parseInt(l.token.split('_')[0], 36))?.name ?? '').split(' ')[0] })),
+  }));
   app.get('/api/me', async (req) => {
     const u = (req as any).authUser as User | null;
     const signedIn = (req as any).authVia === 'session';
@@ -275,7 +292,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       for (const raw of b.providers.slice(0, 10)) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bad('Each provider must be an object.');
         const p: Provider = {
-          ...(raw.useCloudApp === true ? { useCloudApp: true } : {}), id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
+          ...(raw.useCloudApp === true ? { useCloudApp: true } : {}), ...(raw.off === true ? { off: true } : {}), id: String(raw.id ?? '').trim().toLowerCase(), type: raw.type, name: String(raw.name ?? '').trim().slice(0, 40), clientId: String(raw.clientId ?? '').trim().slice(0, 300),
           ...(raw.issuer ? { issuer: String(raw.issuer).trim().slice(0, 300) } : {}), ...(raw.tenant ? { tenant: String(raw.tenant).trim().slice(0, 100) } : {}),
           ...(raw.authUrl ? { authUrl: String(raw.authUrl).trim().slice(0, 300) } : {}), ...(raw.tokenUrl ? { tokenUrl: String(raw.tokenUrl).trim().slice(0, 300) } : {}),
           ...(raw.teamDomain ? { teamDomain: String(raw.teamDomain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 253) } : {}), ...(raw.aud ? { aud: String(raw.aud).trim().toLowerCase().slice(0, 64) } : {}),

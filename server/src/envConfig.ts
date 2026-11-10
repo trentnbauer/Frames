@@ -30,7 +30,7 @@ export function envConfigLoaded(env: Record<string, string | undefined> = proces
 }
 
 /** Settings that are about what is happening now, not about how Frames is set up. */
-const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState)$/;
+const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState|releasesCache|smtpHealth|mailSent)$/;
 const KEY = /^[\w:.-]{1,200}$/;
 export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k);
 
@@ -58,9 +58,11 @@ export function readConfigVar(name: string, env: EnvSource = process.env): { val
 }
 
 /** At start: write the env file's settings over the saved ones. Returns how many it wrote, and anything it could not read. */
-export function applyEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.env): { applied: number; problems: string[] } {
+export type EnvItem = { db: DB; scope: 'system' | 'owner'; key: string; value: unknown };
+/** What an env file (or the environment) would write: every setting it holds, and anything it could not read. Writes nothing. */
+export function collectEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.env): { items: EnvItem[]; problems: string[] } {
   const problems: string[] = [];
-  let applied = 0;
+  const items: EnvItem[] = [];
   for (const [name, prefix, scope, db] of [[SYSTEM_VAR, SYSTEM_PREFIX, 'system', sys], [OWNER_VAR, OWNER_PREFIX, 'owner', ownerDb]] as const) {
     const legacy = readConfigVar(name, env); // the older single JSON variable, if there is one
     if (legacy.problem) problems.push(legacy.problem);
@@ -74,8 +76,16 @@ export function applyEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.en
       const base = all[key] && typeof all[key] === 'object' && !Array.isArray(all[key]) ? (all[key] as Record<string, unknown>) : getSetting<Record<string, unknown>>(db, key, {});
       all[key] = { ...base, ...patch };
     }
-    for (const [k, v] of Object.entries(all)) { if (isConfigKey(k)) { setSetting(db, k, v); applied++; } }
+    for (const [k, v] of Object.entries(all)) if (isConfigKey(k)) items.push({ db, scope, key: k, value: v });
   }
+  return { items, problems };
+}
+
+/** At start: write the env file's settings over the saved ones. Returns how many it wrote, and anything it could not read. */
+export function applyEnvConfig(sys: DB, ownerDb: DB, env: EnvSource = process.env): { applied: number; problems: string[] } {
+  const { items, problems } = collectEnvConfig(sys, ownerDb, env);
+  let applied = 0;
+  for (const i of items) { setSetting(i.db, i.key, i.value); applied++; }
   if (applied) {
     // What other parts keep in step with these settings: who the owner is, and which hostname is whose.
     const auth = getSetting<Partial<AuthConfig>>(sys, 'auth', {});
@@ -104,9 +114,12 @@ const PASS_THROUGH = ['AUTH_DISABLE', 'AUTH_USER', 'AUTH_PASSWORD', 'ALLOW_SIGNU
 const TUNNEL_VARS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TUNNEL_NAME', 'APP_HOSTNAME', 'ACCESS_EMAILS', 'PORTFOLIO_HOSTNAME'];
 
 /** `pairs`, if given, is filled with every variable the file would hold and its value as plain text (for comparing with what is set). */
-export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; date?: Date; env?: EnvSource; pairs?: [string, string][] } = {}): string {
+export const isSecretName = (k: string) => /KEY|SECRET|TOKEN|PASSWORD|AUD|CREDENTIAL|PRIVATE/i.test(k) || /^FRAMES_CONFIG_/.test(k);
+
+/** `secrets: false` writes every secret variable with no value, so the file can be shared. */
+export function buildEnvFile(sys: DB, ownerDb: DB, opts: { version?: string; date?: Date; env?: EnvSource; pairs?: [string, string][]; secrets?: boolean } = {}): string {
   const env = opts.env ?? process.env;
-  const note = (k: string, t: string) => { opts.pairs?.push([k, t]); return envLine(k, t); };
+  const note = (k: string, t: string) => { opts.pairs?.push([k, t]); return envLine(k, opts.secrets === false && isSecretName(k) ? '' : t); };
   const lines = [
     `# Frames${opts.version && opts.version !== 'dev' ? ` ${opts.version}` : ''} settings${opts.date ? `, exported ${opts.date.toISOString().slice(0, 10)}` : ''}.`,
     '# Add this file to your stack (docker compose --env-file frames.env up -d, or save it as .env next to the compose file, or in Portainer:',

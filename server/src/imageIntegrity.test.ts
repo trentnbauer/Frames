@@ -66,12 +66,14 @@ describe('checking the files against the database', () => {
       expect(hamming(await dHash(dp(p.id, 'thumb')), h)).toBeLessThanOrEqual(2); // its own picture again
     }
   });
-  it('treats a missing or unreadable file as wrong too', async () => {
-    fs.rmSync(dp(a.id, 'preview'));
+  it('treats a missing thumbnail or an unreadable file as wrong, but a missing preview alone is not (the cache limit removes those)', async () => {
+    fs.rmSync(dp(a.id, 'thumb'));
     fs.writeFileSync(dp(b.id, 'thumb'), 'not an image');
     const r = await verifyDerivatives(env.db, { libraries: [], dataDir: env.data });
     expect(r).toMatchObject({ wrong: 2, rebuilt: 2 });
-    expect(fs.existsSync(dp(a.id, 'preview'))).toBe(true);
+    expect(fs.existsSync(dp(a.id, 'thumb'))).toBe(true);
     expect(hamming(await dHash(dp(b.id, 'thumb')), row(b.id).dhash!)).toBeLessThanOrEqual(2);
+    fs.rmSync(dp(a.id, 'preview'));
+    expect(await verifyDerivatives(env.db, { libraries: [], dataDir: env.data })).toMatchObject({ wrong: 0 });
   });
 });

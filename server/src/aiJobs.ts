@@ -1,3 +1,4 @@
+import { policyOf } from './policy.js';
 import { getSetting, setSetting, type DB } from './db.js';
 import { isReady, loadShared, loadSources } from './aisources.js';
 
@@ -16,7 +17,9 @@ const ids = (db: DB) => [...loadSources(db), ...loadShared(db)].map((s) => s.id)
 /** The saved settings, cleaned against the providers that exist now: gone ones dropped, new ones at the end. */
 export function loadJobs(db: DB): Jobs {
   const saved = getSetting<Partial<Jobs>>(db, 'aiJobs', {});
-  const all = ids(db);
+  const sys = (db as unknown as { sys?: DB }).sys;
+  // With no order of their own yet, and the administrator's wish, the shared AIs come first.
+  const all = !getSetting<unknown>(db, 'aiJobs', null) && sys && policyOf(sys).aiSharedFirst ? [...loadShared(db).map((s) => s.id), ...loadSources(db).map((s) => s.id)] : ids(db);
   const out = {} as Jobs;
   for (const j of JOBS) {
     const s = saved[j];

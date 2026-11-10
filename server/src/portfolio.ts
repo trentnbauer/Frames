@@ -39,7 +39,7 @@ export type PortfolioCfg = {
   /** What a visitor gets when they open a photo full size. */
   fullSize: 'resized' | 'original' | 'none';
   captions: boolean;
-  order: 'collection' | 'newest' | 'oldest' | 'captured';
+  order: 'collection' | 'newest' | 'oldest' | 'captured' | 'score';
   /** Photographs whose average rating reaches the threshold join the portfolio by themselves (unless left out). */
   autoAdd: boolean;
   autoThreshold: number;
@@ -115,7 +115,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       OR p.id IN (SELECT photo_id FROM portfolio_marks WHERE favourite = 1)
       OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))`;
   const photos = (c: PortfolioCfg): Row[] => {
-    const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos IS NULL, cp.pos ASC, p.id ASC';
+    const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'score' ? 'COALESCE((SELECT AVG(rating) FROM reviews r WHERE r.photo_id = p.id), 0) DESC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos IS NULL, cp.pos ASC, p.id ASC';
     return db.prepare(`SELECT p.* FROM photos p LEFT JOIN collection_photos cp ON cp.collection_id = :col AND cp.photo_id = p.id WHERE ${MEMBER} ORDER BY ${order}`)
       .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold }) as Row[];
   };
@@ -264,7 +264,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       else n.collectionId = num(b.collectionId);
     }
     if (b.fullSize === 'original' && !originalsAllowed()) return bad('Switched off on this server. An administrator can allow it under Settings, Photo folders.');
-    for (const [k, vals] of [['fullSize', ['resized', 'original', 'none']], ['order', ['collection', 'newest', 'oldest', 'captured']]] as const) if (b[k] !== undefined) { if (!(vals as readonly string[]).includes(b[k])) return bad(`Unknown ${k}`); (n as any)[k] = b[k]; }
+    for (const [k, vals] of [['fullSize', ['resized', 'original', 'none']], ['order', ['collection', 'newest', 'oldest', 'captured', 'score']]] as const) if (b[k] !== undefined) { if (!(vals as readonly string[]).includes(b[k])) return bad(`Unknown ${k}`); (n as any)[k] = b[k]; }
     if (typeof b.captions === 'boolean') n.captions = b.captions;
     if (typeof b.autoAdd === 'boolean') n.autoAdd = b.autoAdd;
     if (b.autoThreshold !== undefined) { const t = Math.round(Number(b.autoThreshold) * 10) / 10; if (!(t >= 1 && t <= 5)) return bad('The score must be between 1 and 5.'); n.autoThreshold = t; }

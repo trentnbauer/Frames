@@ -30,6 +30,8 @@ export type Provider = {
   /** google, microsoft and dropbox: sign in with the app registered under Settings, Cloud storage providers, so no second client ID and secret. */
   useCloudApp?: boolean;
   teamDomain?: string; aud?: string; // cloudflare: the Access team's domain, and the application's audience tag
+  /** Set up but switched off: not offered on the sign-in page. */
+  off?: boolean;
 };
 export type Identity = { provider: string; sub: string; email: string; emailVerified: boolean; name: string };
 export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: string[]; publicUrl: string; testedBy: Identity | null;
@@ -42,14 +44,17 @@ const EMPTY: AuthConfig = { enabled: false, providers: [], allow: [], publicUrl:
 export const loadAuth = (db: DB): AuthConfig => ({ ...EMPTY, ...getSetting<Partial<AuthConfig>>(db, 'auth', {}) });
 export const saveAuth = (db: DB, c: AuthConfig) => setSetting(db, 'auth', c);
 /** Is OAuth sign-in switched on, with at least one provider? */
-export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && (a.providers.length > 0 || !!a.email); };
+export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && (a.providers.some((p) => !p.off) || !!a.email); };
 
 export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
   dropbox: { authUrl: 'https://www.dropbox.com/oauth2/authorize', tokenUrl: 'https://api.dropboxapi.com/oauth2/token', userUrl: 'https://api.dropboxapi.com/2/users/get_current_account', emailsUrl: '' },
   github: { authUrl: 'https://github.com/login/oauth/authorize', tokenUrl: 'https://github.com/login/oauth/access_token', userUrl: 'https://api.github.com/user', emailsUrl: 'https://api.github.com/user/emails' },
 };
 
-const SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
+let SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
+/** The days a sign-in lasts: the Sign-in & access setting, unless SESSION_DAYS fixes it. */
+export const sessionDays = () => SESSION_DAYS;
+export const setSessionDays = (n: number) => { if (!process.env.SESSION_DAYS && Number.isInteger(n) && n >= 1 && n <= 365) SESSION_DAYS = n; };
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const rand = (n = 32) => crypto.randomBytes(n).toString('base64url');
 /**
@@ -213,7 +218,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const id = (req.params as { id: string }).id;
     if (!flow || flow.providerId !== id || Date.now() - flow.created > 600_000) throw new Error('This sign-in link expired or was already used. Please start again.');
     if (q.error) throw new Error(`The provider did not sign you in (${q.error_description || q.error}).`);
-    const p = loadAuth(db).providers.find((x) => x.id === id);
+    const p = loadAuth(db).providers.find((x) => x.id === id && !x.off);
     if (!p) throw new Error('That provider is no longer set up.');
     const { clientId, secret } = creds(p);
 
@@ -322,10 +327,10 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const t = active(db, 'signin');
     // With the Turnstile check on, the buttons submit a form that carries the check's answer; without it they are plain links.
     const buttons = t
-      ? `<form method="get" action="/auth/login/${esc(a.providers[0]?.id ?? '')}">${opts.returnTo ? `<input type="hidden" name="returnTo" value="${esc(opts.returnTo)}">` : ''}${opts.guest ? '<input type="hidden" name="guest" value="1">' : ''}
+      ? `<form method="get" action="/auth/login/${esc(a.providers.find((p) => !p.off)?.id ?? '')}">${opts.returnTo ? `<input type="hidden" name="returnTo" value="${esc(opts.returnTo)}">` : ''}${opts.guest ? '<input type="hidden" name="guest" value="1">' : ''}
         <div class="cf-turnstile" data-sitekey="${esc(t.siteKey)}" data-theme="dark" style="margin-bottom:14px"></div>
-        ${a.providers.map((p) => `<button class="b" type="submit" formaction="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</button>`).join('')}</form><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
-      : a.providers.map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('');
+        ${a.providers.filter((p) => !p.off).map((p) => `<button class="b" type="submit" formaction="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</button>`).join('')}</form><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
+      : a.providers.filter((p) => !p.off).map((p) => `<a class="b" href="/auth/login/${esc(p.id)}">Continue with ${esc(p.name)}</a>`).join('');
     return PAGE(`<h1>Frames</h1><p>Sign in to continue.</p>${message ? `<div class="e" role="alert">${esc(message)}</div>` : ''}
       ${buttons}
       ${cfg.authPassword ? '<a class="l" href="/auth/password">Use the shared password instead</a>' : ''}<p style="margin-top:26px;font-size:13px"><a class="l" href="/privacy">Privacy</a></p>`);

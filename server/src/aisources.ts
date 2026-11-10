@@ -89,11 +89,11 @@ export function applySource(cur: AiSource, input: Record<string, unknown>): AiSo
 }
 
 /** What the rest of the app uses: the active source, or null when AI is off or not fully set up. */
-export type AiCfg = { protocol: AiProtocol; local: boolean; name: string; endpoint: string; model: string; embedModel: string; key: string };
+export type AiCfg = { protocol: AiProtocol; local: boolean; name: string; endpoint: string; model: string; embedModel: string; key: string; /** One the administrator set up for everyone, outside the person's own list. */ shared?: boolean };
 export function activeConfig(db: DB, activeId: string): AiCfg | null {
   if (!activeId) return null;
   const s = getSource(db, activeId);
   if (!s || !isReady(s)) return null; // never send photos out without the explicit acknowledgement
   const t = aiType(s.type)!;
-  return { protocol: t.protocol, local: t.local, name: s.name, endpoint: s.endpoint, model: s.model, embedModel: t.canEmbed ? s.embedModel : '', key: sourceKey(db, s.id) };
+  return { protocol: t.protocol, local: t.local, name: s.name, endpoint: s.endpoint, model: s.model, embedModel: t.canEmbed ? s.embedModel : '', key: sourceKey(db, s.id), shared: !loadSources(db).some((o) => o.id === s.id) };
 }

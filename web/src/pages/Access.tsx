@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
-import { CardFooter, Destructive, EditRow, useOne } from '../components/editcard';
+import { Link } from 'react-router-dom';
+import { Badge, Eyebrow, PInput, PSelect, PSwitch, SCard, SRow } from '../components/srow';
 
 type Provider = {
   id: string; type: 'google' | 'github' | 'microsoft' | 'dropbox' | 'oidc' | 'oauth2' | 'cloudflare'; name: string; clientId: string; useCloudApp?: boolean;
@@ -72,6 +73,15 @@ function SetupSteps({ p, redirect, appUrl }: { p: Provider; redirect: string; ap
   );
 }
 
+const METHODS: { type: Provider['type']; label: string; hint: string; abbr: string }[] = [
+  { type: 'cloudflare', abbr: 'CF', label: 'Cloudflare Access', hint: 'No sign-in screen: Access vouches for the email.' },
+  { type: 'google', abbr: 'G', label: 'Google', hint: 'Sign in with a Google account.' },
+  { type: 'github', abbr: 'GH', label: 'GitHub', hint: 'Sign in with a GitHub account.' },
+  { type: 'dropbox', abbr: 'DB', label: 'Dropbox', hint: 'Sign in with a Dropbox account.' },
+  { type: 'microsoft', abbr: 'MS', label: 'Microsoft', hint: 'Work or school (Entra ID). Needs your tenant ID.' },
+  { type: 'oidc', abbr: 'ID', label: 'OpenID Connect', hint: 'Authentik, Keycloak, Authelia or any OIDC server.' },
+  { type: 'oauth2', abbr: 'O2', label: 'Other OAuth 2', hint: 'Anything that gives out OAuth 2 tokens.' },
+];
 const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
   { type: 'google', label: 'Google', hint: 'Sign in with a Google account.' },
   { type: 'github', label: 'GitHub', hint: 'Sign in with a GitHub account.' },
@@ -85,10 +95,10 @@ const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
 /** Optional sign-in through OAuth providers. Off until it has been tested, so it can never lock you out. */
 export function Access() {
   const cfg = useApi<Cfg>('/auth/config');
-  const one = useOne(); // before the early return below: hooks always run in the same order
+  const [openId, setOpenId] = useState<string | null>(null); // before the early return below: hooks always run in the same order
   const tunnel = useApi<{ protect: boolean; protectForced: boolean; config: { enabled: boolean }; hostnames: { kind: string }[] }>('/tunnel');
   const { refreshMe, me } = useStore();
-  const inst = useApi<{ signups: boolean; signupsLocked: boolean }>('/admin/instance');
+  const inst = useApi<{ signups: boolean; signupsLocked: boolean; defaultRole: 'member' | 'guest'; sessionDays: number; sessionDaysLocked: boolean; shareExpireDays: number; shareDownload: boolean; shareAskName: boolean }>('/admin/instance');
   const save2 = async (v: boolean) => { try { await api('/admin/instance', { method: 'PUT', body: { signups: v } }); inst.reload(); refreshMe(); setMsg({ ok: true, text: v ? 'New people can make an account again.' : 'New accounts are closed. Existing accounts and people you add by email can still sign in.' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
   const [providers, setProviders] = useState<Provider[]>([]);
   const [allow, setAllow] = useState('');
@@ -121,6 +131,7 @@ export function Access() {
     setProviders([...providers, { id, type, name: KINDS.find((k) => k.type === type)!.label, clientId: '' }]);
     setDirty(true);
   };
+  const uniqueId = (type: string) => { let id = type, n = 2; const ids = new Set(providers.map((p) => p.id)); while (ids.has(id)) id = `${type}-${n++}`; return id; };
   const toggle = () => save({ enabled: !c.enabled }, c.enabled ? 'Sign-in is off. Everyone who could reach Frames can use it again.' : 'Sign-in is on.');
 
   return (
@@ -128,27 +139,27 @@ export function Access() {
       {c.disabledByEnv && <div className="banner" role="alert"><span className="reason">Sign-in is switched off by the AUTH_DISABLE setting on this server. Remove it and restart to use sign-in.</span></div>}
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
 
-      <div className="field toggle">
-        <div>
-          <h3 style={{ fontSize: 19 }}>Require sign-in</h3>
-          <p style={{ margin: 0 }}>
-            {c.enabled ? 'Only people on the allowed list can use Frames. Share links still work for the people they were sent to.' : 'Off: anyone who can reach Frames can use it. Set up a provider, test it, then turn this on.'}
-          </p>
-          {!c.enabled && <p style={{ margin: '6px 0 0' }}>{c.testedBy ? <>Tested with <b>{c.testedBy.email || c.testedBy.name}</b> ({c.testedBy.provider}).</> : <span className="muted">Not tested yet: save a provider and the list, then press “Test sign-in”.</span>}</p>}
-        </div>
-        <button className={'sw' + (c.enabled ? ' on' : '')} role="switch" aria-checked={c.enabled} aria-label="Require sign-in" onClick={toggle} />
-      </div>
-
-      <div className="field">
-        <h3>Providers</h3>
-        <p>Add the ways people can sign in. Each one needs a client ID and secret from the provider. Register the address shown under it with the provider.</p>
-        {locked && <p className="reason">Sign-in is on, so the providers below are locked. You can still add another with “Add a provider”; to change or remove one, turn sign-in off, then test it and turn sign-in on again.</p>}
-        {providers.length === 0 && <p className="muted">No providers yet.</p>}
-        {providers.map((p, i) => (
-          <EditRow key={p.id} id={p.id} one={one} title={p.name || p.id} note={`How people sign in with ${p.name || 'this provider'}.`}
-            summary={<><b>{p.name}</b> <span className="faint mono" style={{ fontSize: 11 }}>{p.id}</span> <span className="muted">{KINDS.find((k) => k.type === p.type)?.label}</span></>}
-            right={p.hasSecret !== undefined && ((!dirty && !locked) || locked) ? <a className="t2" style={{ fontSize: 12.5 }} href={`/auth/login/${p.id}?test=1`}>Test sign-in</a> : undefined}>
-            <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 520, marginTop: 10 }}>
+      <Eyebrow>Sign-in methods · test before turning on</Eyebrow>
+      <SCard>
+        <SRow lead={<Badge>PK</Badge>} title="Passkey" hint="Face ID, Touch ID or a security key. Built in.">
+          <Link to="/settings?section=profile" className="ghost plain">Configure</Link><span className="ghost" aria-label="Passkey: built in">✓ Built in</span>
+        </SRow>
+        {METHODS.flatMap((k) => {
+          const mine = providers.map((p, i) => ({ p, i })).filter(({ p }) => p.type === k.type);
+          const rows = mine.length ? mine : [{ p: null as Provider | null, i: -1 }];
+          return rows.map(({ p, i }) => {
+            const id = p?.id ?? `new-${k.type}`;
+            const isOpen = openId === id;
+            const passed = !!p && !!c.testedBy && (c.testedBy.provider === p.id || c.testedBy.provider === p.type);
+            return (
+              <div key={id}>
+                <SRow lead={<Badge>{k.abbr}</Badge>} title={<>{p?.name || k.label}{mine.length > 1 && p && <span className="faint mono" style={{ fontSize: 11, marginLeft: 8 }}>{p.id}</span>}</>} hint={k.hint}>
+                  <button className="ghost plain" aria-expanded={isOpen} aria-label={`Configure ${p?.name || k.label}`} onClick={() => { if (!p) { add(k.type); setOpenId(uniqueId(k.type)); } else setOpenId(isOpen ? null : id); }}>{isOpen ? 'Close' : 'Configure'}</button>
+                  {p && p.hasSecret !== undefined && ((!dirty && !locked) || locked) ? <a className="ghost" href={`/auth/login/${p.id}?test=1`}>{passed ? '✓ Passed' : 'Test'}</a> : <span className="ghost" style={{ opacity: .5 }}>{passed ? '✓ Passed' : 'Test'}</span>}
+                </SRow>
+                {p && isOpen && i >= 0 && (
+                  <div className="sdetail" role="group" aria-label={`Set up ${p.name || p.id}`}>
+                <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 520, marginTop: 10 }}>
               <label>Button label <input disabled={lockedFor(p)} value={p.name} aria-label={`${p.id} label`} onChange={(e) => edit(i, { name: e.target.value })} /></label>
               {p.type === 'cloudflare' && <>
                 <label>Team domain <input disabled={lockedFor(p)} value={p.teamDomain ?? ''} placeholder="myteam.cloudflareaccess.com" aria-label={`${p.id} team domain`} onChange={(e) => edit(i, { teamDomain: e.target.value })} /></label>
@@ -157,8 +168,8 @@ export function Access() {
               </>}
               {['google', 'microsoft', 'dropbox'].includes(p.type) && (
                 <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <input type="checkbox" disabled={lockedFor(p)} aria-label={`${p.id}: use the app from Cloud services`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
-                  <span>Use the app already set up under <b>Settings, Cloud storage providers</b> ({p.type === 'google' ? 'Google Drive' : p.type === 'microsoft' ? 'OneDrive' : 'Dropbox'}): the same client ID and secret, so there is nothing to enter here. Add the redirect address below to that app too.</span>
+                  <input type="checkbox" disabled={lockedFor(p)} aria-label={`${p.id}: use the app from Photos & storage`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
+                  <span>Use the app already set up under <b>Settings, Photos & storage</b> ({p.type === 'google' ? 'Google Drive' : p.type === 'microsoft' ? 'OneDrive' : 'Dropbox'}): the same client ID and secret, so there is nothing to enter here. Add the redirect address below to that app too.</span>
                 </label>
               )}
               {p.type !== 'cloudflare' && !p.useCloudApp && <label>Client ID <input disabled={lockedFor(p)} value={p.clientId} aria-label={`${p.id} client ID`} onChange={(e) => edit(i, { clientId: e.target.value })} /></label>}
@@ -175,38 +186,48 @@ export function Access() {
               </div>
             )}
             <SetupSteps p={p} redirect={p.redirectUrl ?? `${c.callbackBase}/auth/callback/${p.id}`} appUrl={publicUrl || c.callbackBase} />
-            <CardFooter>
-              <span className="muted" style={{ fontSize: 12.5 }}>{lockedFor(p) ? 'Turn sign-in off to change a provider.' : 'Press Save providers below to keep your changes.'}</span>
-              <Destructive disabled={lockedFor(p)} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</Destructive>
-            </CardFooter>
-          </EditRow>
-        ))}
-        {(
-          <div style={{ marginTop: 12 }}>
-            <select aria-label="Add a provider" value="" onChange={(e) => e.target.value && add(e.target.value as Provider['type'])}>
-              <option value="">Add a provider…</option>
-              {KINDS.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
-            </select>
-            {dirty && <button className="pill primary" style={{ marginLeft: 12 }} onClick={() => save({ providers: providers.map(({ hasSecret, redirectUrl, ...p }) => p) }, 'Providers saved. Now press “Test sign-in”.')}>Save providers</button>}
-          </div>
-        )}
-      </div>
+            <div className="sfoot">
+              {dirty && <button className="pill primary" onClick={() => save({ providers: providers.map(({ hasSecret, redirectUrl, ...q }) => q) }, 'Providers saved. Now press “Test”.')}>Save providers</button>}
+              <span className="muted" style={{ fontSize: 12.5 }}>{lockedFor(p) ? 'Turn sign-in off to change a provider.' : dirty ? 'Save to keep your changes.' : ''}</span>
+              <span style={{ marginLeft: 'auto' }}><button className="ghost danger" disabled={lockedFor(p)} onClick={() => { setProviders(providers.filter((_, j) => j !== i)); setDirty(true); }}>Remove</button></span>
+            </div>
+                  </div>
+                )}
+              </div>
+            );
+          });
+        })}
+      </SCard>
+
+      <Eyebrow>Sessions</Eyebrow>
+      <SCard>
+        <SRow title="Require sign-in" hint={c.enabled ? 'Only people on the allowed list can use Frames. Share links still work for the people they were sent to.' : c.testedBy ? `Off. Tested with ${c.testedBy.email || c.testedBy.name} (${c.testedBy.provider}): you can turn it on.` : 'Off: anyone who can reach Frames can use it. Set up a method and test it first.'}>
+          <PSwitch on={c.enabled} set={() => toggle()} label="Require sign-in" />
+        </SRow>
+        <SRow title="Allow anyone to sign up" hint="Off: invite only."><PSwitch on={!!inst.data?.signups} disabled={!inst.data || inst.data.signupsLocked} set={(v) => save2(v)} label="Let new people make an account" /></SRow>
+        {inst.data?.signupsLocked && <p className="reason" style={{ margin: '0 0 12px', fontSize: 12.5 }}>Switched off by ALLOW_SIGNUPS=false on this server; remove that setting and restart to change it here.</p>}
+        <SRow title="New people join as"><PSelect label="Role of new accounts" value={inst.data?.defaultRole ?? 'member'} options={[['member', 'Member'], ['guest', 'Guest only']]} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { defaultRole: v } }); inst.reload(); }} /></SRow>
+        <SRow title="Stay signed in for" hint={inst.data?.sessionDaysLocked ? 'Fixed by SESSION_DAYS on this server.' : undefined}><PSelect label="Stay signed in for" disabled={!inst.data || inst.data.sessionDaysLocked} value={inst.data?.sessionDays ?? 14} options={[[1, '1 day'], [7, '7 days'], [14, '14 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']]} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { sessionDays: v } }); inst.reload(); }} /></SRow>
+        <SRow title="Signed-in sessions" hint={`${c.sessions} active. Signing everyone out makes people sign in again.`}><button className="ghost" onClick={async () => { await api('/auth/sessions/clear', { body: {} }); window.location.assign('/'); }}>Sign everyone out</button></SRow>
+      </SCard>
+
+      <Eyebrow>Guest links</Eyebrow>
+      <SCard>
+        <SRow title="Expire after" hint="For new links. Each link can be changed when you share."><PSelect label="Expire after" value={inst.data?.shareExpireDays ?? 21} options={[[7, '1 week'], [21, '3 weeks'], [30, '30 days'], [90, '90 days'], [0, 'Never']]} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { shareExpireDays: v } }); inst.reload(); }} /></SRow>
+        <SRow title="Guests can download files"><PSwitch on={!!inst.data?.shareDownload} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { shareDownload: v } }); inst.reload(); }} label="Guests can download files" /></SRow>
+        <SRow title="Ask guests for their name" hint="So you know whose ratings are whose."><PSwitch on={inst.data?.shareAskName !== false} set={async (v) => { await api('/admin/instance', { method: 'PUT', body: { shareAskName: v } }); inst.reload(); }} label="Ask guests for their name" /></SRow>
+      </SCard>
 
       <Turnstile />
 
-      <div className="field">
-        <h3>Who is allowed in</h3>
+      <Eyebrow>Who is allowed in</Eyebrow>
+      <div className="scard" style={{ padding: '16px 24px' }}>
         <div role="radiogroup" aria-label="Who is allowed in" style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', marginBottom: 14 }}>
           {([[false, 'Only people on the list'], [true, 'Anyone who signs in']] as const).map(([open, label]) => (
             <button key={label} role="radio" aria-checked={c.open === open} onClick={() => c.open !== open && save({ open }, open ? 'Anyone who signs in with a provider can now use Frames. The list is kept.' : 'Only people on the list can sign in again.')}
               style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13, background: c.open === open ? 'var(--text)' : 'transparent', color: c.open === open ? 'var(--bg)' : 'var(--text2)' }}>{label}</button>
           ))}
         </div>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', maxWidth: 560, margin: '0 0 14px' }}>
-          <input type="checkbox" aria-label="Let new people make an account" checked={!!inst.data?.signups} disabled={!inst.data || inst.data.signupsLocked}
-            onChange={async (e) => { await save2(e.target.checked); }} />
-          <span><b>Let new people make an account</b>: someone who signs in for the first time gets an account and an empty library of their own. Untick it to close the door: only people who already have an account, and people you add by email in Settings, People, can sign in.{inst.data?.signupsLocked && <span className="reason"> Switched off by ALLOW_SIGNUPS=false on this server; remove that setting and restart to change it here.</span>}</span>
-        </label>
         {c.open && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 560, padding: '12px 14px', borderRadius: 10, background: 'var(--hover)', fontSize: 13, color: 'var(--text2)' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)', flex: 'none', marginTop: 7 }} />
@@ -241,22 +262,13 @@ export function Access() {
         </>}
       </div>
 
-      <div className="field">
-        <h3>Public address</h3>
-        <p>Only needed behind a reverse proxy, or to be sure about the redirect address above. Include https:// and no path. Currently using <span className="mono">{c.callbackBase}</span>.</p>
-        <div className="form"><input aria-label="Public address" style={{ minWidth: 320 }} value={publicUrl} placeholder="https://photos.example.com" onChange={(e) => setPublicUrl(e.target.value)} /><button className="pill" onClick={() => save({ publicUrl }, 'Address saved.')}>Save address</button></div>
-      </div>
-
-      <div className="field">
-        <h3>Signed-in sessions</h3>
-        <p>{c.sessions} active. Signing everyone out makes people sign in again.</p>
-        <button className="pill" onClick={async () => { await api('/auth/sessions/clear', { body: {} }); window.location.assign('/'); }}>Sign everyone out</button>
-      </div>
-
-      <div className="field">
-        <h3>If you get locked out</h3>
-        <p style={{ margin: 0 }}>Set <span className="mono">AUTH_DISABLE=true</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</p>
-      </div>
+      <Eyebrow>Address</Eyebrow>
+      <SCard>
+        <SRow title="Public address" hint={<>Only needed behind a reverse proxy, or to be sure about the redirect address. Include https:// and no path. Currently using <span className="mono">{c.callbackBase}</span>.</>}>
+          <PInput label="Public address" value={publicUrl} placeholder="https://photos.example.com" save={(v) => { setPublicUrl(v); void save({ publicUrl: v }, 'Address saved.'); }} />
+        </SRow>
+        <SRow title="If you get locked out" hint={<>Set <span className="mono">AUTH_DISABLE=true</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</>} />
+      </SCard>
     </>
   );
 }
@@ -274,24 +286,18 @@ function Turnstile() {
   const d = t.data;
   const save = async (body: Record<string, unknown>, ok: string) => { setMsg(null); try { await api('/admin/turnstile', { method: 'PUT', body }); setSecret(''); setMsg({ ok: true, text: ok }); t.reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
   return (
-    <div className="field">
-      <h3>Bot check (Cloudflare Turnstile)</h3>
-      <p>Ask people to pass a short check, run by Cloudflare, before they can sign in or open a share link. It is a second line behind sign-in and the unguessable link. Create a widget in the Cloudflare dashboard (Turnstile) for this address and paste its two keys here.</p>
-      {d.disabledByEnv && <div className="banner" role="alert"><span className="reason">Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.</span></div>}
-      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, maxWidth: 520 }}>
-        <label>Site key <input aria-label="Turnstile site key" value={site} onChange={(e) => setSite(e.target.value)} placeholder="0x4AAAAAAA…" /></label>
-        <label>Secret key <input aria-label="Turnstile secret key" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={d.hasSecret ? 'Set. Type to replace it.' : '0x4AAAAAAA…'} /></label>
-        <div><button className="pill" onClick={() => save({ siteKey: site, secret }, 'Keys saved.')} disabled={!site.trim() && !secret.trim()}>Save keys</button></div>
-      </div>
-      <label className="check" style={{ marginTop: 14 }}><input type="checkbox" aria-label="Use the bot check" checked={d.enabled} onChange={(e) => save({ enabled: e.target.checked, siteKey: site, secret }, e.target.checked ? 'The bot check is on.' : 'The bot check is off.')} /> Use the bot check</label>
-      {d.enabled && (
-        <div style={{ marginLeft: 24 }}>
-          <label className="check"><input type="checkbox" aria-label="Check on the sign-in page" checked={d.signin} onChange={(e) => save({ signin: e.target.checked }, 'Saved.')} /> On the sign-in page</label>
-          <label className="check"><input type="checkbox" aria-label="Check on share links" checked={d.shares} onChange={(e) => save({ shares: e.target.checked }, 'Saved.')} /> On share links (a signed-in person is not asked)</label>
-        </div>
-      )}
-      <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out. A wrong site key cannot be detected, and would stop the check showing: if that happens, start Frames with TURNSTILE_DISABLE=true and correct the keys. The secret key is never shown again.</p>
-    </div>
+    <>
+      <Eyebrow>Bot check · Cloudflare Turnstile</Eyebrow>
+      <SCard>
+        {d.disabledByEnv && <p className="reason" style={{ margin: '14px 0 0', fontSize: 12.5 }}>Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.</p>}
+        {msg && <p role={msg.ok ? 'status' : 'alert'} className={msg.ok ? 'muted' : 'reason'} style={{ margin: '14px 0 0', fontSize: 12.5 }}>{msg.text}</p>}
+        <SRow title="Use the bot check" hint="Ask people to pass a short check, run by Cloudflare, before they sign in or open a share link."><PSwitch on={d.enabled} label="Use the bot check" set={(v) => save({ enabled: v, siteKey: site, secret }, v ? 'The bot check is on.' : 'The bot check is off.')} /></SRow>
+        <SRow title="Site key" sub><input className="pin" aria-label="Turnstile site key" value={site} onChange={(e) => setSite(e.target.value)} placeholder="0x4AAAAAAA…" /></SRow>
+        <SRow title="Secret key" hint="Never shown again." sub><input className="pin" aria-label="Turnstile secret key" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={d.hasSecret ? 'Saved. Type to replace' : '0x4AAAAAAA…'} /><button className="ghost" onClick={() => save({ siteKey: site, secret }, 'Keys saved.')} disabled={!site.trim() && !secret.trim()}>Save keys</button></SRow>
+        {d.enabled && <SRow title="On the sign-in page" sub><PSwitch on={d.signin} label="Check on the sign-in page" set={(v) => save({ signin: v }, 'Saved.')} /></SRow>}
+        {d.enabled && <SRow title="On share links" hint="A signed-in person is not asked." sub><PSwitch on={d.shares} label="Check on share links" set={(v) => save({ shares: v }, 'Saved.')} /></SRow>}
+      </SCard>
+      <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 0' }}>If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out. A wrong site key cannot be detected: if the check stops showing, start Frames with TURNSTILE_DISABLE=true and correct the keys.</p>
+    </>
   );
 }

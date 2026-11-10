@@ -39,7 +39,7 @@ export function EnvBanner() {
   const n = drift.data?.drift ?? 0;
   if (me?.role !== 'admin' || n <= 0) return null;
   return (
-    <button className="envbar" role="alert" onClick={() => nav('/settings?section=env-file')}>
+    <button className="envbar" role="alert" onClick={() => nav('/settings?section=updates-system')}>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden style={{ flex: 'none' }}><path d="M12 3 2 21h20L12 3z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M12 10v5" stroke="#fff" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="18" r="1.2" fill="#fff" /></svg>
       <span style={{ fontWeight: 600 }}>Settings out of sync</span>
       <span className="env-sub">{n} server setting{n === 1 ? '' : 's'} in the app differ{n === 1 ? 's' : ''} from the .env file. A restart would bring back the file’s values.</span>

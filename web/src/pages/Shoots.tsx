@@ -132,7 +132,29 @@ export function Shoots() {
           <div className="shoot-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: '24px 12px' }}>{list.map((x) => <ShootCard key={x.id} s={x} inComps={comps.get(x.id) ?? 0} fresh={result?.shootId === x.id ? result.imported : 0} />)}</div>
         </section>
       ))}
+      <OthersShoots />
     </div>
+  );
+}
+
+/** Other members' photoshoots, read-only, when the administrator has allowed it: who, what, when and how many. */
+function OthersShoots() {
+  const o = useApi<{ enabled: boolean; shoots: { owner: string; id: number; name: string; dates: string; count: number; place: string }[] }>('/shoots/others');
+  if (!o.data?.enabled || o.data.shoots.length === 0) return null;
+  return (
+    <section aria-label="Other members’ shoots" style={{ marginTop: 48 }}>
+      <div className="spread" style={{ alignItems: 'baseline', paddingBottom: 8, borderBottom: '1px solid var(--hair)', marginBottom: 6 }}>
+        <h2 className="serif" style={{ fontSize: 24, margin: 0 }}>Other members</h2>
+        <span className="faint" style={{ fontSize: 13 }}>Names and dates only, shared by your administrator’s choice</span>
+      </div>
+      {o.data.shoots.map((x) => (
+        <div key={`${x.owner}-${x.id}`} style={{ display: 'flex', alignItems: 'baseline', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--hair)' }}>
+          <span className="serif" style={{ fontSize: 19, flex: 1 }}>{x.name}</span>
+          <span className="faint" style={{ fontSize: 13 }}>{[x.place, x.dates].filter(Boolean).join(' · ')}</span>
+          <span className="muted" style={{ fontSize: 13, minWidth: 90, textAlign: 'right' }}>{x.count} photo{x.count === 1 ? '' : 's'} · {x.owner}</span>
+        </div>
+      ))}
+    </section>
   );
 }
 

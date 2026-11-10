@@ -153,24 +153,68 @@ export function ShareMobile(p: Props) {
               <span style={eyebrow}>{wallPrints.length === 1 ? 'The print' : `The ${wallPrints.length} prints`}</span>
               <span style={{ font: `400 11.5px ${mono}`, color: 'var(--muted)' }}>{metres(f.w)} × {metres(f.h)} m</span>
             </div>
-            <div style={{ position: 'relative', margin: 0, background: WALL_BG, padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {canReview && d.layout && (
-                <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a change'}</button>
-                  {p.layoutSent && <span role="status" style={{ fontSize: 12, color: 'var(--muted)' }}>Sent. Thank you.</span>}
-                </div>
-              )}
-              <Wall compact fill prints={shown} mode="free" editing={false} sel={over ?? -1} photos={wallPhotos} over={over} locked share={token} onSelect={openPrint} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 16px' }}>
+              {shown.map((pr, i) => {
+                const ids = photosOf(pr);
+                const origin = photosOf(wallPrints[i])[0];
+                const fr = pr.frame;
+                const kept = origin !== undefined && p.mine[origin] !== undefined;
+                return (
+                  <section key={pr.id} aria-label={`Print ${i + 1}`} style={{ background: 'var(--surface)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ background: WALL_BG, borderRadius: 8, padding: '18px 14px', display: 'flex', flexDirection: pr.stack && pr.orientation === 'landscape' ? 'row' : 'column', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                      {(ids.length ? ids : [null]).map((pid, k) => {
+                        const ph = pid !== null ? byId.get(pid) : undefined;
+                        return (
+                          <button key={k} onClick={() => { if (pid !== null) { const at = order.findIndex((x) => x.id === pid); if (at >= 0) { setLook(at); setLookText(''); } } }} aria-label={ph ? `Look closer at ${ph.title}` : 'Empty print'}
+                            style={{ display: 'block', background: fr && fr.color !== 'none' ? SWATCH[fr.color] ?? '#151514' : 'transparent', padding: fr ? 8 : 0, boxShadow: '0 6px 18px rgba(0,0,0,.45)', maxWidth: '100%' }}>
+                            <span style={{ display: 'block', background: fr ? '#f4f2ec' : 'transparent', padding: fr && fr.size !== pr.size ? 12 : 0 }}>
+                              {ph ? <img src={imgUrl(ph.id, 'preview', token)} alt={ph.title} style={{ display: 'block', maxWidth: '100%', maxHeight: 320, objectFit: 'contain' }} /> : <i style={{ display: 'block', width: 160, height: 200, background: '#1e1e1d' }} />}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                      <span style={{ font: `400 22px/1.1 ${serif}` }}>{ids.length && byId.get(ids[0]) ? byId.get(ids[0])!.title : `Print ${i + 1}`}</span>
+                      <span style={{ font: `400 11px ${mono}`, color: 'var(--muted)', flex: 'none' }}>Print {i + 1} · {sizeLabel(pr)}</span>
+                    </div>
+                    {canReview && ids.map((pid) => (
+                      <div key={pid} role="group" aria-label="Rate this photograph" style={{ display: 'flex', gap: 6 }}>
+                        {RATINGS.map((r) => {
+                          const on = ratings[pid] === r.value;
+                          return (
+                            <button key={r.value} onClick={() => rate(pid, r.value)} aria-label={`${r.value}, ${r.label}`} aria-pressed={on}
+                              style={{ flex: 1, height: 48, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.16)' }}>
+                              <span style={{ fontSize: 17, lineHeight: 1 }}>{r.emoji}</span><span style={{ font: `500 10.5px ${mono}` }}>{r.value}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                    {canReview && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {origin !== undefined && others.length > 0 && <button onClick={() => setPicking(origin)} style={{ height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Try a different photo</button>}
+                        {fr && <button onClick={() => setFraming(i)} style={{ height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Frame colour</button>}
+                        {kept && <button onClick={() => p.swap(origin, null)} style={{ minHeight: 44, fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Put the original back</button>}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 20px 0', fontSize: 12, color: 'var(--faint)' }}>
-              <span>Tap a print to look closer{canReview ? ', rate it or swap it' : ''}.</span>
-              <span style={{ fontFamily: mono, whiteSpace: 'nowrap', flex: 'none' }}>1 square = 10 cm</span>
-            </div>
+            {canReview && d.layout && (
+              <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => withName(() => p.openLayout())} style={{ height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a different layout…'}</button>
+                {p.layoutSent && <span role="status" style={{ fontSize: 12, color: 'var(--muted)' }}>Sent. Thank you.</span>}
+              </div>
+            )}
+            {p.sugErr && <p className="reason" role="alert" style={{ padding: '0 20px' }}>{p.sugErr}</p>}
           </>
         )}
       </div>
 
       <div className="sm-right" style={{ minWidth: 0, paddingBottom: 200 }}>
+        {!f && (
         <div style={{ padding: '28px 20px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
             <span style={eyebrow}>{f ? 'Other candidates' : 'Photographs'}</span>
@@ -187,6 +231,7 @@ export function ShareMobile(p: Props) {
           </div>
           {p.sugErr && <p className="reason" role="alert" style={{ marginTop: 10 }}>{p.sugErr}</p>}
         </div>
+        )}
         {canReview && (
           <div style={{ padding: '32px 20px 0' }}>
             <div style={{ ...eyebrow, marginBottom: 10 }}>A comment for the person who shared this</div>

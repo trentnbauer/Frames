@@ -16,20 +16,17 @@ const card = { background: 'var(--surface)', borderRadius: 12, boxShadow: 'inset
 export function EditRow({ id, one, summary, right, title, note, noEdit, children }: { id: string; one: One; summary: ReactNode; right?: ReactNode; title: string; note?: string; noEdit?: boolean; children?: ReactNode }) {
   const isOpen = one.open === id;
   return (
-    <div className="row" style={{ display: 'block', padding: '10px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-        <div style={{ minWidth: 0 }}>{summary}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+    <div>
+      <div className="srow" style={{ fontSize: 14 }}>
+        <div className="srow-t" style={{ fontSize: 14 }}>{summary}</div>
+        <div className="srow-c">
           {right}
-          {!noEdit && <button className="pill" style={{ padding: '6px 14px' }} aria-expanded={isOpen} aria-label={`${isOpen ? 'Close' : 'Edit'} ${title}`} onClick={() => one.set(isOpen ? null : id)}>{isOpen ? 'Close' : 'Edit'}</button>}
+          {!noEdit && <button className="ghost plain" aria-expanded={isOpen} aria-label={`${isOpen ? 'Close' : 'Edit'} ${title}`} onClick={() => one.set(isOpen ? null : id)}>{isOpen ? 'Close' : 'Configure'}</button>}
         </div>
       </div>
       {!noEdit && isOpen && (
-        <div role="group" aria-label={`Edit ${title}`} style={card}>
-          <div>
-            <h4 className="serif" style={{ fontSize: 19, fontWeight: 400, margin: 0 }}>Edit {title}</h4>
-            {note && <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 0' }}>{note}</p>}
-          </div>
+        <div role="group" aria-label={`Edit ${title}`} className="sdetail">
+          {note && <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>{note}</p>}
           {children}
         </div>
       )}

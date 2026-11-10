@@ -1,10 +1,12 @@
+import { crashHost, crashUrl } from '../crash.js';
+import { readLog, setLogLevel } from '../logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
+import { setSessionDays, cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, type DB } from '../db.js';
-import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
+import { buildEnvFile, collectEnvConfig, envConfigLoaded, isSecretName, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
@@ -14,7 +16,9 @@ import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
 import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeCloudDest, removeS3, s3State, saveCloudDest, saveS3, storeOf } from '../backupS3.js';
 import { beginConnect, CloudError, finishBackupConnect, isProvider, pendingPurpose } from '../cloud.js';
-import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore } from '../serverBackup.js';
+import { applyRuntime, policyOf, policyPatch } from '../policy.js';
+import { trimCache } from '../cache.js';
+import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore, writeServerArchive } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
 
@@ -116,12 +120,20 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
 
   // ---------- choices that apply to the whole server ----------
   type Instance = { allowOriginals?: boolean; shrinkCopies?: 'choice' | 'always'; cloudOnly?: boolean; defaultRole?: 'member' | 'guest'; signups?: boolean };
-  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false }; };
+  const instance = () => { const i = getSetting<Instance>(sys, 'instance', {}); return { allowOriginals: !!i.allowOriginals, cloudOnly: !!i.cloudOnly, shrinkCopies: i.shrinkCopies === 'always' ? 'always' as const : 'choice' as const, defaultRole: i.defaultRole === 'guest' ? 'guest' as const : 'member' as const, signups: signupsOn(sys, x.cfg.allowSignups !== false), signupsLocked: x.cfg.allowSignups === false, ...policyOf(sys), crashHost: crashHost(), sessionDaysLocked: !!process.env.SESSION_DAYS }; };
   app.get('/api/admin/instance', async () => instance());
-  app.put('/api/admin/instance', async (req) => {
+  // The server's own log (start-up lines, warnings, errors), for the last week, as a text file.
+  app.get('/api/admin/logs/info', async () => ({ bytes: readLog(7).bytes }));
+  app.get('/api/admin/logs', async (_req, rep) => rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.log"').header('Cache-Control', 'no-store').send(readLog(7).text || 'Nothing logged yet.\n'));
+  app.put('/api/admin/instance', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
+    if (b.crashReports === true && !crashUrl()) return rep.code(400).send({ error: 'No place to send reports to is set. The person running the server sets CRASH_REPORT_URL first.' });
     const cur = getSetting<Instance>(sys, 'instance', {});
-    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}), ...(typeof b.signups === 'boolean' ? { signups: b.signups } : {}) });
+    setSetting(sys, 'instance', { ...cur, ...(typeof b.allowOriginals === 'boolean' ? { allowOriginals: b.allowOriginals } : {}), ...(typeof b.cloudOnly === 'boolean' ? { cloudOnly: b.cloudOnly } : {}), ...(b.shrinkCopies === 'always' || b.shrinkCopies === 'choice' ? { shrinkCopies: b.shrinkCopies } : {}), ...(b.defaultRole === 'guest' || b.defaultRole === 'member' ? { defaultRole: b.defaultRole } : {}), ...(typeof b.signups === 'boolean' ? { signups: b.signups } : {}), ...policyPatch(b) });
+    setSessionDays(policyOf(sys).sessionDays);
+    applyRuntime(sys);
+    setLogLevel(policyOf(sys).logLevel);
+    { const p = policyOf(sys); if (p.cacheLimitGb) trimCache(x.tenants.all().map((t) => t.cfg as never), p.cacheLimitGb * 1073741824); }
     return instance();
   });
 
@@ -176,6 +188,13 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const { provider } = req.params as Row;
     if (!isProvider(provider)) return x.notFound(rep);
     try { return { url: beginConnect(sys, ownerCfg(), provider, `${x.baseUrl(req)}/api/cloud/callback`, 'backup') }; } catch (e) { return rep.code(400).send({ error: e instanceof CloudError ? e.message : 'Could not start the sign-in.' }); }
+  });
+  // Make today's archive now, in the backups folder (no copy elsewhere). One a day: a second press the same day says so.
+  app.post('/api/admin/backup/now', async (_req, rep) => {
+    try {
+      const name = await writeServerArchive({ sys, tenants: x.tenants as any }, backupDir(), new Date(), { everyDays: 1, keep: policyOf(sys).backupKeep });
+      return { made: name, already: name === null, archives: archivesIn(backupDir()) };
+    } catch (e) { return rep.code(400).send({ error: (e as Error).message }); }
   });
   app.post('/api/admin/backup/sync', async (_req, rep) => {
     if (!loadS3(sys) && !loadCloudDest(sys)) return rep.code(400).send({ error: 'Set up S3 or connect a cloud account first.' });
@@ -278,7 +297,43 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   app.get('/api/admin/env/compare', async () => envCompare());
   // Just whether the app and the env file disagree, for the banner every administrator sees.
   app.get('/api/admin/env/drift', async () => { const c = envCompare().counts; return { drift: envConfigLoaded().system ? c.differs + c.appOnly : 0, differs: c.differs, appOnly: c.appOnly }; });
+  // The env file parsed (KEY=value lines, quoted the way the export quotes them).
+  const parseEnvText = (text: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const raw of text.split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(raw);
+      if (!m || raw.trim().startsWith('#')) continue;
+      let v = m[2].trim();
+      if (v.startsWith("'") && v.endsWith("'") && v.length >= 2) v = v.slice(1, -1);
+      else if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) v = v.slice(1, -1).replace(/\$\$/g, '$').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      out[m[1]] = v;
+    }
+    return out;
+  };
+  // Import: shows what a .env file would change (never a secret's value), and with apply: true, does it.
+  app.post('/api/admin/env/import', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (typeof b.text !== 'string' || b.text.length > 400_000) return rep.code(400).send({ error: 'Send the text of a .env file.' });
+    const env = parseEnvText(b.text);
+    const owner = x.tenants.owner().db;
+    const { items, problems } = collectEnvConfig(sys, owner, env);
+    const rows = items.map((i) => {
+      const cur = getSetting<unknown>(i.db, i.key, undefined as unknown);
+      const same = JSON.stringify(cur ?? null) === JSON.stringify(i.value ?? null);
+      return { name: i.key, secret: i.key.startsWith('secret:') || isSecretName(i.key), status: cur === undefined ? 'new' as const : same ? 'same' as const : 'changes' as const };
+    });
+    if (b.apply === true) {
+      for (const i of items) setSetting(i.db, i.key, i.value);
+      console.warn(`env file imported by administrator ${me(req).id}: ${items.length} settings`);
+    }
+    return { rows, problems, counts: { new: rows.filter((r) => r.status === 'new').length, changes: rows.filter((r) => r.status === 'changes').length, same: rows.filter((r) => r.status === 'same').length }, applied: b.apply === true ? items.length : 0 };
+  });
   app.get('/api/admin/env/export', async (req, rep) => {
+    const withSecrets = (req.query as Row).secrets === '1';
+    if (!withSecrets) {
+      return rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.env"').header('Cache-Control', 'no-store')
+        .send(buildEnvFile(sys, x.tenants.owner().db, { version: x.cfg.version, date: new Date(), secrets: false }));
+    }
     if (!envExportOn() && x.cfg.allowEnvExport !== false) return rep.code(403).send({ error: 'Export is switched off. Turn it on in Settings, Env file (you will be asked to sign in again).' });
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });
     console.warn(`env file exported by administrator ${me(req).id}`);

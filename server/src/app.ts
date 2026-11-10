@@ -1,3 +1,5 @@
+import { noteUse } from './activity.js';
+import { ensureDeriv } from './cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,7 +68,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // Routes are added below before the plugin has loaded, so the limit is attached as a hook on the whole app instead of per route.
   // It is the first hook, so a flood is counted before sign-in or anything else runs.
   let limit: (req: any, rep: any) => Promise<unknown> = async () => undefined;
-  app.addHook('onRequest', async (req, rep) => { await limit(req, rep); });
+  app.addHook('onRequest', async (req, rep) => { noteUse(req.url); await limit(req, rep); });
   app.after(() => { limit = app.rateLimit() as typeof limit; });
   // Who the people are lives in the system database. Each person's library is their own database (see tenants.ts), and `db` and
   // `cfg` below answer from the library of whoever is making the request, so a route can only ever reach its own caller's data.
@@ -324,7 +326,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const id = num(req.params.id);
     const f = derivPath(cfg, id, kind);
     const row = one('SELECT hash FROM photos WHERE id = ?', id); // a derivative with no photograph behind it is never sent
-    if (!row || !fs.existsSync(f)) return notFound(rep, 'No preview available');
+    if (!row || !(await ensureDeriv(db, cfg, id, kind))) return notFound(rep, 'No preview available');
     return serveDerivative(req, rep, f, String(row.hash), kind);
   };
   app.get('/api/photos/:id/thumb', sendImage('thumb'));

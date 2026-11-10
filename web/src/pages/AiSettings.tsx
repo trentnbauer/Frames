@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
+import { Eyebrow, PSelect, PSwitch, SCard, SRow } from '../components/srow';
 import { CardFooter, Chip, Destructive, EditRow, useOne, type One } from '../components/editcard';
 
 type Type = { id: string; label: string; group: string; local: boolean; endpoint: string; model: string; embedModel: string; needsKey: boolean; canEmbed: boolean; note: string };
 type Source = { shared?: boolean; id: string; type: string; name: string; endpoint: string; model: string; embedModel: string; ack: boolean; hasKey: boolean; ready: boolean; why: string };
 type Data = { types: Type[]; active: string; sources: Source[] };
-type Status = { enabled: boolean; pending: number; done: number; failed: number; running: boolean; total: number; lastError: string | null };
+type Status = { sharedUsage?: { used: number; limit: number }; enabled: boolean; pending: number; done: number; failed: number; running: boolean; total: number; lastError: string | null };
 
 /** Every AI you have set up, in one list. Open one to change it; pick which one is in use. */
 export function AiSettings({ server = false }: { server?: boolean }) {
@@ -48,6 +49,8 @@ export function AiSettings({ server = false }: { server?: boolean }) {
         </div>
         {!server && !active && sources.length > 0 && <p className="muted" style={{ marginTop: 12 }}>Every switch is off, so AI is off. Tags, descriptions, similarity from content and suggestions are hidden. Colour-based similarity, search and everything else still work.</p>}
       </div>
+      {server && <AiRules />}
+      {!server && status.data?.sharedUsage && status.data.sharedUsage.limit > 0 && <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>Shared AI: {status.data.sharedUsage.used} of {status.data.sharedUsage.limit} requests used this month. After that, the next AI in your order is used.</p>}
       {!server && status.data?.enabled && (
         <div className="field">
           <h3>Analysis</h3>
@@ -112,5 +115,21 @@ function Item({ base, server, src, type, active, one, run }: { base: string; ser
         <Destructive onClick={() => { if (window.confirm(`Remove ${src.name}?`)) run(() => api(`${base}/sources/${src.id}`, { method: 'DELETE' }), 'Removed.'); }}>Remove</Destructive>
       </CardFooter>
     </EditRow>
+  );
+}
+
+/** The administrator's rules for shared AI: whether members may add their own, and a monthly limit per person for paid shared ones. */
+function AiRules() {
+  const inst = useApi<{ aiMembersOwn: boolean; aiMonthlyLimit: number; aiSharedFirst: boolean }>('/admin/instance');
+  const put = (body: Record<string, unknown>) => api('/admin/instance', { method: 'PUT', body }).then(inst.reload).catch(() => undefined);
+  return (
+    <>
+      <Eyebrow>Rules</Eyebrow>
+      <SCard>
+        <SRow title="Members can add their own AI" hint="Their keys, their bill. Shown only to them."><PSwitch label="Members can add their own AI" on={inst.data?.aiMembersOwn !== false} set={(v) => put({ aiMembersOwn: v })} /></SRow>
+        <SRow title="Put shared AI first for new members" hint="Sets the starting order for their jobs. They can change it."><PSwitch label="Put shared AI first for new members" on={!!inst.data?.aiSharedFirst} set={(v) => put({ aiSharedFirst: v })} /></SRow>
+        <SRow title="Monthly limit per person" hint="Requests to shared paid AIs. Free local AI isn’t limited. When it is reached, the next AI in their order takes over."><PSelect label="Monthly limit per person" value={inst.data?.aiMonthlyLimit ?? 0} options={[[0, 'No limit'], [100, '100 requests'], [500, '500 requests'], [2000, '2,000 requests'], [10000, '10,000 requests']]} set={(v) => put({ aiMonthlyLimit: v })} /></SRow>
+      </SCard>
+    </>
   );
 }

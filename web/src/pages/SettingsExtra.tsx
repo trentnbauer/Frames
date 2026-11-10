@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal, Spinner } from '../components/Modal';
+import { Eyebrow, PSelect, PSwitch, SCard, SRow } from '../components/srow';
 
 const Sw = ({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) => <button role="switch" aria-checked={on} aria-label={label} className={'sw' + (on ? ' on' : '')} onClick={onClick} />;
 const Row = ({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) => (
@@ -84,78 +85,79 @@ export function EmailSettings() {
   const [filter, setFilter] = useState<'all' | 'delivered' | 'failed'>('all');
   const log = useApi<{ rows: Log[] }>(`/admin/email/log${filter === 'all' ? '' : `?status=${filter}`}`);
   const [code, setCode] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
   const d = e.data;
   if (!d) return <p className="empty">Loading…</p>;
   const v = { ...d.smtp, ...f };
   const run = async (name: string, fn: () => Promise<unknown>, ok: string) => { setBusy(name); setMsg(null); try { await fn(); setMsg({ ok: true, t: ok }); e.reload(); log.reload(); } catch (x) { setMsg({ ok: false, t: (x as Error).message }); } finally { setBusy(''); } };
   const h = d.health;
+  const ports: [number, string][] = [[465, '465 · SSL'], [587, '587 · STARTTLS'], [25, '25 · Plain'], [2525, '2525 · Alternate']];
+  const port = ports.some(([p]) => p === Number(v.port)) ? Number(v.port) : 465;
+  const sent = (log.data?.rows ?? []).filter((r) => r.status !== 'failed').length;
+  const failed = (log.data?.rows ?? []).filter((r) => r.status === 'failed').length;
   return (
     <>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.t}</span></div>}
-      <div className="field">
-        <h3>Outgoing mail (SMTP)</h3>
-        <p>Used for sign-in codes, invites, share links and reminders. Off means no one gets email, and share links are copy-and-paste only.{d.fromEnv && ' Some values come from SMTP_* environment variables.'}</p>
-        <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', maxWidth: 520 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="field-in" style={{ height: 40 }} placeholder="Host, e.g. smtp.example.com" aria-label="SMTP host" value={v.host} onChange={(x) => setF({ ...f, host: x.target.value })} />
-            <input className="field-in" style={{ height: 40, width: 100 }} placeholder="Port" inputMode="numeric" aria-label="Port" value={v.port} onChange={(x) => setF({ ...f, port: Number(x.target.value.replace(/\D/g, '')) })} />
-          </div>
-          <label className="check"><input type="checkbox" checked={v.secure} onChange={(x) => setF({ ...f, secure: x.target.checked })} /> Secure connection from the start (usually port 465). Otherwise STARTTLS is used.</label>
-          <input className="field-in" style={{ height: 40 }} placeholder="User name" aria-label="SMTP user" autoComplete="off" value={v.user} onChange={(x) => setF({ ...f, user: x.target.value })} />
-          <input className="field-in" style={{ height: 40 }} type="password" placeholder={d.hasPassword ? 'Password (saved. Type to replace)' : 'Password'} aria-label="SMTP password" autoComplete="new-password" value={f.password ?? ''} onChange={(x) => setF({ ...f, password: x.target.value })} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="field-in" style={{ height: 40 }} placeholder="Send as, e.g. frames@example.com" aria-label="Send as" value={v.from} onChange={(x) => setF({ ...f, from: x.target.value })} />
-            <input className="field-in" style={{ height: 40, width: 160 }} placeholder="Name" aria-label="From name" value={v.fromName} onChange={(x) => setF({ ...f, fromName: x.target.value })} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn primary" disabled={!!busy || Object.keys(f).length === 0} onClick={() => run('save', async () => { await api('/admin/email', { method: 'PUT', body: f }); setF({}); }, 'Saved. The connection was checked.')}>Save and check</button>
-            {d.configured && <button className="btn outline" disabled={!!busy} onClick={() => run('check', () => api('/admin/email/check', { body: {} }), 'Checked.')}>{busy === 'check' ? <Spinner /> : 'Check again'}</button>}
-          </div>
-          {d.configured && (
-            <div style={{ fontSize: 13, color: h?.ok ? 'var(--ok)' : 'var(--err)' }} role="status">
-              {!h ? 'Not checked yet.' : h.ok ? `✓ Working · checked ${new Date(h.at).toLocaleString()}` : `✕ Not working: ${h.error}`}
-            </div>
-          )}
-        </div>
-      </div>
-      {d.configured && (
-        <div className="field">
-          <h3>Send a test email</h3>
-          <div className="form"><input className="field-in" style={{ height: 40, width: 280 }} type="email" placeholder="Send to (blank = you)" value={to} onChange={(x) => setTo(x.target.value)} aria-label="Test address" /><button className="btn outline" disabled={!!busy} onClick={() => run('test', () => api('/admin/email/test', { body: { to } }), 'Test email sent.')}>{busy === 'test' ? <Spinner /> : 'Send test email'}</button></div>
-        </div>
-      )}
-      <div className="field">
-        <h3>Sign in with an emailed code</h3>
-        <p>Offered on the sign-in page only while the check above passes. If it fails, the option disappears by itself; Google, Cloudflare Access and the shared password are unaffected.</p>
-        <Row title="Let people sign in with a code" hint={h?.ok ? '' : 'Needs a passing check first.'}>
-          <Sw label="Email sign-in" on={d.emailSignIn} onClick={() => h?.ok && run('si', () => api('/auth/config', { method: 'PUT', body: { email: !d.emailSignIn } }), d.emailSignIn ? 'Email sign-in is off.' : 'Email sign-in is on.')} />
-        </Row>
+      <SCard>
+        <SRow title="Send email" hint={d.configured ? (!h ? 'Not checked yet.' : h.ok ? `Working · checked ${new Date(h.at).toLocaleString()}` : `Not working: ${h.error}`) : 'Off: invites and shares are copy-a-link only.'}>
+          <span className="ghost" role="status" style={{ color: d.configured && h?.ok ? 'var(--ok)' : undefined }}>{d.configured ? (h?.ok ? '✓ On' : h ? '✕ Failing' : 'Not checked') : 'Not set up'}</span>
+        </SRow>
+        <SRow title="SMTP server" hint={d.fromEnv ? 'Some values come from SMTP_* environment variables.' : undefined} sub><input className="pin" placeholder="smtp.example.com" aria-label="SMTP host" value={v.host} onChange={(x) => setF({ ...f, host: x.target.value })} /></SRow>
+        <SRow title="Port" sub><PSelect label="Port" value={port} options={ports} set={(p) => setF({ ...f, port: p, secure: p === 465 })} /></SRow>
+        <SRow title="Username" sub><input className="pin" aria-label="SMTP user" autoComplete="off" value={v.user} onChange={(x) => setF({ ...f, user: x.target.value })} /></SRow>
+        <SRow title="Password" sub><input className="pin" type="password" placeholder={d.hasPassword ? 'Saved. Type to replace' : ''} aria-label="SMTP password" autoComplete="new-password" value={f.password ?? ''} onChange={(x) => setF({ ...f, password: x.target.value })} /></SRow>
+        <SRow title="Send as" hint="The address, then the name people see." sub>
+          <input className="pin" style={{ width: 200 }} placeholder="frames@example.com" aria-label="Send as" value={v.from} onChange={(x) => setF({ ...f, from: x.target.value })} />
+          <input className="pin" style={{ width: 110 }} placeholder="Name" aria-label="From name" value={v.fromName} onChange={(x) => setF({ ...f, fromName: x.target.value })} />
+        </SRow>
+        <SRow title="" sub>
+          {d.configured && <button className="ghost" disabled={!!busy} onClick={() => run('check', () => api('/admin/email/check', { body: {} }), 'Checked.')}>{busy === 'check' ? <Spinner /> : 'Check again'}</button>}
+          <button className="pill primary" disabled={!!busy || Object.keys(f).length === 0} onClick={() => run('save', async () => { await api('/admin/email', { method: 'PUT', body: f }); setF({}); }, 'Saved. The connection was checked.')}>Save and check</button>
+        </SRow>
+        {d.configured && (
+          <SRow title="Send a test email" hint="Blank sends it to you." sub>
+            <input className="pin" style={{ width: 200 }} type="email" placeholder="you@example.com" value={to} onChange={(x) => setTo(x.target.value)} aria-label="Test address" />
+            <button className="ghost" disabled={!!busy} onClick={() => run('test', () => api('/admin/email/test', { body: { to } }), 'Test email sent.')}>{busy === 'test' ? <Spinner /> : 'Send'}</button>
+          </SRow>
+        )}
+      </SCard>
+
+      <Eyebrow>Sign-in</Eyebrow>
+      <SCard>
+        <SRow title="Let people sign in with a code" hint={h?.ok ? 'Offered on the sign-in page only while the connection check passes.' : 'Needs a passing check first.'}>
+          <PSwitch label="Email sign-in" on={d.emailSignIn} set={() => h?.ok && run('si', () => api('/auth/config', { method: 'PUT', body: { email: !d.emailSignIn } }), d.emailSignIn ? 'Email sign-in is off.' : 'Email sign-in is on.')} />
+        </SRow>
         {d.emailSignIn && (
-          <div style={{ paddingTop: 8 }}>
+          <SRow title="Test it" hint="Email yourself a code and enter it." sub>
             {code === null
-              ? <button className="btn outline" onClick={() => run('stest', async () => { await api('/admin/email/signin-test', { body: {} }); setCode(''); }, 'A code was sent to your email address. Enter it to prove this works.')}>Test it: email me a code</button>
-              : <div className="form"><input className="field-in" style={{ height: 40, width: 160, textTransform: 'uppercase', letterSpacing: '.2em' }} maxLength={6} value={code} onChange={(x) => setCode(x.target.value.toUpperCase())} aria-label="Code" /><button className="btn primary" onClick={() => run('stest2', async () => { await api('/admin/email/signin-test', { body: { code } }); setCode(null); }, 'It works. Email sign-in can now stand on its own.')}>Confirm</button></div>}
+              ? <button className="ghost" onClick={() => run('stest', async () => { await api('/admin/email/signin-test', { body: {} }); setCode(''); }, 'A code was sent to your email address. Enter it to prove this works.')}>Email me a code</button>
+              : <><input className="pin" style={{ width: 130, textTransform: 'uppercase', letterSpacing: '.2em' }} maxLength={6} value={code} onChange={(x) => setCode(x.target.value.toUpperCase())} aria-label="Code" /><button className="ghost" onClick={() => run('stest2', async () => { await api('/admin/email/signin-test', { body: { code } }); setCode(null); }, 'It works. Email sign-in can now stand on its own.')}>Confirm</button></>}
+          </SRow>
+        )}
+      </SCard>
+
+      <Eyebrow>Sent</Eyebrow>
+      <SCard>
+        <SRow title="Email log" hint={`Last 30 days · ${sent} sent · ${failed} failed. Message bodies are never stored.`}>
+          <button className="ghost" aria-expanded={showLog} onClick={() => setShowLog(!showLog)}>{showLog ? 'Hide' : 'View'}</button>
+        </SRow>
+        {showLog && (
+          <div className="sdetail">
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="seg">{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
+              <button className="ghost" onClick={() => run('retry', async () => { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); setMsg({ ok: true, t: `${r.sent} resent.` }); }, 'Retried.')} disabled={!log.data?.rows.some((r) => r.status === 'failed')}>Retry failed</button>
+              <a className="ghost" href="/api/admin/email/log.csv" download>Download CSV</a>
+            </div>
+            <table className="cmp-table" style={{ fontSize: 13 }}>
+              <thead><tr>{['When', 'To', 'Subject', 'Type', 'Status'].map((h2) => <th key={h2} style={{ width: 'auto' }}>{h2}</th>)}</tr></thead>
+              <tbody>{(log.data?.rows ?? []).slice(0, 60).map((r) => (
+                <tr key={r.id} title={r.error || undefined}><td className="mono" style={{ fontSize: 12 }}>{new Date(r.at).toLocaleString()}</td><td>{r.to}</td><td>{r.subject}</td><td className="muted">{r.type}</td><td style={{ color: r.status === 'failed' ? 'var(--err)' : 'var(--ok)' }}>{r.status}{r.status === 'failed' && r.error ? ` · ${r.error}` : ''}</td></tr>
+              ))}</tbody>
+            </table>
+            {log.data && log.data.rows.length === 0 && <p className="muted">Nothing sent yet.</p>}
           </div>
         )}
-      </div>
-      <div className="field" style={{ maxWidth: 'none' }}>
-        <div className="spread" style={{ alignItems: 'center', marginBottom: 6 }}>
-          <h3 style={{ margin: 0 }}>Email log</h3>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div className="seg">{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
-            <button className="btn outline" style={{ height: 32 }} onClick={() => run('retry', async () => { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); setMsg({ ok: true, t: `${r.sent} resent.` }); }, 'Retried.')} disabled={!log.data?.rows.some((r) => r.status === 'failed')}>Retry failed</button>
-            <a className="btn outline" style={{ height: 32 }} href="/api/admin/email/log.csv" download>Download CSV</a>
-          </div>
-        </div>
-        <p>The last 30 days. Message bodies are never stored.</p>
-        <table className="cmp-table" style={{ fontSize: 13 }}>
-          <thead><tr>{['When', 'To', 'Subject', 'Type', 'Status'].map((h2) => <th key={h2} style={{ width: 'auto' }}>{h2}</th>)}</tr></thead>
-          <tbody>{(log.data?.rows ?? []).slice(0, 60).map((r) => (
-            <tr key={r.id} title={r.error || undefined}><td className="mono" style={{ fontSize: 12 }}>{new Date(r.at).toLocaleString()}</td><td>{r.to}</td><td>{r.subject}</td><td className="muted">{r.type}</td><td style={{ color: r.status === 'failed' ? 'var(--err)' : 'var(--ok)' }}>{r.status}{r.status === 'failed' && r.error ? ` · ${r.error}` : ''}</td></tr>
-          ))}</tbody>
-        </table>
-        {log.data && log.data.rows.length === 0 && <p className="muted">Nothing sent yet.</p>}
-      </div>
+      </SCard>
     </>
   );
 }

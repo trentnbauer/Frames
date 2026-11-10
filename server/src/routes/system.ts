@@ -1,3 +1,8 @@
+import { getSetting, setSetting, type DB } from '../db.js';
+import { policyOf } from '../policy.js';
+import { dirBytes } from '../cache.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { loadAuth, saveAuth } from '../auth.js';
 import { clientOf, PROVIDERS } from '../cloud.js';
@@ -22,6 +27,72 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
       cloudProviders: providers,
       admin: me(req)?.role === 'admin',
     };
+  });
+
+
+  // ---------- Settings, Server, Storage & processing and Updates & system ----------
+  const disk = (dir: string) => { try { const f = fs.statfsSync(dir); return { path: dir, total: f.blocks * f.bsize, free: f.bavail * f.bsize }; } catch { return { path: dir, total: 0, free: 0 }; } };
+  app.get('/api/admin/system', async () => {
+    const owner = x.tenants.owner();
+    const all = x.tenants.all();
+    const folder = owner.cfg.libraries?.[0] ?? owner.cfg.dataDir;
+    const cacheBytes = all.reduce((n, t) => n + dirBytes(path.join(t.cfg.dataDir, 'derivatives')), 0);
+    const checks = [
+      { name: 'database', ok: (() => { try { return sys.pragma('integrity_check', { simple: true }) === 'ok'; } catch { return false; } })() },
+      { name: 'library folder', ok: !!folder && fs.existsSync(folder) },
+      { name: 'cache', ok: (() => { try { fs.accessSync(owner.cfg.dataDir, fs.constants.W_OK); return true; } catch { return false; } })() },
+      { name: 'email', ok: !smtpConfigured(sys) || smtpHealthy(sys) },
+    ];
+    return { version: cfg.version ?? 'dev', image: process.env.FRAMES_IMAGE ?? 'ghcr.io/trentnbauer/frames', libraryDisk: disk(folder), dataDisk: disk(owner.cfg.dataDir), cache: { path: path.join(owner.cfg.dataDir, 'derivatives'), bytes: cacheBytes }, checks, libraries: all.length };
+  });
+
+  // Settings that have no behaviour of their own yet but are part of the Settings pages (and are kept, so nothing is lost when one starts to do something).
+  // One value is a string, a number, a true/false, or a short list of strings. A person's own are kept in their library, the server's in the system database.
+  const cleanPrefs = (body: unknown): Record<string, string | number | boolean | string[]> | null => {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+    const out: Record<string, string | number | boolean | string[]> = {};
+    for (const [k, v] of Object.entries(body as Row)) {
+      if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(k)) return null;
+      if (typeof v === 'string') { if (v.length > 300) return null; out[k] = v; }
+      else if (typeof v === 'number') { if (!Number.isFinite(v)) return null; out[k] = v; }
+      else if (typeof v === 'boolean') out[k] = v;
+      else if (Array.isArray(v) && v.length <= 60 && v.every((i) => typeof i === 'string' && i.length <= 100)) out[k] = v as string[];
+      else return null;
+    }
+    return out;
+  };
+  const putPrefs = (store: DB, key: string, body: unknown, rep: any) => {
+    const p = cleanPrefs(body);
+    if (!p) return rep.code(400).send({ error: 'Those settings are not valid.' });
+    const cur = getSetting<Record<string, unknown>>(store, key, {});
+    const next = { ...cur, ...p };
+    if (Object.keys(next).length > 300) return rep.code(400).send({ error: 'Too many settings.' });
+    setSetting(store, key, next);
+    return { prefs: next };
+  };
+  app.get('/api/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(db, 'uiPrefs', {}) }));
+  app.put('/api/prefs', async (req, rep) => putPrefs(db, 'uiPrefs', req.body, rep));
+  app.get('/api/admin/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(sys, 'serverPrefs', {}) }));
+  app.put('/api/admin/prefs', async (req, rep) => putPrefs(sys, 'serverPrefs', req.body, rep));
+
+  // Other members' photoshoots, read-only, when the administrator allows it (Settings, Server, Members). Names, dates and counts only:
+  // the photographs themselves stay in their own library.
+  app.get('/api/shoots/others', async () => {
+    if (!policyOf(sys).membersSeeShoots) return { enabled: false, shoots: [] };
+    const me = x.tenant().user.id;
+    const out: { owner: string; id: number; name: string; dates: string; count: number; place: string }[] = [];
+    for (const t of x.tenants.all()) {
+      if (t.user.id === me || t.user.role === 'guest' || t.user.disabled) continue;
+      try {
+        const rows = t.db.prepare('SELECT s.id, s.name, s.place, s.imported_at, s.date_from, s.date_to, COUNT(p.id) n, MIN(p.captured_at) a, MAX(p.captured_at) b FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id AND p.missing = 0 GROUP BY s.id ORDER BY s.imported_at DESC LIMIT 100').all() as Row[];
+        const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+        for (const r of rows) {
+          const from = r.date_from ?? r.a, to = r.date_to ?? r.b;
+          out.push({ owner: (t.user.name || t.user.email || 'Someone').split(' ')[0], id: r.id, name: r.name, place: r.place, count: r.n, dates: from ? (!to || String(from).slice(0, 10) === String(to).slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(r.imported_at) });
+        }
+      } catch { /* one person's library that cannot be read never hides the others */ }
+    }
+    return { enabled: true, shoots: out };
   });
 
   // ---------- Settings, Server, Email ----------

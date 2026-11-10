@@ -1,3 +1,4 @@
+import { runtime } from './policy.js';
 import { execFile } from 'node:child_process';
 import sharp, { type Metadata, type Sharp } from 'sharp';
 
@@ -107,7 +108,7 @@ export async function rawToJpeg(file: string, info?: RawInfo | null): Promise<Ra
   };
   for (const b of await embeddedJpegs(file)) await consider(b, 'embedded');
   const long = (m?: Metadata) => Math.max(m?.width ?? 0, m?.height ?? 0);
-  if (long((best as { m: Metadata } | null)?.m) < BIG_ENOUGH) {
+  if (runtime.rawPreview === 'full' || long((best as { m: Metadata } | null)?.m) < BIG_ENOUGH) {
     const dev = await developRaw(file);
     if (dev) await consider(dev, 'developed');
   }

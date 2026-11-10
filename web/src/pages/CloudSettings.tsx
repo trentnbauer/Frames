@@ -1,3 +1,4 @@
+import { Badge, Eyebrow, SCard, SRow } from '../components/srow';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
@@ -87,35 +88,45 @@ function Steps({ p }: { p: Prov }) {
 /** Administrators: the app registration for each service, once for the whole server. People then only connect their own account. */
 export function CloudServices() {
   const d = useApi<Data>('/cloud');
-  const one = useOne();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   if (!d.data) return <p className="empty">Loading…</p>;
   const act = async (fn: () => Promise<unknown>, ok?: string) => { setMsg(null); try { await fn(); if (ok) setMsg({ ok: true, text: ok }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } d.reload(); };
   return (
     <>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      <p>Frames has no shared account with these services, so you register a small app of your own with each one (free). It is set up here once for the whole server; every person then signs in to their own account under Settings, Cloud sync. Use this return address when asked:</p>
-      <p><span className="mono" style={{ userSelect: 'all' }}>{d.data.redirectUri}</span></p>
-      {d.data.providers.map((p) => <Service key={p.id} one={one} p={p} act={act} />)}
+      <Eyebrow>Cloud providers</Eyebrow>
+      <SCard>
+        {d.data.providers.map((p) => <Service key={p.id} p={p} act={act} />)}
+        <SRow title="Redirect URL" hint={<>Paste this into each provider’s app settings: <span className="mono" style={{ userSelect: 'all' }}>{d.data.redirectUri}</span>. Frames has no shared account with these services, so you register a small app of your own with each one (free); every person then signs in to their own account under Settings, Cloud sync.</>}>
+          <button className="ghost plain" onClick={() => { void navigator.clipboard?.writeText(d.data!.redirectUri); setCopied(true); }}>{copied ? 'Copied' : 'Copy →'}</button>
+        </SRow>
+      </SCard>
     </>
   );
 }
 
-function Service({ one, p, act }: { one: One; p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
+const ABBR: Record<string, string> = { google: 'GD', dropbox: 'DB', onedrive: 'OD' };
+
+function Service({ p, act }: { p: Prov; act: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
   const [id, setId] = useState(p.clientId ?? '');
   const [secret, setSecret] = useState('');
+  const [open, setOpen] = useState(false);
   return (
-    <EditRow id={p.id} one={one} title={p.label} note="The app you registered with this service, for the whole server." summary={<><b>{p.label}</b> <span className="faint">{p.configured ? 'ready: people can connect' : 'not set up'}</span></>}>
-      <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-        <label>Client ID <input aria-label={`${p.label} client ID`} value={id} onChange={(e) => setId(e.target.value)} /></label>
-        <label>Client secret <input type="password" autoComplete="off" aria-label={`${p.label} client secret`} value={secret} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} onChange={(e) => setSecret(e.target.value)} /></label>
-        <Steps p={p} />
-        <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>The secret is kept on this server only, never shown again and left out of backups.</p>
-      </div>
-      <CardFooter>
-        <button className="pill primary" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save changes</button>
-      </CardFooter>
-    </EditRow>
+    <div>
+      <SRow lead={<Badge>{ABBR[p.id] ?? p.label.slice(0, 2).toUpperCase()}</Badge>} title={p.label} hint={p.configured ? 'Your app is set up: people can connect.' : 'Not set up yet.'}>
+        <button className="ghost plain" aria-expanded={open} aria-label={`${open ? 'Close' : 'Configure'} ${p.label}`} onClick={() => setOpen(!open)}>{open ? 'Close' : 'Configure'}</button>
+        <span className="ghost" style={{ opacity: p.configured ? 1 : .6 }}>{p.configured ? '✓ Ready' : 'Not set up'}</span>
+      </SRow>
+      {open && (
+        <div className="sdetail" role="group" aria-label={`Set up ${p.label}`}>
+          <SRow title={`${p.label} client ID`} sub><input className="pin" aria-label={`${p.label} client ID`} value={id} onChange={(e) => setId(e.target.value)} /></SRow>
+          <SRow title={`${p.label} client secret`} hint="Kept on this server only, never shown again and left out of backups." sub><input className="pin" type="password" autoComplete="off" aria-label={`${p.label} client secret`} value={secret} placeholder={p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret'} onChange={(e) => setSecret(e.target.value)} /></SRow>
+          <Steps p={p} />
+          <div className="sfoot"><button className="pill primary" onClick={() => act(async () => { await api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: id, ...(secret ? { clientSecret: secret } : {}) } }); setSecret(''); }, 'Saved.')}>Save changes</button></div>
+        </div>
+      )}
+    </div>
   );
 }
 

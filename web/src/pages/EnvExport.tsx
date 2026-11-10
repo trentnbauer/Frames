@@ -23,7 +23,7 @@ export function EnvExport() {
     try { await api('/admin/env/export-enabled', { method: 'PUT', body: { on } }); d.reload(); cmp.reload(); }
     catch (e) {
       const m = (e as Error).message;
-      if (on && /Sign in again/.test(m) && me?.user) window.location.assign(`/auth/login/${encodeURIComponent(me.user.provider)}?returnTo=${encodeURIComponent('/settings?section=env-file&enableExport=1')}`);
+      if (on && /Sign in again/.test(m) && me?.user) window.location.assign(`/auth/login/${encodeURIComponent(me.user.provider)}?returnTo=${encodeURIComponent('/settings?section=updates-system&enableExport=1')}`);
       else setErr(m);
     }
   };

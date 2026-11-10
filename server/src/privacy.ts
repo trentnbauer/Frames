@@ -2,7 +2,7 @@ import { signupsOn } from './users.js';
 import type { FastifyInstance } from 'fastify';
 import type { Ctx, Row } from './ctx.js';
 import { getSetting, setSetting } from './db.js';
-import { loadAuth } from './auth.js';
+import { loadAuth, sessionDays } from './auth.js';
 import { loadTunnel } from './tunnel.js';
 
 /**
@@ -17,7 +17,6 @@ export const loadPrivacy = (sys: Ctx['sys']): PrivacyInfo => ({ ...EMPTY, ...get
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const para = (s: string) => s.split(/\n{2,}/).map((p) => `<p>${esc(p.trim()).replace(/\n/g, '<br>')}</p>`).join('');
-const SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
 
 export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): string {
   const info = loadPrivacy(sys);
@@ -37,7 +36,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
   <h2>What is kept about you</h2>
   <ul>
     <li><strong>Your account</strong>: the name, email address and account id your sign-in provider${providers.length ? ` (${esc(providers.join(', '))})` : ''} gives Frames, your role (administrator or member), and when you last signed in. If the shared password is used, no personal details are kept.</li>
-    <li><strong>A sign-in cookie</strong>: one cookie that keeps you signed in for ${SESSION_DAYS} days of use. Only a scrambled (hashed) copy is stored on the server. There are no tracking cookies, no analytics and no advertising.</li>
+    <li><strong>A sign-in cookie</strong>: one cookie that keeps you signed in for ${sessionDays()} days of use. Only a scrambled (hashed) copy is stored on the server. There are no tracking cookies, no analytics and no advertising.</li>
     <li><strong>Your library</strong>: the photographs you upload or sync, previews made from them, and everything you add: titles, descriptions, tags, reviews and ratings, notes, collections, share links and settings. The photographs in a library folder on the server are only ever read, never changed.</li>
     <li><strong>Secrets you enter</strong>, such as an AI key or a cloud account connection: stored on the server, never shown again, and left out of backups.</li>
   </ul>
@@ -61,7 +60,7 @@ export function renderPrivacy(sys: Ctx['sys'], opts: { signups: boolean }): stri
 
   <h2>How long it is kept</h2>
   <ul>
-    <li>Your library stays until you delete it. Sign-in sessions end after ${SESSION_DAYS} days without use.</li>
+    <li>Your library stays until you delete it. Sign-in sessions end after ${sessionDays()} days without use.</li>
     <li>The server keeps a daily backup of each library and of the list of people, the last seven days. After you delete your data, copies in those backups disappear as they rotate out, within a week.</li>
   </ul>
 

@@ -10,10 +10,10 @@ import { CODE_HTML, GENERAL_HTML } from './mailTemplates.js';
  *
  * The email sign-in option exists only while SMTP is configured AND its last health check passed.
  */
-export type Smtp = { host: string; port: number; secure: boolean; user: string; from: string; fromName: string };
+export type Smtp = { host: string; port: number; secure: boolean; user: string; from: string; fromName: string; /** false: set up but switched off, so invites and shares are copy-a-link only. */ enabled: boolean };
 export type Health = { ok: boolean; at: string; error: string };
 
-const DEFAULT: Smtp = { host: '', port: 587, secure: false, user: '', from: '', fromName: 'Frames' };
+const DEFAULT: Smtp = { host: '', port: 587, secure: false, user: '', from: '', fromName: 'Frames', enabled: true };
 
 /** What is saved, with SMTP_* environment variables as the defaults for anything not saved in the app. */
 export function getSmtp(sys: DB, env: Record<string, string | undefined> = process.env): Smtp {
@@ -23,10 +23,10 @@ export function getSmtp(sys: DB, env: Record<string, string | undefined> = proce
     user: env.SMTP_USER, from: env.SMTP_FROM, fromName: env.SMTP_FROM_NAME,
   };
   const pick = <K extends keyof Smtp>(k: K): Smtp[K] => (saved[k] !== undefined && saved[k] !== '' ? saved[k] : e[k] !== undefined && e[k] !== '' && !Number.isNaN(e[k]) ? e[k] : DEFAULT[k]) as Smtp[K];
-  return { host: pick('host'), port: pick('port'), secure: pick('secure'), user: pick('user'), from: pick('from'), fromName: pick('fromName') };
+  return { host: pick('host'), port: pick('port'), secure: pick('secure'), user: pick('user'), from: pick('from'), fromName: pick('fromName'), enabled: saved.enabled !== false };
 }
 export const smtpPassword = (sys: DB, env: Record<string, string | undefined> = process.env) => getSecret(sys, 'smtp:pass') || env.SMTP_PASSWORD || '';
-export const smtpConfigured = (sys: DB) => { const s = getSmtp(sys); return !!s.host && !!s.from; };
+export const smtpConfigured = (sys: DB) => { const s = getSmtp(sys); return !!s.host && !!s.from && s.enabled; };
 
 export function saveSmtp(sys: DB, b: Record<string, unknown>): string | null {
   const cur = getSmtp(sys);
@@ -35,6 +35,7 @@ export function saveSmtp(sys: DB, b: Record<string, unknown>): string | null {
   if (b.host !== undefined) next.host = str(b.host, 253);
   if (b.port !== undefined) { const p = Number(b.port); if (!Number.isInteger(p) || p < 1 || p > 65535) return 'The port must be a number from 1 to 65535.'; next.port = p; }
   if (typeof b.secure === 'boolean') next.secure = b.secure;
+  if (typeof b.enabled === 'boolean') next.enabled = b.enabled;
   if (b.user !== undefined) next.user = str(b.user, 200);
   if (b.from !== undefined) { const f = str(b.from, 200); if (f && !/^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[^\s@<>]{2,}$/.test(f)) return 'Send-as must be an email address.'; next.from = f; }
   if (b.fromName !== undefined) next.fromName = str(b.fromName, 80).replace(/[\r\n"<>]/g, '') || 'Frames';
