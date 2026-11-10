@@ -2,6 +2,7 @@
 // @ts-nocheck
 // Ported from the logic class in design_handoff_frames/prototype/Proto Library.dc.html. Behaviour is the spec; the data comes in through props.
 import { DCLogic } from './runtime';
+import { addShortcuts } from '../components/shortcuts';
 
 /**
  * props:
@@ -13,7 +14,11 @@ import { DCLogic } from './runtime';
  */
 export class Logic extends DCLogic {
   state = { selMode: false, picked: [], mv: null, cm: null, del: null, delMode: 'frames', sortBy: 'shoot', toast: '', tOp: 0 };
-  componentWillUnmount() { clearTimeout(this.tT); }
+  componentDidMount() { this.offKeys = addShortcuts(() => [
+    { key: 'a', label: 'Add photos', run: () => this.props.onAddPhotos(), off: !this.props.canAdd || this.state.selMode },
+    { key: 's', label: 'Select photos', run: () => this.setState({ selMode: !this.state.selMode, picked: this.state.selMode ? [] : this.state.picked }) },
+  ]); }
+  componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); }
   flash(t) { this.setState({ toast: t, tOp: 1 }); clearTimeout(this.tT); this.tT = setTimeout(() => this.setState({ tOp: 0 }), 2200); }
   renderVals() {
     const S = this.state, P = this.props;

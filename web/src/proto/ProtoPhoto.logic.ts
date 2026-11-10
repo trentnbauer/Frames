@@ -4,13 +4,18 @@
 // through props (see screens/Photo.tsx). Place search and reverse lookup go through this server's map proxy.
 import React from 'react';
 import { DCLogic } from './runtime';
+import { addShortcuts } from '../components/shortcuts';
 
 const spin = () => React.createElement('i', { style: { width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block', flex: 'none' } });
 const ICON = { business: 'BU', suburb: 'SU', city: 'CI', landmark: 'LM', place: 'PL' };
 
 export class Logic extends DCLogic {
   state = { more: false, del: false, delMode: 'frames', pick: false, rateOpen: false, mine: null, note: '', map: null, toast: '', tOp: 0, newTag: '' };
-  componentWillUnmount() { clearTimeout(this.tT); clearTimeout(this.mT); }
+  componentDidMount() { this.offKeys = addShortcuts(() => [
+    { key: 'ArrowLeft', label: 'Previous photo', run: () => this.props.onStep(-1) },
+    { key: 'ArrowRight', label: 'Next photo', run: () => this.props.onStep(1) },
+  ]); }
+  componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); clearTimeout(this.mT); }
   ptoast(t) { this.setState({ toast: t, tOp: 1 }); clearTimeout(this.tT); this.tT = setTimeout(() => this.setState({ tOp: 0 }), 2400); }
 
   openMap() { this.setState({ map: true }); }

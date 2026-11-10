@@ -4,12 +4,14 @@
 // through props (see screens/Gear.tsx). Each item: { id, name, type: 'Body'|'Lens'|'Film'|'Light'|'App'|'Other', system, year, used, note }.
 // Each wish: { id, name, price (number|null), url, why, fits }.
 import { DCLogic } from './runtime';
+import { addShortcuts } from '../components/shortcuts';
 
 export class Logic extends DCLogic {
   TYPES = ['Body', 'Lens', 'Film', 'Light', 'App', 'Other'];
   TYPE_TITLE = { Body: 'Cameras', Lens: 'Lenses', Film: 'Film', Light: 'Light & meters', App: 'Apps & tools', Other: 'Other' };
   state = { nName: '', nPrice: '', nUrl: '', addTop: false, dragI: null, wishAll: false, b: null, sysEdit: null, toast: '', tOp: 0, syncing: false };
-  componentWillUnmount() { clearTimeout(this.tT); clearTimeout(this.sT); }
+  componentDidMount() { this.offKeys = addShortcuts(() => [{ key: 'n', label: (this.props.arrange || 'system') === 'system' ? 'New system' : 'New item', run: () => this.addNewNow?.() }]); }
+  componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); clearTimeout(this.sT); }
   flash(t) { this.setState({ toast: t, tOp: 1 }); clearTimeout(this.tT); this.tT = setTimeout(() => this.setState({ tOp: 0 }), 2000); }
   async act(fn) { this.setState({ syncing: true }); try { await fn(); } finally { clearTimeout(this.sT); this.sT = setTimeout(() => this.setState({ syncing: false }), 500); } }
   addNow() {
@@ -73,7 +75,7 @@ export class Logic extends DCLogic {
       addKey: (e) => { if (e.key === 'Enter') this.addNow(); },
       addWish: () => this.addNow(),
       addNewLabel: ar === 'system' ? 'New system' : 'New item',
-      addNew: () => { let sys = 'New system', k = 2; while (items.some((x) => x.system === sys)) sys = 'New system ' + k++; this.act(() => P.onAddItem({ name: ar === 'system' ? 'New camera body' : 'New item', type: ar === 'system' ? 'Body' : 'Other', system: ar === 'system' ? sys : 'Other' })); this.flash(ar === 'system' ? 'Added a system · name the body to start it' : 'Added · give it a name'); },
+      addNew: this.addNewNow = () => { let sys = 'New system', k = 2; while (items.some((x) => x.system === sys)) sys = 'New system ' + k++; this.act(() => P.onAddItem({ name: ar === 'system' ? 'New camera body' : 'New item', type: ar === 'system' ? 'Body' : 'Other', system: ar === 'system' ? sys : 'Other' })); this.flash(ar === 'system' ? 'Added a system · name the body to start it' : 'Added · give it a name'); },
       ownMeta: items.length + ' items · ' + items.filter((x) => x.type === 'Body').length + ' cameras · ' + items.filter((x) => x.type === 'Lens').length + ' lenses',
       arranges: [['system', 'System', 'Bodies with the lenses that fit them'], ['type', 'Type', 'Cameras, lenses, tools'], ['used', 'Most used', 'From the camera data in your photos'], ['year', 'Era', 'By the year it was made']].map(([k, label, hint]) => ({ label, hint, bg: ar === k ? 'var(--text)' : 'transparent', fg: ar === k ? 'var(--bg)' : 'var(--text2)', go: () => this.act(() => P.onPrefs({ arrange: k === 'year' ? 'era' : k })) })),
       arrangeHint: { system: 'Bodies first, then the lenses that fit · your portfolio uses this too', type: 'Grouped by what it is · your portfolio uses this too', used: 'Counted from camera and lens data in your photos', year: 'Oldest first · your portfolio uses this too' }[ar],

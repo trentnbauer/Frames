@@ -4,14 +4,23 @@
 // (see screens/Shoots.tsx for what each prop is).
 import React from 'react';
 import { DCLogic } from './runtime';
+import { addShortcuts } from '../components/shortcuts';
 
 const spin = () => React.createElement('i', { style: { width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block', flex: 'none' } });
 
 export class Logic extends DCLogic {
   state = { selMode: false, picked: [], mv: null, up: false, phase: 'pick', prog: 0, mode: 'new', name: '', split: false, existing: null, src: null, clouds: {}, cs: 'idle', found: 0, drag: false, shootFilter: 'all', shootSort: 'time', shootName: null, shootEdit: null, placeOpen: false, toast: '', tOp: 0 };
-  componentDidMount() { if (this.props.uploadReq) this.open(); }
+  componentDidMount() { this.offKeys = addShortcuts(() => this.keys()); if (this.props.uploadReq) this.open(); }
+  keys() {
+    const P = this.props, S = this.state, sh = P.shoot;
+    return [
+      { key: 'a', label: 'Add photos', run: () => this.open(), off: !(P.localOn || P.cloudOn) },
+      { key: 's', label: 'Select photos', run: () => this.setState({ selMode: !S.selMode, picked: S.selMode ? [] : S.picked }), off: !sh },
+      { key: 'c', label: 'Compose from this shoot', run: () => P.onCompose(), off: !sh },
+    ];
+  }
   componentDidUpdate(pp) { if (this.props.uploadReq && this.props.uploadReq !== pp.uploadReq) this.open(); }
-  componentWillUnmount() { clearTimeout(this.tT); }
+  componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); }
   open() {
     const P = this.props; if (!P.localOn && !P.cloudOn) return;
     const clouds = {}; (P.conns || []).forEach((c) => { clouds[c.id] = true; });
