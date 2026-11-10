@@ -305,6 +305,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // where a photograph was taken, in full: the address and kind of place, and how much the public may see (exact, suburb or city)
   (db) => { addColumn(db, 'photos', 'place_address', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_kind', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_precision', "TEXT NOT NULL DEFAULT 'exact'"); },
+  // the serial number of a piece of gear
+  (db) => { addColumn(db, 'gear_items', 'serial', "TEXT NOT NULL DEFAULT ''"); },
 ];
 
 export function migrate(db: DB) {

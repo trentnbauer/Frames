@@ -46,7 +46,7 @@ export function gearJson(db: DB) {
 export function registerGearItems(app: FastifyInstance, x: Ctx) {
   const { db, all, one, num, notFound } = x;
   const prefs = (): Prefs => ({ showWant: false, arrange: 'system', ...getSetting<Partial<Prefs>>(db, 'gearPrefs', {}) });
-  const dto = (r: Row) => ({ id: r.id, kind: r.kind, name: r.name, type: r.type, system: r.system, year: r.year, why: r.why, link: r.link, price: r.price, rank: r.rank, boughtAt: r.bought_at });
+  const dto = (r: Row) => ({ id: r.id, kind: r.kind, name: r.name, type: r.type, system: r.system, serial: r.serial, year: r.year, why: r.why, link: r.link, price: r.price, rank: r.rank, boughtAt: r.bought_at });
 
   /** Once, on first use: the camera and lens the person had set as defaults become gear they own. */
   const migrate = () => {
@@ -95,6 +95,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const set = (col: string, v: unknown) => { sets.push(`${col} = ?`); args.push(v); };
     if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); }
     if ((TYPES as readonly string[]).includes(b.type)) set('type', b.type);
+    if (typeof b.serial === 'string') set('serial', b.serial.trim().slice(0, 60));
     if (typeof b.system === 'string') set('system', b.system.trim().slice(0, 60));
     if (b.year !== undefined) { const y = b.year === null || b.year === '' ? null : Number(b.year); if (y !== null && !(Number.isInteger(y) && y > 1800 && y < 2200)) return rep.code(400).send({ error: 'The year must be a number like 2019.' }); set('year', y); }
     if (typeof b.why === 'string') set('why', b.why.trim().slice(0, 200));

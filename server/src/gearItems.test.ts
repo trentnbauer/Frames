@@ -30,6 +30,12 @@ describe('gear and wishlist', () => {
     expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Pentax 67II' })).body.system).toBe('Pentax 67');
     expect((await A.patch(`/api/gear/items/${g.id}`, { name: 'Fujifilm X-T5' })).body.system).toBe('Pentax 67');
   });
+  it('keeps a serial number', async () => {
+    const g = (await A.post('/api/gear/items', { kind: 'own', name: 'Pentax 67', type: 'camera' })).body;
+    expect(g.serial).toBe('');
+    expect((await A.patch(`/api/gear/items/${g.id}`, { serial: ' 1234567 ' })).body.serial).toBe('1234567');
+    expect((await A.get('/api/gear/items')).body.own.find((o: any) => o.id === g.id).serial).toBe('1234567');
+  });
   it('checks what it is given', async () => {
     expect((await A.post('/api/gear/items', { name: '' })).status).toBe(400);
     expect((await A.post('/api/gear/items', { name: 'x', price: 'abc' })).status).toBe(400);

@@ -75,6 +75,30 @@ export function parseFilenameMeta(file: string): { camera?: string; film?: strin
   return tokens.length < 4 ? {} : { camera: humanise(tokens[2]), film: humanise(tokens[3]) };
 }
 
+/** First path segments a handle may never take: the app's own pages, routes and files. */
+export const RESERVED_HANDLES = new Set(['api', 'auth', 's', 'assets', 'admin', 'collections', 'community', 'compare', 'duplicates', 'gear', 'library', 'photo', 'review', 'settings', 'shoots', 'stats', 'todo', 'welcome', 'portfolio', 'signin', 'signup', 'terms', 'privacy', 'login', 'logout', 'static', 'public', 'www', 'icon', 'theme', 'favicon']);
+export const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+const HANDLE_URL = /^\/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])(\/[^?]*)?(\?.*)?$/;
+type HandleReq = { __handle?: string; __handleUser?: number };
+
+/**
+ * Fastify's rewriteUrl: "/jane/images/1.jpg" is answered as "/portfolio/images/1.jpg" for Jane, whose handle it is. Anything else is left alone.
+ * Nothing is rewritten unless a person has claimed that handle, so the app's own addresses are untouched.
+ */
+export function portfolioHandleRewrite(sys: DB) {
+  const find = sys.prepare('SELECT user_id FROM portfolio_handles WHERE handle = ?');
+  return (raw: { url?: string }): string => {
+    const url = raw.url ?? '';
+    const m = HANDLE_URL.exec(url);
+    if (!m || RESERVED_HANDLES.has(m[1])) return url;
+    const row = find.get(m[1]) as { user_id: number } | undefined;
+    if (!row) return url;
+    Object.assign(raw, { __handle: m[1], __handleUser: row.user_id } satisfies HandleReq);
+    return `/portfolio${m[2] ?? '/'}${m[3] ?? ''}`;
+  };
+}
+const handleOfReq = (req: { raw: unknown }) => (req.raw as HandleReq).__handle;
+
 const hostOf = (req: FastifyRequest) => String(req.hostname ?? '').toLowerCase();
 
 /**
@@ -84,19 +108,21 @@ const hostOf = (req: FastifyRequest) => String(req.hostname ?? '').toLowerCase()
  */
 export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) {
   let index: string | null = null;
-  const indexHtml = () => (index ??= fs.readFileSync(path.join(webDir ?? '', 'portfolio', 'index.html'), 'utf8'));
+  /** The page; at a person's handle its relative links (<base>) point there instead of /portfolio/. */
+  const indexHtml = (handle?: string) => { index ??= fs.readFileSync(path.join(webDir ?? '', 'portfolio', 'index.html'), 'utf8'); return handle ? index.replace('<base href="/portfolio/">', `<base href="/${handle}/">`) : index; };
   const none = { mode: null as null, tenant: null as Tenant | null };
   return {
     indexHtml,
     check(req: FastifyRequest): { mode: 'index' | 'allow' | 'deny' | null; tenant: Tenant | null } {
-      const row = sys.prepare('SELECT user_id FROM portfolio_hosts WHERE host = ?').get(hostOf(req)) as { user_id: number } | undefined;
+      const viaHandle = (req.raw as HandleReq).__handleUser;
+      const row = viaHandle ? { user_id: viaHandle } : sys.prepare('SELECT user_id FROM portfolio_hosts WHERE host = ?').get(hostOf(req)) as { user_id: number } | undefined;
       if (!row) return none;
       const t = tenants.get(row.user_id);
       if (!t) return { mode: 'deny', tenant: null };
       if (!loadPortfolio(t.db).enabled) return { mode: 'deny', tenant: null };
       const p = req.url.split('?')[0];
       if (req.method !== 'GET' && req.method !== 'HEAD') return { mode: 'deny', tenant: null };
-      if (p === '/') return { mode: 'index', tenant: t };
+      if (p === '/' && !viaHandle) return { mode: 'index', tenant: t };
       return isPortfolioPath(req.url) ? { mode: 'allow', tenant: t } : { mode: 'deny', tenant: null };
     },
   };
@@ -140,11 +166,17 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   const originalsAllowed = () => !!getSetting<{ allowOriginals?: boolean }>(x.sys, 'instance', {}).allowOriginals;
 
   // ---------- the public site ----------
-  app.get('/portfolio', async (_req, rep) => rep.redirect('/portfolio/'));
-  app.get('/portfolio/', async (_req, rep) => {
+  // A person with a handle is at /handle/. The old /portfolio/ address sends the owner there (and still serves the page when no handle is set).
+  const ownHandle = (): string => (x.sys.prepare('SELECT handle FROM portfolio_handles WHERE user_id = ?').get(x.tenant().user.id) as { handle: string } | undefined)?.handle ?? '';
+  const pageFor = (req: FastifyRequest, rep: any) => {
+    const via = handleOfReq(req), mine = via ? '' : ownHandle();
+    if (mine) return rep.redirect(`/${mine}/`, 301);
     if (!live(rep)) return;
-    return rep.type('text/html').header('Cache-Control', 'no-cache').send(fs.readFileSync(path.join(cfg.webDir ?? '', 'portfolio', 'index.html')));
-  });
+    const html = fs.readFileSync(path.join(cfg.webDir ?? '', 'portfolio', 'index.html'), 'utf8');
+    return rep.type('text/html').header('Cache-Control', 'no-cache').send(via ? html.replace('<base href="/portfolio/">', `<base href="/${via}/">`) : html);
+  };
+  app.get('/portfolio', async (req, rep) => (handleOfReq(req) ? pageFor(req, rep) : ownHandle() ? rep.redirect(`/${ownHandle()}/`, 301) : rep.redirect('/portfolio/')));
+  app.get('/portfolio/', async (req, rep) => pageFor(req, rep));
   app.get('/portfolio/config.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
     // The name and picture are the person's profile (Settings, Profile); a name typed here by an older version is used only until they set one.
@@ -219,7 +251,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   };
   const dto = (c: PortfolioCfg) => ({ originalsAllowed: originalsAllowed(), config: c, status: status(c), collections: all('SELECT c.id, c.name, COUNT(cp.photo_id) n FROM collections c LEFT JOIN collection_photos cp ON cp.collection_id = c.id GROUP BY c.id ORDER BY c.name') });
 
-  app.get('/api/portfolio', async () => ({ ...dto(loadPortfolio(db)), dnsTarget: hostOfUrl(loadAuth(x.sys).publicUrl) }));
+  app.get('/api/portfolio', async () => ({ ...dto(loadPortfolio(db)), handle: ownHandle(), dnsTarget: hostOfUrl(loadAuth(x.sys).publicUrl) }));
 
   app.put('/api/portfolio', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
@@ -258,6 +290,14 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
       if (envHost && h !== envHost) return bad('The portfolio address is set by the PORTFOLIO_HOSTNAME environment variable. Change it there and restart Frames.');
       n.host = h;
     }
+    if (b.handle !== undefined) {
+      const h = text(b.handle, 40).toLowerCase();
+      if (h && !HANDLE_RE.test(h)) return bad('A name is 3 to 30 letters, numbers or hyphens, like jane-smith.');
+      if (h && RESERVED_HANDLES.has(h)) return bad('That name is used by Frames itself. Choose another.');
+      if (h && x.sys.prepare('SELECT 1 FROM portfolio_handles WHERE handle = ? AND user_id != ?').get(h, x.tenant().user.id)) return bad('Someone else already uses that name.');
+      x.sys.prepare('DELETE FROM portfolio_handles WHERE user_id = ?').run(x.tenant().user.id);
+      if (h) x.sys.prepare('INSERT INTO portfolio_handles(handle, user_id) VALUES(?, ?)').run(h, x.tenant().user.id);
+    }
     if (b.collectionId !== undefined) {
       if (b.collectionId === null) n.collectionId = null;
       else if (!one('SELECT 1 x FROM collections WHERE id = ?', num(b.collectionId))) return bad('That collection does not exist');
@@ -274,7 +314,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
     x.sys.prepare('DELETE FROM portfolio_hosts WHERE user_id = ?').run(x.tenant().user.id);
     if (n.host) x.sys.prepare('INSERT INTO portfolio_hosts(host, user_id) VALUES(?, ?)').run(n.host.toLowerCase(), x.tenant().user.id);
     x.tunnelRefresh?.(); // the tunnel's routes follow the portfolio addresses
-    return dto(n);
+    return { ...dto(n), handle: ownHandle() };
   });
 
   /** One photograph's place in the portfolio: in (by hand or favourite), auto (added by the score rule), or none. */

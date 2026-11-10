@@ -30,6 +30,7 @@ export class Logic extends DCLogic {
     const row = (it, lead) => ({ sepShow: 'inline', name: it.name, lead: lead || '', type: it.type, isBody: it.type === 'Body', isLens: it.type === 'Lens', isFilm: it.type === 'Film', isLight: it.type === 'Light', isApp: it.type === 'App', isOther: !['Body', 'Lens', 'Film', 'Light', 'App'].includes(it.type), used: it.used ? it.used.toLocaleString('en-AU') : '—', pct: Math.round(((it.used || 0) / maxUsed) * 100) + '%',
       typeTitle: { Body: 'Camera', Lens: 'Lens', Film: 'Film', Light: 'Light & meter', App: 'App', Other: 'Other' }[it.type] || 'Other', meta: [ar !== 'type' ? ({ Body: 'Camera', Lens: 'Lens', Film: 'Film', Light: 'Meter', App: 'App', Other: 'Other' }[it.type] || '') : '', ar !== 'system' ? it.system : '', it.note].filter(Boolean).join(' · '),
       year: it.year ? String(it.year) : '', onYear: (e) => this.act(() => P.onItem(it.id, { year: +e.target.value.replace(/[^0-9]/g, '').slice(0, 4) || null })),
+      serial: it.serial || '', onSerial: (e) => P.onItemSerial(it.id, e.target.value),
       onName: (e) => P.onItemName(it.id, e.target.value), cycle: () => this.act(() => P.onItem(it.id, { type: this.TYPES[(this.TYPES.indexOf(it.type) + 1) % this.TYPES.length] })), remove: () => this.act(() => P.onRemoveItem(it.id)) });
     const indexed = items;
     let groups = [];
