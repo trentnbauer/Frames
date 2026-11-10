@@ -98,4 +98,17 @@ describe('the gate', () => {
     expect((await call('GET', `/api/s/${s.token}`)).statusCode).toBe(410);
     expect((await own('PATCH', `/api/shares/${s.id}`, { on: true })).json().status).toBe('active');
   });
+  it('can show guests only the wall, make a new link that retires the old one, and drop a listed invite', async () => {
+    const photos = (await own('GET', '/api/photos')).json().photos as any[];
+    const c = (await own('POST', '/api/collections', { name: 'Wall only', photoIds: [photos[0].id] })).json();
+    await own('PATCH', `/api/collections/${c.id}`, { layout: { mode: 'row', prints: [{ id: 1, size: 'A4', orientation: 'portrait', frame: null, photoId: photos[0].id, stack: false, photoId2: null, x: 0, y: 0 }] } });
+    const s = (await own('POST', '/api/shares', { kind: 'collection', id: c.id, onlyWall: true })).json();
+    expect(s.onlyWall).toBe(true);
+    expect((await call('GET', `/api/s/${s.token}`)).statusCode).toBe(200);
+    const fresh = (await own('POST', `/api/shares/${s.id}/regenerate`, {})).json();
+    expect(fresh.token).not.toBe(s.token);
+    expect((await call('GET', `/api/s/${s.token}`)).statusCode).toBe(404); // the old address is gone
+    expect((await call('GET', `/api/s/${fresh.token}`)).statusCode).toBe(200);
+    expect((await own('DELETE', `/api/shares/${s.id}/invites?email=nobody@x.test`)).json()).toEqual({ removed: 0 });
+  });
 });

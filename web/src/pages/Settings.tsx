@@ -119,7 +119,16 @@ export function SettingsPage() {
   return (
     <div className="page">
       <Header />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 56, alignItems: 'flex-start' }}>
+      <div className="spread" style={{ alignItems: 'center', marginBottom: 32 }}>
+        <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>Settings</h1>
+        {isAdmin && (
+          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}>
+            <button role="tab" aria-selected={!adminSec} onClick={() => adminSec && go('Profile')} style={{ padding: '8px 16px', borderRadius: 999, fontSize: 14, background: !adminSec ? 'var(--chip)' : 'transparent', color: !adminSec ? 'var(--text)' : 'var(--text2)' }}>Your library</button>
+            <button role="tab" aria-selected={adminSec} onClick={() => !adminSec && go('People')} style={{ padding: '8px 16px', borderRadius: 999, fontSize: 14, background: adminSec ? 'var(--chip)' : 'transparent', color: adminSec ? 'var(--text)' : 'var(--text2)' }}>Server <span className="faint">· admin</span></button>
+          </div>
+        )}
+      </div>
+      <div className="settings-wrap" style={{ display: 'flex', flexWrap: 'wrap', gap: 56, alignItems: 'flex-start' }}>
         <aside style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', position: 'sticky', top: 24 }}>
           <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ background: 'var(--surface)', border: 0, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', marginBottom: 6 }} />
           {needle ? (
@@ -134,23 +143,15 @@ export function SettingsPage() {
             </div>
           ) : (
             <nav className="snav" aria-label="Settings sections">
-              {YOUR_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
-              {isAdmin && (
-                <div style={{ marginTop: 22, paddingTop: 6, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 12px 2px' }}>Administration</div>
-                  <div className="faint" style={{ fontSize: 12, margin: '0 12px 4px' }}>Applies to everyone on this server</div>
-                  {ADMIN_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
-                </div>
-              )}
+              {(adminSec ? ADMIN_GROUPS : YOUR_GROUPS).map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{g.items.map(item)}</div>)}
               <div style={{ marginTop: 22, paddingTop: 10, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column' }}>
                 <button className={shown === 'About' ? 'on' : ''} style={{ fontSize: 13, color: shown === 'About' ? undefined : 'var(--muted)' }} onClick={() => go('About')}>About Frames</button>
               </div>
             </nav>
           )}
         </aside>
-        <main style={{ flex: '1 1 480px', minWidth: 0 }}>
-          <div className="faint" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>{adminSec ? `Settings · Administration · ${groupOf(shown)}` : shown === 'About' ? 'Settings' : `Settings · ${groupOf(shown)}`}</div>
-          <h1 className="serif" style={{ fontSize: 44, lineHeight: 1, margin: '10px 0' }}>{nameOf(shown)}</h1>
+        <main className="settings-main" style={{ flex: '1 1 480px', minWidth: 0, maxWidth: 760 }}>
+          <h2 className="serif" style={{ fontSize: 40, lineHeight: 1, margin: '0 0 8px' }}>{nameOf(shown)}</h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text2)', maxWidth: 640 }}>{DESC[shown]}</p>
           {adminSec && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text2)' }}>

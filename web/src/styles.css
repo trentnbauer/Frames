@@ -487,3 +487,18 @@ main.auth.terms { width: 640px; }
 .sheet.inline { width: 100% !important; max-height: none !important; box-shadow: none !important; padding: 22px !important; border-radius: 14px !important; background: var(--surface) !important; }
 .editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-bottom: 40px; align-items: start; }
 @media (max-width: 1199px) { .editor-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1199px) { .gear-groups { grid-template-columns: 1fr !important; } }
+
+/* settings: each setting is a card row, as in the design */
+.settings-main .field { max-width: none; background: var(--surface); border-radius: 14px; border: 0; padding: 18px 24px; margin: 0 0 12px; }
+.settings-main .field h3 { font: 400 15px/1.3 var(--sans); margin: 0 0 4px; }
+.settings-main .field p { font-size: 12.5px; margin: 0 0 12px; }
+.snav button { padding: 9px 12px; border-radius: 8px; font-size: 14px; }
+.snav button.on { background: var(--chip); color: var(--text); }
+/* stats: tiles and charts are cards */
+.big5 { gap: 16px; }
+.big5 > div { background: var(--surface); border-radius: 12px; padding: 24px; }
+.big5 b { font-size: 44px; }
+.lists { gap: 16px; }
+.lists > div { background: var(--surface); border-radius: 14px; padding: 22px 24px; }
+.lists .label { font: 500 11px var(--mono); letter-spacing: .08em; }

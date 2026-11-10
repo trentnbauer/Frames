@@ -9,7 +9,7 @@ import type { Ctx, Row } from '../ctx.js';
 export const TYPES = ['camera', 'lens', 'film', 'light', 'app', 'other'] as const;
 export type GearType = (typeof TYPES)[number];
 export const ARRANGE = ['system', 'type', 'used', 'era'] as const;
-export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number] };
+export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string };
 
 /** A lens mount or camera system from a model name, or '' when unknown. Case and punctuation do not matter. */
 const SYSTEMS: [RegExp, string][] = [
@@ -48,7 +48,7 @@ export function gearJson(db: DB) {
   const by = new Map<string, Row[]>();
   for (const g of own) (by.get(key(g)) ?? by.set(key(g), []).get(key(g))!).push(g);
   const groups = [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([title, items]) => ({ title, count: items.length, items: items.sort((a, b) => Number(b.type === 'camera') - Number(a.type === 'camera')).map((g) => ({ name: g.name, note: g.year ? String(g.year) : '', tag: TYPE[g.type] ?? '' })) }));
-  return { showWant: prefs.showWant && want.length > 0, want: want.map((w, i) => ({ n: i + 1, name: w.name, price: w.price === null ? '' : String(Math.round(w.price)), url: /^https?:\/\//.test(w.link) ? w.link : '' })), groups, empty: own.length === 0 && want.length === 0 };
+  return { intro: prefs.intro ?? '', showWant: prefs.showWant && want.length > 0, want: want.map((w, i) => ({ n: i + 1, name: w.name, price: w.price === null ? '' : String(Math.round(w.price)), url: /^https?:\/\//.test(w.link) ? w.link : '' })), groups, empty: own.length === 0 && want.length === 0 };
 }
 
 export function registerGearItems(app: FastifyInstance, x: Ctx) {
@@ -92,7 +92,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const price = b.price === undefined || b.price === null || b.price === '' ? null : Number(b.price);
     if (price !== null && !(price >= 0 && price < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' });
     if (b.link && !/^https?:\/\//i.test(String(b.link))) return rep.code(400).send({ error: 'A link starts with https://' });
-    const id = add(kind, name, type, { year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true });
+    const id = add(kind, name, type, { system: typeof b.system === 'string' && b.system.trim() ? b.system.trim().slice(0, 60) : undefined, year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true });
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.patch('/api/gear/items/:id', async (req, rep) => {
@@ -130,6 +130,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const next = prefs();
     if (typeof b.showWant === 'boolean') next.showWant = b.showWant;
+    if (typeof b.intro === 'string') next.intro = b.intro.trim().slice(0, 300);
     if (b.arrange !== undefined) { if (!(ARRANGE as readonly string[]).includes(b.arrange)) return rep.code(400).send({ error: 'Choose system, type, most used or era.' }); next.arrange = b.arrange; }
     setSetting(db, 'gearPrefs', next);
     return next;

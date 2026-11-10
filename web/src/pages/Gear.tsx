@@ -3,7 +3,7 @@ import { api, useApi } from '../api';
 import { Header } from '../components/bits';
 
 type Item = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; year: number | null; why: string; link: string; price: number | null; rank: number; used?: number };
-type Data = { own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era' }; movedFromSettings: boolean; totals: { want: number; next: number | null } };
+type Data = { own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string }; movedFromSettings: boolean; totals: { want: number; next: number | null } };
 
 const TYPES: [string, string, string][] = [['camera', 'Camera', '◉'], ['lens', 'Lens', '◎'], ['film', 'Film', '▤'], ['light', 'Light & meter', '☼'], ['app', 'App', '▣'], ['other', 'Other', '·']];
 const ARRANGE: [Data['prefs']['arrange'], string][] = [['system', 'System'], ['type', 'Type'], ['used', 'Most used'], ['era', 'Era']];
@@ -46,7 +46,13 @@ export function Gear() {
   return (
     <div className="page">
       <Header />
-      <div className="title-row" style={{ marginBottom: 20 }}><h1 className="title">Gear &amp; wishlist</h1>{d && <span className="count">{d.own.length} owned · {d.want.length} wanted</span>}</div>
+      <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>Want to buy</h1>{d && <span className="muted" style={{ fontSize: 13 }}>{d.want.length} item{d.want.length === 1 ? '' : 's'} · drag or use the arrows to set priority</span>}</div>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <span className="muted" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}><i style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)' }} />Synced to {window.location.host}</span>
+          <a className="btn outline" style={{ height: 40 }} href="/portfolio/" target="_blank" rel="noopener noreferrer">View on portfolio ↗</a>
+        </div>
+      </div>
       {d?.movedFromSettings && <div className="banner" role="status"><span>Your cameras moved to Gear.</span></div>}
       {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
 
@@ -87,34 +93,41 @@ export function Gear() {
         </aside>
       </section>
 
-      <section aria-label="What I own">
-        <div className="spread" style={{ marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-          <h2 className="serif" style={{ fontSize: 28 }}>What I own</h2>
+      <section aria-label="What I own" style={{ borderTop: '1px solid var(--hair)', paddingTop: 32 }}>
+        <div className="spread" style={{ marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h2 className="serif" style={{ fontSize: 40, lineHeight: 1 }}>What I own</h2>{d && <span className="muted" style={{ fontSize: 13 }}>{d.own.length} items · {d.own.filter((i) => i.type === 'camera').length} cameras · {d.own.filter((i) => i.type === 'lens').length} lenses</span>}</div>
           <div className="seg" role="tablist" aria-label="Arrange by"><span className="faint" style={{ padding: '6px 8px 6px 12px', fontSize: 12 }}>Arrange by</span>{ARRANGE.map(([k, l]) => <button key={k} role="tab" aria-selected={arrange === k} className={arrange === k ? 'on' : ''} onClick={() => run(() => api('/gear/prefs', { method: 'PUT', body: { arrange: k } }))}>{l}</button>)}</div>
         </div>
+        <div className="spread" style={{ gap: 24, marginBottom: 18, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <input className="inline t2" style={{ fontSize: 15, flex: 1, minWidth: 240 }} defaultValue={d?.prefs.intro ?? ''} key={d?.prefs.intro ?? ''} placeholder="A line about your gear, shown on your portfolio" aria-label="About my gear" maxLength={300} onBlur={(e) => e.target.value !== (d?.prefs.intro ?? '') && run(() => api('/gear/prefs', { method: 'PUT', body: { intro: e.target.value } }))} />
+          <span className="faint" style={{ fontSize: 12.5 }}>{arrange === 'system' ? 'Bodies first, then the lenses that fit · your portfolio uses this too' : 'Your portfolio uses this arrangement too'}</span>
+        </div>
         {d && d.found.length > 0 && (
-          <div className="chips-row" aria-label="Found in your photos"><span className="eyebrow">Found in your photos</span>{d.found.slice(0, 8).map((f) => <button key={f.name} className="chip sug" onClick={() => run(() => api('/gear/items', { body: { kind: 'own', name: f.name, type: f.type } }))}>＋ {f.name} <span className="faint">{f.count}</span></button>)}</div>
+          <div className="chips-row" aria-label="Found in your photos" style={{ borderRadius: 12, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: '12px 16px' }}><span className="eyebrow" style={{ marginRight: 8 }}>Found in your photos</span>{d.found.slice(0, 8).map((f) => <button key={f.name} className="chip sug" onClick={() => run(() => api('/gear/items', { body: { kind: 'own', name: f.name, type: f.type } }))}>＋ {f.name} <span className="faint">{f.count.toLocaleString()} photos</span></button>)}</div>
         )}
-        {groups.map(([title, items]) => (
-          <div key={title} style={{ marginBottom: 28 }}>
-            {arrange !== 'used' && <div className="eyebrow" style={{ marginBottom: 10 }}>{title}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 10 }}>
-              {items.map((i) => (
-                <div key={i.id} style={{ background: 'var(--surface)', borderRadius: 10, padding: '14px 14px 10px', position: 'relative', minHeight: 96 }}>
-                  <input className="inline serif" style={{ fontSize: 20 }} defaultValue={i.name} aria-label="Name" onBlur={(e) => e.target.value.trim() && e.target.value !== i.name && patch(i.id, { name: e.target.value })} />
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4, display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span>{TYPES.find((t) => t[0] === i.type)?.[1]}</span>{i.system && <span>· {i.system}</span>}
-                    <span>·</span><input className="inline" style={{ width: 44 }} defaultValue={i.year ?? ''} placeholder="year" inputMode="numeric" aria-label="Year" onBlur={(e) => String(i.year ?? '') !== e.target.value && patch(i.id, { year: e.target.value || null })} />
-                    {arrange === 'used' && <span>· {i.used ?? 0} photos</span>}
+        <div className="gear-groups" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16 }}>
+          {groups.map(([title, items]) => (
+            <div key={title} style={{ background: 'var(--surface)', borderRadius: 14, padding: 20 }}>
+              <div className="spread" style={{ alignItems: 'baseline', marginBottom: 14 }}><h3 className="serif" style={{ fontSize: 26 }}>{title}</h3><span className="faint" style={{ fontSize: 12.5 }}>{items.filter((i) => i.type === 'camera').length} bod{items.filter((i) => i.type === 'camera').length === 1 ? 'y' : 'ies'} · {items.filter((i) => i.type === 'lens').length} lens{items.filter((i) => i.type === 'lens').length === 1 ? '' : 'es'}</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
+                {items.map((i) => (
+                  <div key={i.id} style={{ background: 'var(--bg)', borderRadius: 10, padding: '12px 12px 8px', position: 'relative', minHeight: 100 }}>
+                    <input className="inline" style={{ fontSize: 14, fontWeight: 500, paddingRight: 16 }} defaultValue={i.name} aria-label="Name" onBlur={(e) => e.target.value.trim() && e.target.value !== i.name && patch(i.id, { name: e.target.value })} />
+                    <div className="muted" style={{ fontSize: 11.5, marginTop: 6, display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span>{TYPES.find((t) => t[0] === i.type)?.[1]}</span><span>·</span>
+                      <input className="inline" style={{ width: 40 }} defaultValue={i.year ?? ''} placeholder="year" inputMode="numeric" aria-label="Year" onBlur={(e) => String(i.year ?? '') !== e.target.value && patch(i.id, { year: e.target.value || null })} />
+                      {arrange === 'used' && <span>· {i.used ?? 0} photos</span>}
+                    </div>
+                    <button title={`${TYPES.find((t) => t[0] === i.type)?.[1]} · click to change type`} aria-label="Change type" className="faint" style={{ position: 'absolute', right: 10, bottom: 8, fontSize: 18 }} onClick={() => patch(i.id, { type: TYPES[(TYPES.findIndex((t) => t[0] === i.type) + 1) % TYPES.length][0] })}>{TYPES.find((t) => t[0] === i.type)?.[2]}</button>
+                    <button aria-label={`Remove ${i.name}`} className="faint" style={{ position: 'absolute', right: 8, top: 8, fontSize: 12 }} onClick={() => run(() => api(`/gear/items/${i.id}`, { method: 'DELETE' }))}>✕</button>
                   </div>
-                  <button title={`${TYPES.find((t) => t[0] === i.type)?.[1]} · click to change type`} aria-label="Change type" className="faint" style={{ position: 'absolute', right: 10, bottom: 8, fontSize: 15 }}
-                    onClick={() => patch(i.id, { type: TYPES[(TYPES.findIndex((t) => t[0] === i.type) + 1) % TYPES.length][0] })}>{TYPES.find((t) => t[0] === i.type)?.[2]}</button>
-                  <button aria-label={`Remove ${i.name}`} className="faint" style={{ position: 'absolute', right: 10, top: 8, fontSize: 12 }} onClick={() => run(() => api(`/gear/items/${i.id}`, { method: 'DELETE' }))}>✕</button>
-                </div>
-              ))}
+                ))}
+                <button style={{ borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--outline)', minHeight: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, color: 'var(--text2)', fontSize: 13 }}
+                  onClick={() => { const n = window.prompt(`Add to ${title}`, ''); if (n?.trim()) run(() => api('/gear/items', { body: { kind: 'own', name: n.trim(), type: items[0]?.type === 'camera' ? 'lens' : items[0]?.type ?? 'other', ...(arrange === 'system' ? { system: title } : {}) } })); }}><span style={{ fontSize: 18 }}>+</span>Add<span>to {title}</span></button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
         {d && d.own.length === 0 && <p className="muted">Nothing here yet. Tap a camera above that Frames found in your photos, or buy something from the list.</p>}
       </section>
     </div>

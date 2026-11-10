@@ -78,7 +78,7 @@
     const content = document.getElementById('gear-content');
     const data = await loadJSON('gear.json');
     if (data && !data.empty) {
-      let html = '';
+      let html = data.intro ? '<p class="gear-intro">' + esc(data.intro) + '</p>' : '';
       if (data.showWant) {
         html += '<div class="gear-block"><div class="gear-head"><h2>Want to buy</h2><span>' + data.want.length + '</span></div>' +
           data.want.map((w) => {
