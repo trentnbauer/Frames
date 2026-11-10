@@ -5,6 +5,7 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { miniWall, printsSummary } from './walls';
 import { useStore } from '../store';
 import { Header } from '../components/Shell';
+import { useKey } from '../components/bits';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { Today, greetingFor } from '../pages/Today';
 import ProtoHome from '../proto/ProtoHome';
@@ -113,6 +114,15 @@ export function Home() {
       : { title: 'Nothing in progress', status: 'Start a composition from an idea, or from the Compositions page.', cta: 'Compositions', gap: '0', prints: [] as ReturnType<typeof miniWall>, count: '', open: () => nav('/collections') },
     showCommunity: !!community.data?.enabled && !!community.data.showOnHome, communityWaiting: community.data?.waiting ?? 0,
   };
+
+  // Keyboard shortcuts shown on the buttons: A add photos, S start this composition, C continue one. (R, for the review, is in App.tsx.)
+  useKey((e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || adding) return;
+    const k = e.key.toLowerCase();
+    if (k === 'a' && v.canAdd) v.addPhotos();
+    else if (k === 's' && idea) void v.startIdea();
+    else if (k === 'c' && wall) v.wall?.open();
+  }, [v, adding, idea, wall]);
 
   if (s && s.total === 0) return <Today />;
   return (
