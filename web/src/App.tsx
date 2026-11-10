@@ -18,7 +18,7 @@ import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare, Duplicates } from './screens/Compare';
 import { SharePage } from './pages/SharePage';
-import { Welcome } from './pages/Welcome';
+import { Welcome } from './screens/Welcome';
 import { Community } from './screens/Community';
 import { Gear } from './screens/Gear';
 import { GuestHome } from './pages/GuestHome';
