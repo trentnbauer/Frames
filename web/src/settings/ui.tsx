@@ -9,7 +9,7 @@ export type R = {
   /** Shown only while another row is on (or equals depVal). */
   dep?: string; depVal?: string;
   value?: any; set?: (v: any) => void;
-  opts?: string[]; step?: number; min?: number; max?: number; unit?: string; prefix?: string;
+  opts?: string[]; /** select: choices that cannot be picked (shown greyed out). */ offOpts?: string[]; step?: number; min?: number; max?: number; unit?: string; prefix?: string;
   meta?: string; act?: () => void;
   ph?: string; inputType?: string; disabled?: boolean;
   pct?: number; text?: string;
@@ -43,7 +43,7 @@ function Switch({ on, set, title, op = 1, label }: { on: boolean; set: () => voi
   );
 }
 
-function Select({ value, opts, prefix, set, opened, setOpened, op = 1, label }: { value: string; opts: string[]; prefix?: string; set: (v: string) => void; opened: boolean; setOpened: (b: boolean) => void; op?: number; label: string }) {
+function Select({ value, opts, off = [], prefix, set, opened, setOpened, op = 1, label }: { value: string; opts: string[]; off?: string[]; prefix?: string; set: (v: string) => void; opened: boolean; setOpened: (b: boolean) => void; op?: number; label: string }) {
   return (
     <>
       <span role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={opened} aria-label={label} onClick={() => setOpened(!opened)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpened(!opened); } if (e.key === 'Escape') setOpened(false); }}
@@ -51,8 +51,8 @@ function Select({ value, opts, prefix, set, opened, setOpened, op = 1, label }: 
       {opened && (
         <div role="listbox" style={{ position: 'absolute', top: 38, right: 0, zIndex: 6, minWidth: 200, background: '#1e1e1d', borderRadius: 10, padding: 4, boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column' }}>
           {opts.map((o) => (
-            <div key={o} role="option" aria-selected={o === value} onClick={() => { setOpened(false); set(o); }} className="sopt"
-              style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', height: 34, padding: '0 10px', borderRadius: 6, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap', background: o === value ? 'rgba(255,255,255,.08)' : 'transparent' }}>
+            <div key={o} role="option" aria-selected={o === value} aria-disabled={off.includes(o) || undefined} onClick={() => { if (off.includes(o)) return; setOpened(false); set(o); }} className="sopt"
+              style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', height: 34, padding: '0 10px', borderRadius: 6, fontSize: 13.5, cursor: off.includes(o) ? 'not-allowed' : 'pointer', opacity: off.includes(o) ? 0.4 : 1, whiteSpace: 'nowrap', background: o === value ? 'rgba(255,255,255,.08)' : 'transparent' }}>
               <span>{o}</span><span style={{ color: '#a8a59f' }}>{o === value ? '✓' : ''}</span>
             </div>
           ))}
@@ -102,7 +102,7 @@ export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: 
             <span role="button" tabIndex={0} aria-label={`More ${labelText}`} onClick={() => r.set?.(Math.min(r.max ?? 999, (v as number) + (r.step ?? 1)))} style={{ width: 24, textAlign: 'center', color: '#a8a59f', cursor: 'pointer' }}>+</span>
           </div>
         )}
-        {(t === 'select' || t === 'selTog') && <Select value={String(v ?? r.opts?.[0] ?? '')} opts={r.opts ?? []} prefix={r.prefix} set={(x) => r.set?.(x)} opened={open === r.id} setOpened={(b) => setOpen(b ? r.id : null)} op={t === 'selTog' ? (tv ? 1 : 0.4) : 1} label={labelText} />}
+        {(t === 'select' || t === 'selTog') && <Select value={String(v ?? r.opts?.[0] ?? '')} opts={r.opts ?? []} off={r.offOpts} prefix={r.prefix} set={(x) => r.set?.(x)} opened={open === r.id} setOpened={(b) => setOpen(b ? r.id : null)} op={t === 'selTog' ? (tv ? 1 : 0.4) : 1} label={labelText} />}
         {(t === 'seg' || t === 'chips') && (
           <div role={t === 'seg' ? 'radiogroup' : 'group'} aria-label={labelText} style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'rgba(255,255,255,.05)', fontSize: 13, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 460 }}>
             {(r.opts ?? []).map((o) => {

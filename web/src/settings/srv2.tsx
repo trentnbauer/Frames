@@ -194,7 +194,6 @@ export function useProcessing(ctx: Ctx): Section {
         { id: 'cachePath', t: 'text', label: 'Cache folder', hint: 'Thumbnails and previews. Safe to delete; they rebuild.', value: c?.path ?? '', disabled: true },
         { id: 'cacheUse', t: 'meter', label: 'Cache size', hint: c?.path, pct: limit && c ? (c.bytes / limit) * 100 : 0, text: c ? (limit ? `${gb(c.bytes)} of ${gb(limit)} limit` : gb(c.bytes)) : '' },
         { id: 'cacheMax', t: 'select', label: 'Cache limit', opts: LIMIT.map((l) => l[0]), value: LIMIT.find((l) => l[1] === inst.data?.cacheLimitGb)?.[0] ?? 'No limit', set: (v) => void put({ cacheLimitGb: LIMIT.find((l) => l[0] === v)![1] }) },
-        { id: 'previewSize', t: 'select', label: 'Preview size', hint: 'What you see on the Photo page and in Review.', opts: PREVIEW.map((p) => p[0]), value: PREVIEW.find((p) => p[1] === inst.data?.previewPx)?.[0] ?? '2400 px', set: (v) => void put({ previewPx: PREVIEW.find((p) => p[0] === v)![1] }) },
       ] },
       { title: 'Processing', rows: [
         { id: 'rawMode', t: 'seg', label: 'RAW previews', hint: 'Embedded is instant; full decode looks better but is slower.', opts: ['Embedded JPEG', 'Full decode'], value: inst.data?.rawPreview === 'full' ? 'Full decode' : 'Embedded JPEG', set: (v: string) => void put({ rawPreview: v === 'Full decode' ? 'full' : 'embedded' }) },

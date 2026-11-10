@@ -12,7 +12,8 @@ export type Policy = {
   backupEveryDays: 1 | 7 | 30;
   backupKeep: number;
   cacheLimitGb: number; // 0 = no limit
-  previewPx: number;
+  previewPx: number; // the largest preview any photograph gets (people can choose smaller)
+  previewQuality: number; // the highest JPEG quality for previews (people can choose lower)
   workers: number;
   logLevel: 'errors' | 'warnings' | 'info' | 'debug';
   updateChannel: 'stable' | 'beta';
@@ -30,6 +31,8 @@ export type Policy = {
 };
 type Stored = Partial<Record<keyof Policy, unknown>>;
 
+export const PREVIEW_SIZES = [1600, 2400, 3072, 4096];
+export const PREVIEW_QUALITIES = [70, 75, 80, 85, 88, 90, 95];
 const int = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi ? v : d);
 
 export function policyOf(sys: DB): Policy {
@@ -44,6 +47,7 @@ export function policyOf(sys: DB): Policy {
     backupKeep: int(i.backupKeep, 1, 90, 7),
     cacheLimitGb: [0, 10, 25, 50, 100, 250].includes(i.cacheLimitGb as number) ? (i.cacheLimitGb as number) : 0,
     previewPx: [1600, 2400, 3072, 4096].includes(i.previewPx as number) ? (i.previewPx as number) : 2400,
+    previewQuality: PREVIEW_QUALITIES.includes(i.previewQuality as number) ? (i.previewQuality as number) : 90,
     workers: int(i.workers, 0, 8, 0), // 0 = as many as there are processors
     logLevel: i.logLevel === 'errors' || i.logLevel === 'warnings' || i.logLevel === 'debug' ? i.logLevel : 'info',
     updateChannel: i.updateChannel === 'beta' ? 'beta' : 'stable',
@@ -72,7 +76,7 @@ export function policyPatch(b: Record<string, unknown>): Stored {
   if (b.backupEveryDays === 1 || b.backupEveryDays === 7 || b.backupEveryDays === 30) o.backupEveryDays = b.backupEveryDays;
   if (typeof b.backupKeep === 'number' && Number.isInteger(b.backupKeep) && b.backupKeep >= 1 && b.backupKeep <= 90) o.backupKeep = b.backupKeep;
   const pick = (k: string, allowed: unknown[]) => { if (allowed.includes(b[k])) o[k as keyof Policy] = b[k]; };
-  pick('cacheLimitGb', [0, 10, 25, 50, 100, 250]); pick('previewPx', [1600, 2400, 3072, 4096]);
+  pick('cacheLimitGb', [0, 10, 25, 50, 100, 250]); pick('previewPx', [1600, 2400, 3072, 4096]); pick('previewQuality', PREVIEW_QUALITIES);
   if (typeof b.workers === 'number' && Number.isInteger(b.workers) && b.workers >= 0 && b.workers <= 8) o.workers = b.workers;
   pick('logLevel', ['errors', 'warnings', 'info', 'debug']); pick('rawPreview', ['embedded', 'full']);
   if (typeof b.showWhatsNew === 'boolean') o.showWhatsNew = b.showWhatsNew; pick('updateChannel', ['stable', 'beta']); pick('cloudWho', ['admins', 'members']);
@@ -85,8 +89,8 @@ export function policyPatch(b: Record<string, unknown>): Stored {
 }
 
 /** Values read on every use by code that has no database in hand (image making). Set at start-up and whenever the choices change. */
-export const runtime = { previewPx: 2400, workers: 0, rawPreview: 'embedded' as 'embedded' | 'full' };
-export function applyRuntime(sys: DB) { const p = policyOf(sys); runtime.previewPx = p.previewPx; runtime.workers = p.workers; runtime.rawPreview = p.rawPreview; sharp.concurrency(p.workers); }
+export const runtime = { previewPx: 2400, previewQuality: 90, workers: 0, rawPreview: 'embedded' as 'embedded' | 'full' };
+export function applyRuntime(sys: DB) { const p = policyOf(sys); runtime.previewPx = p.previewPx; runtime.previewQuality = p.previewQuality; runtime.workers = p.workers; runtime.rawPreview = p.rawPreview; sharp.concurrency(p.workers); }
 
 /** True when a file newer than `days` days exists, so a weekly schedule skips the days in between. */
 export function madeWithin(files: { mtimeMs: number }[], days: number, now = Date.now()): boolean {

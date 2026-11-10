@@ -131,6 +131,8 @@ export function useMembers(ctx: Ctx): Section {
 }
 
 /* ------------------------------------------------- Photos & storage */
+const PREVIEW: [string, number][] = [['1600 px', 1600], ['2400 px', 2400], ['3072 px', 3072], ['4096 px', 4096]];
+const QUALITY = [70, 75, 80, 85, 88, 90, 95];
 const WHO: [string, string][] = [['Admins and members', 'members'], ['Admins only', 'admins']];
 const SYNC: [string, number][] = [['Every 15 min', 15], ['Every hour', 60], ['Every 6 hours', 360]];
 const QUOTA: [string, number][] = [['50 GB', 50], ['200 GB', 200], ['500 GB', 500], ['No limit', 0]];
@@ -174,6 +176,10 @@ export function useFolders(ctx: Ctx): Section {
         { id: 'allowOrig', t: 'toggle', label: 'Allow original downloads on portfolios', value: !!inst.data?.allowOriginals, set: (v) => void put({ allowOriginals: v }) },
         { id: 'srvFullRes', t: 'toggle', label: 'Allow original resolution from the cloud', hint: 'Off: everyone’s cloud imports are saved as 4096 px copies to save disk space.', value: !!orig.data?.allow, set: async (v: boolean) => { await act(ctx, () => api('/admin/cloud-originals', { method: 'PUT', body: { allow: v } })); orig.reload(); } },
         { id: 'cloudOnly', t: 'toggle', label: 'Keep originals in cloud storage only', hint: 'Frees disk space on this server. Nothing in the cloud is touched.', value: !!inst.data?.cloudOnly, set: (v) => { if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload to Frames, and every cloud photo is kept only as a smaller copy here. Deleting a photo from the cloud deletes its only full-size original.')) return; void put({ cloudOnly: v }); } },
+      ] },
+      { title: 'Previews', rows: [
+        { id: 'previewSize', t: 'select', label: 'Largest preview', hint: 'The most pixels any photo’s preview can have on this server. Everyone can choose smaller in their own settings.', opts: PREVIEW.map((p) => p[0]), value: PREVIEW.find((p) => p[1] === inst.data?.previewPx)?.[0] ?? '2400 px', set: (v) => void put({ previewPx: PREVIEW.find((p) => p[0] === v)![1] }) },
+        { id: 'previewQuality', t: 'select', label: 'Highest preview quality', hint: 'JPEG quality, 70 to 95. Lower makes smaller files; 85 is hard to tell apart on screen. Everyone can choose lower.', opts: QUALITY.map(String), value: String(inst.data?.previewQuality ?? 90), set: (v) => void put({ previewQuality: Number(v) }) },
       ] },
       { title: 'Per-person limit', rows: [
         { id: 'userQuota', t: 'select', label: 'Storage per person', hint: 'Uploads pause for that member at the limit. Administrators aren’t limited.', opts: PERSON.map((q) => q[0]), value: PERSON.find((q) => q[1] === ((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0))?.[0] ?? 'No limit', set: (v) => void put({ userQuotaGb: PERSON.find((q) => q[0] === v)![1] }) },

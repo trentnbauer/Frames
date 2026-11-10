@@ -22,6 +22,7 @@ import { chosenOf, deriveLayout, parseLayout, targetOf, type Layout } from './la
 import { addDays, nextIntervalDays } from './schedule.js';
 import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { runtime } from './policy.js';
 import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
 import { registerNotifications } from './routes/notifications.js';
@@ -276,6 +277,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
 
   app.get('/api/settings', async () => ({
     settings: loadSettings(db),
+    limits: { previewPx: runtime.previewPx, previewQuality: runtime.previewQuality }, // what the server allows, so the choices above it can be greyed out
     hasKey: !!getSecret(db, 'aiKey'), // the key itself is never sent to the browser
     internalDir: path.join(cfg.dataDir, 'originals'),
     libraries: cfg.libraries.map((l) => ({ path: l, exists: fs.existsSync(l), lastScan: getSetting<string | null>(db, `lastScan:${l}`, null) })),
