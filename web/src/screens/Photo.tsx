@@ -118,7 +118,7 @@ export function Photo() {
         rateSub={`Session ${Math.min(rs.length + 1, 9)}`}
         rateResult={(n: number) => { const you = (rs.reduce((a, r) => a + r.rating, 0) + n) / (rs.length + 1); return `Your score ${avg !== null ? avg.toFixed(1) : '–'} → ${you.toFixed(1)} · combined ${(combined(you) ?? you).toFixed(1)}.`; }}
         onRate={async (n: number, note: string) => { await api('/review/rate', { body: { photoId: p.id, rating: n, note } }); photo.reload(); refreshSummary(); }}
-        printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: '#8f8c86' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: '#8f8c86' }}>· {fits[0].ppi} PPI</span></>}
+        printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: 'var(--muted)' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: 'var(--muted)' }}>· {fits[0].ppi} PPI</span></>}
         printSub={next ? `${next.size} looks sharp from ${((3 * 3438) / Math.max(next.ppi, 1) * 0.0254).toFixed(1)} m away or more` : 'Every common size is sharp at arm’s length'}
         place={place} defaultLat={undefined} defaultLng={undefined}
         searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
@@ -128,7 +128,7 @@ export function Photo() {
         sensitive={SENSITIVE.map((n) => ({ name: n, on: sensOn(n) }))}
         onSensitive={async (name: string, on: boolean) => { await tagAct(name.toLowerCase(), 'tag', on ? 'accept' : 'remove'); }}
         tags={accepted.filter((t) => !SENSITIVE.some((n) => n.toLowerCase() === t.name.toLowerCase())).map((t) => ({ label: t.name, accepted: t.source === 'ai', remove: () => tagAct(t.name, t.kind, 'remove') }))}
-        aiTags={suggested.map((t) => ({ label: t.name, mark: '+', fg: '#a8a59f', bg: 'transparent', ring: 'inset 0 0 0 1px rgba(255,255,255,.22)', accept: () => tagAct(t.name, t.kind, 'accept') }))}
+        aiTags={suggested.map((t) => ({ label: t.name, mark: '+', fg: 'var(--text2)', bg: 'transparent', ring: 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', accept: () => tagAct(t.name, t.kind, 'accept') }))}
         onAddTag={async (name: string) => { await tagAct(name, 'tag', 'accept'); }}
         description={p.description || (ai && p.aiSuggestion?.description) || ''}
         detailFields={[['camera', 'Camera', 'Camera', p.camera], ['lens', 'Lens', 'Lens', p.lens], ['aperture', 'Aperture', 'f/–', p.aperture ? `f/${p.aperture}` : '']].map(([k, t, ph, val]) => ({ value: val, title: `${t} · click to edit`, ph, size: Math.max(3, String(val || ph).length), onChange: () => undefined, onBlur: (e: React.FocusEvent<HTMLInputElement>) => { const v = e.target.value.trim(); if (v !== String(val)) void patch(k === 'aperture' ? { aperture: Number(v.replace(/^f\//i, '')) || null } : { [k]: v }); } }))}

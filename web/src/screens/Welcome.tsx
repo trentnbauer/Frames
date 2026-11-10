@@ -28,7 +28,7 @@ export function Welcome() {
     wStep: i + 1, wTitle: title, wBody: lead, wFacts: facts.map((t, k) => ({ n: `0${k + 1}`, t })),
     wImg: pic ? imgUrl(pic.id, 'preview') : '',
     wFirst: i === 0, wHasBack: i > 0, wBack: () => setI(i - 1), wSkip: finish, wNext: () => (last ? finish() : setI(i + 1)), wNextLabel: last ? 'Start using Frames' : 'Next',
-    wDots: STEPS.map((_, k) => ({ bg: k === i ? '#efede8' : 'rgba(255,255,255,.2)', go: () => setI(k) })),
+    wDots: STEPS.map((_, k) => ({ bg: k === i ? 'var(--text)' : 'var(--outline)', go: () => setI(k) })),
   };
   return <div className="page-shell"><Header /><ProtoMore page="welcome" v={v} /></div>;
 }

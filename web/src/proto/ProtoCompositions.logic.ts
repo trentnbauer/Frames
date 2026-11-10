@@ -22,7 +22,7 @@ export class Logic extends DCLogic {
     const printed = (P.printedList || []).map((c) => ({ ...c, open: () => P.onOpen(c.id), again: () => { P.onOpen(c.id); } }));
     return {
       compsAfter: prog, ready, printed, readyEmpty: !ready.length,
-      tabs: [['prog', 'In progress', prog.length], ['ready', 'Ready to export', ready.length], ['printed', 'Printed', printed.length]].map(([k, label, n]) => ({ label, n, bg: tab === k ? 'rgba(255,255,255,.1)' : 'transparent', fg: tab === k ? '#efede8' : '#a8a59f', go: () => this.setState({ tab: k }) })),
+      tabs: [['prog', 'In progress', prog.length], ['ready', 'Ready to export', ready.length], ['printed', 'Printed', printed.length]].map(([k, label, n]) => ({ label, n, bg: tab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: tab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ tab: k }) })),
       sortLabel: P.sortLabel(tab), toggleSort: P.onToggleSort,
       isProg: tab === 'prog', isReady: tab === 'ready', isPrinted: tab === 'printed',
       pStats: P.pStats || [], printedMore: P.printedMore || '',

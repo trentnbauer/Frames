@@ -31,7 +31,7 @@ export function Stats() {
   const pts = trend.map((t, i) => `${32 + (trend.length > 1 ? (i / (trend.length - 1)) * 668 : 334)},${140 - ((t.avg - 1) / 4) * 120}`).join(' ');
   const v = d ? {
     isStats: true, isTodo: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
-    ranges: ['', ...d.years.slice(0, 2)].map((y) => ({ label: y || 'All time', bg: year === y ? '#efede8' : 'transparent', fg: year === y ? '#0d0d0d' : '#a8a59f', go: () => setYear(y) })),
+    ranges: ['', ...d.years.slice(0, 2)].map((y) => ({ label: y || 'All time', bg: year === y ? 'var(--text)' : 'transparent', fg: year === y ? 'var(--bg)' : 'var(--text2)', go: () => setYear(y) })),
     big: [[fmt(d.photos), 'photographs'], [size(d.bytes), 'storage'], [`${d.completePct}%`, 'finished all reviews'], [d.avgRating ? d.avgRating.toFixed(1) : '–', 'average rating'], [fmt(d.inCollections), 'in compositions']].map(([v2, l]) => ({ v: v2, l })),
     statLists: [
       bars('Rating distribution', RATINGS.map((r) => ({ label: `${r.emoji} ${r.label}`, n: d.dist.find((x) => x.value === r.value)?.n ?? 0 }))),
@@ -43,7 +43,7 @@ export function Stats() {
     sessions: d.bySession.map((b) => ({ l: 'S' + b.session, v: b.avg.toFixed(1), h: Math.max(8, Math.round(((b.avg - 1) / 4) * 100)) + '%' })),
     top: d.top.map((p) => ({ src: imgUrl(p.id, 'thumb'), ar: p.ar, go: () => nav(`/photo/${p.id}`) })),
     comBig: c ? [[fmt(c.reviewed), 'photos you’ve reviewed'], [fmt(c.shared), 'of yours shared'], [fmt(c.received), 'ratings received'], [c.average != null ? c.average.toFixed(1) : '–', 'community average'], [fmt(c.notes), 'written notes received']].map(([v2, l]) => ({ v: v2, l })) : [],
-    comCompare: c ? [['You', c.you, '#a8a59f'], ['Guests', c.guests, '#d9d6cf'], ['Community', c.community, '#efede8']].map(([label, a, col]) => ({ label, c: col, v: a == null ? '–' : (a as number).toFixed(1), pct: a == null ? '0%' : Math.round(((a as number) / 5) * 100) + '%' })) : [],
+    comCompare: c ? [['You', c.you, 'var(--text2)'], ['Guests', c.guests, '#d9d6cf'], ['Community', c.community, 'var(--text)']].map(([label, a, col]) => ({ label, c: col, v: a == null ? '–' : (a as number).toFixed(1), pct: a == null ? '0%' : Math.round(((a as number) / 5) * 100) + '%' })) : [],
     comNote: c && c.you != null && c.community != null ? (c.community > c.you + 0.05 ? 'The community rates your work a little higher than you do.' : c.community < c.you - 0.05 ? 'The community rates your work a little lower than you do.' : 'The community rates your work about the same as you do.') : 'Ratings from the community appear here once others have reviewed your photos.',
     comTop: (c?.favourites ?? []).map((f) => ({ src: imgUrl(f.id, 'thumb'), name: f.title || `Photo ${f.id}`, n: f.n, avg: f.avg.toFixed(1), go: () => nav(`/photo/${f.id}`) })),
   } : null;

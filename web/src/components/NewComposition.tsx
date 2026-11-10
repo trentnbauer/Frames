@@ -11,7 +11,7 @@ import ProtoMore from '../proto/ProtoMore';
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const label = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 8 } as const;
 const ring = 'inset 0 0 0 1px var(--outline)';
-const opt = (on: boolean) => ({ background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
+const opt = (on: boolean) => ({ background: on ? 'var(--text)' : 'transparent', color: on ? 'var(--bg)' : 'var(--text)', boxShadow: ring });
 
 
 type Rect = [number, number, number, number];
@@ -144,8 +144,8 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const v = {
     isNew: true, isStats: false, isTodo: false, isCompare: false, isDupes: false, isWelcome: false,
     ncName: name, onNcName: (e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value),
-    ncCount: count, ncDec: () => setN(count - 1), ncInc: () => setN(count + 1), ncDecFg: count > 1 ? '#efede8' : '#4a4845', ncIncFg: count < 12 ? '#efede8' : '#4a4845',
-    layouts: opts.map((pr) => { const on = preset === pr.key; return { label: pr.label, bg: on ? '#efede8' : 'transparent', fg: on ? '#0d0d0d' : '#efede8', hover: on ? '#efede8' : 'rgba(255,255,255,.04)', ring: on ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.16)', wall: on ? '#dcd9d2' : 'rgba(255,255,255,.04)', blockBg: on ? '#0d0d0d' : '#a8a59f', blocks: pr.rects.map(([x, y, w, h]) => ({ x: `${x}%`, y: `${(y / 64) * 100}%`, w: `${w}%`, h: `${(h / 64) * 100}%` })), go: () => choose(pr) }; }),
+    ncCount: count, ncDec: () => setN(count - 1), ncInc: () => setN(count + 1), ncDecFg: count > 1 ? 'var(--text)' : '#4a4845', ncIncFg: count < 12 ? 'var(--text)' : '#4a4845',
+    layouts: opts.map((pr) => { const on = preset === pr.key; return { label: pr.label, bg: on ? 'var(--text)' : 'transparent', fg: on ? 'var(--bg)' : 'var(--text)', hover: on ? 'var(--text)' : 'color-mix(in srgb, var(--text) 4%, transparent)', ring: on ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)', wall: on ? '#dcd9d2' : 'color-mix(in srgb, var(--text) 4%, transparent)', blockBg: on ? 'var(--bg)' : 'var(--text2)', blocks: pr.rects.map(([x, y, w, h]) => ({ x: `${x}%`, y: `${(y / 64) * 100}%`, w: `${w}%`, h: `${(h / 64) * 100}%` })), go: () => choose(pr) }; }),
     ncPrints: prints.map((p, i) => ({ n: i + 1, size: sizeName(p.size), orient: cap(p.orientation), frame: p.frame ? (p.frame.size === p.size ? 'Framed, no border' : `${sizeName(p.frame.size)} frame`) : 'Poster',
       cycle: () => custom((q) => { const next = SIZES[(SIZES.indexOf(q[i].size) + 1) % SIZES.length] ?? 'A3'; q[i].size = next; if (q[i].frame && !fits(q[i].frame!.size, next)) q[i].frame = { ...q[i].frame!, size: next }; }) })),
     askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Ask the AI', aiSpin: null,
@@ -154,7 +154,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     ncCreate: create, ncClose: onClose,
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(7,7,7,.75)', overflow: 'auto' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'var(--scrim)', overflow: 'auto' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div onKeyDown={(e) => e.key === 'Escape' && onClose()}>
         <ProtoMore page="new" v={v} />
       </div>

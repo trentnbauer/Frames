@@ -84,7 +84,7 @@ export function Home() {
       return {
         open: !isDone, done: isDone, op: isDone ? 0.7 : 1, name: names[b.id] ?? '', ph: b.name, meta: `${b.count} photo${b.count === 1 ? '' : 's'} · ${b.days} day${b.days === 1 ? '' : 's'}`, a: b.covers[0] ? thumb(b.covers[0]) : '', b: b.covers[1] ? thumb(b.covers[1]) : '',
         onName: (e: React.ChangeEvent<HTMLInputElement>) => setNames((x) => ({ ...x, [b.id]: e.target.value })),
-        canSplit: b.days > 1, splitBg: sp ? 'rgba(255,255,255,.12)' : 'transparent', splitFg: sp ? '#efede8' : '#a8a59f', splitRing: sp ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)', splitLabel: sp ? `✓ Split into ${b.days} shoots` : `Split by day (${b.days})`, splitTog: () => setSplits((x) => ({ ...x, [b.id]: !sp })),
+        canSplit: b.days > 1, splitBg: sp ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', splitFg: sp ? 'var(--text)' : 'var(--text2)', splitRing: sp ? 'none' : 'inset 0 0 0 1px var(--outline)', splitLabel: sp ? `✓ Split into ${b.days} shoots` : `Split by day (${b.days})`, splitTog: () => setSplits((x) => ({ ...x, [b.id]: !sp })),
         addLabel: sp ? `Add ${b.days} shoots` : 'Add shoot',
         add: async () => {
           if ((names[b.id] ?? '').trim()) await api(`/shoots/${b.id}`, { method: 'PATCH', body: { name: names[b.id].trim() } });
@@ -98,7 +98,7 @@ export function Home() {
     }),
     compCount: comps.data?.length ?? 0,
     sug: { title: idea?.name ?? 'No ideas yet', photos: (idea?.photos ?? []).slice(0, 4).map((p) => ({ img: `url(${thumb(p.id)}) center/cover`, flex: `${p.ar || 1} 1 0` })), tags: idea?.tags ?? [], colours: idea?.colours ?? [], why: idea?.reason ?? (recs.loading ? 'Looking for sets…' : 'Rate a few more photographs and Frames will suggest sets.') },
-    sFade: ci.fade, sDots: ideas.map((_, k) => ({ bg: k === ci.i ? '#efede8' : 'rgba(255,255,255,.2)', go: () => ci.go(k) })), sPrev: () => ci.go(ci.i - 1), sNext: () => ci.go(ci.i + 1),
+    sFade: ci.fade, sDots: ideas.map((_, k) => ({ bg: k === ci.i ? 'var(--text)' : 'var(--outline)', go: () => ci.go(k) })), sPrev: () => ci.go(ci.i - 1), sNext: () => ci.go(ci.i + 1),
     startIdea: async () => {
       if (!idea) return;
       const c = await api<Collection>('/collections', { body: { name: idea.name, photoIds: idea.photoIds } });
@@ -107,7 +107,7 @@ export function Home() {
     },
     notMe: () => { if (!idea) return; api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'reject' } }).catch(() => undefined); setDismissed((d) => new Set(d).add(idea.name)); },
     pause: () => { cw.pause(); ci.pause(); }, resume: () => { cw.resume(); ci.resume(); },
-    fade: cw.fade, dots: wip.map((_, k) => ({ bg: k === cw.i ? '#efede8' : 'rgba(255,255,255,.2)', go: () => cw.go(k) })), prev: () => cw.go(cw.i - 1), next: () => cw.go(cw.i + 1),
+    fade: cw.fade, dots: wip.map((_, k) => ({ bg: k === cw.i ? 'var(--text)' : 'var(--outline)', go: () => cw.go(k) })), prev: () => cw.go(cw.i - 1), next: () => cw.go(cw.i + 1),
     wall: wall
       ? { title: `Finish ${wall.name}`, status: `${wall.chosenIds.length} of ${wall.layout.prints.length} prints chosen · ${printsSummary(wall)}`, cta: 'Continue', gap: '14px', prints: miniWall(wall), count: `${cw.i + 1} of ${wip.length} in progress`, open: () => nav(`/collections/${wall.id}`) }
       : { title: 'Nothing in progress', status: 'Start a composition from an idea, or from the Compositions page.', cta: 'Compositions', gap: '0', prints: [] as ReturnType<typeof miniWall>, count: '', open: () => nav('/collections') },

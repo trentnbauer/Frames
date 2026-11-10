@@ -26,7 +26,7 @@ export class Logic extends DCLogic {
       },
       hasChips: (P.chips || []).length > 0, chips: P.chips || [],
       hasFiles: (P.files || []).length > 0, files: (P.files || []).slice(0, 5),
-      hasHits: hits.length > 0, hits: hits.map((h, i) => ({ name: h.name, meta: h.meta, src: h.src, bg: i === hi ? 'rgba(255,255,255,.06)' : 'transparent', enter: i === hi ? '↵' : '', hover: () => this.setState({ hi: i }), open: () => P.onOpenHit(h) })),
+      hasHits: hits.length > 0, hits: hits.map((h, i) => ({ name: h.name, meta: h.meta, src: h.src, bg: i === hi ? 'var(--hover)' : 'transparent', enter: i === hi ? '↵' : '', hover: () => this.setState({ hi: i }), open: () => P.onOpenHit(h) })),
       photoMeta: photos.length ? 'Photos · ' + n.toLocaleString() + (P.shootCount ? ' from ' + P.shootCount + (P.shootCount === 1 ? ' shoot' : ' shoots') : '') : 'Photos',
       searchRow: photos, noPhotos: !photos.length && !!P.q.trim() && !P.busy,
       actOp: photos.length ? 1 : 0.4, pickLabel: photos.length ? 'Pick from these ' + n.toLocaleString() : 'Pick from these',

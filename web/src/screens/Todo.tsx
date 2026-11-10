@@ -52,7 +52,7 @@ export function TodoPage() {
   for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
   const show = (k: string) => reason === k || (reason === 'all' && ['location', 'subjects', 'desc'].includes(k));
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'rgba(255,255,255,.12)' : 'transparent', fg: t.accepted ? '#efede8' : '#a8a59f', ring: t.accepted ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.22)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept') }));
+  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept') }));
   const inComp = (c: Collection) => !!p && c.photoIds.includes(p.id);
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
   const save = async () => {
@@ -72,16 +72,16 @@ export function TodoPage() {
   const v = {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     todoCount: ids.length.toLocaleString(), todoDone: done, todoWhat: WHAT[reason],
-    reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? '#efede8' : 'rgba(255,255,255,.06)', fg: reason === k ? '#0d0d0d' : '#a8a59f', go: () => { setReason(k); setSkipped([]); } })),
+    reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
     tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'), mapH: '0px',
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tPlace: place, tPlaceHint: shoot?.place ?? '', tPlaceSuggest: !place && !!shoot?.place,
-    tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.12)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
+    tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',
     useRoll: () => mate && setCam([mate.camera, mate.lens, mate.aperture ? `f/${mate.aperture}` : '', mate.shutter, mate.iso ? String(mate.iso) : '', mate.film]),
     tTags: chip('tag'), tSubjects: chip('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
-    tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? '#efede8' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px rgba(255,255,255,.3)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
-    tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? '#a8a59f' : '#efede8', tAiSpin: null,
+    tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
+    tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     onPlace: (e: React.ChangeEvent<HTMLInputElement>) => { const q = e.target.value; setPlace(q); window.clearTimeout(timer.current); if (q.trim().length < 3) { setHits([]); return; } timer.current = window.setTimeout(() => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`).then(setHits).catch(() => setHits([])), 900); },
     placeOpen: hits.length > 0, placeHits: hits.slice(0, 5).map((h) => ({ name: h.name, region: h.address.split(',').slice(-1)[0] ?? '', pick: () => { setPlace(h.name); setHits([]); } })),

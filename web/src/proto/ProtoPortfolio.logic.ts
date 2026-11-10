@@ -31,7 +31,7 @@ export class Logic extends DCLogic {
     const groups = (G.groups || []).map((g) => ({ ...g, items: g.items.filter((it) => (it[0] || '').trim()) })).filter((g) => g.items.length);
     const unit = (items) => { const t = items.map((i) => (i[1] || '').toLowerCase()); const u = t.every((x) => x === 'app') ? ['app', 'apps'] : ['piece', 'pieces']; return items.length + ' ' + u[items.length === 1 ? 0 : 1]; };
     return { country: this.state.country || (() => { try { return localStorage.getItem('frames-country') || 'Australia'; } catch (e) { return 'Australia'; } })(),
-      pBg: S.dark ? '#0d0c0b' : '#f4f2ec', pFg: fg, pLine: S.dark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.15)',
+      pBg: S.dark ? '#0d0c0b' : '#f4f2ec', pFg: fg, pLine: S.dark ? 'color-mix(in srgb, var(--text) 15%, transparent)' : 'rgba(0,0,0,.15)',
       themeLabel: S.dark ? 'Light' : 'Dark', themeIcon: S.dark ? '☼' : '☾', toggleTheme: () => this.toggle(),
       pNav: nav.map(([label, k]) => ({ label, line: k === S.view ? `1.5px solid ${fg}` : '1.5px solid transparent', go: () => (k === 'ext' ? null : this.setState({ view: k, gear: k === 'gear' ? this.readGear() : S.gear })) })),
       isGrid: S.view !== 'gear', isGear: S.view === 'gear', pGrid: S.view === 'fav' ? fav : idx,

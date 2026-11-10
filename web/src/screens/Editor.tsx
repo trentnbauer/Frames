@@ -60,8 +60,8 @@ export function Editor() {
   const ppi = c.layout.ppi;
   const reload = () => { coll.reload(); ranking.reload(); sugg.reload(); fsugg.reload(); lsugg.reload(); links.reload(); };
   const saveLayout = async (ps: Print[]) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: 'free', prints: ps, ppi, ...(c.layout.bg ? { bg: c.layout.bg } : {}) } } })); ranking.reload(); };
-  const wallOf = (ps: Print[]) => ps.map((p, i) => ({ img: p.photoId ? `url(${imgUrl(p.photoId, 'thumb')}) center/cover` : 'rgba(0,0,0,.18)', frame: p.frame ? FRAMES[p.frame.color] ?? '#151514' : '#e9e7e1', ring: 'none', label: `Print ${i + 1}`, labelFg: '#6f6c67' }));
-  const mark = (w: ReturnType<typeof wallOf>, i: number) => w.map((x, k) => (k === i ? { ...x, ring: '0 0 0 2px #161615,0 0 0 4px #efede8', label: `${x.label} · changed`, labelFg: '#efede8' } : x));
+  const wallOf = (ps: Print[]) => ps.map((p, i) => ({ img: p.photoId ? `url(${imgUrl(p.photoId, 'thumb')}) center/cover` : 'rgba(0,0,0,.18)', frame: p.frame ? FRAMES[p.frame.color] ?? '#151514' : '#e9e7e1', ring: 'none', label: `Print ${i + 1}`, labelFg: 'var(--faint)' }));
+  const mark = (w: ReturnType<typeof wallOf>, i: number) => w.map((x, k) => (k === i ? { ...x, ring: '0 0 0 2px var(--surface),0 0 0 4px var(--text)', label: `${x.label} · changed`, labelFg: 'var(--text)' } : x));
   const title = (pid: number) => byId.get(pid)?.title || byId.get(pid)?.file || 'a photo';
 
   // Guests: what they suggested (a photo, a frame colour, a layout) to approve or deny, and what they rated.

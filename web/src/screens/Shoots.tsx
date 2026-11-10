@@ -68,7 +68,7 @@ export function Shoots() {
   const shootOf = new Map((lib.data?.photos ?? []).map((p) => [p.id, p.shootId]));
   const compsPerShoot = new Map<number, Set<number>>();
   for (const c of colls.data ?? []) for (const pid of c.photoIds) { const s = shootOf.get(pid); if (s != null) (compsPerShoot.get(s) ?? compsPerShoot.set(s, new Set()).get(s)!).add(c.id); }
-  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.reviewPct < 100 ? { tag: 'Needs review', tagColor: '#efede8' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: '#a8a59f' } : { tag: 'Not composed', tagColor: '#efede8' }; };
+  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.reviewPct < 100 ? { tag: 'Needs review', tagColor: 'var(--text)' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: 'var(--text2)' } : { tag: 'Not composed', tagColor: 'var(--text)' }; };
   const all = [...(shoots.data ?? [])].sort((a, b) => (a.dateFrom ?? a.importedAt).localeCompare(b.dateFrom ?? b.importedAt) * (newest ? -1 : 1));
   const needle = q.trim().toLowerCase();
   const shown = all.filter((s) => (!needle || [s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle)) && (filter === '' || (filter === 'uncomposed' ? !(compsPerShoot.get(s.id)?.size) : s.reviewPct < 100)));

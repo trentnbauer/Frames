@@ -29,7 +29,7 @@ export class Logic extends DCLogic {
         selAll: () => this.setState((s) => ({ selMode: true, picked: all ? s.picked.filter((x) => !gr.ids.includes(x)) : [...new Set([...s.picked, ...gr.ids])] })),
         photos: gr.ids.map((id) => {
           const p = photo(id); const on = S.picked.includes(id);
-          return { src: p.src, ar: p.ar, flex: p.ar + ' ' + p.ar + ' ' + Math.round(p.ar * 190) + 'px', go: '', click: () => { if (sel) pick(id); else P.onOpenPhoto && P.onOpenPhoto(id); }, tickShow: sel ? 'block' : 'none', tick: on ? '#efede8' : 'rgba(0,0,0,.35)', mark: on ? '✓' : '', outline: on ? '2px solid #efede8' : 'none', badge: p.badge || '', badgeShow: p.badge ? 'block' : 'none' };
+          return { src: p.src, ar: p.ar, flex: p.ar + ' ' + p.ar + ' ' + Math.round(p.ar * 190) + 'px', go: '', click: () => { if (sel) pick(id); else P.onOpenPhoto && P.onOpenPhoto(id); }, tickShow: sel ? 'block' : 'none', tick: on ? 'var(--text)' : 'rgba(0,0,0,.35)', mark: on ? '✓' : '', outline: on ? '2px solid var(--text)' : 'none', badge: p.badge || '', badgeShow: p.badge ? 'block' : 'none' };
         }),
       };
     });
@@ -42,8 +42,8 @@ export class Logic extends DCLogic {
     const dm = S.delMode;
     return {
       groups, countLabel: P.countLabel, toggleFilters: P.onToggleFilters, filterCount: (P.chips || []).length, clearAll: P.onClear, showAdd: P.canAdd && !sel, cantAdd: !P.canAdd, addPhotos: P.onAddPhotos,
-      sortOpts: [['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']].map(([k, label]) => ({ label, bg: by === k ? '#efede8' : 'transparent', fg: by === k ? '#0d0d0d' : '#a8a59f', go: () => this.setState({ sortBy: k }) })),
-      selBtnLabel: sel ? 'Done' : 'Select', selBtnBg: sel ? '#efede8' : 'transparent', selBtnFg: sel ? '#0d0d0d' : '#efede8', selBtnRing: sel ? 'none' : 'inset 0 0 0 1px rgba(255,255,255,.2)',
+      sortOpts: [['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']].map(([k, label]) => ({ label, bg: by === k ? 'var(--text)' : 'transparent', fg: by === k ? 'var(--bg)' : 'var(--text2)', go: () => this.setState({ sortBy: k }) })),
+      selBtnLabel: sel ? 'Done' : 'Select', selBtnBg: sel ? 'var(--text)' : 'transparent', selBtnFg: sel ? 'var(--bg)' : 'var(--text)', selBtnRing: sel ? 'none' : 'inset 0 0 0 1px var(--outline)',
       toggleSel: () => this.setState({ selMode: !sel, picked: sel ? [] : S.picked }),
       selMode: sel, actOp: n ? 1 : 0.4, actPe: n ? 'auto' : 'none', pickedLabel: n + ' selected', pickedN: n, mvThumbs: thumbs,
       review: () => P.onReview && P.onReview(S.picked),
@@ -51,9 +51,9 @@ export class Logic extends DCLogic {
       openMove: () => this.setState({ mv: { mode: 'existing', name: '', q: '', target: null } }),
       mvOpen: !!S.mv, closeMv: () => this.setState({ mv: null }), stopMv: (e) => e.stopPropagation(),
       mvTitle: 'Move ' + n + (n === 1 ? ' photo' : ' photos'), mvSub: 'From ' + (P.fromLabel ? P.fromLabel(S.picked) : 'the library'),
-      mvModes: [['new', 'New shoot'], ['existing', 'Existing shoot']].map(([k, label]) => ({ label, bg: M.mode === k ? '#efede8' : 'transparent', fg: M.mode === k ? '#0d0d0d' : '#a8a59f', go: () => setMv({ mode: k }) })),
+      mvModes: [['new', 'New shoot'], ['existing', 'Existing shoot']].map(([k, label]) => ({ label, bg: M.mode === k ? 'var(--text)' : 'transparent', fg: M.mode === k ? 'var(--bg)' : 'var(--text2)', go: () => setMv({ mode: k }) })),
       mvIsNew: M.mode === 'new', mvIsExisting: M.mode === 'existing', mvName: M.name, mvOnName: (e) => setMv({ name: e.target.value }), mvPh: ph, mvQ: M.q, mvOnQ: (e) => setMv({ q: e.target.value }),
-      mvList: (P.shoots ?? []).filter((s) => !q || s.name.toLowerCase().includes(q)).map((s) => ({ name: s.name, meta: s.meta, src: s.src, bg: M.target === s.id ? 'rgba(255,255,255,.06)' : 'transparent', tick: M.target === s.id ? '✓' : '', pick: () => setMv({ target: s.id }) })),
+      mvList: (P.shoots ?? []).filter((s) => !q || s.name.toLowerCase().includes(q)).map((s) => ({ name: s.name, meta: s.meta, src: s.src, bg: M.target === s.id ? 'var(--hover)' : 'transparent', tick: M.target === s.id ? '✓' : '', pick: () => setMv({ target: s.id }) })),
       mvGoOp: ok ? 1 : 0.4, mvGoLabel: M.mode === 'new' ? 'Create shoot and move' : 'Move ' + n + (n === 1 ? ' photo' : ' photos'),
       mvGo: async () => {
         if (!ok) return;
@@ -65,7 +65,7 @@ export class Logic extends DCLogic {
       compPicker: S.cm ? P.renderCompPicker(S.picked, () => this.setState({ cm: null }), (msg) => { this.setState({ cm: null, picked: [], selMode: false }); this.flash(msg); }) : null,
       delOpen: !!S.del, openDel: () => this.setState({ del: true, delMode: 'frames' }), closeDel: () => this.setState({ del: false }),
       delTitle: 'Delete ' + n + (n === 1 ? ' photo?' : ' photos?'), delSub: 'Their ratings, tags and places in compositions go too.',
-      delOpts: [['frames', 'Remove from Frames', 'Originals stay on disk. You can import them again.'], ['trash', 'Also move the originals to the trash', 'Includes RAW files and XMP sidecars']].map(([k, label, hint]) => ({ label, hint, bg: dm === k ? 'rgba(255,255,255,.06)' : 'transparent', ring: dm === k ? 'inset 0 0 0 1px rgba(255,255,255,.16)' : 'none', dot: dm === k ? 'inset 0 0 0 5px #efede8' : 'inset 0 0 0 1.5px rgba(255,255,255,.3)', pick: () => this.setState({ delMode: k }) })),
+      delOpts: [['frames', 'Remove from Frames', 'Originals stay on disk. You can import them again.'], ['trash', 'Also move the originals to the trash', 'Includes RAW files and XMP sidecars']].map(([k, label, hint]) => ({ label, hint, bg: dm === k ? 'var(--hover)' : 'transparent', ring: dm === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: dm === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', pick: () => this.setState({ delMode: k }) })),
       delLabel: dm === 'trash' ? 'Delete and trash files' : 'Delete ' + n + (n === 1 ? ' photo' : ' photos'),
       confirmDel: async () => { await P.onDelete(S.picked, dm); this.setState({ del: false, picked: [], selMode: false }); this.flash(n + (n === 1 ? ' photo' : ' photos') + (dm === 'trash' ? ' deleted · originals in the trash' : ' removed from Frames · originals kept')); },
       toast: S.toast, toastOp: S.tOp,

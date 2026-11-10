@@ -74,7 +74,7 @@ export class Logic extends DCLogic {
   renderVals() {
     const S = this.state; const cur = S.screen; const i = this.keys.indexOf(cur); let n = 0;
     const flags = {}; for (const k of this.keys) flags['is' + k[0].toUpperCase() + k.slice(1)] = k === cur;
-    const tog = (on) => ({ track: on ? '#efede8' : 'rgba(255,255,255,.14)', knob: on ? '15px' : '3px', knobBg: on ? '#0d0d0d' : '#a8a59f' });
+    const tog = (on) => ({ track: on ? 'var(--text)' : 'color-mix(in srgb, var(--text) 14%, transparent)', knob: on ? '15px' : '3px', knobBg: on ? 'var(--bg)' : 'var(--text2)' });
     const light = S.theme === 'light'; const stageIsApp = !['share', 'portfolio', 'auth', 'guestlink', 'signup', 'terms', 'emailcode', 'emailgen'].includes(cur); const rels = S.rel || []; const unread = this.unread();
     return {
       ...flags, zoom: S.zoom, stageRef: this.stageRef, stageKind: ['share', 'portfolio', 'auth', 'guestlink', 'signup', 'terms', 'emailcode', 'emailgen'].includes(cur) ? 'site' : 'app',
@@ -84,7 +84,7 @@ export class Logic extends DCLogic {
       flagsList: [['localOn', 'Local storage'], ['cloudOn', 'Cloud providers set'], ['admin', 'Signed in as admin'], ['envDrift', 'ENV out of sync with app'], ['smtpOn', 'Email (SMTP) working']].map(([k, label]) => ({ label, ...tog(S[k]), go: () => this.saveFlags({ [k]: !S[k] }) })),
       simAdmin: () => { if (!S.admin) this.saveFlags({ admin: true }); this.openUpd(); },
       updOpen: S.upd, closeUpd: () => this.setState({ upd: false }), remindUpd: () => this.setState({ upd: false }), updLoading: !S.rel,
-      updSpin: React.createElement('i', { style: { width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,.2)', borderTopColor: '#efede8', animation: 'spin .8s linear infinite', display: 'inline-block' } }),
+      updSpin: React.createElement('i', { style: { width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block' } }),
       updTitle: rels.length ? rels[0].name + ' is ready to install' : 'A new version of Frames is out',
       updSub: rels.length > 1 ? 'This server runs ' + rels[rels.length - 1].name + '. Here’s what changed since.' : 'Here’s what changed.',
       rels: rels.length > 1 ? rels.slice(0, -1) : rels, updSource: S.relSrc === 'github' ? 'From GitHub releases · trentnbauer/Frames' : S.relSrc === 'fallback' ? 'Couldn’t reach GitHub · showing saved notes' : '',
@@ -94,31 +94,31 @@ export class Logic extends DCLogic {
         const ctx = 'v1.17.0 · ' + cur + ' · ' + navigator.platform;
         return { fbOpen: true, closeFb: () => this.setState({ fb: null }), fbTitle: F.title, fbBody: F.body, onFbTitle: (e) => setF({ title: e.target.value, sent: false }), onFbBody: (e) => setF({ body: e.target.value }),
           fbPh: F.kind === 'Bug' ? 'Short summary, e.g. “Export button stays disabled”' : F.kind === 'Idea' ? 'What would you like Frames to do?' : 'Your question',
-          fbKinds: ['Bug', 'Idea', 'Question'].map((k) => ({ label: k, bg: F.kind === k ? '#efede8' : 'transparent', fg: F.kind === k ? '#0d0d0d' : '#a8a59f', go: () => setF({ kind: k }) })),
-          fbCtxBg: F.ctx ? '#efede8' : 'transparent', fbCtxTick: F.ctx ? '✓' : '', fbCtxText: ctx, toggleFbCtx: () => setF({ ctx: !F.ctx }),
-          fbOp: ok ? 1 : 0.4, fbMsg: F.sent ? '✓ Opened GitHub in a new tab' : ok ? '' : 'Add a title first', fbMsgFg: F.sent ? 'oklch(0.78 0.12 150)' : '#6f6c67',
+          fbKinds: ['Bug', 'Idea', 'Question'].map((k) => ({ label: k, bg: F.kind === k ? 'var(--text)' : 'transparent', fg: F.kind === k ? 'var(--bg)' : 'var(--text2)', go: () => setF({ kind: k }) })),
+          fbCtxBg: F.ctx ? 'var(--text)' : 'transparent', fbCtxTick: F.ctx ? '✓' : '', fbCtxText: ctx, toggleFbCtx: () => setF({ ctx: !F.ctx }),
+          fbOp: ok ? 1 : 0.4, fbMsg: F.sent ? '✓ Opened GitHub in a new tab' : ok ? '' : 'Add a title first', fbMsgFg: F.sent ? 'oklch(0.78 0.12 150)' : 'var(--faint)',
           sendFb: () => { if (!ok) return; const body = (F.body.trim() || '_No details given._') + (F.ctx ? '\n\n---\nFrames ' + ctx : ''); const label = { Bug: 'bug', Idea: 'enhancement', Question: 'question' }[F.kind];
             window.open('https://github.com/trentnbauer/Frames/issues/new?' + new URLSearchParams({ title: F.title.trim(), body, labels: label }).toString(), '_blank', 'noopener'); setF({ sent: true }); } }; })(),
       newsOpen: !!S.news, closeNews: () => this.setState({ news: false }),
       news: [['Guest suggestions you can preview and approve', 214], ['Frame size and mat options per print', 211], ['Analyze a photo with AI from its page', 208], ['Near-duplicate finder links variants', 203], ['Faster Library with a year scrubber', 199]].map(([t, num]) => ({ t, n: num })),
-      notifs: this.NOTIFS().map(([id, icon, text, when, to, what]) => { const un = ['n1', 'n2', 'n3', 'n4'].includes(id) && !S.read.includes(id); return { icon, text, when, fg: un ? '#efede8' : '#a8a59f', bg: un ? 'rgba(255,255,255,.03)' : 'transparent', dot: un ? 'oklch(0.72 0.15 45)' : 'transparent', go: () => { this.setState({ read: [...S.read, id] }); this.deep(to, what); } }; }),
-      readAll: () => this.setState({ read: ['n1', 'n2', 'n3', 'n4'] }), readAllFg: unread ? '#a8a59f' : '#5c5a56', notifSettings: () => { window.__framesSettingsGo = { tab: 'lib', sec: 'notifications' }; window.dispatchEvent(new CustomEvent('frames-settings-go', { detail: window.__framesSettingsGo })); this.go('settings'); },
+      notifs: this.NOTIFS().map(([id, icon, text, when, to, what]) => { const un = ['n1', 'n2', 'n3', 'n4'].includes(id) && !S.read.includes(id); return { icon, text, when, fg: un ? 'var(--text)' : 'var(--text2)', bg: un ? 'color-mix(in srgb, var(--text) 3%, transparent)' : 'transparent', dot: un ? 'oklch(0.72 0.15 45)' : 'transparent', go: () => { this.setState({ read: [...S.read, id] }); this.deep(to, what); } }; }),
+      readAll: () => this.setState({ read: ['n1', 'n2', 'n3', 'n4'] }), readAllFg: unread ? 'var(--text2)' : 'var(--disabled)', notifSettings: () => { window.__framesSettingsGo = { tab: 'lib', sec: 'notifications' }; window.dispatchEvent(new CustomEvent('frames-settings-go', { detail: window.__framesSettingsGo })); this.go('settings'); },
       profItems: [
-        { label: 'Settings', meta: '⌘ ,', sep: 'none', fg: '#efede8', go: () => this.go('settings') },
-        { label: 'View my portfolio', meta: '↗', sep: 'none', fg: '#efede8', go: () => this.go('portfolio') },
-        { label: 'Gear & wishlist', meta: '', sep: 'none', fg: '#efede8', go: () => this.go('gear') },
-        { label: light ? 'Dark mode' : 'Light mode', meta: light ? '☾' : '☼', sep: 'none', fg: '#efede8', go: () => { this.setState({ prof: false }); this.setTheme(light ? 'dark' : 'light'); } },
-        { label: 'Your stats', meta: '48,210 photos', sep: 'block', fg: '#efede8', go: () => this.go('stats') },
-        { label: 'To do', meta: '1,284', sep: 'none', fg: '#efede8', go: () => this.go('todo') },
-        { label: 'Community review', meta: '20', sep: 'none', fg: '#efede8', go: () => this.go('community') },
-        { label: 'Near-duplicates', meta: '6', sep: 'none', fg: '#efede8', go: () => this.go('dupes') },
-        { label: 'What’s new', meta: 'v1.17.0 ●', sep: 'block', fg: '#efede8', go: () => this.setState({ prof: false, news: true }) },
-        { label: 'Welcome tour', meta: '', sep: 'none', fg: '#efede8', go: () => this.go('welcome') },
-        { label: 'Help & docs', meta: '↗', sep: 'none', fg: '#efede8', go: () => this.setState({ prof: false }) },
-        { label: 'Send feedback', meta: 'GitHub', sep: 'none', fg: '#efede8', go: () => this.setState({ prof: false, fb: { kind: 'Bug', title: '', body: '', ctx: true, sent: false } }) },
-        { label: 'Sign out', meta: '', sep: 'block', fg: '#a8a59f', go: () => this.setState({ prof: false }) },
+        { label: 'Settings', meta: '⌘ ,', sep: 'none', fg: 'var(--text)', go: () => this.go('settings') },
+        { label: 'View my portfolio', meta: '↗', sep: 'none', fg: 'var(--text)', go: () => this.go('portfolio') },
+        { label: 'Gear & wishlist', meta: '', sep: 'none', fg: 'var(--text)', go: () => this.go('gear') },
+        { label: light ? 'Dark mode' : 'Light mode', meta: light ? '☾' : '☼', sep: 'none', fg: 'var(--text)', go: () => { this.setState({ prof: false }); this.setTheme(light ? 'dark' : 'light'); } },
+        { label: 'Your stats', meta: '48,210 photos', sep: 'block', fg: 'var(--text)', go: () => this.go('stats') },
+        { label: 'To do', meta: '1,284', sep: 'none', fg: 'var(--text)', go: () => this.go('todo') },
+        { label: 'Community review', meta: '20', sep: 'none', fg: 'var(--text)', go: () => this.go('community') },
+        { label: 'Near-duplicates', meta: '6', sep: 'none', fg: 'var(--text)', go: () => this.go('dupes') },
+        { label: 'What’s new', meta: 'v1.17.0 ●', sep: 'block', fg: 'var(--text)', go: () => this.setState({ prof: false, news: true }) },
+        { label: 'Welcome tour', meta: '', sep: 'none', fg: 'var(--text)', go: () => this.go('welcome') },
+        { label: 'Help & docs', meta: '↗', sep: 'none', fg: 'var(--text)', go: () => this.setState({ prof: false }) },
+        { label: 'Send feedback', meta: 'GitHub', sep: 'none', fg: 'var(--text)', go: () => this.setState({ prof: false, fb: { kind: 'Bug', title: '', body: '', ctx: true, sent: false } }) },
+        { label: 'Sign out', meta: '', sep: 'block', fg: 'var(--text2)', go: () => this.setState({ prof: false }) },
       ],
-      groups: this.SCREENS.map(([name, items]) => ({ name, items: items.map(([k, label]) => { n++; return { label, key: String(n).padStart(2, '0'), bg: k === cur ? 'rgba(255,255,255,.08)' : 'transparent', fg: k === cur ? '#efede8' : '#a8a59f', go: () => this.go(k) }; }) })),
+      groups: this.SCREENS.map(([name, items]) => ({ name, items: items.map(([k, label]) => { n++; return { label, key: String(n).padStart(2, '0'), bg: k === cur ? 'var(--hair)' : 'transparent', fg: k === cur ? 'var(--text)' : 'var(--text2)', go: () => this.go(k) }; }) })),
       prev: () => this.go(this.keys[(i - 1 + this.keys.length) % this.keys.length]), next: () => this.go(this.keys[(i + 1) % this.keys.length]),
     };
   }
