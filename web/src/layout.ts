@@ -17,7 +17,7 @@ export type Frame = { size: string; mat: string; color: string };
 export type Orientation = 'portrait' | 'landscape';
 /** A print holds one photograph, or (stack) two: two landscape photographs one above the other make a portrait print, two portrait ones side by side make a landscape one. */
 /** How a photograph is cropped in its print, to see how it would look: zoomed in by `zoom` around the point (fx, fy), each 0 to 1. Only for looking: the original is never changed. */
-export type Crop = { zoom: number; fx: number; fy: number };
+export type Crop = { zoom: number; shiftX: number; shiftY: number };
 export type Print = { crop?: Crop; id: number; size: string; orientation: Orientation; frame: Frame | null; photoId: number | null; stack: boolean; photoId2: number | null; x: number; y: number };
 export type Mode = 'row' | 'grid' | 'feature' | 'free';
 export type Layout = { /** The scale of the room picture behind the wall: mm of wall per pixel of the picture. */ bg?: { mmPerPx: number }; mode: Mode; prints: Print[]; /** The sharpness wanted, in pixels per inch (300 when absent). A photograph below it is allowed, with a warning. */ ppi?: number };

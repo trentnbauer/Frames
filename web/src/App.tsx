@@ -13,7 +13,7 @@ import { Photo as PhotoDetail } from './screens/Photo';
 import { Review } from './screens/Review';
 import { Shoots } from './screens/Shoots';
 import { Compositions } from './screens/Compositions';
-import { CollectionDetail } from './pages/Collections';
+import { Editor as CollectionDetail } from './screens/Editor';
 import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare, Duplicates } from './screens/Compare';
