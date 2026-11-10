@@ -9,7 +9,7 @@ import { EnvExport } from './EnvExport';
 type RestoreInfo = { dir: string; archives: { name: string; bytes: number; at: string }[]; pending: { at: string; parts: string[] } | null; canRestart: boolean };
 
 /** Restoring the people and libraries from a server backup. It is checked and put aside, and applied when Frames next starts. */
-function Restore() {
+export function Restore() {
   const r = useApi<RestoreInfo>('/admin/restore');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,7 +68,7 @@ function Restore() {
 type S3State = { configured: boolean; endpoint: string; region: string; bucket: string; prefix: string; accessKeyId: string; hasSecret: boolean; status: { at: string; ok: boolean; message: string } | null };
 
 /** Copy the daily whole-server archive to S3 or an S3-compatible service. The secret key is write-only: it is never shown again. */
-function S3Backup() {
+export function S3Backup() {
   const st = useApi<S3State>('/admin/backup/s3');
   const [f, setF] = useState({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -103,7 +103,7 @@ type CloudBackupState = { connected: boolean; provider: string; account: string;
 const PROVIDER_NAMES: Record<string, string> = { dropbox: 'Dropbox', google: 'Google Drive', onedrive: 'OneDrive' };
 
 /** Copy the daily archive to the administrator's own Dropbox, Google Drive or OneDrive, in a folder called Frames backups. */
-function CloudBackup() {
+export function CloudBackup() {
   const st = useApi<CloudBackupState>('/admin/backup/cloud');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(() => { const b = new URLSearchParams(window.location.search).get('backup'); return b ? { ok: b === 'connected', text: b === 'connected' ? 'Connected.' : b } : null; });
   const [busy, setBusy] = useState(false);

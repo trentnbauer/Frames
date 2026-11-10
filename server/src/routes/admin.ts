@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { setSessionDays, cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, type DB } from '../db.js';
-import { buildEnvFile, envConfigLoaded, snapshot } from '../envConfig.js';
+import { buildEnvFile, collectEnvConfig, envConfigLoaded, isSecretName, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
@@ -297,7 +297,43 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   app.get('/api/admin/env/compare', async () => envCompare());
   // Just whether the app and the env file disagree, for the banner every administrator sees.
   app.get('/api/admin/env/drift', async () => { const c = envCompare().counts; return { drift: envConfigLoaded().system ? c.differs + c.appOnly : 0, differs: c.differs, appOnly: c.appOnly }; });
+  // The env file parsed (KEY=value lines, quoted the way the export quotes them).
+  const parseEnvText = (text: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const raw of text.split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(raw);
+      if (!m || raw.trim().startsWith('#')) continue;
+      let v = m[2].trim();
+      if (v.startsWith("'") && v.endsWith("'") && v.length >= 2) v = v.slice(1, -1);
+      else if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) v = v.slice(1, -1).replace(/\$\$/g, '$').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      out[m[1]] = v;
+    }
+    return out;
+  };
+  // Import: shows what a .env file would change (never a secret's value), and with apply: true, does it.
+  app.post('/api/admin/env/import', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (typeof b.text !== 'string' || b.text.length > 400_000) return rep.code(400).send({ error: 'Send the text of a .env file.' });
+    const env = parseEnvText(b.text);
+    const owner = x.tenants.owner().db;
+    const { items, problems } = collectEnvConfig(sys, owner, env);
+    const rows = items.map((i) => {
+      const cur = getSetting<unknown>(i.db, i.key, undefined as unknown);
+      const same = JSON.stringify(cur ?? null) === JSON.stringify(i.value ?? null);
+      return { name: i.key, secret: i.key.startsWith('secret:') || isSecretName(i.key), status: cur === undefined ? 'new' as const : same ? 'same' as const : 'changes' as const };
+    });
+    if (b.apply === true) {
+      for (const i of items) setSetting(i.db, i.key, i.value);
+      console.warn(`env file imported by administrator ${me(req).id}: ${items.length} settings`);
+    }
+    return { rows, problems, counts: { new: rows.filter((r) => r.status === 'new').length, changes: rows.filter((r) => r.status === 'changes').length, same: rows.filter((r) => r.status === 'same').length }, applied: b.apply === true ? items.length : 0 };
+  });
   app.get('/api/admin/env/export', async (req, rep) => {
+    const withSecrets = (req.query as Row).secrets === '1';
+    if (!withSecrets) {
+      return rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.env"').header('Cache-Control', 'no-store')
+        .send(buildEnvFile(sys, x.tenants.owner().db, { version: x.cfg.version, date: new Date(), secrets: false }));
+    }
     if (!envExportOn() && x.cfg.allowEnvExport !== false) return rep.code(403).send({ error: 'Export is switched off. Turn it on in Settings, Env file (you will be asked to sign in again).' });
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });
     console.warn(`env file exported by administrator ${me(req).id}`);

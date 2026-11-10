@@ -120,13 +120,14 @@ function Item({ base, server, src, type, active, one, run }: { base: string; ser
 
 /** The administrator's rules for shared AI: whether members may add their own, and a monthly limit per person for paid shared ones. */
 function AiRules() {
-  const inst = useApi<{ aiMembersOwn: boolean; aiMonthlyLimit: number }>('/admin/instance');
+  const inst = useApi<{ aiMembersOwn: boolean; aiMonthlyLimit: number; aiSharedFirst: boolean }>('/admin/instance');
   const put = (body: Record<string, unknown>) => api('/admin/instance', { method: 'PUT', body }).then(inst.reload).catch(() => undefined);
   return (
     <>
       <Eyebrow>Rules</Eyebrow>
       <SCard>
         <SRow title="Members can add their own AI" hint="Their keys, their bill. Shown only to them."><PSwitch label="Members can add their own AI" on={inst.data?.aiMembersOwn !== false} set={(v) => put({ aiMembersOwn: v })} /></SRow>
+        <SRow title="Put shared AI first for new members" hint="Sets the starting order for their jobs. They can change it."><PSwitch label="Put shared AI first for new members" on={!!inst.data?.aiSharedFirst} set={(v) => put({ aiSharedFirst: v })} /></SRow>
         <SRow title="Monthly limit per person" hint="Requests to shared paid AIs. Free local AI isn’t limited. When it is reached, the next AI in their order takes over."><PSelect label="Monthly limit per person" value={inst.data?.aiMonthlyLimit ?? 0} options={[[0, 'No limit'], [100, '100 requests'], [500, '500 requests'], [2000, '2,000 requests'], [10000, '10,000 requests']]} set={(v) => put({ aiMonthlyLimit: v })} /></SRow>
       </SCard>
     </>

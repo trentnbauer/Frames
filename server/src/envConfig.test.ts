@@ -199,12 +199,12 @@ describe('the export switch', () => {
   it('is off by default, and only an exact true or false changes it', async () => {
     const a = mk(); const A = api(a);
     expect((await A.get('/api/admin/env')).body).toMatchObject({ enabled: false, allowed: false, lockedByEnv: false });
-    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+    expect((await A.get('/api/admin/env/export?secrets=1')).status).toBe(403);
     expect((await A.put('/api/admin/env/export-enabled', { on: 'yes' })).status).toBe(400);
     expect((await A.put('/api/admin/env/export-enabled', { on: true })).body).toMatchObject({ enabled: true, allowed: true });
-    expect((await A.get('/api/admin/env/export')).status).toBe(200);
+    expect((await A.get('/api/admin/env/export?secrets=1')).status).toBe(200);
     expect((await A.put('/api/admin/env/export-enabled', { on: false })).body).toMatchObject({ enabled: false, allowed: false });
-    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+    expect((await A.get('/api/admin/env/export?secrets=1')).status).toBe(403);
   });
   it('cannot be turned on while ALLOW_ENV_EXPORT=false locks it', async () => {
     const a = mk({ allowEnvExport: false }); const A = api(a);
@@ -223,9 +223,9 @@ describe('export, import, and the block', () => {
     await A.put('/api/tunnel', { apiToken: SECRET + '-tunnel', accountId: 'c'.repeat(32), appUrl: 'https://frames.example.com' });
     await A.put('/api/admin/privacy', { operator: 'Studio', contact: 'hi@example.test' });
     // 2. Export is off by default; turned on from the Env file page, it is an attachment that is never cached.
-    expect((await A.get('/api/admin/env/export')).status).toBe(403);
+    expect((await A.get('/api/admin/env/export?secrets=1')).status).toBe(403);
     expect((await A.put('/api/admin/env/export-enabled', { on: true })).body).toMatchObject({ enabled: true, allowed: true });
-    const r = await A.raw('GET', '/api/admin/env/export');
+    const r = await A.raw('GET', '/api/admin/env/export?secrets=1');
     expect(r.status).toBe(200);
     expect(String(r.headers['content-disposition'])).toContain('frames.env');
     expect(String(r.headers['cache-control'])).toBe('no-store');
@@ -242,7 +242,7 @@ describe('export, import, and the block', () => {
     expect((await B.get('/api/tunnel')).body).toMatchObject({ hasApiToken: true, appUrl: 'https://frames.example.com' });
     expect(String((await B.get('/privacy')).body)).toContain('Studio');
     expect((await B.get('/api/me')).body.envConfig).toBe(true);
-    const again = await B.get('/api/admin/env/export');
+    const again = await B.get('/api/admin/env/export?secrets=1');
     expect(again.status).toBe(403);
     expect(again.body.error).toMatch(/ALLOW_ENV_EXPORT/);
     expect((await B.get('/api/admin/env')).body).toMatchObject({ allowed: false, loaded: { system: true, owner: false } }); // only the server's settings are in the file
@@ -251,7 +251,7 @@ describe('export, import, and the block', () => {
     const a = mk(); const A = api(a);
     await A.put('/api/admin/privacy', { operator: 'From the file' });
     await A.put('/api/admin/env/export-enabled', { on: true });
-    const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString());
+    const vars = parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export?secrets=1')).body as Buffer).toString());
     useVars(vars);
     const b = mk(); const B = api(b);
     await B.put('/api/admin/privacy', { operator: 'Changed in the app' });
@@ -261,11 +261,11 @@ describe('export, import, and the block', () => {
   });
   it('is for administrators only, and not reachable without signing in', async () => {
     const e = mk({ authUser: 'me', authPassword: 'pw' });
-    expect((await e.app.inject('/api/admin/env/export')).statusCode).toBe(401);
+    expect((await e.app.inject('/api/admin/env/export?secrets=1')).statusCode).toBe(401);
     const basic = { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') };
     expect((await e.app.inject({ method: 'PUT', url: '/api/admin/env/export-enabled', payload: { on: true } })).statusCode).toBe(401); // the switch needs the login too
     expect((await e.app.inject({ method: 'PUT', url: '/api/admin/env/export-enabled', payload: { on: true }, headers: basic })).statusCode).toBe(200); // a shared password has no one to ask again
-    expect((await e.app.inject({ url: '/api/admin/env/export', headers: basic })).statusCode).toBe(200);
+    expect((await e.app.inject({ url: '/api/admin/env/export?secrets=1', headers: basic })).statusCode).toBe(200);
   });
 });
 
@@ -284,7 +284,7 @@ describe('several AIs in the export', () => {
     await A.post('/api/ai/sources', { type: 'ollama', name: 'Only mine', endpoint: 'http://localhost:11434', model: 'mine', embedModel: '' });
 
     await A.put('/api/admin/env/export-enabled', { on: true });
-    const text = Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString();
+    const text = Buffer.from((await A.raw('GET', '/api/admin/env/export?secrets=1')).body as Buffer).toString();
     expect(text).toContain(KEYS.claude);
     expect(text).toContain(KEYS.gemini);
     expect(text).not.toContain(KEYS.openai);
@@ -308,7 +308,7 @@ describe('several AIs in the export', () => {
     const a = mk(); const A = api(a);
     await post(A, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'From the file' });
     await A.put('/api/admin/env/export-enabled', { on: true });
-    useVars(parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export')).body as Buffer).toString()));
+    useVars(parseEnv(Buffer.from((await A.raw('GET', '/api/admin/env/export?secrets=1')).body as Buffer).toString()));
     const b = mk(); const B = api(b);
     await post(B, 'ollama', { endpoint: 'http://localhost:11434', model: 'llava', name: 'Added later in the app' });
     const names = async () => (await B.get('/api/admin/ai/sources')).body.sources.map((x: any) => x.name);

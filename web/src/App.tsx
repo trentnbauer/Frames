@@ -13,7 +13,7 @@ import { Review } from './pages/Review';
 import { Shoots } from './pages/Shoots';
 import { Collections, CollectionDetail } from './pages/Collections';
 import { Stats } from './pages/Stats';
-import { SettingsPage } from './pages/Settings';
+import { SettingsPage } from './settings/SettingsPage';
 import { ShootDetail } from './pages/ShootDetail';
 import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';

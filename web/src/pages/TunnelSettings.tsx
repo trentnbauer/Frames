@@ -146,7 +146,7 @@ export function TunnelSettings() {
 }
 
 /** What to pick on Cloudflare's "Create token" screen, laid out the way that screen shows it. */
-function TokenSheet() {
+export function TokenSheet() {
   const box = { border: '1px solid var(--line, #3a3a3a)', borderRadius: 10, overflow: 'hidden', marginTop: 12, maxWidth: 560 } as const;
   const head = { padding: '8px 12px', fontWeight: 600, fontSize: 13, background: 'var(--surface, #1a1a1a)' } as const;
   const row = { display: 'grid', gridTemplateColumns: '90px 1fr 70px', gap: 8, padding: '8px 12px', borderTop: '1px solid var(--line, #3a3a3a)', fontSize: 13 } as const;
