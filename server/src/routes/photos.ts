@@ -5,6 +5,8 @@ import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
 import { applyGear, syncGearTags } from '../gear.js';
+import { hemisphere, monthsOf, type Season, type Seasons } from '../seasons.js';
+import { getSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
@@ -22,6 +24,11 @@ const haversineKm = (a: number, b: number, c: number, d: number) => {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dLon / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));
 };
+
+
+/** A column as a lower-case run of letters and digits, so "Fujifilm X-T5" and "xt5" can be compared. */
+const normSql = (col: string) => `lower(replace(replace(replace(replace(replace(replace(replace(${col}, ' ', ''), '-', ''), '.', ''), '_', ''), '/', ''), '(', ''), ')', ''))`;
+export const normText = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 export function registerPhotos(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
@@ -43,13 +50,27 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(s);
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.from ?? ''))) { where.push('substr(COALESCE(p.captured_at, p.added_at), 1, 10) >= ?'); args.push(q.from); }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.to ?? ''))) { where.push('substr(COALESCE(p.captured_at, p.added_at), 1, 10) <= ?'); args.push(q.to); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.from ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) >= ?'); args.push(q.from); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.to ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) <= ?'); args.push(q.to); }
     if (q.place) {
       const w = String(q.place).toLowerCase();
       where.push("(lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND lower(s.place) LIKE ? ESCAPE '\\'))"); args.push(like(w), like(w));
     }
     if (q.gps === '1') where.push('p.lat IS NOT NULL AND p.lon IS NOT NULL');
+    // Metadata chips from Search: partial, case-insensitive, punctuation ignored (xt5 = X-T5), each one narrows the result.
+    for (const [param, col] of [['camera', 'p.camera'], ['lens', 'p.lens'], ['film', 'p.film'], ['file', 'p.file']] as const) {
+      const v = normText(String(q[param] ?? ''));
+      if (v) { where.push(`${normSql(col)} LIKE ? ESCAPE '\\'`); args.push(`%${v}%`); }
+    }
+    if (q.aperture !== undefined && Number.isFinite(Number(q.aperture))) { where.push('ABS(p.aperture - ?) < 0.05'); args.push(Number(q.aperture)); }
+    if (q.iso !== undefined && Number.isFinite(Number(q.iso))) { where.push('p.iso = ?'); args.push(Number(q.iso)); }
+    if (q.shutter) { where.push("replace(p.shutter, ' ', '') = ?"); args.push(String(q.shutter).replace(/\s/g, '')); }
+    // A season, by the person's hemisphere (Settings, Profile, Country).
+    if (['winter', 'spring', 'summer', 'autumn'].includes(String(q.season))) {
+      const pr = getSetting<{ country?: string; seasons?: Seasons }>(db, 'profile', {});
+      const h = hemisphere(pr.country ?? '', pr.seasons ?? 'auto');
+      if (h !== 'none') { const ms = monthsOf(q.season as Season, h); where.push(`CAST(strftime('%m', COALESCE(p.date_edit, p.captured_at, p.added_at)) AS INTEGER) IN (${ms.join(',')})`); }
+    }
     let near: { lat: number; lon: number; km: number } | null = null;
     const nm = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(String(q.near ?? ''));
     if (nm) {
@@ -131,6 +152,43 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   });
 
   /** "fog over water, early morning, no people" into chips the user can remove. Needs AI; without it, returns the text as-is. */
+
+  /**
+   * What a typed query means as metadata: camera, lens, film stock, aperture, shutter, ISO, place, and file names, matched partially, ignoring
+   * case and punctuation. Each match is a chip (they combine with AND); file-name matches are also listed with their camera and date.
+   */
+  app.get('/api/search/meta', async (req) => {
+    const text = String(((req.query ?? {}) as Row).q ?? '').slice(0, 200);
+    const chips: { key: string; kind: string; label: string; param: string; value: string }[] = [];
+    const seen = new Set<string>();
+    const add = (kind: string, label: string, param: string, value: string) => { const k = `${param}=${value}`; if (!seen.has(k)) { seen.add(k); chips.push({ key: k, kind, label, param, value }); } };
+    // Whole phrases of settings first: f/1.2, 1/250, iso 800.
+    for (const m of text.matchAll(/\bf\s*\/?\s*(\d{1,2}(?:\.\d)?)\b/gi)) if (/f\s*\//i.test(m[0]) || /\bf\d/i.test(m[0])) add('Aperture', `Aperture: f/${m[1]}`, 'aperture', m[1]);
+    for (const m of text.matchAll(/\b1\s*\/\s*(\d{2,5})\b/g)) add('Shutter', `Shutter: 1/${m[1]}`, 'shutter', `1/${m[1]}`);
+    for (const m of text.matchAll(/\biso\s*(\d{2,6})\b/gi)) add('ISO', `ISO: ${m[1]}`, 'iso', m[1]);
+    const words = text.split(/\s+/).map(normText).filter((w) => w.length >= 2);
+    const phrase = normText(text);
+    const probe = (col: 'camera' | 'lens' | 'film', kind: string, param: string) => {
+      const rows = all(`SELECT ${col} v, COUNT(*) n FROM photos WHERE ${col} != '' AND missing = 0 GROUP BY ${col} ORDER BY n DESC LIMIT 300`);
+      for (const w of [phrase, ...words]) {
+        if (w.length < 2) continue;
+        const hit = rows.find((rw) => normText(String(rw.v)).includes(w));
+        if (hit) { add(kind, `${kind}: ${hit.v}`, param, String(hit.v)); break; }
+      }
+    };
+    probe('camera', 'Camera', 'camera'); probe('lens', 'Lens', 'lens'); probe('film', 'Film', 'film');
+    // A place already in use.
+    const places = all("SELECT place v FROM photos WHERE place != '' AND missing = 0 GROUP BY place LIMIT 500");
+    for (const w of words) { const hit = places.find((p) => normText(String(p.v)).includes(w) && w.length >= 3); if (hit) { add('Place', `Place: ${hit.v}`, 'place', String(hit.v)); break; } }
+    // File names: "dscf41" finds DSCF4182.RAF. Only worth listing when the query looks like part of a file name.
+    const files: { id: number; file: string; camera: string; date: string }[] = [];
+    if (phrase.length >= 3) {
+      const rows = all(`SELECT id, file, camera, COALESCE(date_edit, captured_at, added_at) d FROM photos WHERE missing = 0 AND ${normSql('file')} LIKE ? ESCAPE '\\' ORDER BY file LIMIT 12`, `%${phrase}%`);
+      for (const f of rows) files.push({ id: f.id as number, file: f.file as string, camera: f.camera as string, date: String(f.d).slice(0, 10) });
+    }
+    return { chips, files };
+  });
+
   app.post('/api/search/parse', async (req) => {
     const c = aiConfig(db);
     const text = String(((req.body ?? {}) as Row).q ?? '').slice(0, 300);
@@ -173,7 +231,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   app.post('/api/photos/remove', async (req, rep) => {
     const ids = ((req.body ?? {}) as Row).ids;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every((n) => Number.isInteger(n))) return rep.code(400).send({ error: 'Send up to 500 photograph ids.' });
-    return removePhotos(db, cfg, ids as number[]);
+    const o = ((req.body ?? {}) as Row).originals;
+    return removePhotos(db, cfg, ids as number[], o === 'trash' ? 'trash' : o === 'keep' ? 'keep' : 'delete');
   });
   app.delete('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -197,6 +256,12 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       set("DELETE FROM xmp_conflicts WHERE photo_id = ? AND field = 'description'", id);
     }
     if (typeof b.place === 'string') set('UPDATE photos SET place = ? WHERE id = ?', b.place.trim().slice(0, 120), id);
+    // The date shown for the photograph: edited by hand, or null to go back to the camera date (else the upload date).
+    if (b.dateEdit !== undefined) {
+      if (b.dateEdit === null || b.dateEdit === '') set('UPDATE photos SET date_edit = NULL WHERE id = ?', id);
+      else if (typeof b.dateEdit === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.dateEdit) && !Number.isNaN(Date.parse(b.dateEdit))) set('UPDATE photos SET date_edit = ? WHERE id = ?', b.dateEdit, id);
+      else return rep.code(400).send({ error: 'Use a date like 2026-03-14.' });
+    }
     // A pin on the map: both numbers, or null for both to clear it.
     const unsrc = (field: string) => { const cur = String((one('SELECT gear_src g FROM photos WHERE id = ?', id) as Row).g ?? '').split(',').filter((x) => x && x !== field); set('UPDATE photos SET gear_src = ? WHERE id = ?', cur.join(','), id); };
     const mark = (field: string) => { unsrc(field); const cur = new Set(String((one('SELECT user_fields f FROM photos WHERE id = ?', id) as Row).f ?? '').split(',').filter(Boolean)); cur.add(field); set('UPDATE photos SET user_fields = ? WHERE id = ?', [...cur].join(','), id); };

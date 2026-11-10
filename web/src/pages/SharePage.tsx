@@ -9,9 +9,10 @@ import { HumanCheck } from '../components/HumanCheck';
 import { WALL_BG, arrange, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
+import { PinGate } from './Auth';
 
 type G = { id: number; title: string; ar: number; n: number };
-type Shared = { kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
+type Shared = { askName?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** What someone with a share link sees. It never calls the signed-in part of the app. */
 export function SharePage() {
@@ -20,6 +21,7 @@ export function SharePage() {
   const [gone, setGone] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<string | null>(null); // the Turnstile site key, when the link asks to be shown a person is here
   const [tries, setTries] = useState(0);
+  const [pin, setPin] = useState<{ lockedFor: number } | null>(null); // the link has a PIN this device has not entered yet
   const [view, setView] = useState<'grid' | 'review'>('grid');
   const [look, setLook] = useState<number | null>(null);
   const nameKey = `frames-guest-name-${token}`;
@@ -28,7 +30,7 @@ export function SharePage() {
   const [asking, setAsking] = useState<null | ((name: string) => void)>(null); // the name box, and what to do once there is a name
   const setName = (n: string) => { setReviewer(n); try { localStorage.setItem(nameKey, n); } catch { /* the name is only remembered for next time */ } };
   // Reviewing and suggesting are done under a name, so the photographer can tell guests apart: ask once, remember it on this device.
-  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else setAsking(() => then); };
+  const withName = (then: (name: string) => void) => { if (reviewer.trim()) then(reviewer.trim()); else if (d && d.askName === false) then('Guest'); else setAsking(() => then); };
   const [dl, setDl] = useState<{ done: number; total: number; ready: boolean } | null>(null);
   const [over, setOver] = useState<number | null>(null); // the print a candidate is being dragged over
   const [picking, setPicking] = useState<number | null>(null); // the print a suggestion is being chosen for
@@ -48,8 +50,9 @@ export function SharePage() {
   useEffect(() => {
     document.title = 'Shared photographs · Frames';
     fetch(`/api/s/${token}`).then(async (r) => {
-      if (r.ok) { setChallenge(null); return setD(await r.json()); }
+      if (r.ok) { setChallenge(null); setPin(null); return setD(await r.json()); }
       const j = await r.json().catch(() => ({}));
+      if (r.status === 401 && j.pinRequired) return setPin({ lockedFor: j.lockedFor ?? 0 });
       if (r.status === 403 && j.challenge?.siteKey) return setChallenge(j.challenge.siteKey);
       setGone(j.error ?? 'This link is not available');
     }).catch(() => setGone('Could not load this link'));
@@ -73,6 +76,7 @@ export function SharePage() {
     const pass = async (t: string) => { const r = await fetch(`/api/s/${token}/human`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) }); if (r.ok) setTries((n) => n + 1); };
     return <Shell><h1 className="serif" style={{ fontSize: 44, margin: '12vh 0 12px' }}>One moment.</h1><p className="t2" style={{ marginBottom: 22 }}>Please show that you are a person to open this link.</p><HumanCheck siteKey={challenge} onToken={(t) => void pass(t)} /></Shell>;
   }
+  if (pin) return <PinGate token={token} lockedFor={pin.lockedFor} onDone={() => { setPin(null); setTries((t) => t + 1); }} />;
   if (!d) return <Shell><p className="muted">Loading…</p></Shell>;
   const photos = d.photos.map((p) => ({ ...p, share: token }));
 
@@ -156,7 +160,20 @@ export function SharePage() {
 
   return (
     <Shell>
-      <h1 className="title" style={{ marginBottom: 8 }}>{d.name}</h1>
+      {showPrints && d.allowReview && (
+        <div className="guest-head" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div className="muted" style={{ fontSize: 13 }}>{d.owner ? `${d.owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 44, lineHeight: 1 }}>{d.name}</h1><span className="faint" style={{ fontSize: 12.5, fontFamily: 'var(--mono)' }}>{count} print{count === 1 ? '' : 's'}</span></div>
+          </div>
+          <nav className="steps" aria-label="Your steps" style={{ order: -1, width: '100%', justifyContent: 'center', marginBottom: 8 }}>
+            <span style={{ padding: '6px 12px' }}>✓ 1 Rate</span><span className="arrow">→</span><span className={dirty ? '' : 'on'} style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? undefined : 'var(--hover)', color: dirty ? undefined : 'var(--text)' }}>2 Try changes</span><span className="arrow">→</span><span style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? 'var(--hover)' : undefined, color: dirty ? 'var(--text)' : undefined }}>3 Send to {d.owner || 'them'}</span>
+          </nav>
+          <button className="muted" style={{ opacity: dirty ? 1 : 0.5 }} onClick={discard} disabled={!dirty}>Undo my changes</button>
+          <button className="btn primary lg" onClick={sendBack} disabled={!dirty || sending}>{sending ? 'Sending…' : `Send to ${d.owner || 'them'}${dirty ? ` · ${changes}` : ''}`}</button>
+        </div>
+      )}
+      {!(showPrints && d.allowReview) && <h1 className="title" style={{ marginBottom: 8 }}>{d.name}</h1>}
       {d.description && <p className="t2" style={{ fontSize: 14, maxWidth: 620, margin: '0 0 8px' }}>{d.description}</p>}
       <p className="muted" style={{ fontSize: 12.5, margin: '0 0 24px' }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}`}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
@@ -176,14 +193,7 @@ export function SharePage() {
             {relayoutSent && <span className="muted" role="status" style={{ textTransform: 'none', letterSpacing: 0 }}>Sent. Thank you.</span>}
           </div>
           {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
-          {d.allowReview && (dirty || sendNote) && (
-            <div role="status" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', fontSize: 13 }}>
-              {dirty && <span>You have changed {changes} {changes === 1 ? 'thing' : 'things'} on the wall. Nothing is sent until you send it back.</span>}
-              {dirty && <button className="pill primary" onClick={sendBack} disabled={sending}>{sending ? 'Sending…' : 'Send back to the photographer'}</button>}
-              {dirty && <button className="t2" onClick={discard}>Discard</button>}
-              {sendNote && <span className={sendNote.ok ? 'muted' : 'reason'} role={sendNote.ok ? 'status' : 'alert'}>{sendNote.text}</span>}
-            </div>
-          )}
+          {sendNote && <div role="status" className={sendNote.ok ? 'muted' : 'reason'} style={{ marginBottom: 12, fontSize: 13 }}>{sendNote.text}</div>}
           {wallPrints.length > 0 && (
             <div style={{ background: WALL_BG, borderRadius: 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <Wall prints={viewPrints} mode="free" editing={false} sel={-1} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => { const pid = photosOf(wallPrints[i])[0]; const at = photos.findIndex((x) => x.id === pid); if (at >= 0) setLook(at); }} onEdit={() => undefined} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
@@ -219,9 +229,9 @@ export function SharePage() {
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div role="dialog" aria-label="Suggest another" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+          <div role="dialog" aria-label="Suggest another" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 760, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
             <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>Suggest another</h2>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px' }}>Pick the photograph you think should be in this print instead. It is sent to whoever shared this; nothing changes until they decide.</p>
             <div className="just">
               {others.filter((o) => !swapped.has(o.id) || mine[picking] === o.id).map((p) => <button key={p.id} style={{ flex: `${p.ar} ${p.ar} ${p.ar * 140}px`, aspectRatio: String(p.ar) }} onClick={() => swap(picking, p.id)} aria-label={`Suggest ${p.title}`}><Img p={p} /></button>)}
               <i />
@@ -276,17 +286,17 @@ function NameBox({ initial, token, signIn, onDone, onCancel }: { initial: string
   const ok = n.trim().length > 0;
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: '#161615', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>What should we call you?</h2>
-        <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
         <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" className="namebox" style={{ width: '100%', marginBottom: 16 }} />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="pill" onClick={onCancel}>Cancel</button>
           <button className="pill primary" disabled={!ok}>Continue with this name</button>
         </div>
         {signIn.length > 0 && (
-          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--hair)' }}>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {signIn.map((p) => <a key={p.id} className="pill" href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
             </div>

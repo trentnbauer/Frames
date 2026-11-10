@@ -21,6 +21,11 @@ import { remoteOriginal } from './cloud.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { registerAuth } from './routes/auth.js';
 import { registerProfile } from './routes/profile.js';
+import { registerNotifications } from './routes/notifications.js';
+import { registerHome } from './routes/home.js';
+import { registerGearItems } from './routes/gearitems.js';
+import { registerCommunity } from './routes/community.js';
+import { registerSystem, startEmailHealth } from './routes/system.js';
 import { registerInsights } from './routes/insights.js';
 import { parseGear } from './gear.js';
 import { registerTodo } from './routes/todo.js';
@@ -43,9 +48,9 @@ const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const avgOf = (r: number[]) => (r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0);
 const digest = (s: string) => crypto.createHash('sha256').update(s).digest();
 
-// Fonts come from Google Fonts. Everything else must be same-origin.
+// Fonts are bundled with the app. Everything must be same-origin.
 const CSP_TS = (c: string) => c.replace("script-src 'self'", "script-src 'self' https://challenges.cloudflare.com").replace("connect-src 'self'", "connect-src 'self' https://challenges.cloudflare.com") + '; frame-src https://challenges.cloudflare.com';
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 const ADMIN_ONLY = /^\/api\/(auth|tunnel|admin|cloud\/client)(\/|\?|$)/;
 /** The only signed-in addresses a guest may use: who they are, their list of shared links, and the welcome check the app makes. */
@@ -175,7 +180,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     return {
       id: p.id, title: p.title, file: p.file, shootId: p.shoot_id, w: p.w, h: p.h,
       ar: p.w && p.h ? p.w / p.h : 1.5, hasImage: !!p.has_derivs,
-      capturedAt: p.captured_at, camera: p.camera, lens: p.lens, exposure: p.exposure,
+      capturedAt: p.captured_at, addedAt: p.added_at, dateEdit: p.date_edit ?? null, camera: p.camera, lens: p.lens, exposure: p.exposure,
       iso: p.iso ?? null, aperture: p.aperture ?? null, shutter: p.shutter ?? '', focalMm: p.focal_mm ?? null, medium: p.medium ?? '', film: p.film ?? '',
       fileType: p.file_type, sizeMb: Math.round(p.size_bytes / 1048576), archived: !!p.archived, missing: !!p.missing,
       // When it was last reviewed; a photograph never reviewed counts from when it was added.
@@ -234,7 +239,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const portrait = (pid: number) => { const p = one('SELECT w, h FROM photos WHERE id = ?', pid); return p && p.w && p.h ? p.h > p.w : null; };
     const layout = stored ?? deriveLayout(c.target ? JSON.parse(c.target) : null, oldChosen, portrait);
     return {
-      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '',
+      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', updatedAt: c.updated_at ?? '',
       target: stored ? targetOf(stored) : c.target ? JSON.parse(c.target) : null,
       layout, layoutSaved: !!stored, background: backgroundOf(db, c.id),
       photoIds: rows.map((r) => r.photo_id), chosenIds: stored ? chosenOf(stored) : oldChosen, printedAt: c.printed_at ?? null,
@@ -526,6 +531,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerPortfolio(app, ctx);
   registerAuth(app, ctx, auth);
   registerProfile(app, ctx);
+  registerNotifications(app, ctx);
+  registerHome(app, ctx);
+  registerGearItems(app, ctx);
+  registerCommunity(app, ctx);
+  registerSystem(app, ctx);
+  startEmailHealth(ctx, (fn) => app.addHook('onClose', async () => fn()));
   registerCloud(app, ctx);
   registerAdmin(app, ctx);
   registerPrivacy(app, ctx);

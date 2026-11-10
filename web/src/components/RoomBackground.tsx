@@ -34,7 +34,7 @@ export function RoomBackground({ id, bg, onChanged, onScale }: { id: number; bg:
     setErr('');
     try { await api(`/collections/${id}/background`, { method: 'PUT', body: { image: await shrink(f) } }); onChanged(); } catch (e) { setErr((e as Error).message); }
   };
-  const pill = { padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: 'transparent', color: '#efede8', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' } as const;
+  const pill = { padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: 'transparent', color: 'var(--text)', boxShadow: 'inset 0 0 0 1px var(--outline)' } as const;
   return (
     <>
       <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose a picture of the room" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f); }} />
@@ -58,7 +58,7 @@ function ScaleBox({ id, bg, onClose, onSave }: { id: number; bg: Bg; onClose: ()
   const mmPerPx = ok ? mm / px : 0;
   return (
     <div className="sheet-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div role="dialog" aria-label="Set the scale" style={{ background: '#161615', borderRadius: 14, padding: 20, width: 720, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <div role="dialog" aria-label="Set the scale" style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: 720, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 26px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Set the scale</h2>
         <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>Click both ends of something whose real width you know, such as a couch, a door or a window. Then type how wide it is.</p>
         <div onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const p = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; setPts((cur) => (cur.length >= 2 ? [p] : [...cur, p])); }}

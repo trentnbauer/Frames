@@ -1,0 +1,36 @@
+import { useEffect, useRef, type ReactNode } from 'react';
+
+/**
+ * The one modal: 16px radius, scrim, Esc and outside-click close, focus returns to what opened it.
+ * On a phone it becomes a full-screen sheet with the actions pinned to the bottom (see .modal in styles.css).
+ */
+export function Modal({ title, sub, onClose, children, foot, width = 560, eyebrow }: { title: ReactNode; sub?: ReactNode; onClose: () => void; children: ReactNode; foot?: ReactNode; width?: number; eyebrow?: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    ref.current?.focus();
+    const f = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', f);
+    return () => { window.removeEventListener('keydown', f); before?.focus?.(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="mscrim" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex={-1} style={{ width }}>
+        <div className="mbody">
+          <div className="mhead">
+            <div>
+              {eyebrow && <span className="eyebrow pillish">{eyebrow}</span>}
+              <div className="mtitle">{title}</div>
+              {sub && <div className="msub">{sub}</div>}
+            </div>
+            <button className="xbtn" onClick={onClose} aria-label="Close">✕</button>
+          </div>
+          {children}
+        </div>
+        {foot && <div className="mfoot">{foot}</div>}
+      </div>
+    </div>
+  );
+}
+
+export const Spinner = ({ size = 14 }: { size?: number }) => <span className="spin" style={{ width: size, height: size }} aria-hidden />;

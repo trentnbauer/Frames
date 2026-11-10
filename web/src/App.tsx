@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { BottomNav, useKey } from './components/bits';
-import { Changelog } from './components/Changelog';
+import { useKey } from './components/bits';
+import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { NewComposition } from './components/NewComposition';
 import { UiContext, type NewCompositionStart } from './ui';
@@ -12,7 +12,6 @@ import { PhotoDetail } from './pages/PhotoDetail';
 import { Review } from './pages/Review';
 import { Shoots } from './pages/Shoots';
 import { Collections, CollectionDetail } from './pages/Collections';
-import { ForYou } from './pages/ForYou';
 import { Stats } from './pages/Stats';
 import { SettingsPage } from './pages/Settings';
 import { ShootDetail } from './pages/ShootDetail';
@@ -20,13 +19,16 @@ import { Compare } from './pages/Compare';
 import { Duplicates } from './pages/Duplicates';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
+import { Community } from './pages/Community';
+import { Gear } from './pages/Gear';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
+import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
   '/': 'Today', '/library': 'Library', '/review': 'Review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
-  '/collections': 'Compositions', '/for-you': 'For you', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
+  '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
 const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
@@ -62,6 +64,7 @@ function Shell() {
 
   return (
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
+      {!inReview && <EnvBanner />}
       <Routes>
         <Route path="/" element={<Today />} />
         <Route path="/library" element={<Library />} />
@@ -73,7 +76,8 @@ function Shell() {
         <Route path="/duplicates" element={<Duplicates />} />
         <Route path="/collections" element={<Collections />} />
         <Route path="/collections/:id" element={<CollectionDetail />} />
-        <Route path="/for-you" element={<ForYou />} />
+        <Route path="/community" element={<Community />} />
+        <Route path="/gear" element={<Gear />} />
         <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/welcome" element={<Welcome />} />
@@ -81,8 +85,9 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Today />} />
       </Routes>
-      {!inReview && <BottomNav onSearch={() => setSearching(true)} onNew={() => setCreating({})} />}
-      {!inReview && <Changelog />}
+      {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
+      {!inReview && <TabBar />}
+      <ShellModals />
       {searching && <Search onClose={() => setSearching(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>
@@ -96,6 +101,7 @@ function Shell() {
 export function App() {
   const loc = useLocation();
   const { me } = useStore();
+  if (AUTH_PATHS.test(loc.pathname)) return <AuthApp />;
   if (loc.pathname.startsWith('/s/')) return <Routes><Route path="/s/:token" element={<SharePage />} /><Route path="*" element={<SharePage />} /></Routes>;
   if (me?.role === 'guest') return <GuestHome />; // a guest has no library, so none of the app
   return <Shell />;

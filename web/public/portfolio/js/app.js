@@ -3,19 +3,20 @@
   const THEME_KEY = 'photo-portfolio-theme';
 
   function applyTheme(theme) {
-    if (theme === 'dark') root.setAttribute('data-theme', 'dark');
-    else root.removeAttribute('data-theme');
+    root.setAttribute('data-theme', theme);
+    const label = document.getElementById('theme-label');
+    if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
   }
 
   function initTheme() {
-    const saved = localStorage.getItem(THEME_KEY);
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(saved || (prefersDark ? 'dark' : 'light'));
-
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* storage blocked */ }
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    applyTheme(saved || (prefersLight ? 'light' : 'dark'));
     document.getElementById('theme-toggle').addEventListener('click', () => {
       const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       applyTheme(next);
-      localStorage.setItem(THEME_KEY, next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not remembered */ }
     });
   }
 
@@ -71,38 +72,55 @@
     return html;
   }
 
-  function initGearModal(gearUrl) {
-    const modal = document.getElementById('gear-modal');
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  async function renderGear(gearUrl) {
     const content = document.getElementById('gear-content');
-    let loaded = false;
-
-    async function open() {
-      modal.hidden = false;
-      if (loaded) return;
-      const text = await (async () => {
-        try {
-          const res = await fetch(gearUrl || 'gear.md', { cache: 'no-store' });
-          return res.ok ? await res.text() : null;
-        } catch (e) {
-          return null;
-        }
-      })();
-      content.innerHTML = text ? renderMarkdown(text) : '<p>Could not load gear.md.</p>';
-      loaded = true;
+    const data = await loadJSON('gear.json');
+    if (data && !data.empty) {
+      let html = data.intro ? '<p class="gear-intro">' + esc(data.intro) + '</p>' : '';
+      if (data.showWant) {
+        html += '<div class="gear-block"><div class="gear-head"><h2>Want to buy</h2><span>' + data.want.length + '</span></div>' +
+          data.want.map((w) => {
+            const inner = '<span class="n">' + w.n + '</span><span>' + esc(w.name) + (w.url ? ' ↗' : '') + '</span><span class="note">' + (w.price ? '$' + esc(w.price) : '') + '</span>';
+            return w.url ? '<a class="gear-row want" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>' : '<div class="gear-row want">' + inner + '</div>';
+          }).join('') + '</div>';
+      }
+      html += data.groups.map((g) => '<div class="gear-block"><div class="gear-head"><h2>' + esc(g.title) + '</h2><span>' + g.count + '</span></div>' +
+        g.items.map((it) => '<div class="gear-row"><div><span>' + esc(it.name) + '</span>' + (it.note ? '<span class="note">' + esc(it.note) + '</span>' : '') + '</div><span class="tag">' + esc(it.tag) + '</span></div>').join('') + '</div>').join('');
+      content.innerHTML = html;
+      return;
     }
+    const res = await fetch(gearUrl || 'gear.md', { cache: 'no-store' }).catch(() => null);
+    const text = res && res.ok ? await res.text() : null;
+    content.innerHTML = text ? renderMarkdown(text) : '<p>Nothing listed yet.</p>';
+  }
 
-    function close() {
-      modal.hidden = true;
-    }
-
-    document.getElementById('gear-toggle').addEventListener('click', open);
-    document.getElementById('gear-close').addEventListener('click', close);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) close();
+  /** The site's pages: Photographs, Gear (when there is any), then the photographer's own links. */
+  function initNav(config, hasGear) {
+    const nav = document.getElementById('site-nav');
+    const work = document.getElementById('work');
+    const gear = document.getElementById('gear');
+    nav.innerHTML = '';
+    const show = (which) => {
+      work.hidden = which !== 'work';
+      gear.hidden = which !== 'gear';
+      nav.querySelectorAll('button').forEach((b) => b.setAttribute('aria-current', b.dataset.page === which ? 'page' : 'false'));
+    };
+    const tab = (label, page) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.page = page; b.textContent = label; b.addEventListener('click', () => show(page)); nav.appendChild(b); };
+    tab('Photographs', 'work');
+    if (hasGear) tab('Gear', 'gear');
+    (config.buttons || []).forEach((btn) => {
+      if (!btn || !btn.url) return;
+      const a = document.createElement('a');
+      a.href = btn.url;
+      if (!/^mailto:/i.test(btn.url)) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      a.setAttribute('aria-label', btn.name || btn.short);
+      a.title = btn.name || '';
+      a.textContent = btn.name || btn.short;
+      nav.appendChild(a);
     });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !modal.hidden) close();
-    });
+    show('work');
   }
 
   function renderHero(config) {
@@ -117,7 +135,7 @@
       img.src = config.avatar;
       img.alt = '';
       img.width = img.height = 72;
-      img.style.cssText = 'border-radius:50%;object-fit:cover;display:block;margin:0 0 14px';
+      img.style.cssText = 'border-radius:50%;object-fit:cover;display:block;margin:24px 0 0';
       nameEl.parentNode.insertBefore(img, nameEl);
     }
 
@@ -131,20 +149,9 @@
     footer.textContent = config.footer || '';
     footer.hidden = !config.footer;
 
-    // The header buttons the photographer chose: a short name (an emoji or up to 4 letters) on the button, the full name for screen readers and as a tooltip.
-    const row = document.getElementById('social-row');
-    row.innerHTML = '';
-    (config.buttons || []).forEach((btn) => {
-      if (!btn || !btn.url) return;
-      const a = document.createElement('a');
-      a.href = btn.url;
-      if (!/^mailto:/i.test(btn.url)) { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
-      a.className = 'social-link';
-      a.setAttribute('aria-label', btn.name || btn.short);
-      a.title = btn.name || '';
-      a.textContent = btn.short;
-      row.appendChild(a);
-    });
+    const country = document.getElementById('country');
+    document.getElementById('country-name').textContent = config.country || '';
+    country.hidden = !config.country;
   }
 
   function resetViewportZoom() {
@@ -269,8 +276,11 @@
     initTheme();
     const openLightbox = initLightbox();
     const config = (await loadJSON('config.json')) || {};
-    initGearModal(config.gearUrl);
     renderHero(config);
+    const gearData = await loadJSON('gear.json');
+    const hasGear = !!config.gearUrl || !!(gearData && !gearData.empty);
+    initNav(config, hasGear);
+    if (hasGear) renderGear(config.gearUrl);
     renderGallery(await loadJSON('images/manifest.json'), openLightbox);
   }
 

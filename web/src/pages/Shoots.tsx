@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUi } from '../ui';
 import { api, useApi } from '../api';
 import { fmtDate, type Shoot } from '../data';
 import { Header, Img, Loading } from '../components/bits';
 import { useStore } from '../store';
+import { AddPhotosButton } from '../components/AddPhotos';
 
 type Pending = { count: number; folders: { folder: string; count: number }[]; lastScan: string | null };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootName: string | null };
@@ -14,20 +15,15 @@ export function Shoots() {
   const shoots = useApi<Shoot[]>('/shoots');
   const pending = useApi<Pending>('/library/pending');
   const suggestions = useApi<Suggestion[]>('/shoots/suggestions');
-  const { refreshSummary, me } = useStore();
+  const { refreshSummary, me, summary } = useStore();
   const cloudOnly = !!me?.cloudOnly; // the administrator requires originals to be kept in cloud storage
   const { openNew } = useUi();
   const nav = useNavigate();
-  const [box, setBox] = useState<'drop' | 'busy' | 'done' | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
-  const made = useApi<{ photos: { id: number; ar: number }[] }>(box === 'done' && result?.shootId ? `/photos?shoot=${result.shootId}` : null);
   const [uploaded, setUploaded] = useState<{ saved: string[]; rejected: { file: string; reason: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [naming, setNaming] = useState(false);
-  const [name, setName] = useState('');
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const refreshAll = () => { shoots.reload(); pending.reload(); suggestions.reload(); refreshSummary(); };
 
@@ -46,22 +42,25 @@ export function Shoots() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); setProgress(null); }
   };
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setError(null); setUploaded(null); setBox('busy');
-    const fd = new FormData();
-    for (const f of files) fd.append('file', f);
-    try {
-      const r = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Upload failed');
-      setUploaded(await r.json());
-      await sync();
-      setBox('done');
-    } catch (e) { setError((e as Error).message); setBox(null); }
-    if (fileInput.current) fileInput.current.value = '';
-  };
-
-  const create = async () => { if (name.trim()) { await api('/shoots', { body: { name } }); setName(''); setNaming(false); shoots.reload(); } };
+  const [find, setFind] = useState('');
+  const [sort, setSort] = useState<'new' | 'old' | 'name'>('new');
+  const [noComp, setNoComp] = useState(false);
+  const [needs, setNeeds] = useState(false);
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const [openSplit, setOpenSplit] = useState<number | null>(null);
+  const colls = useApi<{ photoIds: number[]; printedAt: string | null }[]>('/collections');
+  const lib = useApi<{ photos: { id: number; shootId: number }[] }>('/photos');
+  // How many compositions hold at least one photograph of each shoot.
+  const comps = new Map<number, number>();
+  if (colls.data && lib.data) { const of = new Map(lib.data.photos.map((p) => [p.id, p.shootId])); for (const c of colls.data) for (const sh of new Set(c.photoIds.map((id) => of.get(id)).filter((v): v is number => v !== undefined))) comps.set(sh, (comps.get(sh) ?? 0) + 1); }
+  const all = shoots.data ?? [];
+  const notComposed = all.filter((x) => !comps.get(x.id)).length;
+  const needsReview = all.filter((x) => x.reviewPct < 100).length;
+  const q = find.trim().toLowerCase();
+  const yearOf = (x: Shoot) => (x.dateFrom ?? x.importedAt ?? '').slice(0, 4) || 'Undated';
+  const shown = all.filter((x) => (!q || `${x.name} ${x.place} ${x.dates} ${yearOf(x)}`.toLowerCase().includes(q)) && (!noComp || !comps.get(x.id)) && (!needs || x.reviewPct < 100))
+    .sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : ((a.dateFrom ?? a.importedAt ?? '').localeCompare(b.dateFrom ?? b.importedAt ?? '')) * (sort === 'new' ? -1 : 1)));
+  const years = [...shown.reduce((m, x) => m.set(yearOf(x), [...(m.get(yearOf(x)) ?? []), x]), new Map<string, Shoot[]>())];
   const accept = async (g: Suggestion['groups'][number]) => { await api('/shoots', { body: { name: g.name, photoIds: g.photoIds } }); refreshAll(); };
   const p = pending.data;
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -69,96 +68,30 @@ export function Shoots() {
   return (
     <div className="page">
       <Header />
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 28 }}>
-        <h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Photoshoots</h1>
-        {shoots.data && <span style={{ fontSize: 13, color: '#8f8c86' }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
+      <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+          <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>Photoshoots</h1>
+          {shoots.data && <span className="muted" style={{ fontSize: 13 }}>{shoots.data.length} {shoots.data.length === 1 ? 'shoot' : 'shoots'} · {shoots.data.reduce((n, x) => n + x.count, 0).toLocaleString()} photographs</span>}
+        </div>
+        <AddPhotosButton big onDone={refreshAll} />
       </div>
-      <input ref={fileInput} type="file" multiple hidden accept=".jpg,.jpeg,.png,.tif,.tiff,.raf,.cr2,.cr3,.nef,.arw,.dng,.orf,.rw2" onChange={(e) => upload(e.target.files)} aria-label="Choose photographs to upload" />
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
-        style={{ width: '100%', borderRadius: 12, padding: '30px 32px', marginBottom: 36, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', textAlign: 'left', background: 'rgba(255,255,255,.03)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>
-        <div>
-          <div style={{ font: "400 30px/1.1 'Instrument Serif',Georgia,serif" }}>Bring in a new shoot</div>
-          <div style={{ fontSize: 13, color: '#a8a59f', marginTop: 6 }}>{cloudOnly ? <>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings, Cloud sync</Link>, or sync the library folder.</> : 'Drop a whole card or roll here. JPEG, TIFF and RAW. Originals are never changed.'}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#6f6c67' }}>
-            {p?.lastScan ? `Last synced ${fmtDate(p.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
-            <button onClick={sync} disabled={busy} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{busy ? (progress && progress.total ? `Syncing ${progress.done} / ${progress.total}` : 'Syncing…') : 'Sync library'}</button>
-          </span>
-          <button onClick={() => setNaming(!naming)} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>New photoshoot</button>
-          {cloudOnly
-            ? <Link to="/settings?section=cloud-sync" style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Connect cloud storage</Link>
-            : <button onClick={() => setBox('drop')} disabled={busy} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Upload photos</button>}
-        </div>
-      </div>
-      {naming && (
-        <form className="form" style={{ marginBottom: 24 }} onSubmit={(e) => { e.preventDefault(); create(); }}>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Photoshoot name" aria-label="Photoshoot name" style={{ width: 280 }} />
-          <button className="pill primary">Create</button>
-        </form>
-      )}
-      {box && (
-        <div onMouseDown={(e) => e.target === e.currentTarget && box !== 'busy' && setBox(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div role="dialog" aria-label="Bring in a shoot" style={{ background: '#161615', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '86vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
-            {box === 'drop' && (
-              <>
-                <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Bring in a shoot</h2>
-                <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 18px' }}>One shoot or roll at a time works best. Frames groups by date and suggests splits.</p>
-                <button onClick={() => fileInput.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files); }}
-                  style={{ width: '100%', aspectRatio: '2', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(255,255,255,.03)' }}>
-                  <span style={{ font: "400 24px 'Instrument Serif',Georgia,serif" }}>Drop photographs here</span>
-                  <span style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Choose files</span>
-                  <span style={{ fontSize: 12, color: '#6f6c67' }}>JPEG · TIFF · RAW</span>
-                </button>
-                <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 14 }}>Or <button onClick={async () => { setBox('busy'); await sync(); setBox('done'); }} style={{ color: '#efede8', textDecoration: 'underline' }}>sync the library folder</button> · {p?.count ?? 0} new {p?.count === 1 ? 'file' : 'files'} found</div>
-              </>
-            )}
-            {box === 'busy' && (
-              <>
-                <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 18px' }}>{progress && progress.total ? `Importing ${progress.total} photographs…` : 'Importing…'}</h2>
-                <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', width: progress && progress.total ? `${Math.round((progress.done / progress.total) * 100)}%` : '8%', background: '#a8a59f' }} /></div>
-                <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 8 }}>Reading camera data and building previews. Originals are not touched.</div>
-              </>
-            )}
-            {box === 'done' && (
-              <>
-                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 8 }}>{result && result.imported > 0 ? `Imported ${result.imported} ${result.imported === 1 ? 'photograph' : 'photographs'}` : 'Nothing new to import'}</div>
-                <div style={{ font: "400 36px/1.1 'Instrument Serif',Georgia,serif", marginBottom: 4 }}>{result?.shootName ?? 'Your library is up to date'}</div>
-                {result?.errors && result.errors.length > 0 && <div className="reason" style={{ fontSize: 12.5, marginBottom: 8 }}>{result.errors.length} could not be read: {result.errors.slice(0, 3).map((e) => e.file).join(', ')}.</div>}
-                <div style={{ display: 'flex', gap: 4, height: 70, margin: '14px 0 22px', overflow: 'hidden' }}>
-                  {(made.data?.photos ?? []).slice(0, 8).map((x) => <Img key={x.id} p={x} style={{ height: '100%', width: 'auto', borderRadius: 2 }} />)}
-                </div>
-                {result?.shootId ? (
-                  <>
-                    <div style={{ fontSize: 13, color: '#a8a59f', marginBottom: 12 }}>What next?</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <button onClick={() => { setBox(null); openNew({ name: result.shootName ?? '', photoIds: (made.data?.photos ?? []).map((x) => x.id) }); }} style={{ textAlign: 'left', background: '#efede8', color: '#0d0d0d', borderRadius: 10, padding: '14px 16px' }}><b style={{ fontWeight: 500 }}>Start a composition from this shoot</b><div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 2 }}>Choose how many prints and what size</div></button>
-                      <button onClick={() => nav(`/shoots/${result.shootId}?share=1`)} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Send it for review</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>A link where friends rate the photos</div></button>
-                      <button onClick={() => nav('/review')} style={{ textAlign: 'left', borderRadius: 10, padding: '14px 16px', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}><b style={{ fontWeight: 500 }}>Review it now</b><div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 2 }}>Your first session, a week apart from the next</div></button>
-                    </div>
-                  </>
-                ) : <button onClick={() => setBox(null)} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Close</button>}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {cloudOnly && <p className="muted" style={{ fontSize: 13, margin: '-12px 0 24px' }}>Originals are kept in cloud storage on this server, so uploads are turned off. Connect a folder under <Link to="/settings?section=cloud-sync" style={{ textDecoration: 'underline' }}>Settings</Link>.</p>}
       {error && <div className="banner" role="alert"><span className="reason">{error}</span></div>}
-      {p && p.count > 0 && !busy && (
-        <div className="banner" role="status">
-          <span><b>{p.count} new {p.count === 1 ? 'photo' : 'photos'} in your library</b> <span className="muted">· {p.folders.slice(0, 3).map((f) => f.folder).join(', ')} · will be filed as</span> <b>{today}</b> <span className="muted">(rename anytime)</span></span>
-          <button className="pill primary" onClick={sync}>Import</button>
+      {p && p.count > 0 && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', borderRadius: 12, padding: '14px 20px', marginBottom: 8 }}>
+          <i style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)', flex: 'none' }} />
+          <span style={{ flex: 1, fontSize: 14 }}><b style={{ fontWeight: 500 }}>{p.count} new file{p.count === 1 ? '' : 's'}</b> <span className="muted">in your library folder</span></span>
+          {p.lastScan && <span className="faint" style={{ fontSize: 13 }}>Synced {fmtDate(p.lastScan, { hour: '2-digit', minute: '2-digit' })}</span>}
+          <button className="btn outline" onClick={sync} disabled={busy}>{busy ? (progress && progress.total ? `Importing ${progress.done} / ${progress.total}` : 'Importing…') : `Import ${p.count}`}</button>
         </div>
       )}
-      {uploaded && !box && (
+      {uploaded && (
         <div className="banner" role="status">
           <span>Uploaded <b>{uploaded.saved.length}</b> {uploaded.saved.length === 1 ? 'file' : 'files'}.{uploaded.rejected.length > 0 && <span className="reason"> Not added: {uploaded.rejected.map((r) => `${r.file} (${r.reason})`).join(', ')}.</span>}</span>
           <button className="pill" onClick={() => setUploaded(null)}>Dismiss</button>
         </div>
       )}
-      {result && !box && (
+      {result && (
         <div className="banner" role="status">
           <span>
             Imported <b>{result.imported}</b> {result.imported === 1 ? 'photo' : 'photos'}{result.shootName && result.imported > 0 && <> into <b>{result.shootName}</b></>}.
@@ -170,36 +103,50 @@ export function Shoots() {
           <button className="pill" onClick={() => setResult(null)}>Dismiss</button>
         </div>
       )}
-      {(suggestions.data ?? []).map((s) => (
-        <div className="banner suggest" key={s.shootId}>
-          <span><b>“{s.shootName}” looks like {s.groups.length} separate shoots.</b>
-            <span className="sug-list">{s.groups.map((g) => (
-              <button key={g.name} className="pill" onClick={() => accept(g)} title={g.reason}>Split off “{g.name}” ({g.photoIds.length})</button>
-            ))}</span></span>
+      {(suggestions.data ?? []).filter((x) => !dismissed.includes(x.shootId)).map((x) => (
+        <div key={x.shootId} style={{ borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: '9px 20px', marginBottom: 8, fontSize: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{x.shootName}</b> <span className="muted">looks like {x.groups.length} shoots.</span></span>
+            <button onClick={() => setOpenSplit(openSplit === x.shootId ? null : x.shootId)}>Review split →</button>
+            <button aria-label="Dismiss" className="muted" onClick={() => setDismissed((d) => [...d, x.shootId])}>✕</button>
+          </div>
+          {openSplit === x.shootId && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>{x.groups.map((g) => <button key={g.name} className="btn outline" style={{ height: 32 }} onClick={() => accept(g)} title={g.reason}>Split off “{g.name}” ({g.photoIds.length})</button>)}</div>}
         </div>
       ))}
       {(shoots.loading || shoots.error) && <Loading error={shoots.error} />}
       {shoots.data?.length === 0 && <div className="empty">No photoshoots yet. Put photographs in your library folder and press Sync library, or upload some.</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '28px 24px' }}>{shoots.data?.map((s) => <ShootCard key={s.id} s={s} />)}</div>
+      {shoots.data && shoots.data.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '28px 0 24px', flexWrap: 'wrap' }}>
+          <input className="field-in" style={{ width: 360, height: 40, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a shoot, place or year" aria-label="Find a shoot, place or year" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as 'new' | 'old' | 'name')} aria-label="Sort" style={{ height: 36, borderRadius: 999, background: 'var(--surface)', boxShadow: 'none' }}><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option></select>
+          <button aria-pressed={noComp} className="chip" style={{ height: 36, padding: '0 14px', background: noComp ? 'var(--chip)' : 'var(--surface)', fontSize: 13.5 }} onClick={() => setNoComp(!noComp)}>Not in a composition · {notComposed}</button>
+          <button aria-pressed={needs} className="chip" style={{ height: 36, padding: '0 14px', background: needs ? 'var(--chip)' : 'var(--surface)', fontSize: 13.5 }} onClick={() => setNeeds(!needs)}>Needs review · {needsReview}</button>
+        </div>
+      )}
+      {years.map(([y, list]) => (
+        <section key={y} style={{ marginBottom: 36 }}>
+          <div className="spread" style={{ alignItems: 'baseline', paddingBottom: 8, borderBottom: '1px solid var(--hair)', marginBottom: 14 }}>
+            <h2 className="serif" style={{ fontSize: 24, margin: 0 }}>{y}</h2>
+            <span className="faint" style={{ fontSize: 13 }}>{list.length} shoots{years.length > 1 ? ` · ${years.filter(([k]) => k !== y).map(([k]) => k).join(' · ')}` : ''}</span>
+          </div>
+          <div className="shoot-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: '24px 12px' }}>{list.map((x) => <ShootCard key={x.id} s={x} inComps={comps.get(x.id) ?? 0} fresh={result?.shootId === x.id ? result.imported : 0} />)}</div>
+        </section>
+      ))}
     </div>
   );
 }
 
-function ShootCard({ s }: { s: Shoot }) {
-  const { openNew } = useUi();
-  const photos = useApi<{ photos: { id: number }[] }>(`/photos?shoot=${s.id}`);
+function ShootCard({ s, inComps, fresh }: { s: Shoot; inComps: number; fresh: number }) {
+  const chip = fresh ? `${fresh} new` : inComps > 0 ? `In ${inComps} composition${inComps === 1 ? '' : 's'}` : s.reviewPct < 100 && s.reviewPct >= 0 && s.sessions > 0 && s.reviewPct < 100 ? 'Needs review' : 'Not composed';
   return (
-    <div>
-      <Link to={`/shoots/${s.id}`} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
-        <div className="cover" style={{ borderRadius: 6, marginBottom: 12 }}>{s.coverId && <Img p={{ id: s.coverId, ar: 2.2 }} style={{ aspectRatio: '2.2', width: '100%', height: '100%' }} />}</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: "400 22px 'Instrument Serif',Georgia,serif" }}>{s.name}</span><span style={{ fontSize: 12.5, color: '#8f8c86' }}>{s.count}</span></div>
-        <div style={{ fontSize: 12, color: '#8f8c86', margin: '2px 0 10px' }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
-        <div style={{ height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${s.reviewPct}%` }} /></div>
-      </Link>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ fontSize: 11.5, color: '#6f6c67' }}>{s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}</span>
-        <button onClick={() => openNew({ name: s.name, photoIds: (photos.data?.photos ?? []).map((p) => p.id) })} style={{ fontSize: 12.5, color: '#efede8' }}>Compose from this →</button>
+    <Link to={`/shoots/${s.id}`} style={{ display: 'block', textAlign: 'left' }}>
+      <div style={{ position: 'relative', aspectRatio: '1.6', borderRadius: 6, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10 }}>
+        {s.coverId && <Img p={{ id: s.coverId, ar: 1.6 }} style={{ aspectRatio: '1.6', width: '100%', height: '100%' }} />}
+        <span style={{ position: 'absolute', left: 8, bottom: 8, fontSize: 12, padding: '3px 9px', borderRadius: 999, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>{chip}</span>
       </div>
-    </div>
+      <div className="spread" style={{ alignItems: 'baseline' }}><span className="serif" style={{ fontSize: 20 }}>{s.name}</span><span className="faint" style={{ fontSize: 12.5 }}>{s.count}</span></div>
+      <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>{[s.place, s.dates].filter(Boolean).join(' · ')}</div>
+    </Link>
   );
 }
+

@@ -9,6 +9,7 @@ import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSou
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
 import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
+import { footer, sendMail, smtpHealthy } from '../email.js';
 import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
 import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeCloudDest, removeS3, s3State, saveCloudDest, saveS3, storeOf } from '../backupS3.js';
@@ -256,7 +257,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
   // What the saved settings would write to the file, against what this container was actually started with. Names and verdicts only:
   // a value, a secret above all, is never sent.
-  app.get('/api/admin/env/compare', async () => {
+  const envCompare = () => {
     const pairs: [string, string][] = [];
     buildEnvFile(sys, x.tenants.owner().db, { pairs });
     const env = process.env;
@@ -273,7 +274,10 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       rows.push({ name, secret: secret(name), status: 'env only', env: show(name, env[name]) });
     }
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };
-  });
+  };
+  app.get('/api/admin/env/compare', async () => envCompare());
+  // Just whether the app and the env file disagree, for the banner every administrator sees.
+  app.get('/api/admin/env/drift', async () => { const c = envCompare().counts; return { drift: envConfigLoaded().system ? c.differs + c.appOnly : 0, differs: c.differs, appOnly: c.appOnly }; });
   app.get('/api/admin/env/export', async (req, rep) => {
     if (!envExportOn() && x.cfg.allowEnvExport !== false) return rep.code(403).send({ error: 'Export is switched off. Turn it on in Settings, Env file (you will be asked to sign in again).' });
     if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is switched off (ALLOW_ENV_EXPORT=false, which the exported file sets so the secrets cannot be downloaded again). Set it to true in your env file and restart Frames to export again.' });
@@ -292,7 +296,15 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     const conf = loadAuth(sys);
     const already = isAllowed({ provider: '', sub: '', email, emailVerified: true }, conf.allow);
     if (!already) saveAuth(sys, { ...conf, allow: cleanAllow([...conf.allow, email]) });
-    return rep.code(201).send({ ...dto(u), allowedList: already ? 'already' : 'added' }); // whether they had to be put on the allowed list
+    // If mail works, tell them: a general email with the address to sign in at.
+    let emailed = false;
+    const base = (conf.publicUrl || '').replace(/\/+$/, '');
+    if (smtpHealthy(sys) && base && b.notify !== false) {
+      const inviter = me(req);
+      const r = await sendMail(sys, { to: email, template: 'general', type: 'invite', params: { ...footer(sys, inviter.name, base), subject: `${inviter.name} invited you to Frames`, preheader: 'You have been invited to a photography archive', eyebrow: 'Invitation', title: 'You’re invited', name: email.split('@')[0], body: `${inviter.name} invited you to their Frames, a private place to keep, rate and plan prints of photographs. Sign in with this email address: you will be sent a one-time code, no password needed.`, button_label: 'Open Frames', button_url: `${base}/signin`, fine_print: 'If you were not expecting this, you can ignore it.', image_url: '', image_alt: '', note: typeof b.note === 'string' ? b.note.slice(0, 400) : '', note_from: typeof b.note === 'string' && b.note ? inviter.name : '' } });
+      emailed = r.ok;
+    }
+    return rep.code(201).send({ ...dto(u), allowedList: already ? 'already' : 'added', emailed }); // whether they had to be put on the allowed list
   });
 
   app.patch('/api/admin/users/:id', async (req, rep) => {

@@ -191,10 +191,9 @@ describe('with sign-in on', () => {
     expect(api.json()).toMatchObject({ signIn: true });
     expect(api.headers['www-authenticate']).toBeUndefined(); // no browser password box for the app's own requests
     const page = await call('GET', '/', undefined, { accept: 'text/html' });
-    expect(page.statusCode).toBe(401);
-    expect(page.headers['content-type']).toContain('text/html');
-    expect(page.body).toContain('Continue with Fake ID');
-    expect(page.body).toContain('href="/auth/login/fake"');
+    expect(page.statusCode).toBe(302); // the sign-in screen is part of the app, at /signin
+    expect(page.headers.location).toBe('/signin');
+    expect((await call('GET', '/api/public/auth')).json().providers).toContainEqual({ id: 'fake', name: 'Fake ID', type: 'oidc' });
     expect((await call('POST', '/api/collections', { name: 'x' })).statusCode).toBe(401);
     expect((await call('PUT', '/api/auth/config', { enabled: false })).statusCode).toBe(401); // nobody can switch it off without signing in
   });
@@ -499,7 +498,8 @@ describe('the shared-password option alongside OAuth', () => {
       expect((await e.app.inject({ method: 'GET', url: '/api/photos', headers: h })).statusCode).toBe(200); // the password still works
       expect((await e.app.inject({ method: 'GET', url: '/api/photos', headers: H })).statusCode).toBe(401);
       const page = await e.app.inject({ method: 'GET', url: '/', headers: { ...H, accept: 'text/html' } });
-      expect(page.body).toContain('Use the shared password instead');
+      expect(page.statusCode).toBe(302);
+      expect(JSON.parse((await e.app.inject({ method: 'GET', url: '/api/public/auth', headers: H })).body).password).toBe(true);
       const pw = await e.app.inject({ method: 'GET', url: '/auth/password', headers: H });
       expect(pw.statusCode).toBe(401);
       expect(pw.headers['www-authenticate']).toContain('Basic');

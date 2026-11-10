@@ -42,10 +42,28 @@ describe('while it is off', () => {
   it('serves nothing', async () => {
     for (const u of ['/portfolio/', '/portfolio/config.json', '/portfolio/images/manifest.json', '/portfolio/gear.md', `/portfolio/images/${ids['plain.jpg']}.jpg`]) expect((await get(u)).statusCode, u).toBe(404);
   });
-  it('cannot be turned on without a collection', async () => {
-    const r = await A.put('/api/portfolio', { enabled: true });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/collection/);
+  it('can be turned on with nothing in it yet, and fills from favourites, hand-picked photographs and the score rule', async () => {
+    expect((await A.put('/api/portfolio', { enabled: true })).status).toBe(200);
+    expect((await A.get('/api/portfolio/marks')).body.count).toBe(0);
+    const id = ids['plain.jpg'], other = ids['third.png'];
+    // A favourite is in, and starring adds it by hand too.
+    expect((await A.post(`/api/portfolio/photos/${id}`, { favourite: true })).body).toMatchObject({ state: 'in', favourite: true });
+    expect((await A.get('/api/portfolio/marks')).body.count).toBe(1);
+    // The score rule adds a well-rated photograph, shown as "auto", and clicking it keeps it out for good.
+    await A.put('/api/portfolio', { autoAdd: true, autoThreshold: 4.3 });
+    for (const rating of [5, 5]) env.db.prepare("INSERT INTO reviews(photo_id, session, date, rating) VALUES(?, ?, ?, ?)").run(other, rating === 5 ? 1 : 2, '2026-01-01', rating);
+    expect((await A.get(`/api/portfolio/photos/${other}`)).body).toMatchObject({ state: 'auto', inPortfolio: true, score: 5 });
+    expect((await A.get('/api/portfolio/marks')).body.count).toBe(2);
+    expect((await A.post(`/api/portfolio/photos/${other}`, { on: false })).body.state).toBe('none');
+    expect((await A.get('/api/portfolio/marks')).body.out).toContain(other);
+    expect((await A.get('/api/portfolio/marks')).body.count).toBe(1);
+    expect((await A.put('/api/portfolio', { autoThreshold: 9 })).status).toBe(400);
+    // Left out always wins, even over a favourite.
+    await A.post(`/api/portfolio/photos/${id}`, { on: false });
+    expect((await A.get('/api/portfolio/marks')).body.count).toBe(0);
+    await A.put('/api/portfolio', { autoAdd: false, enabled: false });
+    env.db.prepare('DELETE FROM reviews').run();
+    env.db.prepare('DELETE FROM portfolio_marks').run();
   });
 });
 
@@ -76,9 +94,14 @@ describe('the public site', () => {
   it('serves the page and its config', async () => {
     expect((await get('/portfolio/')).body).toContain('Portfolio page');
     expect((await get('/portfolio')).statusCode).toBe(302);
-    expect((await get('/portfolio/config.json')).json()).toEqual({ photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
+    expect((await get('/portfolio/config.json')).json()).toEqual({ country: '', photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
     expect((await get('/portfolio/gear.md')).body).toBe('# Gear\n- Leica');
     expect((await get('/portfolio/css/style.css')).statusCode).toBe(200);
+    // The gear page as data: nothing owned yet, so it is empty; and the files the new design needs are public.
+    expect((await get('/portfolio/gear.json')).json()).toMatchObject({ empty: true, showWant: false });
+    expect(isPortfolioPath('/portfolio/js/theme.js')).toBe(true);
+    expect(isPortfolioPath('/portfolio/fonts/ibm-plex-sans-400.woff2')).toBe(true);
+    expect(isPortfolioPath('/portfolio/fonts/../../etc/passwd')).toBe(false);
   });
   it('lists the collection in its own order, with only what the page needs', async () => {
     const m = (await get('/portfolio/images/manifest.json')).json() as any[];

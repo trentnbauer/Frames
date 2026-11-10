@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiConfig, aiCounts, ping } from '../ai.js';
+import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals } from '../cloud.js';
@@ -320,6 +321,12 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     return ping(c);
   });
   // ---------- AI sources: as many as you like, one active ----------
+  // Which AI does what, and in what order.
+  app.get('/api/ai/jobs', async () => ({ jobs: loadJobs(db), jobsList: JOBS }));
+  app.put('/api/ai/jobs/:job', async (req, rep) => {
+    const err = saveJob(db, String((req.params as Row).job), (req.body ?? {}) as Row);
+    return err ? rep.code(400).send({ error: err }) : { jobs: loadJobs(db) };
+  });
   const sourceDto = (src: AiSource) => ({ ...src, hasKey: !!sourceKey(db, src.id), ready: isReady(src), why: whyNotReady(src) });
   const sourcesDto = () => ({ types: AI_TYPES, active: loadSettings(db).aiActive, sources: [...loadSources(db).map(sourceDto), ...loadShared(db).map((s) => ({ ...sourceDto(s), shared: true }))] });
   const cfgOf = (src: AiSource): AiCfg => { const t = aiType(src.type)!; return { protocol: t.protocol, local: t.local, name: src.name, endpoint: src.endpoint, model: src.model, embedModel: t.canEmbed ? src.embedModel : '', key: sourceKey(db, src.id) }; };

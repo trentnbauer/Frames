@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { saveCloudDest } from '../backupS3.js';
 import { beginConnect, finishBackupConnect, pendingPurpose, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
 import { setSecret } from '../ai.js';
+import { getSetting, setSetting } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
 
 /** Settings, Cloud sync: connect Google Drive / Dropbox / OneDrive, pick a folder, and copy its photographs in. */
@@ -21,6 +22,24 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     };
   };
   app.get('/api/cloud', async (req) => ({ ...dto(), redirectUri: redirect(req) }));
+
+  // Save original resolution: the person's switch, and whether an administrator has turned full size off for everyone.
+  const resolution = () => { const admin = (getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false); return { saveOriginal: admin && (getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false), want: getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false, lockedByAdmin: !admin, copyEdge: 4096 }; };
+  app.get('/api/cloud/resolution', async () => resolution());
+  app.put('/api/cloud/resolution', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (typeof b.saveOriginal !== 'boolean') return rep.code(400).send({ error: 'saveOriginal must be true or false' });
+    setSetting(db, 'cloudPrefs', { ...getSetting<Row>(db, 'cloudPrefs', {}), saveOriginal: b.saveOriginal });
+    return resolution();
+  });
+  // Administrators: Photos & storage, "Allow original resolution from the cloud".
+  app.put('/api/admin/cloud-originals', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (typeof b.allow !== 'boolean') return rep.code(400).send({ error: 'allow must be true or false' });
+    setSetting(x.sys, 'instance', { ...getSetting<Row>(x.sys, 'instance', {}), allowCloudOriginals: b.allow });
+    return { allow: b.allow };
+  });
+  app.get('/api/admin/cloud-originals', async () => ({ allow: getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false }));
 
   // The app's own client id (and optional secret) from the provider's developer console. Write-only.
   app.put('/api/cloud/client/:provider', async (req, rep) => {

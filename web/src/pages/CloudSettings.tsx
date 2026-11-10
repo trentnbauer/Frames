@@ -140,7 +140,7 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
             {chosen.length === 0 && <span className="muted" style={{ fontSize: 13 }}>None yet. Frames won't copy anything until you choose at least one.</span>}
             {chosen.map((f) => (
-              <span key={f.id} className="chip" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '3px 10px', borderRadius: 999, background: 'rgba(255,255,255,.08)', fontSize: 13 }}>
+              <span key={f.id} className="chip" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '3px 10px', borderRadius: 999, background: 'var(--hair)', fontSize: 13 }}>
                 {f.name || 'Everything in this account'}
                 <button className="t2" aria-label={`Stop copying ${f.name || 'the whole account'}`} onClick={() => put({ folders: chosen.filter((x) => x.id !== f.id) })}>×</button>
               </span>
@@ -155,7 +155,7 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
           </select>
         </label>
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={c.enabled} disabled={chosen.length === 0 || c.needsReconnect} onChange={(e) => put({ enabled: e.target.checked })} /> Keep these folders up to date automatically</label>
-        <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.04)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--hover)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink || enforced} disabled={enforced} onChange={(e) => {
               if (e.target.checked && !window.confirm(`Keep only a smaller copy of each photo in Frames?\n\nThe full-size original stays in ${p.label}, and is fetched from there when you export it.\n\nIMPORTANT: if you delete a photo from ${p.label}, its full-size original is gone for good. Frames will only have the smaller copy.\n\nThis also replaces the full-size copies Frames already holds from this account, the next time it syncs.`)) return;
@@ -194,7 +194,7 @@ function FolderBrowser({ c, chosen, onDone }: { c: Conn; chosen: Folder[]; onDon
   const has = (id: string) => sel.some((x) => x.id === id);
   const toggle = (f: Folder) => setSel(has(f.id) ? sel.filter((x) => x.id !== f.id) : [...sel, f]);
   const inherited = has(root) || trail.some((t) => has(t.id)); // a folder above is chosen, so everything in here already is
-  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid rgba(255,255,255,.06)' };
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid var(--hover)' };
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 8, padding: 12, marginTop: 8 }}>
       <p className="muted" style={{ margin: '0 0 8px', fontSize: 13 }}>

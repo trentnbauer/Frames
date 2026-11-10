@@ -18,7 +18,7 @@ export function HumanCheck({ siteKey, onToken }: { siteKey: string; onToken: (to
     let id = '', gone = false;
     load().then(() => {
       if (gone || !box.current || !window.turnstile) return;
-      id = window.turnstile.render(box.current, { sitekey: siteKey, theme: 'dark', callback: onToken, 'error-callback': () => setErr('The check did not work. Reload the page to try again.') });
+      id = window.turnstile.render(box.current, { sitekey: siteKey, theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', callback: onToken, 'error-callback': () => setErr('The check did not work. Reload the page to try again.') });
     }).catch((e: Error) => setErr(e.message));
     return () => { gone = true; if (id && window.turnstile) window.turnstile.remove(id); };
   }, [siteKey]); // eslint-disable-line react-hooks/exhaustive-deps

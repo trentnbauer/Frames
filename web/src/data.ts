@@ -7,7 +7,7 @@ export type Review = { session: number; date: string; rating: number; note?: str
 export type Swatch = { hex: string; pct: number; name: string };
 export type PhotoLite = {
   id: number; title: string; file: string; shootId: number; w: number; h: number; ar: number; hasImage: boolean;
-  capturedAt: string | null; camera: string; lens: string; exposure: string; iso: number | null; aperture: number | null; shutter: string; focalMm: number | null; medium: '' | 'digital' | 'film'; film: string; fileType: string; sizeMb: number;
+  capturedAt: string | null; addedAt: string; dateEdit: string | null; camera: string; lens: string; exposure: string; iso: number | null; aperture: number | null; shutter: string; focalMm: number | null; medium: '' | 'digital' | 'film'; film: string; fileType: string; sizeMb: number;
   archived: boolean; missing: boolean; lastReviewedAt: string; nextReviewAt: string | null; reviewCount: number; avgRating: number;
   lat: number | null; lon: number | null; place: string; parentId: number | null;
   palette: Swatch[]; brightness: number | null; contrast: number | null; saturation: number | null;
@@ -26,7 +26,7 @@ export type Shoot = {
   /** Camera details the shoot gives to photographs that have none. */
   gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
 };
-export type Collection = { id: number; name: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean; /** A picture of a room behind the wall (size in pixels), if one is set. */ background?: { w: number; h: number; v: number } | null };
+export type Collection = { id: number; name: string; updatedAt?: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean; /** A picture of a room behind the wall (size in pixels), if one is set. */ background?: { w: number; h: number; v: number } | null };
 
 export const RATINGS = [
   { value: 1, emoji: '😐', label: 'meh' },

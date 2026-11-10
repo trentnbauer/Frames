@@ -239,23 +239,31 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- statistics ----------
-  app.get('/api/stats', async () => {
-    const p = one('SELECT COUNT(*) n, COALESCE(SUM(size_bytes), 0) bytes FROM photos') as Row;
+  app.get('/api/stats', async (req) => {
+    // ?year=2026 limits everything dated (photographs by when they were taken, reviews by when they were made) to that year.
+    const yq = String(((req.query ?? {}) as Row).year ?? '');
+    const year = /^\d{4}$/.test(yq) ? yq : '';
+    const pw = year ? "WHERE substr(COALESCE(date_edit, captured_at, added_at), 1, 4) = ?" : '';
+    const pa = year ? [year] : [];
+    const rw = year ? "WHERE substr(date, 1, 4) = ?" : '';
+    const ra = year ? [year] : [];
+    const p = one(`SELECT COUNT(*) n, COALESCE(SUM(size_bytes), 0) bytes FROM photos ${pw}`, ...pa) as Row;
     const sessions = loadSettings(db).sessions;
-    const complete = (one('SELECT COUNT(*) n FROM (SELECT photo_id FROM reviews GROUP BY photo_id HAVING COUNT(*) >= ?)', sessions) as Row).n;
-    const dist = [1, 2, 3, 4, 5].map((v) => ({ value: v, n: (one('SELECT COUNT(*) n FROM reviews WHERE rating = ?', v) as Row).n }));
-    const avg = (one('SELECT AVG(rating) a FROM reviews') as Row).a ?? 0;
-    const perShoot = all('SELECT s.id, s.name, COUNT(p.id) n FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id GROUP BY s.id ORDER BY s.imported_at DESC');
+    const complete = (one(`SELECT COUNT(*) n FROM (SELECT photo_id FROM reviews ${rw} GROUP BY photo_id HAVING COUNT(*) >= ?)`, ...ra, sessions) as Row).n;
+    const dist = [1, 2, 3, 4, 5].map((v) => ({ value: v, n: (one(`SELECT COUNT(*) n FROM reviews ${rw ? rw + ' AND' : 'WHERE'} rating = ?`, ...ra, v) as Row).n }));
+    const avg = (one(`SELECT AVG(rating) a FROM reviews ${rw}`, ...ra) as Row).a ?? 0;
+    const perShoot = all(`SELECT s.id, s.name, COUNT(p.id) n FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id ${year ? "AND substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 4) = ?" : ''} GROUP BY s.id ${year ? 'HAVING n > 0' : ''} ORDER BY n DESC, s.imported_at DESC`, ...pa);
     const inCollections = (one('SELECT COUNT(DISTINCT photo_id) n FROM collection_photos') as Row).n;
     const agg = x.ratingAgg();
-    const top = all('SELECT p.* FROM photos p JOIN reviews r ON r.photo_id = p.id GROUP BY p.id ORDER BY AVG(r.rating) DESC, COUNT(r.id) DESC LIMIT 10').map((r) => x.photoDto(r, false, agg));
+    const top = all(`SELECT p.* FROM photos p JOIN reviews r ON r.photo_id = p.id ${year ? 'WHERE substr(r.date, 1, 4) = ?' : ''} GROUP BY p.id ORDER BY AVG(r.rating) DESC, COUNT(r.id) DESC LIMIT 10`, ...ra).map((r) => x.photoDto(r, false, agg));
+    const years = all("SELECT DISTINCT substr(COALESCE(date_edit, captured_at, added_at), 1, 4) y FROM photos WHERE y GLOB '[0-9][0-9][0-9][0-9]' ORDER BY y DESC LIMIT 6").map((r) => r.y as string);
     const dist_ = (kind: string) => all('SELECT name, COUNT(*) n FROM tags WHERE accepted = 1 AND kind = ? GROUP BY name ORDER BY n DESC, name LIMIT 12', kind);
     return {
-      photos: p.n, bytes: p.bytes, completePct: p.n ? Math.round((complete / p.n) * 100) : 0, avgRating: avg, inCollections, dist, perShoot, top,
+      year, years, photos: p.n, bytes: p.bytes, completePct: p.n ? Math.round((complete / p.n) * 100) : 0, avgRating: avg, inCollections, dist, perShoot, top,
       subjects: dist_('subject'), tags: dist_('tag'),
       // How the average rating moves over time, and how it differs from first session to last.
-      trend: all("SELECT substr(date, 1, 7) month, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews GROUP BY month ORDER BY month"),
-      bySession: all('SELECT session, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews GROUP BY session ORDER BY session'),
+      trend: all(`SELECT substr(date, 1, 7) month, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews ${rw} GROUP BY month ORDER BY month`, ...ra),
+      bySession: all(`SELECT session, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews ${rw} GROUP BY session ORDER BY session`, ...ra),
     };
   });
 }

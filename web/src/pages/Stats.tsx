@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
 import { Header, Img, Loading, Title } from '../components/bits';
 
 type S = {
+  year: string; years: string[];
   photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;
   dist: { value: number; n: number }[]; perShoot: { id: number; name: string; n: number }[]; top: PhotoLite[];
   subjects: { name: string; n: number }[]; tags: { name: string; n: number }[];
@@ -35,22 +37,50 @@ function Trend({ rows }: { rows: { month: string; avg: number; n: number }[] }) 
   const y = (v: number) => H - pad - ((v - 1) / 4) * (H - pad * 2);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Average rating by month: ${rows.map((r) => `${r.month} ${r.avg}`).join(', ')}`} style={{ width: '100%', maxWidth: 560, display: 'block' }}>
-      {[1, 3, 5].map((v) => <g key={v}><line x1={pad} x2={W - pad} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,.08)" /><text x={4} y={y(v) + 4} fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{v}</text></g>)}
-      <polyline fill="none" stroke="#efede8" strokeWidth="1.5" points={rows.map((r, i) => `${x(i)},${y(r.avg)}`).join(' ')} />
-      {rows.map((r, i) => <circle key={r.month} cx={x(i)} cy={y(r.avg)} r="3" fill="#efede8"><title>{`${r.month}: ${r.avg} (${r.n} reviews)`}</title></circle>)}
-      <text x={pad} y={H - 6} fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{rows[0].month}</text>
-      <text x={W - pad} y={H - 6} textAnchor="end" fill="#6f6c67" fontSize="10" fontFamily="IBM Plex Mono">{rows[rows.length - 1].month}</text>
+      {[1, 3, 5].map((v) => <g key={v}><line x1={pad} x2={W - pad} y1={y(v)} y2={y(v)} stroke="var(--hair)" /><text x={4} y={y(v) + 4} fill="var(--faint)" fontSize="10" fontFamily="IBM Plex Mono">{v}</text></g>)}
+      <polyline fill="none" stroke="var(--text)" strokeWidth="1.5" points={rows.map((r, i) => `${x(i)},${y(r.avg)}`).join(' ')} />
+      {rows.map((r, i) => <circle key={r.month} cx={x(i)} cy={y(r.avg)} r="3" fill="var(--text)"><title>{`${r.month}: ${r.avg} (${r.n} reviews)`}</title></circle>)}
+      <text x={pad} y={H - 6} fill="var(--faint)" fontSize="10" fontFamily="IBM Plex Mono">{rows[0].month}</text>
+      <text x={W - pad} y={H - 6} textAnchor="end" fill="var(--faint)" fontSize="10" fontFamily="IBM Plex Mono">{rows[rows.length - 1].month}</text>
     </svg>
   );
 }
 
+type C = { reviewed: number; shared: number; received: number; average: number | null; notes: number; you: number | null; guests: number | null; community: number | null; favourites: { id: number; avg: number; n: number }[] };
+const f1 = (n: number | null) => (n === null ? '–' : n.toFixed(1));
+
+/** The Community section: what you reviewed, what others said about your photos, and you against guests against the community. */
+function CommunityStats() {
+  const c = useApi<C>('/community/stats');
+  const d = c.data;
+  if (!d || (d.reviewed === 0 && d.received === 0)) return null;
+  return (
+    <section style={{ marginTop: 48 }}>
+      <h2 className="serif" style={{ fontSize: 28, marginBottom: 16 }}>Community</h2>
+      <div className="big5" style={{ marginBottom: 32 }}>
+        {[[d.reviewed, 'photos you reviewed'], [d.shared, 'of yours reviewed'], [d.received, 'ratings received'], [f1(d.average), 'community average'], [d.notes, 'notes received']].map(([v, l]) => <div key={String(l)}><b>{v}</b><span>{l}</span></div>)}
+      </div>
+      <div className="lists">
+        <Bars title="You, guests and the community (×10)" rows={[['You', d.you], ['Guests', d.guests], ['Community', d.community]].map(([l, v]) => ({ key: String(l), label: String(l), n: v === null ? 0 : Math.round(Number(v) * 10) }))} />
+        {d.favourites.length > 0 && <div><div className="label" style={{ marginBottom: 12 }}>Your community favourites</div><div className="strip" style={{ height: 110 }}>{d.favourites.map((p) => <Link key={p.id} to={`/photo/${p.id}`} style={{ aspectRatio: '1' }} aria-label={`Rated ${p.avg.toFixed(1)}`}><Img p={{ id: p.id, ar: 1 }} style={{ height: '100%', width: 'auto', borderRadius: 2 }} /></Link>)}</div></div>}
+      </div>
+    </section>
+  );
+}
+
 export function Stats() {
-  const st = useApi<S>('/stats');
+  const [year, setYear] = useState('');
+  const st = useApi<S>(`/stats${year ? `?year=${year}` : ''}`);
   const d = st.data;
   return (
     <div className="page">
       <Header />
-      <Title>Stats</Title>
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <Title>Stats</Title>
+        <div role="tablist" aria-label="Range" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)', marginBottom: 28 }}>
+          {['', ...((d?.years ?? []).slice(0, 2))].map((y) => <button key={y || 'all'} role="tab" aria-selected={year === y} onClick={() => setYear(y)} style={{ padding: '7px 14px', borderRadius: 999, fontSize: 13.5, background: year === y ? 'var(--btn-bg)' : 'transparent', color: year === y ? 'var(--btn-fg)' : 'var(--text2)' }}>{y || 'All time'}</button>)}
+        </div>
+      </div>
       {(st.loading || st.error) && <Loading error={st.error} />}
       {d && (
         <>
@@ -75,6 +105,7 @@ export function Stats() {
               <div className="strip" style={{ height: 110 }}>{d.top.map((p) => <Link key={p.id} to={`/photo/${p.id}`} style={{ aspectRatio: String(p.ar) }} aria-label={p.title}><Img p={p} style={{ height: '100%', width: 'auto' }} /></Link>)}</div>
             </>
           )}
+          <CommunityStats />
         </>
       )}
     </div>

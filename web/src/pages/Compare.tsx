@@ -1,11 +1,12 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { useApi } from '../api';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { api, useApi } from '../api';
 import { RATINGS, fmtDate, type PhotoFull } from '../data';
 import { Fit, Header, Loading, Swatches } from '../components/bits';
 
 /** Two photographs side by side, to choose between them. */
 export function Compare() {
   const [sp] = useSearchParams();
+  const nav = useNavigate();
   const r = useApi<{ a: PhotoFull; b: PhotoFull; similarity: number }>(`/compare?a=${sp.get('a')}&b=${sp.get('b')}`);
   if (!r.data) return <div className="page"><Header /><Loading error={r.error} /></div>;
   const { a, b, similarity } = r.data;
@@ -22,16 +23,18 @@ export function Compare() {
   const side = (p: PhotoFull) => (
     <div style={{ minWidth: 0 }}>
       <div className="cmp-stage"><Fit p={p} /></div>
-      <h2 className="serif" style={{ fontSize: 24, margin: '12px 0 6px' }}><Link to={`/photo/${p.id}`}>{p.title}</Link></h2>
-      <Swatches palette={p.palette} />
+      <div className="spread" style={{ alignItems: 'flex-start', margin: '12px 0 6px', gap: 12 }}>
+        <div><h2 className="serif" style={{ fontSize: 28, lineHeight: 1 }}><Link to={`/photo/${p.id}`}>{p.title}</Link></h2><div style={{ marginTop: 8, maxWidth: 180 }}><Swatches palette={p.palette} /></div></div>
+        <button className="btn outline" onClick={async () => { const other = p.id === a.id ? b : a; if (window.confirm(`Prefer “${p.title}”? “${other.title}” is left out of review. It stays in your library.`)) { await api(`/photos/${other.id}`, { method: 'PATCH', body: { archived: true } }); nav(`/photo/${p.id}`); } }}>Prefer this</button>
+      </div>
     </div>
   );
   return (
     <div className="page">
       <Header />
       <div className="spread" style={{ fontSize: 13, marginBottom: 18 }}>
-        <Link to={`/photo/${a.id}`} className="t2">← Back</Link>
-        <span className="t2">{Math.round(similarity * 100)}% alike</span>
+        <Link to={`/photo/${a.id}`} style={{ height: 32, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', color: 'var(--text2)' }}>← {a.title}</Link>
+        <span className="mono t2" style={{ fontSize: 13 }}>{Math.round(similarity * 100)}% alike</span>
       </div>
       <div className="cmp">{side(a)}{side(b)}</div>
       <table className="cmp-table">

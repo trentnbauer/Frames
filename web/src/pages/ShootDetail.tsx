@@ -17,7 +17,7 @@ function SharedNames({ kind, names, onChange }: { kind: 'subject' | 'tag'; names
   const add = () => { const n = text.trim().toLowerCase(); if (n && !names.includes(n)) onChange([...names, n]); setText(''); };
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-      <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginRight: 6 }}>{kind === 'subject' ? 'Subjects' : 'Tags'} for every photograph</span>
+      <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginRight: 6 }}>{kind === 'subject' ? 'Subjects' : 'Tags'} for every photograph</span>
       {names.map((n) => <span key={n} className="chip">{n} <button aria-label={`Remove ${kind} ${n} from every photograph`} onClick={() => onChange(names.filter((x) => x !== n))}>✕</button></span>)}
       <input list={id} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} onBlur={add} placeholder={`Add a ${kind}`} aria-label={`Add a ${kind} to every photograph`} style={{ borderRadius: 999, padding: '5px 12px', fontSize: 12.5, width: 150 }} />
       <datalist id={id}>{(known.data ?? []).filter((k) => !names.includes(k.name)).map((k) => <option key={k.name} value={k.name} />)}</datalist>
@@ -60,29 +60,29 @@ export function ShootDetail() {
     <div className="page">
       <Header />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
-        <Link to="/shoots" style={{ color: '#a8a59f' }}>← Photoshoots</Link>
-        <span style={{ color: '#8f8c86', display: 'flex', gap: 18 }}>
+        <Link to="/shoots" style={{ color: 'var(--text2)' }}>← Photoshoots</Link>
+        <span style={{ color: 'var(--muted)', display: 'flex', gap: 18 }}>
           {s.source} · imported {new Date(s.importedAt).toLocaleDateString('en-AU')}
-          <button style={{ color: '#a8a59f' }} onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share for review</button>
-          <button style={{ color: '#a8a59f' }} onClick={async () => {
+          <button style={{ color: 'var(--text2)' }} onClick={() => setSharing(!sharing)} aria-expanded={sharing}>Share for review</button>
+          <button style={{ color: 'var(--text2)' }} onClick={async () => {
             if (!window.confirm(`Take this photoshoot and all ${photos.data?.photos.length ?? 'its'} photographs out of Frames?\n\nTheir reviews, tags and composition places go with them, and its share links stop working. Files in a library folder are not touched. A scan will not bring them back.`)) return;
             await api(`/shoots/${id}`, { method: 'DELETE' });
             nav('/shoots');
           }}>Delete photoshoot</button>
         </span>
       </div>
-      {sharing && <SharePanel kind="shoot" id={s.id} onClose={() => setSharing(false)} />}
+      {sharing && <SharePanel kind="shoot" id={s.id} name={s.name} onClose={() => setSharing(false)} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <input className="serif inline" aria-label="Photoshoot name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onBlur={() => f.name.trim() && f.name !== s.name && save({ name: f.name })} style={{ fontSize: 52, lineHeight: 1, marginBottom: 10 }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#8f8c86' }}>
-            <div style={{ width: 140, height: 2, background: 'rgba(255,255,255,.1)' }}><i style={{ display: 'block', height: '100%', background: '#a8a59f', width: `${s.reviewPct}%` }} /></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--muted)' }}>
+            <div style={{ width: 140, height: 2, background: 'var(--hair)' }}><i style={{ display: 'block', height: '100%', background: 'var(--text2)', width: `${s.reviewPct}%` }} /></div>
             {s.reviewPct >= 100 ? `All ${s.sessions} sessions done` : `Reviews ${s.reviewPct}% done`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button onClick={() => { setSelect(!select); setPicked([]); setMsg(''); }} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }}>{select ? 'Done selecting' : 'Select photographs'}</button>
-          <button onClick={() => openNew({ name: s.name, photoIds: list.map((p) => p.id) })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Compose from this shoot</button>
+          <button onClick={() => { setSelect(!select); setPicked([]); setMsg(''); }} style={{ borderRadius: 999, padding: '11px 18px', fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)' }}>{select ? 'Done selecting' : 'Select photographs'}</button>
+          <button onClick={() => openNew({ name: s.name, photoIds: list.map((p) => p.id) })} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '13px 24px', fontSize: 14.5 }}>Compose from this shoot</button>
         </div>
       </div>
       <div className="form" style={{ margin: '14px 0 6px' }}>
@@ -110,7 +110,7 @@ export function ShootDetail() {
         {list.map((p) => {
           const on = picked.includes(p.id);
           const st = { flex: `${p.ar} ${p.ar} ${p.ar * 200}px`, aspectRatio: String(p.ar), opacity: p.archived ? 0.55 : 1, position: 'relative' as const, outline: on ? '2px solid #efede8' : 'none', outlineOffset: -2 };
-          const inner = <><Img p={p} />{select && <b className="tick" style={{ background: on ? '#efede8' : undefined }}>{on ? '✓' : ''}</b>}</>;
+          const inner = <><Img p={p} />{select && <b className="tick" style={{ background: on ? 'var(--text)' : undefined }}>{on ? '✓' : ''}</b>}</>;
           return select
             ? <button key={p.id} style={st} aria-pressed={on} aria-label={`${on ? 'Deselect' : 'Select'} ${p.title}`} onClick={() => setPicked(on ? picked.filter((x) => x !== p.id) : [...picked, p.id])}>{inner}</button>
             : <Link key={p.id} to={`/photo/${p.id}`} style={st} aria-label={p.title}>{inner}</Link>;
@@ -121,10 +121,10 @@ export function ShootDetail() {
       {select && (
         <div className="selbar float" role="region" aria-label="Selected photographs">
           <b style={{ fontWeight: 500 }}>{picked.length} selected</b>
-          <button style={{ color: '#a8a59f' }} onClick={() => setPicked([])}>Clear</button>
+          <button style={{ color: 'var(--text2)' }} onClick={() => setPicked([])}>Clear</button>
           <MoveToShoot up ids={picked} except={s.id} onDone={(m) => { setMsg(m); setPicked([]); setSelect(false); shoot.reload(); photos.reload(); all.reload(); }} />
           <AddToComposition up label="Add to a composition…" ids={picked} onDone={(m) => { setMsg(m); setPicked([]); }} />
-          <button disabled={picked.length === 0} onClick={() => openNew({ name: s.name, photoIds: picked })} style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.length ? 1 : 0.5 }}>New composition from {picked.length}</button>
+          <button disabled={picked.length === 0} onClick={() => openNew({ name: s.name, photoIds: picked })} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14, opacity: picked.length ? 1 : 0.5 }}>New composition from {picked.length}</button>
         </div>
       )}
     </div>

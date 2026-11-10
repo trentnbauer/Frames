@@ -9,8 +9,8 @@ export type SharedPhoto = { id: number; title: string; ar: number; n: number };
 type Viewer = { name: string } | null | undefined;
 const mono = "'IBM Plex Mono',monospace";
 const serif = "'Instrument Serif',Georgia,serif";
-const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' } as const;
-const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
+const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)' } as const;
+const ring = 'inset 0 0 0 1px var(--outline)';
 const SWATCH: Record<string, string> = { black: '#151514', white: '#e9e7e1', oak: '#b08a5e', walnut: '#5b3f2c', silver: '#a3a3a0' };
 
 /** Whether the page should use the phone layout: a narrow screen, or a phone held sideways. */
@@ -134,35 +134,35 @@ export function ShareMobile(p: Props) {
   function mine_for(i: number) { const pid = photosOf(wallPrints[i])[0]; return p.mine[pid] !== undefined ? byId.get(p.mine[pid]) : undefined; } // the candidate this print has in the guest's version
 
   return (
-    <div className="sm-cols" style={{ minHeight: '100dvh', background: '#0d0d0d', overflowX: 'clip' }}>
+    <div className="sm-cols" style={{ minHeight: '100dvh', background: 'var(--bg)', overflowX: 'clip' }}>
       <div className="sm-left" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 0' }}>
           <span className="lockup" style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Mark />Frames</span>
-          <span style={{ fontSize: 12, color: '#6f6c67' }}>{d.viewer ? 'Shared with you' : 'Shared with you'}</span>
+          <span style={{ fontSize: 12, color: 'var(--faint)' }}>{d.viewer ? 'Shared with you' : 'Shared with you'}</span>
         </header>
         <div style={{ padding: '18px 20px 0' }}>
           <h1 style={{ font: `400 38px/1.02 ${serif}`, margin: '0 0 10px', textWrap: 'pretty' as never }}>{d.name}</h1>
           <div className="sm-meta">
-            {d.description && <p style={{ fontSize: 14, color: '#a8a59f', margin: '0 0 8px' }}>{d.description}</p>}
-            <p style={{ fontSize: 12.5, color: '#8f8c86', margin: 0 }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}`}</p>
+            {d.description && <p style={{ fontSize: 14, color: 'var(--text2)', margin: '0 0 8px' }}>{d.description}</p>}
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}`}</p>
           </div>
         </div>
         {f && (
           <>
             <div style={{ padding: '22px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
               <span style={eyebrow}>{wallPrints.length === 1 ? 'The print' : `The ${wallPrints.length} prints`}</span>
-              <span style={{ font: `400 11.5px ${mono}`, color: '#8f8c86' }}>{metres(f.w)} × {metres(f.h)} m</span>
+              <span style={{ font: `400 11.5px ${mono}`, color: 'var(--muted)' }}>{metres(f.w)} × {metres(f.h)} m</span>
             </div>
             <div style={{ position: 'relative', margin: 0, background: WALL_BG, padding: '18px 8px 68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {canReview && d.layout && (
                 <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => withName(() => p.openLayout())} style={{ height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: 'rgba(13,13,13,.6)', boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a change'}</button>
-                  {p.layoutSent && <span role="status" style={{ fontSize: 12, color: '#8f8c86' }}>Sent. Thank you.</span>}
+                  {p.layoutSent && <span role="status" style={{ fontSize: 12, color: 'var(--muted)' }}>Sent. Thank you.</span>}
                 </div>
               )}
               <Wall compact fill prints={shown} mode="free" editing={false} sel={over ?? -1} photos={wallPhotos} over={over} locked share={token} onSelect={openPrint} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={() => undefined} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 20px 0', fontSize: 12, color: '#6f6c67' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 20px 0', fontSize: 12, color: 'var(--faint)' }}>
               <span>Tap a print to look closer{canReview ? ', rate it or swap it' : ''}.</span>
               <span style={{ fontFamily: mono, whiteSpace: 'nowrap', flex: 'none' }}>1 square = 10 cm</span>
             </div>
@@ -174,9 +174,9 @@ export function ShareMobile(p: Props) {
         <div style={{ padding: '28px 20px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
             <span style={eyebrow}>{f ? 'Other candidates' : 'Photographs'}</span>
-            <span style={{ fontSize: 12, color: '#6f6c67' }}>{(f ? others : photos).length}</span>
+            <span style={{ fontSize: 12, color: 'var(--faint)' }}>{(f ? others : photos).length}</span>
           </div>
-          {canReview && f && others.length > 0 && <p style={{ fontSize: 12.5, color: '#8f8c86', margin: '-4px 0 12px' }}>Hold one, then drag it onto a print to try it there.</p>}
+          {canReview && f && others.length > 0 && <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 12px' }}>Hold one, then drag it onto a print to try it there.</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {(f ? others : photos).map((x) => (
               <button key={x.id} onClick={() => { if (suppress.current) return; const at = order.findIndex((o) => o.id === x.id); if (at >= 0) { setLook(at); setLookText(''); } }} onPointerDown={down(x.id)} onContextMenu={(e) => e.preventDefault()} aria-label={`Open ${x.title}`}
@@ -191,48 +191,48 @@ export function ShareMobile(p: Props) {
           <div style={{ padding: '32px 20px 0' }}>
             <div style={{ ...eyebrow, marginBottom: 10 }}>A comment for the person who shared this</div>
             <textarea value={comment} onChange={(e) => { setComment(e.target.value); setCommentNote(''); }} rows={3} maxLength={1000} placeholder="Say what you think of the whole set…" aria-label="Comment on the whole set"
-              style={{ width: '100%', background: '#161615', border: 0, borderRadius: 10, padding: '12px 14px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)', outline: 'none', resize: 'none', color: 'inherit', fontFamily: 'inherit' }} />
+              style={{ width: '100%', background: 'var(--surface)', border: 0, borderRadius: 10, padding: '12px 14px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)', outline: 'none', resize: 'none', color: 'inherit', fontFamily: 'inherit' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 10 }}>
-              <span role="status" style={{ fontSize: 12.5, color: '#8f8c86' }}>{commentNote}</span>
+              <span role="status" style={{ fontSize: 12.5, color: 'var(--muted)' }}>{commentNote}</span>
               <button onClick={() => { if (comment.trim()) sendText(null, comment, () => { setComment(''); setCommentNote('Sent. Only the person who shared this will see it.'); }); }} style={{ flex: 'none', minHeight: 44, padding: '0 20px', borderRadius: 999, fontSize: 14, boxShadow: ring, opacity: comment.trim() ? 1 : 0.45 }}>Send</button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="sm-bar" style={{ position: 'fixed', bottom: 0, right: 0, zIndex: 5, background: 'rgba(13,13,13,.96)', boxShadow: '0 -1px 0 rgba(255,255,255,.08)', backdropFilter: 'blur(10px)', padding: '12px 16px max(16px, env(safe-area-inset-bottom))' }}>
+      <div className="sm-bar" style={{ position: 'fixed', bottom: 0, right: 0, zIndex: 5, background: 'rgba(13,13,13,.96)', boxShadow: '0 -1px 0 var(--hair)', backdropFilter: 'blur(10px)', padding: '12px 16px max(16px, env(safe-area-inset-bottom))' }}>
         {p.dl && (
-          <div role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: '#a8a59f', marginBottom: 10 }}>
+          <div role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: 'var(--text2)', marginBottom: 10 }}>
             <span>{p.dl.ready ? `${p.dl.total} files sent to your downloads.` : `Downloading ${p.dl.done} of ${p.dl.total}…`}</span>
-            {!p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, color: '#efede8' }}>Cancel</button>}
+            {!p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, color: 'var(--text)' }}>Cancel</button>}
           </div>
         )}
         {canReview && (p.dirty || p.sendNote) && (
-          <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5, color: p.sendNote && !p.sendNote.ok ? 'oklch(0.78 0.11 35)' : '#a8a59f' }}>
-            {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send back to the photographer · ${p.changes}`}</button>}
-            {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Discard</button>}
+          <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5, color: p.sendNote && !p.sendNote.ok ? 'oklch(0.78 0.11 35)' : 'var(--text2)' }}>
+            {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send back to the photographer · ${p.changes}`}</button>}
+            {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Discard</button>}
             {p.sendNote && <span style={{ flex: '1 1 100%' }}>{p.sendNote.text}</span>}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          {canReview && <button onClick={() => withName(() => { setLook(unrated >= 0 ? unrated : 0); setLookText(''); })} style={{ flex: 1, height: 50, borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 15 }}>{rated === 0 ? 'Review these' : unrated >= 0 ? `Keep reviewing · ${rated} of ${order.length}` : 'Review again'}</button>}
-          {d.allowDownload && <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ flex: canReview ? '0 0 auto' : 1, height: 50, borderRadius: 999, padding: '0 20px', fontSize: 15, fontWeight: 500, background: canReview ? 'transparent' : '#efede8', color: canReview ? '#efede8' : '#0d0d0d', boxShadow: canReview ? ring : 'none' }}>Download</button>}
+          {canReview && <button onClick={() => withName(() => { setLook(unrated >= 0 ? unrated : 0); setLookText(''); })} style={{ flex: 1, height: 50, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>{rated === 0 ? 'Review these' : unrated >= 0 ? `Keep reviewing · ${rated} of ${order.length}` : 'Review again'}</button>}
+          {d.allowDownload && <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ flex: canReview ? '0 0 auto' : 1, height: 50, borderRadius: 999, padding: '0 20px', fontSize: 15, fontWeight: 500, background: canReview ? 'transparent' : 'var(--text)', color: canReview ? 'var(--text)' : '#0d0d0d', boxShadow: canReview ? ring : 'none' }}>Download</button>}
         </div>
         {canReview && reviewer.trim() && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 12.5, color: '#8f8c86', marginTop: 8 }}>
-            as {reviewer.trim()}{!d.viewer && <> · <button onClick={p.changeName} style={{ color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>change</button></>}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+            as {reviewer.trim()}{!d.viewer && <> · <button onClick={p.changeName} style={{ color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>change</button></>}
           </div>
         )}
       </div>
 
       {drag && <img src={imgUrl(drag.pid, 'thumb', token)} alt="" style={{ position: 'fixed', left: drag.x, top: drag.y, height: 72, transform: 'translate(-50%, -110%)', borderRadius: 4, zIndex: 80, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,.6)' }} />}
-      {toast && <div role="status" style={{ position: 'fixed', left: 16, right: 16, bottom: 130, zIndex: 90, background: '#efede8', color: '#0d0d0d', borderRadius: 12, padding: '10px 14px', fontSize: 13.5, textAlign: 'center' }}>{toast}</div>}
+      {toast && <div role="status" style={{ position: 'fixed', left: 16, right: 16, bottom: 130, zIndex: 90, background: 'var(--btn-bg)', color: 'var(--btn-fg)', borderRadius: 12, padding: '10px 14px', fontSize: 13.5, textAlign: 'center' }}>{toast}</div>}
 
       {lp && look !== null && (
         <div role="dialog" aria-label="Photograph" style={{ position: 'fixed', inset: 0, zIndex: 20, background: '#000', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 0 20px' }}>
-            <span style={{ font: `400 13px ${mono}` }}>{look + 1} <span style={{ color: '#6f6c67' }}>/ {order.length}</span></span>
-            <button onClick={() => setLook(null)} style={{ minHeight: 44, padding: '0 10px', fontSize: 14, color: '#a8a59f' }}>Close</button>
+            <span style={{ font: `400 13px ${mono}` }}>{look + 1} <span style={{ color: 'var(--faint)' }}>/ {order.length}</span></span>
+            <button onClick={() => setLook(null)} style={{ minHeight: 44, padding: '0 10px', fontSize: 14, color: 'var(--text2)' }}>Close</button>
           </div>
           <div className="sm-lb" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <div onPointerDown={(e) => { swipe.current = e.clientX; }} onPointerUp={(e) => { const dx = e.clientX - swipe.current; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); }}
@@ -242,7 +242,7 @@ export function ShareMobile(p: Props) {
             <div className="sm-lbp" style={{ flex: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 12, padding: '12px 16px max(16px, env(safe-area-inset-bottom))' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '0 4px' }}>
                 <span style={{ font: `400 22px/1.1 ${serif}` }}>{lp.title}</span>
-                <span style={{ fontSize: 12, color: '#8f8c86', flex: 'none' }}>{slot >= 0 ? `Print ${slot + 1} · ${sizeLabel(wallPrints[slot])}` : 'Candidate'}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)', flex: 'none' }}>{slot >= 0 ? `Print ${slot + 1} · ${sizeLabel(wallPrints[slot])}` : 'Candidate'}</span>
               </div>
               {canReview && slot >= 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -251,8 +251,8 @@ export function ShareMobile(p: Props) {
                   {sugOf && (
                     <>
                       <img src={imgUrl(sugOf.id, 'thumb', token)} alt="" style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flex: 'none' }} />
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#a8a59f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>In your version: {sugOf.title}</span>
-                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flex: 'none', minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>In your version: {sugOf.title}</span>
+                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flex: 'none', minHeight: 44, fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
                     </>
                   )}
                 </div>
@@ -264,7 +264,7 @@ export function ShareMobile(p: Props) {
                       const on = ratings[lp.id] === r.value;
                       return (
                         <button key={r.value} onClick={() => rate(lp.id, r.value)} aria-label={`${r.value}, ${r.label}`} aria-pressed={on}
-                          style={{ flex: 1, height: 54, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.16)' }}>
+                          style={{ flex: 1, height: 54, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.16)' }}>
                           <span style={{ fontSize: 19, lineHeight: 1 }}>{r.emoji}</span><span style={{ font: `500 11px ${mono}` }}>{r.value}</span>
                         </button>
                       );
@@ -272,15 +272,15 @@ export function ShareMobile(p: Props) {
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input value={lookText} onChange={(e) => setLookText(e.target.value)} onKeyDown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }} maxLength={1000} placeholder="Comment on this photograph…" aria-label="Comment on this photograph"
-                      style={{ flex: 1, minWidth: 0, height: 44, background: '#161615', border: 0, borderRadius: 999, padding: '0 16px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)', outline: 'none', color: 'inherit', fontFamily: 'inherit' }} />
+                      style={{ flex: 1, minWidth: 0, height: 44, background: 'var(--surface)', border: 0, borderRadius: 999, padding: '0 16px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.14)', outline: 'none', color: 'inherit', fontFamily: 'inherit' }} />
                     <button onClick={() => { if (lookText.trim()) sendText(lp.id, lookText, () => { setLookText(''); flash('Sent. Only the person who shared this will see it.'); }); }} style={{ flex: 'none', height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring, opacity: lookText.trim() ? 1 : 0.45 }}>Send</button>
                   </div>
                 </>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '-4px -8px 0' }}>
-                <button onClick={() => go(-1)} aria-label="Previous" style={{ width: 56, height: 44, fontSize: 26, color: '#a8a59f' }}>‹</button>
-                <span style={{ fontSize: 12, color: '#6f6c67' }}>Swipe for the next</span>
-                <button onClick={() => go(1)} aria-label="Next" style={{ width: 56, height: 44, fontSize: 26, color: '#a8a59f' }}>›</button>
+                <button onClick={() => go(-1)} aria-label="Previous" style={{ width: 56, height: 44, fontSize: 26, color: 'var(--text2)' }}>‹</button>
+                <span style={{ fontSize: 12, color: 'var(--faint)' }}>Swipe for the next</span>
+                <button onClick={() => go(1)} aria-label="Next" style={{ width: 56, height: 44, fontSize: 26, color: 'var(--text2)' }}>›</button>
               </div>
             </div>
           </div>
@@ -291,13 +291,13 @@ export function ShareMobile(p: Props) {
         const idx = wallPrints.findIndex((pr) => photosOf(pr).includes(picking)), pr = wallPrints[idx];
         return (
           <div onClick={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-            <div role="dialog" aria-label="Suggest another" style={{ width: '100%', maxHeight: '82%', overflowY: 'auto', background: '#161615', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
+            <div role="dialog" aria-label="Suggest another" style={{ width: '100%', maxHeight: '82%', overflowY: 'auto', background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 16px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
                 <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Suggest another</h2>
-                <button onClick={() => setPicking(null)} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Close</button>
+                <button onClick={() => setPicking(null)} style={{ minHeight: 44, fontSize: 14, color: 'var(--text2)' }}>Close</button>
               </div>
-              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 16px' }}>{pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {others.filter((x) => p.mine[x.id] === undefined).map((x) => {
                   const wrong = !!pr && (pr.orientation === 'portrait') !== (x.ar < 1);
@@ -319,22 +319,22 @@ export function ShareMobile(p: Props) {
         const pr = wallPrints[framing], cur = p.frames[pr.id] ?? pr.frame!.color;
         return (
           <div onClick={(e) => e.target === e.currentTarget && setFraming(null)} style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-            <div role="dialog" aria-label="Frame colour" style={{ width: '100%', overflowY: 'auto', background: '#161615', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
+            <div role="dialog" aria-label="Frame colour" style={{ width: '100%', overflowY: 'auto', background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '10px 20px 34px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.2)', margin: '0 auto 16px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
                 <h2 style={{ font: `400 28px/1.1 ${serif}`, margin: 0 }}>Frame for print {framing + 1}</h2>
-                <button onClick={() => { if (p.frames[pr.id]) flash(`Changed print ${framing + 1} to a ${p.frames[pr.id]} frame. Send it back when you are ready.`); setFraming(null); }} style={{ minHeight: 44, fontSize: 14, color: '#a8a59f' }}>Done</button>
+                <button onClick={() => { if (p.frames[pr.id]) flash(`Changed print ${framing + 1} to a ${p.frames[pr.id]} frame. Send it back when you are ready.`); setFraming(null); }} style={{ minHeight: 44, fontSize: 14, color: 'var(--text2)' }}>Done</button>
               </div>
-              <p style={{ fontSize: 13, color: '#8f8c86', margin: '4px 0 18px' }}>It is {pr.frame!.color} now. Pick another colour to try it on the wall. It is only sent when you send it back.</p>
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 18px' }}>It is {pr.frame!.color} now. Pick another colour to try it on the wall. It is only sent when you send it back.</p>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {Object.keys(SWATCH).map((c) => (
-                  <button key={c} onClick={() => p.setFrame(pr.id, c === pr.frame!.color ? null : c)} aria-pressed={cur === c} aria-label={c} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 48, fontSize: 12, color: cur === c ? '#efede8' : '#a8a59f' }}>
-                    <span style={{ width: 44, height: 44, borderRadius: '50%', background: SWATCH[c], boxShadow: cur === c ? '0 0 0 2px #161615, 0 0 0 4px #efede8' : 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />
+                  <button key={c} onClick={() => p.setFrame(pr.id, c === pr.frame!.color ? null : c)} aria-pressed={cur === c} aria-label={c} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 48, fontSize: 12, color: cur === c ? 'var(--text)' : 'var(--text2)' }}>
+                    <span style={{ width: 44, height: 44, borderRadius: '50%', background: SWATCH[c], boxShadow: cur === c ? '0 0 0 2px #161615, 0 0 0 4px #efede8' : 'inset 0 0 0 1px var(--outline)' }} />
                     {c[0].toUpperCase() + c.slice(1)}
                   </button>
                 ))}
               </div>
-              {p.frames[pr.id] && <button onClick={() => p.setFrame(pr.id, null)} style={{ minHeight: 44, marginTop: 10, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Back to {pr.frame!.color}</button>}
+              {p.frames[pr.id] && <button onClick={() => p.setFrame(pr.id, null)} style={{ minHeight: 44, marginTop: 10, fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Back to {pr.frame!.color}</button>}
             </div>
           </div>
         );

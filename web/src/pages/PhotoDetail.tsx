@@ -8,11 +8,13 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { MapPin } from '../components/MapPin';
 import { GearRows } from '../components/GearRows';
+import { CompPicker } from '../components/AddToComposition';
+import { seasonOf, type Hemisphere } from '../season';
 
 const serif = "'Instrument Serif',Georgia,serif";
 const mono = "'IBM Plex Mono',monospace";
-const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67', marginBottom: 10 } as const;
-const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
+const eyebrow = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 10 } as const;
+const ring = 'inset 0 0 0 1px var(--outline)';
 const fmt = (n: number | null) => (n === null ? '–' : n.toFixed(1));
 const day = (iso: string | null) => (iso ? fmtDate(iso, { day: 'numeric', month: 'short', year: 'numeric' }) : '–');
 
@@ -27,7 +29,9 @@ export function PhotoDetail() {
   const places = useApi<{ name: string; n: number }[]>('/places');
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const similar = useApi<PhotoLite[]>(`/photos/${id}/similar?limit=8`);
-  const inPf = useApi<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`);
+  const inPf = useApi<{ state: 'in' | 'auto' | 'none'; inPortfolio: boolean; favourite: boolean; score: number | null }>(`/portfolio/photos/${id}`);
+  const profile = useApi<{ hemisphere: Hemisphere }>('/profile');
+  const [more, setMore] = useState(false);
   const colls = useApi<Collection[]>('/collections');
   const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
   const comments = useApi<{ comments: { id: number; by: string; body: string; at: string }[] }>(`/photos/${id}/comments`);
@@ -102,16 +106,35 @@ export function PhotoDetail() {
   };
 
   return (
-    <div className="page">
-      <Header />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 14 }}>
-        <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: '#a8a59f' }}>← {todoKey ? 'To do' : shoot?.name ?? 'Library'}</Link>
-        <span style={{ display: 'flex', gap: 18, color: '#a8a59f', alignItems: 'baseline' }}>
-          <Link to={`/library?similarTo=${p.id}`}>Find similar</Link>
-          {similar.data?.[0] && <Link to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare</Link>}
-          <button onClick={() => go(-1)}>← Previous</button>
-          {idx >= 0 && <span style={{ color: '#6f6c67' }}>{idx + 1} of {stepIds.length}</span>}
-          <button onClick={() => go(1)}>Next →</button>
+    <div className="page" style={{ paddingTop: 24 }}>
+      <div className="photo-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 13, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <Link to={todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'} onClick={(e) => { e.preventDefault(); back(); }} style={{ color: 'var(--text2)', background: 'var(--surface)', borderRadius: 999, height: 32, padding: '0 12px', display: 'inline-flex', alignItems: 'center' }}>← {todoKey ? 'To do' : shoot ? shoot.name : 'Library'}</Link>
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--text2)' }}>
+            <button aria-label="Previous photograph" className="circ" onClick={() => go(-1)}>‹</button>
+            {idx >= 0 && <span className="faint mono" style={{ fontSize: 12 }}>{idx + 1} / {stepIds.length}</span>}
+            <button aria-label="Next photograph" className="circ" onClick={() => go(1)}>›</button>
+          </span>
+        </span>
+        <span className="photo-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
+          <Link to={`/library?similarTo=${p.id}`} style={{ color: 'var(--text2)' }}>Find similar</Link>
+          <span className="splitbtn" role="group" aria-label="Portfolio">
+            <button title={inPf.data?.state === 'auto' ? 'Added by your score rule. Click to keep it out.' : undefined} onClick={async () => { const st = inPf.data?.state; await api(`/portfolio/photos/${p.id}`, { body: { on: st === 'none' } }); inPf.reload(); setMsg(st === 'none' ? 'Added to your portfolio.' : st === 'auto' ? 'Kept out of your portfolio. The score rule will not add it again.' : 'Taken out of your portfolio.'); }}>
+              <i className={'pdot ' + (inPf.data?.state === 'in' ? 'in' : inPf.data?.state === 'auto' ? 'auto' : '')} />
+              {inPf.data?.state === 'in' ? 'In portfolio' : inPf.data?.state === 'auto' ? `Auto · score ${inPf.data.score?.toFixed(1)}` : 'Add to portfolio'}
+            </button>
+            <button aria-pressed={!!inPf.data?.favourite} aria-label={inPf.data?.favourite ? 'Remove favourite' : 'Favourite (also adds it to your portfolio)'} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { favourite: !inPf.data?.favourite } }); inPf.reload(); }}>{inPf.data?.favourite ? '★ Favourite' : '☆ Favourite'}</button>
+          </span>
+          {ai && <button className="btn outline" style={{ height: 36 }} onClick={() => patch({ reanalyse: true }, 'Analysing with AI…')} disabled={p.aiStatus === 'pending'}>{p.aiStatus === 'pending' ? <><span className="spin" style={{ width: 12, height: 12 }} /> Analysing…</> : '✦ Analyze with AI'}</button>}
+          <button className="circ" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)} style={{ boxShadow: 'inset 0 0 0 1px var(--outline)' }}>⋯</button>
+          {more && (<><div className="pop-scrim" onClick={() => setMore(false)} /><div className="popover" style={{ right: 0, top: 42, width: 240 }} role="menu">
+            {similar.data?.[0] && <Link className="mi" to={`/compare?a=${p.id}&b=${similar.data[0].id}`}>Compare with the closest match</Link>}
+            <a className="mi" href={`/api/photos/${p.id}/original`} download>Download original</a>
+            <a className="mi" href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
+            <button className="mi" onClick={async () => { setMore(false); await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
+            <button className="mi" onClick={() => { setMore(false); patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.'); }}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
+          </div></>)}
+          <button className="btn primary lg" onClick={() => setCompOpen(true)}>{inCount ? `In ${inCount} · ` : ''}Add to composition</button>
         </span>
       </div>
       <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -131,72 +154,67 @@ export function PhotoDetail() {
         <aside style={{ width: 340, flex: 'none', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
             <input className="serif inline" aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title.trim() && title !== p.title && patch({ title })} style={{ fontSize: 40, lineHeight: 1 }} />
-            {shoot && <Link to={`/shoots/${shoot.id}`} style={{ fontSize: 13, color: '#a8a59f', display: 'block', marginTop: 6 }}>{shoot.name}{shoot.place ? ` · ${shoot.place}` : ''}</Link>}
+            <DateLine p={p} hemisphere={profile.data?.hemisphere ?? 'north'} onSave={(v) => patch({ dateEdit: v })} />
+            {shoot && <Link to={`/shoots/${shoot.id}`} style={{ fontSize: 13, color: 'var(--text2)', display: 'block', marginTop: 6 }}>{shoot.name}{shoot.place ? ` · ${shoot.place}` : ''}</Link>}
             {p.missing && <div className="reason">The original file is missing from the library.</div>}
             {p.archived && <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>Left out of review. It still appears everywhere else.</div>}
             {p.parentId && <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>A variant of <Link to={`/photo/${p.parentId}`} className="t2" style={{ textDecoration: 'underline' }}>another photo</Link>. <button className="t2" onClick={() => patch({ parentId: null })}>Unlink</button></div>}
           </div>
 
-          <div style={{ background: '#161615', borderRadius: 10, padding: 16 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
               <div>
                 <div style={{ font: `400 44px/1 ${serif}` }}>{fmt(score)}</div>
-                <div style={{ fontSize: 12, color: '#8f8c86', marginTop: 4 }}>combined score{rankInShoot ? ` · #${rankInShoot} in its shoot` : ''}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>combined score{rankInShoot ? ` · #${rankInShoot} in its shoot` : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 44, width: 110 }} aria-label="Ratings by session">
                 {rs.map((r) => <i key={r.session} title={`${emoji(r.rating)} ${r.rating}`} style={{ flex: 1, background: 'rgba(239,237,232,.75)', borderRadius: 1, height: `${(r.rating / 5) * 100}%` }} />)}
               </div>
             </div>
             {[['You', avg === null ? 'Not rated yet' : `${fmt(avg)} · ${rs.length} of ${settings?.sessions ?? 4} sessions`], ['Guests', g?.avg != null ? `${fmt(g.avg)} · ${g.n} ${g.n === 1 ? 'person' : 'people'}` : 'None yet'], ['Next review', p.nextReviewAt ? day(p.nextReviewAt) : rs.length ? 'All sessions done' : '–']].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderTop: '1px solid rgba(255,255,255,.08)' }}><span style={{ color: '#a8a59f' }}>{k}</span><span>{v}</span></div>
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderTop: '1px solid var(--hair)' }}><span style={{ color: 'var(--text2)' }}>{k}</span><span>{v}</span></div>
             ))}
-            <button onClick={async () => { await patch({ reviewAgain: true }); refreshSummary(); nav('/review'); }} style={{ marginTop: 10, fontSize: 12.5, color: '#efede8', textDecoration: 'underline', textUnderlineOffset: 3 }}>Rate it now</button>
+            <button onClick={async () => { await patch({ reviewAgain: true }); refreshSummary(); nav('/review'); }} style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Rate it now</button>
             {p.xmpRating && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Rated {p.xmpRating}/5 in another app (not counted as a review).</div>}
           </div>
 
           {(comments.data?.comments ?? []).length > 0 && (
             <div>
               <div style={eyebrow}>Guest comments</div>
-              {comments.data!.comments.map((c) => <div key={c.id} style={{ marginBottom: 8, fontSize: 13 }}><span style={{ color: '#a8a59f' }}>{c.by}</span> · {c.body}</div>)}
+              {comments.data!.comments.map((c) => <div key={c.id} style={{ marginBottom: 8, fontSize: 13 }}><span style={{ color: 'var(--text2)' }}>{c.by}</span> · {c.body}</div>)}
             </div>
           )}
           <div>
             <div style={eyebrow}>Compositions</div>
-            <button onClick={() => setCompOpen(true)} style={{ width: '100%', borderRadius: 999, padding: '11px 20px', fontSize: 14, boxShadow: ring, color: '#efede8' }}>
-              {inCount ? `In ${inCount} ${inCount === 1 ? 'composition' : 'compositions'} · manage` : 'Add to a composition'}
+            <button onClick={() => setCompOpen(true)} style={{ width: '100%', borderRadius: 999, padding: '11px 20px', fontSize: 14, boxShadow: ring, color: 'var(--text)' }}>
+              {inCount ? `In ${inCount} ${inCount === 1 ? 'composition' : 'compositions'} · manage` : 'Add to composition'}
             </button>
           </div>
           {mapOpen && <MapPin lat={p.lat} lon={p.lon} onClose={() => setMapOpen(false)} onSave={async (la, lo) => { await patch({ lat: la, lon: lo }, la === null ? 'Pin removed.' : 'Pin saved.'); setMapOpen(false); }} />}
-          {compOpen && (
-          <div onMouseDown={(e) => e.target === e.currentTarget && setCompOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(13,13,13,.7)', zIndex: 40, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <div role="dialog" aria-label="Compositions" style={{ width: 460, maxWidth: '100%', maxHeight: '80vh', overflow: 'auto', borderRadius: 18, background: '#1a1a19', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', padding: '22px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div style={eyebrow}>Compositions</div>
-              <button onClick={() => setCompOpen(false)} aria-label="Close" style={{ color: '#8f8c86' }}>✕</button>
-            </div>
-            {(colls.data ?? []).filter((c) => !c.printedAt || inComp(c)).map((c) => (
-              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 13 }}>
-                <Link to={`/collections/${c.id}`} style={{ textAlign: 'left' }}><span style={{ font: `400 18px ${serif}` }}>{c.name}</span><div style={{ fontSize: 12, color: '#8f8c86' }}>{stateOf(c)}</div></Link>
-                {c.printedAt ? <Link to={`/collections/${c.id}`} style={{ flex: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, boxShadow: ring }}>Open</Link>
-                  : <button onClick={() => toggleComp(c)} style={{ flex: 'none', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, background: inComp(c) ? '#efede8' : 'transparent', color: inComp(c) ? '#0d0d0d' : '#efede8', boxShadow: ring }}>{inComp(c) ? 'Added ✓' : 'Add'}</button>}
-              </div>
-            ))}
-            <button onClick={() => openNew({ name: p.title, photoIds: [p.id] })} style={{ marginTop: 12, width: '100%', background: '#efede8', color: '#0d0d0d', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Start a composition with this</button>
-          </div>
-          </div>
-          )}
+          {compOpen && <CompPicker ids={[p.id]} onClose={() => setCompOpen(false)} onDone={(m) => { setMsg(m); colls.reload(); }} />}
 
+          <div>
+            <div style={eyebrow}>Sensitive</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(['nudity', 'violence', 'adult'] as const).map((n) => {
+                const t = p.tags.find((x) => x.name === n);
+                const on = !!t && t.accepted;
+                return <button key={n} className="chip" aria-pressed={on} onClick={() => tagAct(n, 'tag', on ? 'remove' : 'add')} style={{ boxShadow: on ? 'inset 0 0 0 1px var(--text)' : t && t.source === 'ai' && !t.accepted ? 'inset 0 0 0 1px var(--warn)' : undefined, textTransform: 'capitalize' }}>{on ? '✓ ' : ''}{n}{t && t.source === 'ai' && !t.accepted ? ' · AI suggests' : ''}</button>;
+              })}
+            </div>
+            <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>Tagged photos are never shown in Community review.</div>
+          </div>
           <div>
             <div style={eyebrow}>Prints at 300 PPI</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {fits.map((f) => (
-                <div key={f.size} style={{ background: '#161615', borderRadius: 8, padding: 10, textAlign: 'center', boxShadow: f.ok ? 'none' : 'inset 0 0 0 1px rgba(231,140,120,.5)' }}>
+                <div key={f.size} style={{ background: 'var(--surface)', borderRadius: 8, padding: 10, textAlign: 'center', boxShadow: f.ok ? 'none' : 'inset 0 0 0 1px rgba(231,140,120,.5)' }}>
                   <div style={{ font: `400 20px ${serif}` }}>{f.size}</div>
-                  <div style={{ fontSize: 11.5, color: f.ok ? '#a8a59f' : 'oklch(0.78 0.11 35)', marginTop: 2 }}>{f.note}</div>
+                  <div style={{ fontSize: 11.5, color: f.ok ? 'var(--text2)' : 'oklch(0.78 0.11 35)', marginTop: 2 }}>{f.note}</div>
                 </div>
               ))}
             </div>
-            <div style={{ font: `400 11.5px ${mono}`, color: '#8f8c86', marginTop: 8 }}>{p.w} × {p.h} px · {p.fileType}</div>
+            <div style={{ font: `400 11.5px ${mono}`, color: 'var(--muted)', marginTop: 8 }}>{p.w} × {p.h} px · {p.fileType}</div>
           </div>
 
           <div>
@@ -205,12 +223,12 @@ export function PhotoDetail() {
             <TagGroup p={p} kind="tag" mine={tagsOf('tag')} suggested={suggested.filter((t) => t.kind === 'tag')} tagAct={tagAct} />
           </div>
 
-          <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: '#a8a59f', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
-            <dt style={{ color: '#6f6c67' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
-            <dt style={{ color: '#6f6c67' }}>Place</dt>
-            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: '#6f6c67' }}>{fmtCoord(p.lat, p.lon)} </span>}<button className="t2" onClick={() => setMapOpen(true)} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{p.lat !== null ? 'Move pin' : 'Pin on map'}</button></dd>
+          <dl style={{ font: `400 11.5px/1.9 ${mono}`, color: 'var(--text2)', display: 'grid', gridTemplateColumns: '80px 1fr', margin: 0 }}>
+            <dt style={{ color: 'var(--faint)' }}>Captured</dt><dd style={{ margin: 0 }}>{p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '–'}</dd>
+            <dt style={{ color: 'var(--faint)' }}>Place</dt>
+            <dd style={{ margin: 0 }}><input value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => place !== p.place && patch({ place })} placeholder="Name this place" aria-label="Place" list="known-places" style={{ font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 }} /><datalist id="known-places">{(places.data ?? []).map((x) => <option key={x.name} value={x.name} />)}</datalist>{p.lat !== null && p.lon !== null && <span style={{ color: 'var(--faint)' }}>{fmtCoord(p.lat, p.lon)} </span>}<button className="t2" onClick={() => setMapOpen(true)} style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{p.lat !== null ? 'Move pin' : 'Pin on map'}</button></dd>
             <GearRows p={p} patch={(body) => patch(body)} />
-            <dt style={{ color: '#6f6c67' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>
+            <dt style={{ color: 'var(--faint)' }}>File</dt><dd style={{ margin: 0 }}>{p.file} · {p.sizeMb} MB</dd>
           </dl>
 
           <div>
@@ -268,10 +286,9 @@ export function PhotoDetail() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '8px 18px', fontSize: 12.5, color: '#8f8c86', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px 18px', fontSize: 12.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
             <a href={`/api/photos/${p.id}/original`} download>Download original</a>
             <a href={`/api/photos/${p.id}/xmp`} download>Export XMP</a>
-            <button aria-pressed={!!inPf.data?.inPortfolio} onClick={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: !inPf.data?.inPortfolio } }); inPf.reload(); setMsg(inPf.data?.inPortfolio ? 'Taken out of the portfolio.' : 'Added to the portfolio composition.'); }}>{inPf.data?.inPortfolio ? 'In portfolio ✓' : 'Add to portfolio'}</button>
             <button onClick={async () => { await patch({ reviewAgain: true }, 'Queued for review.'); refreshSummary(); }}>Review again</button>
             <button onClick={() => patch({ archived: !p.archived }, p.archived ? 'Back in review.' : 'Left out of review. It still shows everywhere else.')}>{p.archived ? 'Include in review' : 'Leave out of review'}</button>
             <button onClick={async () => {
@@ -302,10 +319,10 @@ function TagGroup({ p, kind, mine, suggested, tagAct }: { p: PhotoFull; kind: 't
   const [adding, setAdding] = useState(false);
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }} data-photo={p.id}>
-      {mine.map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'rgba(255,255,255,.08)', display: 'inline-flex', gap: 6, alignItems: 'center' }}><Link to={`/library?${kind}=${encodeURIComponent(t.name)}`}>{t.name}</Link><button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')} style={{ color: '#8f8c86' }}>✕</button></span>)}
+      {mine.map((t) => <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--hair)', display: 'inline-flex', gap: 6, alignItems: 'center' }}><Link to={`/library?${kind}=${encodeURIComponent(t.name)}`}>{t.name}</Link><button aria-label={`Remove ${t.name}`} onClick={() => tagAct(t.name, kind, 'remove')} style={{ color: 'var(--muted)' }}>✕</button></span>)}
       {suggested.map((t) => (
-        <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.35)', borderStyle: 'dashed', display: 'inline-flex', gap: 6, alignItems: 'center', color: '#a8a59f' }} title="Suggested by the AI">{t.name}
-          <button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')} style={{ color: '#efede8' }}>✓</button>
+        <span key={t.name} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.35)', borderStyle: 'dashed', display: 'inline-flex', gap: 6, alignItems: 'center', color: 'var(--text2)' }} title="Suggested by the AI">{t.name}
+          <button aria-label={`Accept ${t.name}`} onClick={() => tagAct(t.name, kind, 'add')} style={{ color: 'var(--text)' }}>✓</button>
           <button aria-label={`Reject ${t.name}`} onClick={() => tagAct(t.name, kind, 'reject')}>✕</button>
         </span>
       ))}
@@ -313,7 +330,26 @@ function TagGroup({ p, kind, mine, suggested, tagAct }: { p: PhotoFull; kind: 't
         <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) { void tagAct(text, kind, 'add'); setText(''); } setAdding(false); }}>
           <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={() => setAdding(false)} placeholder={`Add a ${kind}`} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, width: 130 }} />
         </form>
-      ) : <button onClick={() => setAdding(true)} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', color: '#a8a59f' }}>+ {kind === 'subject' ? 'Subject' : 'Tag'}</button>}
+      ) : <button onClick={() => setAdding(true)} aria-label={`Add a ${kind}`} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text2)' }}>+ {kind === 'subject' ? 'Subject' : 'Tag'}</button>}
+    </div>
+  );
+}
+
+
+/** The photograph's date, editable. Defaults to the camera date; with none, the upload date. Shows its source, and the season for the person's hemisphere. */
+function DateLine({ p, hemisphere, onSave }: { p: PhotoFull; hemisphere: Hemisphere; onSave: (v: string | null) => void }) {
+  const camera = p.capturedAt ? p.capturedAt.slice(0, 10) : '';
+  const shown = p.dateEdit ?? (camera || p.addedAt.slice(0, 10));
+  const source = p.dateEdit ? 'Date edited by you' : camera ? 'Date taken, from camera data' : 'No camera date · using the upload date';
+  const month = Number(shown.slice(5, 7));
+  const season = hemisphere !== 'none' && month ? seasonOf(month, hemisphere) : '';
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="date" aria-label="Photo date" className="field-in" style={{ height: 34, width: 'auto', padding: '0 10px', fontSize: 13 }} value={shown} onChange={(e) => e.target.value && onSave(e.target.value)} />
+        {season && <span className="chip" title="From the date and your hemisphere (Settings, Profile)">{season}</span>}
+      </div>
+      <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{source}{p.dateEdit && <> · <button style={{ textDecoration: 'underline' }} onClick={() => onSave(null)}>Reset</button></>}</div>
     </div>
   );
 }

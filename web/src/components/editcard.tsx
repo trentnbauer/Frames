@@ -42,6 +42,6 @@ export const CardFooter = ({ children }: { children: ReactNode }) => <div style=
 export const Destructive = (p: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...p} className={`t2 danger ${p.className ?? ''}`} style={{ marginLeft: 'auto', ...p.style }} />;
 
 /** A small grey tag beside a name. */
-export const Chip = ({ children }: { children: ReactNode }) => <span style={{ fontSize: 12, background: 'rgba(255,255,255,.06)', borderRadius: 999, padding: '2px 9px', color: 'var(--text2)' }}>{children}</span>;
+export const Chip = ({ children }: { children: ReactNode }) => <span style={{ fontSize: 12, background: 'var(--hover)', borderRadius: 999, padding: '2px 9px', color: 'var(--text2)' }}>{children}</span>;
 /** "Me" next to the current person's name. */
 export const MeTag = () => <span style={{ fontSize: 11, fontWeight: 500, background: 'var(--text)', color: 'var(--bg)', borderRadius: 999, padding: '1px 8px', marginLeft: 6 }}>Me</span>;

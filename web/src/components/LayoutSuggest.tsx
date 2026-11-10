@@ -4,7 +4,7 @@ import { PrintModal, Wall, type Pic } from './CompositionWall';
 import { usePhone } from '../pages/ShareMobile';
 import { imgUrl } from '../api';
 
-const ring = 'inset 0 0 0 1px rgba(255,255,255,.2)';
+const ring = 'inset 0 0 0 1px var(--outline)';
 
 /**
  * A guest's way to say "what about different prints?": the same wall as the photographer's, with sizes, frames and the number of prints
@@ -34,10 +34,10 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
     setBusy(false);
     if (r.ok) onSent(); else setErr((await r.json().catch(() => ({}))).error ?? 'Could not send that');
   };
-  const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#efede8', boxShadow: ring });
+  const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
   return (
     <div className="lay-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <section className="lay-box" role="dialog" aria-label="Suggest a change" style={{ background: '#161615', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)' }}>
+      <section className="lay-box" role="dialog" aria-label="Suggest a change" style={{ background: 'var(--surface)', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 4px' }}>Suggest a change</h2>
           <button className="t2" onClick={onClose}>Close</button>
@@ -48,7 +48,7 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
         </div>
         {tab === 'photos' ? (
           <>
-            <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 14px' }}>Tap a print, then tap another photograph to try it there. Nothing is sent until you send your changes back from the page; nothing of theirs is changed.</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 14px' }}>Tap a print, then tap another photograph to try it there. Nothing is sent until you send your changes back from the page; nothing of theirs is changed.</p>
             <div style={{ background: WALL_BG, borderRadius: 8, padding: '24px 24px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
               <Wall compact={phone} prints={photoPrints} mode="free" editing={false} sel={sel} photos={photos} over={null} locked={false} share={token} onSelect={setSel} onEdit={() => undefined} onMoved={() => undefined} onOver={() => undefined} onDropPhoto={pick} />
             </div>
@@ -66,7 +66,7 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
           </>
         ) : (
           <>
-        <p style={{ fontSize: 13, color: '#8f8c86', margin: '0 0 14px' }}>Change the size, frame or number of prints and send it. It is shown to whoever shared this as a suggestion; nothing of theirs is changed.</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 14px' }}>Change the size, frame or number of prints and send it. It is shown to whoever shared this as a suggestion; nothing of theirs is changed.</p>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           {([['row', 'Row'], ['grid', 'Grid'], ['feature', 'Feature']] as const).map(([k, l]) => <button key={k} aria-pressed={mode === k} onClick={() => set(prints, k)} style={pill(mode === k)}>{l}</button>)}
           <button onClick={() => { const last = wall[wall.length - 1]; set([...wall, { ...last, id: Math.max(...wall.map((q) => q.id)) + 1, photoId: null, photoId2: null, frame: last.frame ? { ...last.frame } : null }], mode === 'free' ? 'row' : mode); setSel(wall.length); }} disabled={wall.length >= 12} style={pill()}>+ Add a print</button>

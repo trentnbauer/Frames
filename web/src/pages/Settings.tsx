@@ -13,27 +13,30 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
+import { AiJobs, CloudOriginalsAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
 import { GearDefaults } from '../components/GearDefaults';
 
-type Sec = 'Profile' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
-  | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
+type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
+  | 'Notifications' | 'Email' | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
 
 // One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
 const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
-  { title: 'You', items: ['Profile'] },
+  { title: 'You', items: ['Profile', 'Notifications'] },
   { title: 'Your library', items: ['Reviews', 'Tags & subjects', 'Metadata & XMP'] },
   { title: 'Connections', items: ['AI', 'Cloud sync', 'Portfolio'] },
   { title: 'Your account', items: ['Your data'] },
 ];
 const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
-  { title: 'People & sign-in', items: ['People', 'Access'] },
+  { title: 'People & sign-in', items: ['People', 'Access', 'Email'] },
   { title: 'Storage', items: ['Libraries & storage', 'Backup', 'Env file'] },
   { title: 'Shared services', items: ['Shared AI', 'Cloud services', 'Cloudflare tunnel'] },
 ];
 /** What each section is called on screen (the others are called what they are named here). */
 const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
 const DESC: Record<Sec, string> = {
-  Profile: 'Your display name and picture, and the ways you can sign in as you.',
+  Profile: 'Your display name and picture, where you are, and the ways you can sign in as you.',
+  Notifications: 'What the bell shows, what is emailed, and quiet hours.',
+  Email: 'Outgoing mail, the sign-in code option and a log of what was sent.',
   Reviews: 'How often each photograph comes back for a rating.',
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
@@ -53,7 +56,9 @@ const DESC: Record<Sec, string> = {
 };
 /** The headings inside each section, so the finder can find a setting and not only a section. */
 const HEADINGS: Partial<Record<Sec, string[]>> = {
-  Profile: ['Display picture', 'Display name', 'Signed in as', 'Ways to sign in as you'],
+  Profile: ['Display picture', 'Display name', 'Country', 'Seasons', 'Time zone', 'Signed in as', 'Ways to sign in as you'],
+  Notifications: ['What you are told about', 'Review reminder', 'Quiet hours'],
+  Email: ['Outgoing mail (SMTP)', 'Send a test email', 'Sign in with an emailed code', 'Email log'],
   Reviews: ['Sessions', 'Interval after each session', 'Adapt to consistency', 'Suggest leaving low-rated photos out of review'],
   'Tags & subjects': ['Subjects', 'Tags', 'Rename', 'Merge'],
   'Metadata & XMP': ['Camera defaults', 'Reading other apps’ edits', 'Write XMP next to my originals', 'Export approved metadata'],
@@ -114,7 +119,16 @@ export function SettingsPage() {
   return (
     <div className="page">
       <Header />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 56, alignItems: 'flex-start' }}>
+      <div className="spread" style={{ alignItems: 'center', marginBottom: 32 }}>
+        <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>Settings</h1>
+        {isAdmin && (
+          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}>
+            <button role="tab" aria-selected={!adminSec} onClick={() => adminSec && go('Profile')} style={{ padding: '8px 16px', borderRadius: 999, fontSize: 14, background: !adminSec ? 'var(--chip)' : 'transparent', color: !adminSec ? 'var(--text)' : 'var(--text2)' }}>Your library</button>
+            <button role="tab" aria-selected={adminSec} onClick={() => !adminSec && go('People')} style={{ padding: '8px 16px', borderRadius: 999, fontSize: 14, background: adminSec ? 'var(--chip)' : 'transparent', color: adminSec ? 'var(--text)' : 'var(--text2)' }}>Server <span className="faint">· admin</span></button>
+          </div>
+        )}
+      </div>
+      <div className="settings-wrap" style={{ display: 'flex', flexWrap: 'wrap', gap: 56, alignItems: 'flex-start' }}>
         <aside style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', position: 'sticky', top: 24 }}>
           <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ background: 'var(--surface)', border: 0, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', marginBottom: 6 }} />
           {needle ? (
@@ -129,23 +143,15 @@ export function SettingsPage() {
             </div>
           ) : (
             <nav className="snav" aria-label="Settings sections">
-              {YOUR_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
-              {isAdmin && (
-                <div style={{ marginTop: 22, paddingTop: 6, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', margin: '14px 12px 2px' }}>Administration</div>
-                  <div className="faint" style={{ fontSize: 12, margin: '0 12px 4px' }}>Applies to everyone on this server</div>
-                  {ADMIN_GROUPS.map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{label(g.title)}{g.items.map(item)}</div>)}
-                </div>
-              )}
+              {(adminSec ? ADMIN_GROUPS : YOUR_GROUPS).map((g) => <div key={g.title} role="group" aria-label={g.title} style={{ display: 'contents' }}>{g.items.map(item)}</div>)}
               <div style={{ marginTop: 22, paddingTop: 10, borderTop: '1px solid var(--hair)', display: 'flex', flexDirection: 'column' }}>
                 <button className={shown === 'About' ? 'on' : ''} style={{ fontSize: 13, color: shown === 'About' ? undefined : 'var(--muted)' }} onClick={() => go('About')}>About Frames</button>
               </div>
             </nav>
           )}
         </aside>
-        <main style={{ flex: '1 1 480px', minWidth: 0 }}>
-          <div className="faint" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase' }}>{adminSec ? `Settings · Administration · ${groupOf(shown)}` : shown === 'About' ? 'Settings' : `Settings · ${groupOf(shown)}`}</div>
-          <h1 className="serif" style={{ fontSize: 44, lineHeight: 1, margin: '10px 0' }}>{nameOf(shown)}</h1>
+        <main className="settings-main" style={{ flex: '1 1 480px', minWidth: 0, maxWidth: 760 }}>
+          <h2 className="serif" style={{ fontSize: 40, lineHeight: 1, margin: '0 0 8px' }}>{nameOf(shown)}</h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text2)', maxWidth: 640 }}>{DESC[shown]}</p>
           {adminSec && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text2)' }}>
@@ -157,15 +163,17 @@ export function SettingsPage() {
           {me?.envConfig && shown !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
           {shown === 'Profile' && <Profile />}
-          {shown === 'Reviews' && <Reviews s={s} save={save} />}
-          {shown === 'AI' && <AiSettings />}
+          {shown === 'Notifications' && <NotificationSettings />}
+          {shown === 'Email' && <EmailSettings />}
+          {shown === 'Reviews' && <><Reviews s={s} save={save} /><CommunitySettings /></>}
+          {shown === 'AI' && <><AiSettings /><AiJobs /></>}
           {shown === 'Shared AI' && <AiSettings server />}
-          {shown === 'Libraries & storage' && <Libraries />}
+          {shown === 'Libraries & storage' && <><Libraries /><CloudOriginalsAdmin /></>}
           {shown === 'Portfolio' && <PortfolioSettings />}
-          {shown === 'Cloud sync' && <CloudSettings />}
+          {shown === 'Cloud sync' && <><CloudSettings /><CloudResolution /></>}
           {shown === 'Cloud services' && <CloudServices />}
           {shown === 'Cloudflare tunnel' && <TunnelSettings />}
-          {shown === 'People' && <People />}
+          {shown === 'People' && <><People /><ReportsQueue /></>}
           {shown === 'Env file' && <EnvExport />}
           {shown === 'Your data' && <YourData />}
           {shown === 'Access' && <Access />}

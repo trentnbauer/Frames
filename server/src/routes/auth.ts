@@ -1,14 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
-import { cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
+import { sessionUser, cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf } from '../cloud.js';
 import { getSetting } from '../db.js';
+import { checkCode, checkSmtp, footer, issueCode, sendMail, smtpHealthy } from '../email.js';
+import { humanCookie } from '../turnstile.js';
 import fs from 'node:fs';
 import { active as turnstileOn, isHuman, verifyToken } from '../turnstile.js';
 import { avatarPath, displayNameOf } from './profile.js';
 import { trimEnd } from '../text.js';
-import { bindOwner, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User } from '../users.js';
+import { bindOwner, findByEmail, identitiesOf, linkIdentity, resolveUser, signupsOn, unlinkIdentity, type User, type Who } from '../users.js';
 
 /** A path inside this site, never another website: used for "take me back to where I was". */
 const safeReturn = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[\w\-./?=&%]*$/.test(v) && !v.startsWith('/auth/') ? v : '/');
@@ -51,17 +53,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
   });
 
-  app.get('/auth/callback/:id', async (req, rep) => {
-    if (tooMany(req.ip)) return rep.code(429).type('text/html').send(auth.messagePage('Slow down', 'Too many sign-in attempts. Try again in a minute.'));
-    let done;
-    try { done = await auth.finish(req); } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Sign-in failed.';
-      // Provider and protocol errors can carry technical detail: log it, show a plain message.
-      const known = /expired|already used|did not|no longer|would not|no code|answered/.test(msg);
-      if (!known) console.error('sign-in failed', msg);
-      return rep.code(400).type('text/html').send(auth.messagePage('Sign-in did not work', known ? msg : 'The provider’s answer could not be checked. Please try again.'));
-    }
-    const { who, flow } = done;
+  /** Lets an identity in (or not) and sets the session: the part of every sign-in that comes after "who is this". */
+  const admit = (req: any, rep: any, who: Who, flow: { test?: boolean; returnTo: string; linkUser?: number; guest?: boolean }, via: 'redirect' | 'json' = 'redirect') => {
     const conf = loadAuth(db);
     const listed = !!conf.open || isAllowed(who, conf.allow); // open: anyone who signs in is let in
     // Someone who came from a share link to make a guest account needs no place on the list; that lets in a guest and no one else (checked below).
@@ -90,6 +83,93 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const token = createSession(db, user.id);
     rep.header('Set-Cookie', sessionCookie(token, auth.isSecure(req)));
     return rep.redirect(flow.test ? '/settings?section=access&access=tested' : flow.returnTo);
+  };
+
+  app.get('/auth/callback/:id', async (req, rep) => {
+    if (tooMany(req.ip)) return rep.code(429).type('text/html').send(auth.messagePage('Slow down', 'Too many sign-in attempts. Try again in a minute.'));
+    let done;
+    try { done = await auth.finish(req); } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sign-in failed.';
+      // Provider and protocol errors can carry technical detail: log it, show a plain message.
+      const known = /expired|already used|did not|no longer|would not|no code|answered/.test(msg);
+      if (!known) console.error('sign-in failed', msg);
+      return rep.code(400).type('text/html').send(auth.messagePage('Sign-in did not work', known ? msg : 'The provider’s answer could not be checked. Please try again.'));
+    }
+    return admit(req, rep, done.who, done.flow);
+  });
+
+
+  // ---------- public: what the sign-in screens need, and the emailed code ----------
+  const emailOn = () => !!loadAuth(db).email && smtpHealthy(db);
+  const ownerName = () => { const o = x.tenants.owner(); return displayNameOf(o.db) || ''; };
+  const sendHits = new Map<string, number[]>();
+  const sendLimited = (key: string, max: number, windowMs: number) => {
+    const now = Date.now();
+    const l = (sendHits.get(key) ?? []).filter((t) => t > now - windowMs);
+    if (l.length >= max) { sendHits.set(key, l); return true; }
+    l.push(now); sendHits.set(key, l);
+    if (sendHits.size > 5000) sendHits.clear();
+    return false;
+  };
+  const guestFlow = (b: Row) => b.guest === true && /^\/s\/[\w-]+$/.test(safeReturn(b.returnTo));
+  const okEmail = (v: unknown) => { const e = String(v ?? '').trim().toLowerCase(); return /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e) ? e : ''; };
+
+  app.get('/api/public/auth', async (req) => {
+    const conf = loadAuth(db);
+    const t = turnstileOn(db, 'signin');
+    return {
+      providers: conf.providers.map((p) => ({ id: p.id, name: p.name, type: p.type })),
+      email: emailOn(), password: !!cfg.authPassword, turnstile: t ? { siteKey: t.siteKey } : null,
+      signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
+      signedIn: !!sessionUser(db, req),
+    };
+  });
+
+  // Sends a code. The answer is the same whether or not the address may sign in, so this cannot be used to find out who has an account.
+  app.post('/api/public/auth/email/send', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (!emailOn()) return rep.code(404).send({ error: 'Signing in with an emailed code is not available here.' });
+    const email = okEmail(b.email);
+    if (!email) return rep.code(400).send({ error: 'Enter a valid email address.' });
+    if (sendLimited(`ip:${req.ip}`, 10, 600_000) || sendLimited(`e:${email}`, 5, 600_000)) return rep.code(429).send({ error: 'Too many codes asked for. Wait a few minutes and try again.' });
+    if (turnstileOn(db, 'signin') && !isHuman(db, req)) {
+      const v = await verifyToken(db, b.turnstile, req.ip, cfg.turnstileUrl);
+      if (v === 'bad') return rep.code(400).send({ error: 'Please complete the check to show you are a person.' });
+      if (v === 'ok') rep.header('Set-Cookie', humanCookie(db, auth.isSecure(req)));
+    }
+    const conf = loadAuth(db);
+    const who: Who = { provider: 'email', sub: email, email, emailVerified: true, name: String(b.name ?? '').trim().slice(0, 80) || email };
+    const existing = findByEmail(db, email);
+    const invited = !!db.prepare("SELECT 1 FROM users WHERE provider = 'invite' AND sub = ?").get(email);
+    const listed = !!conf.open || isAllowed(who, conf.allow) || invited;
+    const eligible = existing ? !existing.disabled && (listed || existing.role === 'guest' || existing.provider !== 'invite') : (listed && signupsOn(db, cfg.allowSignups !== false)) || guestFlow(b);
+    if (eligible) {
+      const code = issueCode(db, email);
+      const sent = await sendMail(db, { to: email, template: 'code', type: 'code', params: { ...footer(db, ownerName(), auth.baseUrl(req)), name: existing?.name?.split(' ')[0] || who.name.split('@')[0], code, device: String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a browser', location: '', time: new Date().toUTCString() } });
+      if (!sent.ok) return rep.code(502).send({ error: 'The email could not be sent. Ask the owner to check Settings, Email.' });
+    }
+    return { ok: true };
+  });
+
+  app.post('/api/public/auth/email/verify', async (req, rep) => {
+    const b = (req.body ?? {}) as Row;
+    if (!emailOn()) return rep.code(404).send({ error: 'Signing in with an emailed code is not available here.' });
+    const email = okEmail(b.email);
+    if (!email || sendLimited(`v:${req.ip}`, 30, 600_000)) return rep.code(email ? 429 : 400).send({ error: email ? 'Too many tries. Wait a few minutes.' : 'Enter a valid email address.' });
+    const r = checkCode(db, email, b.code);
+    if (r !== 'ok') {
+      const msg = r === 'wrong' ? 'That code is not right. Check it and try again.' : r === 'voided' ? 'Too many wrong tries. That code no longer works: send a new one.' : 'That code has expired. Send a new one.';
+      return rep.code(400).send({ error: msg, reason: r });
+    }
+    const conf = loadAuth(db);
+    const who: Who = { provider: 'email', sub: email, email, emailVerified: true, name: String(b.name ?? '').trim().slice(0, 80) || email };
+    const existing = findByEmail(db, email);
+    const invited = !!db.prepare("SELECT 1 FROM users WHERE provider = 'invite' AND sub = ?").get(email);
+    const listed = !!conf.open || isAllowed(who, conf.allow) || invited;
+    const user = existing ?? (listed || guestFlow(b) ? resolveUser(db, who, signupsOn(db, cfg.allowSignups !== false), !listed) : null);
+    if (!user || user.disabled) return rep.code(403).send({ error: 'This address is not allowed to use this Frames. Ask the owner to add it.' });
+    rep.header('Set-Cookie', sessionCookie(createSession(db, user.id), auth.isSecure(req)));
+    return { ok: true, returnTo: safeReturn(b.returnTo) };
   });
 
   // Add another way to sign in to the person who is signed in now: they pass through the provider once, and that account is then theirs too.
@@ -142,7 +222,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   const dto = (req: any, c: AuthConfig) => ({
-    enabled: c.enabled, allow: c.allow, open: !!c.open, publicUrl: c.publicUrl,
+    enabled: c.enabled, allow: c.allow, open: !!c.open, email: !!c.email, emailHealthy: smtpHealthy(db), publicUrl: c.publicUrl,
     testedBy: c.testedBy ? { email: c.testedBy.email, name: c.testedBy.name, provider: c.testedBy.provider } : null,
     providers: c.providers.map((p) => ({ ...p, hasSecret: !!getSecret(db, `oauth:${p.id}`), redirectUrl: `${auth.baseUrl(req)}/auth/callback/${p.id}` })),
     passwordOption: !!cfg.authPassword, disabledByEnv: !!cfg.authDisabled, callbackBase: auth.baseUrl(req),
@@ -195,6 +275,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     if (typeof b.enabled === 'boolean') next.enabled = b.enabled;
     if (typeof b.open === 'boolean') next.open = b.open;
+    if (typeof b.email === 'boolean') {
+      if (b.email && !smtpHealthy(db)) return bad('Set up Email first (Settings, Email) and pass its check.');
+      next.email = b.email;
+    }
 
     // --- the lock-out protections ---
     if (changedProviders && !(cur.enabled && onlyAdded)) { // adding one while sign-in is on is allowed: nothing that already works is touched
@@ -204,10 +288,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const au = (req as any).authUser as User | null;
     const me = au && (req as any).authVia === 'session' ? { provider: au.provider, sub: au.sub, email: au.email, emailVerified: true } : null;
     if (next.enabled) {
-      if (!next.providers.length) return bad('Add a provider first.');
+      if (!next.providers.length && !next.email) return bad('Add a provider first, or turn on email codes.');
       if (!next.open && !next.allow.length) return bad('Add at least one email, domain or account to the list of people allowed in, or choose “Anyone who signs in”.');
       if (!next.testedBy) return bad('Use “Test sign-in” with a provider first, so you know you can get back in.');
-      if (!next.providers.some((p) => p.id === next.testedBy!.provider)) return bad('The account that tested sign-in uses a provider that is no longer set up. Test again.');
+      if (!next.providers.some((p) => p.id === next.testedBy!.provider) && !(next.email && next.testedBy.provider === 'email')) return bad('The account that tested sign-in uses a provider that is no longer set up. Test again.');
       if (cur.enabled && me && !next.open && !isAllowed(me, next.allow)) return bad('That list would lock you out: your own account is not on it.');
       if (!next.open && !isAllowed(next.testedBy, next.allow)) return bad('The account you tested with is not on the allowed list, so you would be locked out. Add it, or test with an allowed account.');
     }

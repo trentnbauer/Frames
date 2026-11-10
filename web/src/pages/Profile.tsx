@@ -3,7 +3,9 @@ import { api, useApi } from '../api';
 import { useStore } from '../store';
 import { SignInMethods } from './SignInMethods';
 
-type P = { displayName: string; hasAvatar: boolean; signedInAs: string };
+type P = { displayName: string; hasAvatar: boolean; signedInAs: string; country: string; seasons: 'auto' | 'north' | 'south' | 'off'; hemisphere: 'north' | 'south' | 'none'; tz: string };
+
+const COUNTRIES = ['Australia', 'New Zealand', 'South Africa', 'Argentina', 'Brazil', 'Chile', 'Uruguay', 'Paraguay', 'Peru', 'Bolivia', 'Madagascar', 'Mozambique', 'Namibia', 'Botswana', 'Zimbabwe', 'Zambia', 'Fiji', 'Samoa', 'Tonga', 'Mauritius', 'United Kingdom', 'Ireland', 'United States', 'Canada', 'Mexico', 'France', 'Germany', 'Spain', 'Italy', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Portugal', 'Sweden', 'Norway', 'Denmark', 'Finland', 'Poland', 'Czechia', 'Greece', 'Turkey', 'Israel', 'India', 'China', 'Japan', 'South Korea', 'Taiwan', 'Hong Kong', 'Indonesia', 'Singapore', 'Malaysia', 'Thailand', 'Vietnam', 'Philippines', 'Kenya', 'Nigeria', 'Egypt', 'Morocco', 'Ecuador', 'Colombia', 'Other'];
 
 /** Shrinks a chosen picture to a 256 pixel square in the browser, so only a small JPEG is sent. */
 function squareJpeg(file: File): Promise<string> {
@@ -64,6 +66,21 @@ export function Profile() {
           <input aria-label="Display name" value={name} maxLength={80} placeholder={p.data.signedInAs || 'Your name'} onChange={(e) => setName(e.target.value)} style={{ minWidth: 280 }} />
           <button className="pill primary" disabled={name.trim() === p.data.displayName} onClick={() => run(() => api('/profile', { method: 'PUT', body: { displayName: name } }), 'Name saved.')}>Save</button>
         </div>
+      </div>
+      <div className="field">
+        <h3>Country</h3>
+        <p>Sets the hemisphere for photo seasons, and appears on your public portfolio under your tagline.</p>
+        <div className="form"><select value={p.data.country} onChange={(e) => run(() => api('/profile', { method: 'PUT', body: { country: e.target.value } }), 'Country saved.')} aria-label="Country"><option value="">Choose…</option>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+      </div>
+      <div className="field">
+        <h3>Seasons</h3>
+        <p>Photos get a season chip from their date. Auto follows your country{p.data.seasons === 'auto' && p.data.hemisphere === 'none' ? ', and near the equator it shows no seasons' : ''}.</p>
+        <div className="seg">{([['auto', 'Auto (from country)'], ['north', 'Northern'], ['south', 'Southern'], ['off', 'Don’t show seasons']] as const).map(([k, l]) => <button key={k} className={p.data!.seasons === k ? 'on' : ''} onClick={() => run(() => api('/profile', { method: 'PUT', body: { seasons: k } }), 'Seasons saved.')}>{l}</button>)}</div>
+      </div>
+      <div className="field">
+        <h3>Time zone</h3>
+        <p>Used for quiet hours and when reminder emails go out. Taken from this browser until you change it.</p>
+        <div className="form"><input aria-label="Time zone" defaultValue={p.data.tz || Intl.DateTimeFormat().resolvedOptions().timeZone} onBlur={(e) => e.target.value && e.target.value !== p.data!.tz && run(() => api('/profile', { method: 'PUT', body: { tz: e.target.value } }), 'Time zone saved.')} style={{ width: 240 }} /></div>
       </div>
       <SignInMethods />
     </>

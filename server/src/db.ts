@@ -271,6 +271,38 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'photos', 'focal35', 'REAL');
     addColumn(db, 'photos', 'gear_sig', "TEXT NOT NULL DEFAULT ''");
   },
+  // share links: PIN lock, permissions and the guest-facing options of the redesigned Share dialog
+  (db) => {
+    addColumn(db, 'shares', 'pin', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'shares', 'allow_suggest', 'INTEGER');
+    addColumn(db, 'shares', 'see_each_other', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'shares', 'show_guests', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'shares', 'ask_name', 'INTEGER NOT NULL DEFAULT 1');
+  },
+  // collections remember when they were last changed, for "most recently edited"
+  (db) => { addColumn(db, 'collections', 'updated_at', 'TEXT'); },
+  // the portfolio: favourites, and photographs left out (which always wins over the automatic score rule)
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS portfolio_marks (photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, favourite INTEGER NOT NULL DEFAULT 0, out INTEGER NOT NULL DEFAULT 0)'); },
+  // gear and wishlist
+  (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS gear_items (
+      id INTEGER PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other', system TEXT NOT NULL DEFAULT '',
+      year INTEGER, why TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '', price REAL, rank INTEGER NOT NULL DEFAULT 0, bought_at TEXT, created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS gear_items_kind ON gear_items(kind, rank)`);
+  },
+  // a date the person set by hand on a photograph (the camera date and the upload date stay as they were)
+  (db) => { addColumn(db, 'photos', 'date_edit', 'TEXT'); },
+  // who a share link was emailed to, and whether it arrived
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS share_invites (id INTEGER PRIMARY KEY, share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE, email TEXT NOT NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT \'\', at TEXT NOT NULL)'); },
+  // share links: "Show guests: only the wall" (otherwise all candidates)
+  (db) => { addColumn(db, 'shares', 'only_wall', 'INTEGER NOT NULL DEFAULT 0'); },
+  // notifications (the bell): what happened, where it leads, and whether it has been read
+  (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0,
+      screen TEXT NOT NULL DEFAULT '', anchor TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '');
+      CREATE INDEX IF NOT EXISTS notifications_created ON notifications(created_at);`);
+  },
 ];
 
 export function migrate(db: DB) {

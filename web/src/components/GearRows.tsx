@@ -3,7 +3,7 @@ import { useApi } from '../api';
 import type { PhotoFull } from '../data';
 
 const box = { font: 'inherit', width: '100%', background: 'none', border: 0, outline: 'none', color: 'inherit', padding: 0 } as const;
-const dt = { color: '#6f6c67' } as const;
+const dt = { color: 'var(--faint)' } as const;
 
 /** One box that saves when you leave it, and shows the saved value again if the photograph changes. */
 function Box({ value, label, placeholder, list, onSave, width }: { value: string; label: string; placeholder?: string; list?: string; onSave: (v: string) => void; width?: number }) {

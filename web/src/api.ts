@@ -6,7 +6,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     headers: init?.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
-  if (r.status === 401 && (await r.clone().json().catch(() => null))?.signIn) window.location.assign('/'); // the session ended: back to the sign-in page
+  if (r.status === 401 && (await r.clone().json().catch(() => null))?.signIn) window.location.assign(`/signin?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`); // the session ended: back to the sign-in page
   if (!r.ok) throw new Error((await r.json().catch(() => ({ error: r.statusText }))).error ?? r.statusText);
   return r.json() as Promise<T>;
 }

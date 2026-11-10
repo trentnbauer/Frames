@@ -95,7 +95,7 @@ export function TunnelSettings() {
         <p>The App URL is the address you open Frames at from outside. It is the same <b>public address</b> as under Settings, Sign-in & access. Each person sets their own portfolio address under Settings, Portfolio.</p>
         <div style={{ maxWidth: 560 }}>
           <div className="muted" style={{ fontSize: 12.5, marginBottom: 4 }}>Frames: App URL</div>
-          <div aria-label="App URL" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,.04)', fontSize: 13.5 }}>
+          <div aria-label="App URL" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 8, background: 'var(--hover)', fontSize: 13.5 }}>
             <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" style={{ color: 'var(--faint)', flex: 'none' }}><rect x="0.5" y="5" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" /><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" /></svg>
             <span className="mono">{t.appUrl || 'Not set yet'}</span>
           </div>
