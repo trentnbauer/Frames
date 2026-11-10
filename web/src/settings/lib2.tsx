@@ -219,10 +219,14 @@ export function usePortfolio(ctx: Ctx): Section {
 }
 
 /* -------------------------------------------------------------------- Data */
+const PV_SIZES = [1600, 2400, 3072, 4096];
+const PV_QUALITY = [70, 75, 80, 85, 88, 90, 95];
 export function useData(ctx: Ctx): Section {
   const s = useApi<{ photos?: unknown[] }>('/library/pending');
   const sys = useApi<{ cache: { bytes: number } }>(ctx.isAdmin ? '/admin/system' : null);
   const summary = useApi<{ total: number }>('/review/summary');
+  const pv = useApi<{ settings: { previewPx: number; previewQuality: number }; limits: { previewPx: number; previewQuality: number } }>('/settings');
+  const savePv = async (body: object) => { await act(ctx, () => api('/settings', { method: 'PUT', body })); pv.reload(); };
   const gb = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
   void s;
   const manage = () => ctx.modal(<Modal title="Your data" sub="Back up, delete or reset everything Frames keeps for you." width={680} onClose={close(ctx)}><YourData /></Modal>);
@@ -232,6 +236,8 @@ export function useData(ctx: Ctx): Section {
       { title: 'Storage', rows: [
         { id: 'stLib', t: 'meter', label: 'Library', hint: `${(summary.data?.total ?? 0).toLocaleString()} photos · originals untouched`, pct: 100, text: `${(summary.data?.total ?? 0).toLocaleString()} photos` },
         { id: 'stCache', t: 'button', label: 'Previews & thumbnails', hint: `${sys.data ? gb(sys.data.cache.bytes) + ' · ' : ''}rebuilt when needed`, meta: 'Clear', act: async () => { if (!window.confirm('Clear all previews and thumbnails? They are made again in the background.')) return; await act(ctx, () => api('/library/clear-cache', { body: {} }), 'Previews cleared · they’ll rebuild in the background'); sys.reload(); } },
+        { id: 'pvSize', t: 'select', label: 'Preview size', hint: 'What you see on the Photo page and in Review. Smaller saves space. Sizes above the server’s limit are greyed out. Clear previews above to apply it to photos already here.', opts: PV_SIZES.map((x) => `${x} px`), offOpts: PV_SIZES.filter((x) => x > (pv.data?.limits.previewPx ?? 4096)).map((x) => `${x} px`), value: `${Math.min(pv.data?.settings.previewPx ?? 2400, pv.data?.limits.previewPx ?? 4096)} px`, set: (v: string) => void savePv({ previewPx: parseInt(v, 10) }) },
+        { id: 'pvQuality', t: 'select', label: 'Preview quality', hint: 'JPEG quality, 70 to 95. Lower makes smaller files; 85 is hard to tell apart on screen. Values above the server’s limit are greyed out.', opts: PV_QUALITY.map(String), offOpts: PV_QUALITY.filter((x) => x > (pv.data?.limits.previewQuality ?? 95)).map(String), value: String(Math.min(pv.data?.settings.previewQuality ?? 85, pv.data?.limits.previewQuality ?? 95)), set: (v: string) => void savePv({ previewQuality: Number(v) }) },
       ] },
       { title: 'Export', rows: [
         { id: 'exportAll', t: 'button', label: 'Everything', hint: 'Ratings, tags and compositions as a library backup.', meta: 'Export', act: () => { window.location.href = '/api/backup'; ctx.toast('Downloading your library backup'); } },
