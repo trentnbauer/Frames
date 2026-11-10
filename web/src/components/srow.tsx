@@ -8,7 +8,7 @@ export const Eyebrow = ({ children }: { children: React.ReactNode }) => <div cla
 export const SCard = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => <div className="scard" style={style}>{children}</div>;
 export function SRow({ title, hint, children, sub, onClick, lead }: { title: React.ReactNode; hint?: React.ReactNode; children?: React.ReactNode; sub?: boolean; onClick?: () => void; lead?: React.ReactNode }) {
   return (
-    <div className={'srow' + (sub ? ' sub' : '') + (onClick ? ' click' : '')} onClick={onClick} role={onClick ? 'button' : undefined}>
+    <div style={{"cursor":"pointer"}} className={'srow' + (sub ? ' sub' : '') + (onClick ? ' click' : '')} onClick={onClick} role={onClick ? 'button' : undefined}>
       <div className="srow-l">{lead}<div className="srow-t"><div>{title}</div>{hint && <div className="srow-h">{hint}</div>}</div></div>
       {children !== undefined && <div className="srow-c">{children}</div>}
     </div>

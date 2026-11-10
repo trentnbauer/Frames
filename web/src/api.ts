@@ -35,3 +35,15 @@ export function useApi<T>(path: string | null) {
  */
 const IMG_REV = 2;
 export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;
+
+/** Opens the person's own portfolio in a new tab: their own web address if they set one, else /portfolio/. The tab opens first so a pop-up blocker allows it. */
+export async function openPortfolio() {
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.opener = null;
+  try {
+    const { config } = await api<{ config: { host: string } }>('/portfolio');
+    const h = config.host;
+    w.location.href = h ? `${/^localhost(:|$)/.test(h) ? 'http' : 'https'}://${h}/` : '/portfolio/';
+  } catch { w.location.href = '/portfolio/'; }
+}

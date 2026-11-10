@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { api, useApi } from '../api';
+import { api, openPortfolio, useApi } from '../api';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { getTheme, setTheme } from '../theme';
@@ -127,7 +127,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
               {me?.role === 'admin' && <span className="eyebrow pillish">Admin</span>}
             </div>
             {item('Settings', go('/settings'), '⌘ ,')}
-            {item('View my portfolio', () => { close(); window.open('/portfolio/', '_blank', 'noopener'); }, '↗')}
+            {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
             {item(theme === 'dark' ? 'Light mode' : 'Dark mode', toggleTheme, theme === 'dark' ? '☼' : '☾')}
             <div className="msep" />
