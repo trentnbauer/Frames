@@ -399,3 +399,27 @@ textarea.field-in { height: auto; padding: 12px 14px; line-height: 1.5; resize: 
   .tabbar a, .tabbar button { height: 56px; display: grid; place-items: center; font-size: 12px; color: var(--muted); }
   .tabbar a.on { color: var(--text); }
 }
+
+/* ---- sign in, sign up, terms, PIN ---- */
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; background: var(--bg); }
+.auth-wrap.top { place-items: start center; padding-top: 72px; }
+main.auth { width: 380px; max-width: 100%; display: flex; flex-direction: column; font-size: 15px; line-height: 1.5; }
+main.auth.terms { width: 640px; }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; font: italic 400 20px/1 var(--serif); color: var(--text2); }
+.auth-h { font: 400 44px/1 var(--serif); margin: 0 0 8px; }
+.auth-p { color: var(--text2); margin: 0 0 22px; }
+.auth-about { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 0 0 22px; text-wrap: pretty; }
+.auth-err { color: var(--err); background: var(--err-bg); border-radius: 10px; padding: 10px 14px; margin-bottom: 18px; font-size: 14px; }
+.auth-in, .auth-code { height: 46px; border-radius: 999px; border: 0; outline: none; background: var(--surface); box-shadow: inset 0 0 0 1px var(--outline); color: var(--text); padding: 0 18px; font: 400 15px var(--sans); margin-bottom: 10px; width: 100%; }
+.auth-in:focus, .auth-code:focus { box-shadow: inset 0 0 0 1px var(--text); }
+.auth-code { height: 56px; text-align: center; font: 400 30px var(--mono); letter-spacing: .5em; text-indent: .5em; padding: 0; text-transform: uppercase; }
+.auth-code.pin { letter-spacing: .45em; }
+.auth-btn { width: 100%; margin-bottom: 10px; }
+.auth-hint { font-size: 12.5px; color: var(--faint); margin-bottom: 16px; display: block; }
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12px; margin-bottom: 14px; }
+.auth-or i { flex: 1; height: 1px; background: var(--hair); }
+.auth-foot { margin: 26px 0 0; font-size: 13px; display: flex; gap: 14px; color: var(--muted); }
+.auth-foot a:hover { color: var(--text); }
+.auth-agree { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text2); margin-bottom: 16px; cursor: pointer; }
+.auth-agree input { margin-top: 4px; }
+.auth-agree a { color: var(--text); text-decoration: underline; }

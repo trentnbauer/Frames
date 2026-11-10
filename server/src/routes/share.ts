@@ -32,7 +32,7 @@ const PIN_ERR = 'A PIN is four numbers, not all the same and not a straight run 
 /** The only addresses served without the login: the share page shell, its assets, and the share API. */
 export function isPublicPath(url: string): boolean {
   const path = url.split('?')[0];
-  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg' || path === '/privacy' || /^\/(signin|signup|signed-out|terms)\/?$/.test(path) || /^\/api\/public\/auth(\/[a-z-]+)*\/?$/.test(path);
+  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg' || path === '/theme.js' || path === '/privacy' || /^\/(signin|signup|signed-out|terms)\/?$/.test(path) || /^\/api\/public\/auth(\/[a-z-]+)*\/?$/.test(path);
 }
 export const isSharePath = (url: string) => /^\/(api\/)?s\//.test(url);
 

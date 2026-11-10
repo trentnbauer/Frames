@@ -22,6 +22,7 @@ import { SharePage } from './pages/SharePage';
 import { Welcome } from './pages/Welcome';
 import { GuestHome } from './pages/GuestHome';
 import { api } from './api';
+import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
@@ -97,6 +98,7 @@ function Shell() {
 export function App() {
   const loc = useLocation();
   const { me } = useStore();
+  if (AUTH_PATHS.test(loc.pathname)) return <AuthApp />;
   if (loc.pathname.startsWith('/s/')) return <Routes><Route path="/s/:token" element={<SharePage />} /><Route path="*" element={<SharePage />} /></Routes>;
   if (me?.role === 'guest') return <GuestHome />; // a guest has no library, so none of the app
   return <Shell />;

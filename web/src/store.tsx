@@ -32,7 +32,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); api<{ total: number }>('/todo').then((t) => setTodo(t.total)).catch(() => {}); }, []);
   useEffect(() => {
     // A share link's page has no login, and these calls need one: skip them there, or the browser asks a guest for a password.
-    if (window.location.pathname.startsWith('/s/')) return;
+    if (window.location.pathname.startsWith('/s/') || /^\/(signin|signup|signed-out|terms)\/?$/.test(window.location.pathname)) return;
     api<Me>('/me').then(setMe).catch(() => {});
     api<{ settings: Settings }>('/settings').then((r) => setS(r.settings)).catch(() => {});
     refreshSummary();
