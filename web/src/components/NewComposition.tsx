@@ -153,15 +153,16 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div role="dialog" aria-label="New composition" style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 560, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
-        <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 18px' }}>New composition</h2>
+    <div className="mscrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-label="New composition" style={{ width: 640, maxHeight: '90vh', overflow: 'auto' }}>
+        <div className="mbody" style={{ gap: 0 }}>
+        <div className="mhead" style={{ marginBottom: 18 }}><div className="mtitle">New composition</div><button className="xbtn" onClick={onClose} aria-label="Close">✕</button></div>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example: Birds at the beach" aria-label="Composition name"
           style={{ width: '100%', background: 'var(--bg)', border: 0, borderRadius: 8, padding: '10px 12px', fontSize: 14, boxShadow: ring, outline: 'none', marginBottom: 20 }} />
-        <div style={label}>How many prints</div>
-        <div className="stepper" style={{ marginBottom: 16 }} role="group" aria-label="Number of prints">
+        <div className="spread" style={{ alignItems: 'center', marginBottom: 18 }}><div><div style={{ ...label, marginBottom: 2 }}>Prints</div><div className="muted" style={{ fontSize: 13 }}>You can add or remove prints later</div></div>
+        <div className="stepper" role="group" aria-label="Number of prints">
           <button aria-label="Fewer prints" disabled={count <= 1} onClick={() => setN(count - 1)}>−</button><b aria-live="polite">{count}</b><button aria-label="More prints" disabled={count >= 12} onClick={() => setN(count + 1)}>+</button>
-        </div>
+        </div></div>
         <div style={label}>Layout</div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, optionsFor(count).length)},minmax(0,1fr))`, gap: 6, marginBottom: 18 }}>
           {optionsFor(count).map((pr) => {
@@ -176,7 +177,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
             );
           })}
         </div>
-        <div style={label}>Prints</div>
+        <div className="spread"><div style={label}>Sizes</div><span className="faint" style={{ fontSize: 12 }}>Click a size to change it</span></div>
         <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
           {prints.map((p, i) => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--hair)', flexWrap: 'wrap' }}>
@@ -217,6 +218,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`}</span>
           <button onClick={create} disabled={busy} style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>Create and rank</button>
+        </div>
         </div>
       </div>
     </div>

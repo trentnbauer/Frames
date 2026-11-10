@@ -207,7 +207,7 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
           <button onClick={() => go(1)}>Next →</button>
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start', background: 'var(--surface)', borderRadius: 14, padding: 24 }}>
         <div style={{ flex: '1 1 520px', minWidth: 0, position: 'sticky', top: 16 }}>
           <div style={{ background: '#000', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 330px)', minHeight: 360, padding: 16 }}>
             <img src={imgUrl(w.id, 'preview')} alt={w.title} style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
@@ -224,7 +224,7 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
 
         <aside style={{ width: 340, flex: 'none', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
-            <div style={{ font: `400 40px/1 ${serif}` }}>{w.title}</div>
+            <div className="spread" style={{ alignItems: 'flex-start', gap: 12 }}><div style={{ font: `400 40px/1 ${serif}` }}>{w.title}</div>{ai && <button className="btn outline" style={{ height: 34, fontSize: 13, flex: 'none' }} onClick={recheck} disabled={checking}>{checking ? <><span className="spin" style={{ width: 12, height: 12 }} /> Analysing…</> : '✦ Analyze with AI'}</button>}</div>
             <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 6 }}>{p?.place ? `${w.shoot} · ${p.place}` : w.shoot}</div>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>{!p ? 'Loading…' : leftN ? `${plural(leftN, 'thing', 'things')} left on this one` : 'All done here.'}</div>
           </div>
@@ -287,7 +287,6 @@ function Focus({ photos, cur, setCur, done, markDone, onChange }: { photos: Walk
             <button onClick={() => (allDone || !isLast ? next() : undefined)} style={{ width: '100%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, borderRadius: 999, padding: '11px 20px', fontSize: 14 }}>{nextLabel}</button>
             <AddToComposition up label="Add to a composition…" ids={[w.id]} onDone={setMsg} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              {ai && <button onClick={recheck} disabled={checking} style={pill}>{checking ? 'Checking…' : 'Re-check with AI'}</button>}
               <button onClick={() => go(1)} style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 'auto' }}>Skip for now</button>
             </div>
             {msg && <div role="status" style={{ fontSize: 12.5, color: 'var(--muted)' }}>{msg}</div>}
