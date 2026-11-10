@@ -17,6 +17,8 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       # true switches ALL sign-in inside Frames off: for one person behind something else that protects it, or to get back in (see README, Security).
       AUTH_DISABLE: ${AUTH_DISABLE:-false}
+      # A temporary one-use administrator written to the log at each start, for when nobody can sign in (see README, Security).
+      EMERGENCY_LOGIN: ${EMERGENCY_LOGIN:-true}
       OIDC_ALLOW_HTTP: ${OIDC_ALLOW_HTTP:-false}
       SESSION_DAYS: ${SESSION_DAYS:-}
       # Set to 1 behind a reverse proxy, so share links rate-limit each visitor, not the proxy.

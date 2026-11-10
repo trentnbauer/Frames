@@ -11,6 +11,7 @@ services:
         required: false
     environment:
       AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
+      EMERGENCY_LOGIN: ${EMERGENCY_LOGIN:-true}
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
       ## Settings, Env file exports every setting and secret as one file for this stack. It sets ALLOW_ENV_EXPORT=false so it cannot be downloaded twice.
       # Outgoing email (see .env.example). Optional: Settings, Email in the app does the same.

@@ -12,6 +12,7 @@ import { integrity, startAutoBackup } from './backup.js';
 import { policyOf } from './policy.js';
 import { setSessionDays } from './auth.js';
 import { envBool } from './env.js';
+import { startEmergency } from './emergency.js';
 import { openDb, type DB } from './db.js';
 import { internalDir } from './ingest.js';
 
@@ -67,6 +68,7 @@ startCacheTrim(() => ({ cfgs: frames.tenants.all().map((t) => t.cfg as never), l
 (frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authDisabled ? 'DISABLED' : [authPassword && 'password', oauthEnabled(frames.sys) && 'oauth'].filter(Boolean).join('+') || 'OFF'})`);
+  if (!authDisabled && envBool('EMERGENCY_LOGIN', true)) { try { startEmergency((app as any).frames); } catch (e) { console.error(`Could not make the emergency login: ${e instanceof Error ? e.message : e}`); } }
   if (authDisabled) console.warn('AUTH_DISABLE=true: ALL sign-in is switched off inside Frames. Anyone who can reach this port can use Frames, so something else must protect it (Cloudflare Access, a VPN, a firewall).');
   else if (!authPassword && !oauthEnabled(frames.sys)) console.warn('No sign-in is set up: anyone who can reach this port can use Frames. Set AUTH_PASSWORD or add an OAuth provider in Settings, Sign-in & access.');
 }).catch((e) => {

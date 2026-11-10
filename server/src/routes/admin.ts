@@ -6,7 +6,7 @@ import { zipOne } from '../zip.js';
 import { setSessionDays, cleanAllow, isAllowed, loadAuth, saveAuth, sessionAgeMs, sessionCookie } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, type DB } from '../db.js';
-import { buildEnvFile, collectEnvConfig, envConfigLoaded, isSecretName, snapshot } from '../envConfig.js';
+import { buildEnvFile, collectEnvConfig, envConfigLoaded, isSecretName, isStateVar, snapshot } from '../envConfig.js';
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
@@ -300,7 +300,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       return { name, secret: secret(name), status, env: show(name, env[name]), app: status === 'same' ? undefined : show(name, text) }; // the app's value is shown only where it is not the same
     });
     const known = new Set(pairs.map(([k]) => k));
-    for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k)).sort()) {
+    for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k) && !isStateVar(k)).sort()) {
       rows.push({ name, secret: secret(name), status: 'env only', env: show(name, env[name]) });
     }
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };

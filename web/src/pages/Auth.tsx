@@ -10,17 +10,8 @@ export const AUTH_PATHS = /^\/(signin|signup|signed-out|terms)\/?$/;
 
 type Options = { providers: { id: string; name: string; type: string }[]; email: boolean; password: boolean; turnstile: { siteKey: string } | null; signups: boolean; serverName: string; signedIn: boolean };
 
-const TERMS: { h: string; p: string }[] = [
-  ['Who runs this', 'This Frames is a private, self-hosted server run by its owner. It is not a company service. Frames is open-source software; the people who wrote it do not run or see this server.'],
-  ['Your account', 'You sign in with a one-time code emailed to you, a passkey, or with Google or Cloudflare Access. Don’t share sign-in codes. The owner can switch off any account at any time.'],
-  ['Your photos', 'You keep all rights to the photos you upload. Frames only stores, resizes and shows them where you choose: your library, share links, community review or your portfolio.'],
-  ['Sharing and guests', 'Share links show your photos to anyone who has the link (and its 4-digit PIN, if one is set), until it expires or you stop sharing. Guests can rate and suggest changes; they cannot download originals unless you allow it.'],
-  ['Community review', 'If you opt in, other members rate your photos anonymously. Photos tagged nudity, violence or adult are never shown. Reported photos are reviewed by an administrator and may be removed.'],
-  ['What’s not allowed', 'Uploading photos you don’t have the right to share, photos of people who haven’t agreed to be shared, or anything illegal. Harassing other members through reviews or notes.'],
-  ['AI features', 'If AI is turned on, photos and their details may be sent to the AI providers listed in Settings to describe, tag or search them. Private shoots can be kept to local AI only.'],
-  ['No guarantees', 'This server is run on a best-effort basis. Keep your own copies of anything important. Frames never deletes files in your connected cloud storage.'],
-  ['Changes', 'If these terms change, you’ll be asked to agree again the next time you sign in.'],
-].map(([h, p]) => ({ h, p }));
+/** The owner's terms, plain text: bullets and bold marks the editor allows are shown as simply as the screen can. */
+const plain = (p: string) => p.replace(/\*\*/g, '').replace(/^- /gm, '• ');
 
 const returnTo = (qs: URLSearchParams) => { const r = qs.get('returnTo') ?? ''; return /^\/(?!\/)[\w\-./?=&%]*$/.test(r) ? r : '/'; };
 
@@ -29,6 +20,7 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
   const nav = useNavigate();
   const [qs] = useSearchParams();
   const o = useApi<Options>('/public/auth');
+  const terms = useApi<{ sections: { h: string; p: string }[] }>('/public/auth/terms');
   useEffect(() => { if (o.data?.signedIn && view !== 'lock' && view !== 'out') nav('/', { replace: true }); }, [o.data, nav, view]);
   const err = qs.get('e');
   if (!o.data && view !== 'lock' && view !== 'out' && view !== 'terms') return <div className="auth-shell" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>{o.error ? 'Could not load the sign-in options.' : 'Loading…'}</div>;
@@ -37,7 +29,7 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
   return (
     <div className="auth-shell">
       <ProtoAuth
-        key={view} view={view} options={options} terms={TERMS} initialError={err}
+        key={view} view={view} options={options} terms={(terms.data?.sections ?? []).map((t) => ({ h: t.h, p: plain(t.p) }))} initialError={err}
         sendCode={async (a: { email: string; name?: string; token: string }) => { await api('/public/auth/email/send', { body: { email: a.email, name: a.name, turnstile: a.token } }); }}
         verify={async (a: { email: string; code: string; name?: string }) => (await api<{ returnTo: string }>('/public/auth/email/verify', { body: { ...a, returnTo: rt } })).returnTo}
         provider={(id: string, token: string) => { const q = new URLSearchParams({ returnTo: rt }); if (token) q.set('cf-turnstile-response', token); window.location.assign(`/auth/login/${id}?${q}`); }}
