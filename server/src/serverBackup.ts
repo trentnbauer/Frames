@@ -1,3 +1,4 @@
+import { madeWithin } from './policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -33,23 +34,25 @@ export async function serverParts(src: Source, scratch: string): Promise<Parts> 
 }
 
 /** One archive on disk, written to a temporary name first so a half-written one is never mistaken for a backup. */
-export async function writeServerArchive(src: Source, dir: string, now = new Date()): Promise<string | null> {
+export async function writeServerArchive(src: Source, dir: string, now = new Date(), pol: { everyDays: number; keep: number } = { everyDays: 1, keep: 7 }): Promise<string | null> {
   fs.mkdirSync(dir, { recursive: true });
   const name = `frames-server-backup-${now.toISOString().slice(0, 10)}.tar`;
   const file = path.join(dir, name);
   if (fs.existsSync(file)) return null;
+  if (pol.everyDays > 1 && madeWithin(fs.readdirSync(dir).filter((n) => /^frames-server-backup-\d{4}-\d{2}-\d{2}\.tar$/.test(n)).map((n) => fs.statSync(path.join(dir, n))), pol.everyDays, now.getTime())) return null;
   const parts = await serverParts(src, path.join(dir, '.scratch'));
   try { await pipeline(tarOf(parts), fs.createWriteStream(file + '.partial')); fs.renameSync(file + '.partial', file); }
   finally { for (const p of parts) fs.rmSync(p.file, { force: true }); fs.rmSync(file + '.partial', { force: true }); fs.rmSync(path.join(dir, '.scratch'), { recursive: true, force: true }); }
-  for (const old of fs.readdirSync(dir).filter((n) => /^frames-server-backup-\d{4}-\d{2}-\d{2}\.tar$/.test(n)).sort().reverse().slice(7)) fs.rmSync(path.join(dir, old), { force: true });
+  for (const old of fs.readdirSync(dir).filter((n) => /^frames-server-backup-\d{4}-\d{2}-\d{2}\.tar$/.test(n)).sort().reverse().slice(pol.keep)) fs.rmSync(path.join(dir, old), { force: true });
   return name;
 }
 
-export function startServerBackup(src: () => Source, dir: string) {
+export function startServerBackup(src: () => Source, dir: string, policy?: () => { auto: boolean; everyDays: number; keep: number }) {
   let told = false;
   const run = () => {
     const s = src();
-    writeServerArchive(s, dir).then(() => (loadS3(s.sys) || loadCloudDest(s.sys) ? syncAll(s.sys, s.tenants.owner?.().cfg, dir).then(() => undefined) : undefined)).catch((e: NodeJS.ErrnoException) => {
+    const pol = policy?.();
+    (pol && !pol.auto ? Promise.resolve(null) : writeServerArchive(s, dir, new Date(), pol)).then(() => (loadS3(s.sys) || loadCloudDest(s.sys) ? syncAll(s.sys, s.tenants.owner?.().cfg, dir).then(() => undefined) : undefined)).catch((e: NodeJS.ErrnoException) => {
       if (e.code === 'EACCES' || e.code === 'EROFS') {
         if (!told) console.error(`Server backup cannot write to ${dir} (${e.code}). Frames runs as an unprivileged user (uid ${process.getuid?.() ?? '?'}): give it that folder (chown it to that user, for a bind mount or a volume that something else created), or point BACKUP_DIR somewhere it can write.`);
         told = true;

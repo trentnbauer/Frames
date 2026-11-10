@@ -49,7 +49,10 @@ export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'auth
   github: { authUrl: 'https://github.com/login/oauth/authorize', tokenUrl: 'https://github.com/login/oauth/access_token', userUrl: 'https://api.github.com/user', emailsUrl: 'https://api.github.com/user/emails' },
 };
 
-const SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
+let SESSION_DAYS = Number(process.env.SESSION_DAYS) || 14;
+/** The days a sign-in lasts: the Sign-in & access setting, unless SESSION_DAYS fixes it. */
+export const sessionDays = () => SESSION_DAYS;
+export const setSessionDays = (n: number) => { if (!process.env.SESSION_DAYS && Number.isInteger(n) && n >= 1 && n <= 365) SESSION_DAYS = n; };
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const rand = (n = 32) => crypto.randomBytes(n).toString('base64url');
 /**

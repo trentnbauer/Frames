@@ -7,9 +7,10 @@ import { useStore, type Settings } from '../store';
 import { PortfolioSettings } from './PortfolioSettings';
 import { Access } from './Access';
 import { AiSettings } from './AiSettings';
-import { CloudServices, CloudSettings } from './CloudSettings';
+import { CloudSettings } from './CloudSettings';
+import { BackupSection, PhotosStorage, StorageProcessing, UpdatesSystem } from './ServerSettings';
+import { Notice } from '../components/srow';
 import { TunnelSettings } from './TunnelSettings';
-import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
@@ -17,7 +18,7 @@ import { AiJobs, CloudOriginalsAdmin, XmpLocationAdmin, CloudResolution, Communi
 import { GearDefaults } from '../components/GearDefaults';
 
 type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
-  | 'Notifications' | 'Email' | 'People' | 'Access' | 'Libraries & storage' | 'Backup' | 'Env file' | 'Shared AI' | 'Cloud services' | 'Cloudflare tunnel' | 'About';
+  | 'Notifications' | 'Email' | 'People' | 'Access' | 'Photos & storage' | 'Backup' | 'Shared AI' | 'Cloudflare tunnel' | 'Storage & processing' | 'Updates & system' | 'About';
 
 // One page. The first three groups are about your own library; the rest, shown only to administrators, are about the whole server.
 const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
@@ -27,16 +28,14 @@ const YOUR_GROUPS: { title: string; items: Sec[] }[] = [
   { title: 'Your account', items: ['Your data'] },
 ];
 const ADMIN_GROUPS: { title: string; items: Sec[] }[] = [
-  { title: 'People & sign-in', items: ['People', 'Access', 'Email'] },
-  { title: 'Storage', items: ['Libraries & storage', 'Backup', 'Env file'] },
-  { title: 'Shared services', items: ['Shared AI', 'Cloud services', 'Cloudflare tunnel'] },
+  { title: 'Server', items: ['Access', 'People', 'Photos & storage', 'Backup', 'Shared AI', 'Cloudflare tunnel', 'Email', 'Storage & processing', 'Updates & system'] },
 ];
 /** What each section is called on screen (the others are called what they are named here). */
-const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', 'Shared AI': 'AI for everyone', 'Cloud services': 'Cloud storage providers', AI: 'Your AI', 'Libraries & storage': 'Photo folders', About: 'About Frames' };
+const LABEL: Partial<Record<Sec, string>> = { Access: 'Sign-in & access', People: 'Members', 'Shared AI': 'AI', AI: 'Your AI', About: 'About Frames' };
 const DESC: Record<Sec, string> = {
   Profile: 'Your display name and picture, where you are, and the ways you can sign in as you.',
   Notifications: 'What the bell shows, what is emailed, and quiet hours.',
-  Email: 'Outgoing mail, the sign-in code option and a log of what was sent.',
+  'Email': 'For invites, guest replies and password-free sign-in.',
   Reviews: 'How often each photograph comes back for a rating.',
   'Tags & subjects': 'Create, rename, merge and delete your subjects and tags.',
   'Metadata & XMP': 'Sidecar files, other apps’ edits and exporting what you approved.',
@@ -44,13 +43,13 @@ const DESC: Record<Sec, string> = {
   'Cloud sync': 'Folders from your cloud accounts that Frames keeps in your library.',
   Portfolio: 'Your public site: which photos, how it looks and its address.',
   'Your data': 'What Frames keeps about your library, and how to back it up or delete it.',
-  People: 'Who has a library on this server, and the privacy page they see.',
-  Access: 'Whether sign-in is required, which providers are offered and who is allowed in.',
-  'Libraries & storage': 'The folders Frames reads photographs from.',
-  Backup: 'Download a server backup, see the automatic ones, and how to restore.',
-  'Env file': 'Keep the server’s settings in an env file so they survive a restart.',
-  'Shared AI': 'AIs everyone on this server can use without their own key.',
-  'Cloud services': 'The cloud accounts people can connect for Cloud sync.',
+  'People': 'Who can sign in to this Frames.',
+  'Access': 'How people get in.',
+  'Photos & storage': 'Where originals live, and the cloud services members can bring photos in from.',
+  'Storage & processing': 'Thumbnails, previews and background work.',
+  'Updates & system': 'Version, logs and maintenance.',
+  'Backup': 'Ratings, tags and compositions. Not the photos.',
+  'Shared AI': 'AI providers everyone on this server can use.',
   'Cloudflare tunnel': 'Reach Frames from outside your network without opening ports.',
   About: 'Version and what’s new.',
 };
@@ -66,21 +65,22 @@ const HEADINGS: Partial<Record<Sec, string[]>> = {
   'Cloud sync': ['Your connected folders', 'Connect an account', 'Dropbox', 'Google Drive', 'OneDrive'],
   Portfolio: ['Publish the portfolio', 'Which photos', 'The site', 'Its own web address', 'What a visitor gets when they open a photo'],
   'Your data': ['What is kept', 'Back up my data', 'Previews', 'Delete my data'],
-  People: ['Add someone', 'Privacy page', 'Roles'],
-  Access: ['Require sign-in', 'Providers', 'Who is allowed in', 'Public address'],
-  'Libraries & storage': ['Photo libraries', 'Keep originals in cloud storage only', 'Always keep only a smaller copy of cloud photos'],
-  Backup: ['Back up the whole server', 'Automatic backups', 'Restore'],
-  'Env file': ['Download', 'Using it', 'Status'],
+  People: ['Add someone', 'Storage used', 'Privacy page', 'Roles'],
+  Access: ['Sign-in methods', 'Sessions', 'Require sign-in', 'Allow anyone to sign up', 'Stay signed in for', 'Guest links', 'Expire after', 'Guests can download files', 'Ask guests for their name', 'Bot check', 'Who is allowed in', 'Public address'],
+  'Photos & storage': ['Library folders', 'XMP sidecars', 'Where sidecar files go', 'Originals', 'Allow original downloads on portfolios', 'Allow original resolution from the cloud', 'Keep originals in cloud storage only', 'Cloud providers', 'Client ID', 'Client secret', 'Redirect address'],
+  Backup: ['Back up automatically', 'Every', 'Keep the last', 'History', 'Restore', 'S3', 'Dropbox'],
   'Shared AI': ['AIs for everyone on this server'],
-  'Cloud services': ['Client ID', 'Client secret', 'Redirect address'],
-  'Cloudflare tunnel': ['Run the tunnel', 'API token', 'Account ID', 'Addresses', 'App URL', 'Portfolios', 'Who can reach the App URL', 'Invitation only', 'Open to everyone', 'What Frames sets up', 'The tunnel log'],
+  'Storage & processing': ['Cache folder', 'Cache size', 'Rescan library folder', 'Rebuild thumbnails'],
+  'Updates & system': ['Version', 'Check now', 'Health', 'Restart Frames', 'Environment file', 'Export settings as .env'],
+  'Cloudflare tunnel': ['Run the tunnel', 'API token', 'Account ID', 'Addresses', 'App URL', 'Portfolios', 'Who can reach the App URL', 'Invitation only', 'Open to everyone', 'What Frames sets up', 'The tunnel log']
 };
 const ALL: Sec[] = [...YOUR_GROUPS, ...ADMIN_GROUPS].flatMap((g) => g.items).concat('About');
 const ADMIN_SET = new Set<Sec>(ADMIN_GROUPS.flatMap((g) => g.items));
 const groupOf = (s: Sec) => [...YOUR_GROUPS, ...ADMIN_GROUPS].find((g) => g.items.includes(s))?.title;
 const nameOf = (s: Sec) => LABEL[s] ?? s;
 const slug = (s: Sec) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const fromSlug = (v: string | null): Sec | null => (v === 'sign-in-methods' ? 'Profile' : ALL.find((s) => slug(s) === v) ?? null); // the old address of the sign-in methods page
+const OLD: Record<string, Sec> = { 'sign-in-methods': 'Profile', 'libraries-storage': 'Photos & storage', 'cloud-services': 'Photos & storage', 'env-file': 'Updates & system', 'members': 'People', 'sign-in-access': 'Access' };
+const fromSlug = (v: string | null): Sec | null => (v ? OLD[v] ?? ALL.find((s) => slug(s) === v) ?? null : null); // the old address of the sign-in methods page
 const INTERVALS = ['1 day', '1 week', '1 month', '3 months', '6 months', '1 year'];
 
 function Toggle({ on, onChange, label, hint, locked }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string; locked?: string }) {
@@ -100,9 +100,12 @@ export function SettingsPage() {
   const { settings: s, setSettings, me } = useStore();
   const isAdmin = me?.role === 'admin';
   const [err, setErr] = useState('');
+  const [headAction, setHeadAction] = useState<React.ReactNode>(null);
+  const invite = useRef<(() => void) | null>(null);
+  const onInvite = (open: () => void) => { invite.current = open; };
   // Settings that can be refused (for example AI without a model) report why instead of failing silently.
   const save = async (p: Partial<Settings>) => { setErr(''); try { await setSettings(p); } catch (e) { setErr((e as Error).message); } };
-  const go = (x: Sec) => { setSec(x); setErr(''); setFind(''); const u = new URL(window.location.href); u.searchParams.set('section', slug(x)); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); };
+  const go = (x: Sec) => { setHeadAction(null); setSec(x); setErr(''); setFind(''); const u = new URL(window.location.href); u.searchParams.set('section', slug(x)); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); };
   if (!s) return <div className="page"><Header /><Loading /></div>;
   const allowed = (x: Sec) => !ADMIN_SET.has(x) || isAdmin;
   const shown = allowed(sec) ? sec : 'Profile';
@@ -151,16 +154,17 @@ export function SettingsPage() {
           )}
         </aside>
         <main className="settings-main" style={{ flex: '1 1 480px', minWidth: 0, maxWidth: 760 }}>
-          <h2 className="serif" style={{ fontSize: 40, lineHeight: 1, margin: '0 0 8px' }}>{nameOf(shown)}</h2>
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text2)', maxWidth: 640 }}>{DESC[shown]}</p>
-          {adminSec && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text2)' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)' }} />
-              Administrator setting · changes affect every person
+          <div className="shead">
+            <div>
+              <h2 className="serif" style={{ fontSize: 40, lineHeight: 1, margin: '0 0 8px' }}>{nameOf(shown)}</h2>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text2)', maxWidth: 640 }}>{DESC[shown]}</p>
             </div>
-          )}
+            {adminSec && shown === 'People' && <button className="pill primary" onClick={() => invite.current?.()}>+ Invite</button>}
+            {adminSec && shown === 'Backup' && headAction}
+          </div>
+          {adminSec && <Notice />}
           <div style={{ height: 12 }} />
-          {me?.envConfig && shown !== 'Env file' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Env file to keep them.</span></div>}
+          {me?.envConfig && shown !== 'Updates & system' && <div className="banner" role="status"><span>Settings were loaded from your env file when Frames started, and it wins over the app: changes made here last until the next restart. See Updates & system to keep them.</span></div>}
           {err && <div className="banner" role="alert"><span className="reason">{err}</span></div>}
           {shown === 'Profile' && <Profile />}
           {shown === 'Notifications' && <NotificationSettings />}
@@ -168,18 +172,18 @@ export function SettingsPage() {
           {shown === 'Reviews' && <Reviews s={s} save={save} />}
           {shown === 'AI' && <><AiSettings /><AiJobs /></>}
           {shown === 'Shared AI' && <AiSettings server />}
-          {shown === 'Libraries & storage' && <><Libraries /><XmpLocationAdmin /><CloudOriginalsAdmin /></>}
+          {shown === 'Photos & storage' && <PhotosStorage />}
+          {shown === 'Storage & processing' && <StorageProcessing />}
+          {shown === 'Updates & system' && <UpdatesSystem />}
           {shown === 'Portfolio' && <PortfolioSettings />}
           {shown === 'Cloud sync' && <><CloudSettings /><CloudResolution /></>}
-          {shown === 'Cloud services' && <CloudServices />}
           {shown === 'Cloudflare tunnel' && <TunnelSettings />}
-          {shown === 'People' && <><People /><ReportsQueue /></>}
-          {shown === 'Env file' && <EnvExport />}
+          {shown === 'People' && <><People onInvite={onInvite} /><ReportsQueue /></>}
           {shown === 'Your data' && <YourData />}
           {shown === 'Access' && <Access />}
           {shown === 'Tags & subjects' && <Vocabulary />}
           {shown === 'Metadata & XMP' && <Metadata s={s} save={save} />}
-          {shown === 'Backup' && <Backup />}
+          {shown === 'Backup' && <BackupSection registerAction={setHeadAction} />}
           {shown === 'About' && <About />}
         </main>
       </div>
@@ -303,32 +307,6 @@ function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Setting
   );
 }
 
-function Libraries() {
-  const info = useApi<{ internalDir: string; libraries: { path: string; exists: boolean; lastScan: string | null }[] }>('/settings');
-  const inst = useApi<{ allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always' }>('/admin/instance');
-  return (
-    <>
-      <Toggle on={!!inst.data?.cloudOnly} onChange={async (v) => {
-        if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload photographs to Frames, and every cloud photograph will be kept only as a smaller copy here, with the full-size original left in the cloud.\n\nPhotographs already in Frames are not touched. IMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return;
-        await api('/admin/instance', { method: 'PUT', body: { cloudOnly: v } }); inst.reload();
-      }} label="Keep originals in cloud storage only" hint="Off by default. On: nobody can upload photographs to Frames, and every cloud photograph is kept only as a smaller copy (this includes “Always keep only a smaller copy of cloud photos” below). The full-size original stays in the person's cloud storage and is fetched when it is exported. Photographs already here, and library folders you mount, are not changed. Deleting a photo from cloud storage deletes its only full-size original." />
-      <Toggle on={inst.data?.shrinkCopies === 'always' || !!inst.data?.cloudOnly} locked={inst.data?.cloudOnly ? 'Required while originals are kept in cloud storage only (above).' : undefined} onChange={async (v) => { if (v && !window.confirm('Require a smaller copy of every cloud photo, for everyone?\n\nFrames will keep only a JPEG at quality 80 of each photograph from every connected cloud folder, and leave the full-size originals in the cloud. Copies already held are made smaller on the next sync.\n\nIMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return; await api('/admin/instance', { method: 'PUT', body: { shrinkCopies: v ? 'always' : 'choice' } }); inst.reload(); }} label="Always keep only a smaller copy of cloud photos" hint="Off: each person chooses, per connected folder. On: required for everyone. Every cloud photo is kept as a JPEG at quality 80 and the full-size original stays in the cloud, fetched when it is exported. Deleting a photo from cloud storage deletes its only full-size original." />
-      <Toggle on={!!inst.data?.allowOriginals} onChange={async (v) => { await api('/admin/instance', { method: 'PUT', body: { allowOriginals: v } }); inst.reload(); }} label="Let portfolios offer original files" hint="Off by default. When on, a person can choose to let visitors of their portfolio download the original file, which can hold camera data and the place a photo was taken. When off, portfolios only serve resized copies." />
-      <div className="field">
-        <h3>Photo libraries</h3>
-        <p>Folders Frames reads photographs from. External libraries are read-only: originals are never changed. They are set with LIBRARY_DIRS (see the README), and can be a cloud drive mounted as a folder.</p>
-        {(info.data?.libraries ?? []).map((l) => (
-          <div className="row" key={l.path}>
-            <span className="mono">{l.path}{l.path === info.data?.internalDir ? '  (uploads)' : ''}</span>
-            <span className={l.exists || l.path === info.data?.internalDir ? 'faint' : 'reason'}>{!l.exists && l.path !== info.data?.internalDir ? 'folder not found' : l.lastScan ? `synced ${fmtDate(l.lastScan, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'not synced yet'}</span>
-          </div>
-        ))}
-        <p style={{ marginTop: 12 }}>Photos uploaded from the <Link to="/shoots" className="t2" style={{ textDecoration: 'underline' }}>Photoshoots</Link> page are kept in Frames’ own data folder.</p>
-      </div>
-    </>
-  );
-}
-
 function Vocabulary() {
   const [kind, setKind] = useState<'subject' | 'tag'>('subject');
   const list = useApi<{ name: string; kind: string; n: number }[]>(`/tags?kind=${kind}`);
@@ -396,153 +374,6 @@ function Metadata({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Pr
           </div>
         ))}
       </div>
-    </>
-  );
-}
-
-type RestoreInfo = { dir: string; archives: { name: string; bytes: number; at: string }[]; pending: { at: string; parts: string[] } | null; canRestart: boolean };
-
-/** Restoring the people and libraries from a server backup. It is checked and put aside, and applied when Frames next starts. */
-function Restore() {
-  const r = useApi<RestoreInfo>('/admin/restore');
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const s3list = useApi<{ name: string; bytes: number }[]>('/admin/backup/remote?from=s3');
-  const cloudlist = useApi<{ name: string; bytes: number }[]>('/admin/backup/remote?from=cloud');
-  const done = (x: { parts: string[]; people: number }) => { setMsg({ ok: true, text: `Checked: ${x.people} ${x.people === 1 ? 'person' : 'people'} and ${x.parts.length - 1} ${x.parts.length === 2 ? 'library' : 'libraries'}. It is applied the next time Frames starts.` }); r.reload(); };
-  const run = async (fn: () => Promise<{ parts: string[]; people: number }>) => { setMsg(null); setBusy(true); try { done(await fn()); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); };
-  const upload = async (f: File) => {
-    const body = new FormData(); body.append('file', f);
-    const res = await fetch('/api/admin/restore/upload', { method: 'POST', body });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error ?? 'That did not work.');
-    return j;
-  };
-  const restart = async () => { setMsg(null); try { await api('/admin/restart', { method: 'POST' }); setMsg({ ok: true, text: 'Restarting. Reload this page in a few seconds and sign in again.' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
-  return (
-    <div className="field">
-      <h3>Restore</h3>
-      <p>Put the people and libraries from a server backup back: reviews, tags, compositions and each person’s own settings. The server’s own settings (sign-in providers, the tunnel, shared AIs and keys) are <b>not</b> in a backup and <b>not</b> changed: they come from your env file (Settings, Env file) or what is set here now. Photographs are not touched. Everyone is signed out and signs in again, and the databases being replaced are kept in <span className="mono">backups/before-restore-…</span> in the data folder.</p>
-      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      {r.data?.pending && (
-        <div className="banner" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span>A restore is ready ({r.data.pending.parts.length - 1} {r.data.pending.parts.length === 2 ? 'library' : 'libraries'}). Frames applies it when it next starts.</span>
-          {r.data.canRestart && <button className="pill primary" onClick={() => { if (window.confirm('Restart Frames now and apply the restore? Everyone is signed out.')) void restart(); }}>Restart Frames now</button>}
-          <button className="pill" onClick={async () => { await api('/admin/restore', { method: 'DELETE' }); setMsg(null); r.reload(); }}>Cancel the restore</button>
-        </div>
-      )}
-      <div className="form">
-        <input ref={file} type="file" accept=".tar,application/x-tar" aria-label="Choose a server backup file" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void run(() => upload(f)); }} />
-        <button className="pill" disabled={busy} onClick={() => file.current?.click()}>Restore from a file…</button>
-      </div>
-      <p className="muted" style={{ fontSize: 12.5 }}>A file you downloaded above. Or put it in <span className="mono">{r.data?.dir ?? 'the backups folder'}</span> and pick it here:</p>
-      {r.data?.archives.length === 0 && <p className="muted">No server backups in that folder yet. One is made a day (the last seven kept).</p>}
-      {([['s3', 'In your S3 bucket', s3list], ['cloud', 'In your cloud account', cloudlist]] as const).map(([from, label, l]) => (
-        <div key={from}>
-          {l.data && l.data.length > 0 && <p className="muted" style={{ fontSize: 12.5 }}>{label}:</p>}
-          {l.data?.map((a) => (
-            <div className="row" key={`${from}-${a.name}`}>
-              <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
-              <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name} (${label.toLowerCase()})? It is downloaded and checked first, and applied the next time Frames starts.`)) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/remote/restore', { body: { from, name: a.name } }); r.reload(); return x; }); }}>Restore</button>
-            </div>
-          ))}
-        </div>
-      ))}
-      {r.data?.archives.map((a) => (
-        <div className="row" key={a.name}>
-          <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
-          <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name}? It is checked first and applied the next time Frames starts.`)) void run(() => api('/admin/restore', { body: { name: a.name } })); }}>Restore this</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-type S3State = { configured: boolean; endpoint: string; region: string; bucket: string; prefix: string; accessKeyId: string; hasSecret: boolean; status: { at: string; ok: boolean; message: string } | null };
-
-/** Copy the daily whole-server archive to S3 or an S3-compatible service. The secret key is write-only: it is never shown again. */
-function S3Backup() {
-  const st = useApi<S3State>('/admin/backup/s3');
-  const [f, setF] = useState({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' });
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { if (st.data) setF((x) => ({ ...x, endpoint: st.data!.endpoint, region: st.data!.region, bucket: st.data!.bucket, prefix: st.data!.prefix, accessKeyId: st.data!.accessKeyId })); }, [st.data?.endpoint, st.data?.bucket]); // eslint-disable-line react-hooks/exhaustive-deps
-  const act = async (fn: () => Promise<string>) => { setMsg(null); setBusy(true); try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); st.reload(); };
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
-  return (
-    <div className="field">
-      <h3>Back up to S3</h3>
-      <p>Copy the daily whole-server archive to Amazon S3, or a service that speaks the same language (MinIO, Backblaze B2, Wasabi). The last seven are kept there. Use a key that may only write to this bucket. The secret key is stored on this server, never shown again, and left out of backups.</p>
-      <div className="form">
-        <label>Endpoint <input value={f.endpoint} onChange={set('endpoint')} placeholder="https://s3.us-east-1.amazonaws.com" aria-label="S3 endpoint" /></label>
-        <label>Region <input value={f.region} onChange={set('region')} placeholder="us-east-1" aria-label="S3 region" /></label>
-        <label>Bucket <input value={f.bucket} onChange={set('bucket')} aria-label="S3 bucket" /></label>
-        <label>Folder in the bucket (optional) <input value={f.prefix} onChange={set('prefix')} placeholder="frames" aria-label="S3 folder" /></label>
-        <label>Access key <input value={f.accessKeyId} onChange={set('accessKeyId')} autoComplete="off" aria-label="S3 access key" /></label>
-        <label>Secret key <input type="password" value={f.secretAccessKey} onChange={set('secretAccessKey')} autoComplete="off" placeholder={st.data?.hasSecret ? 'Saved. Type to replace' : ''} aria-label="S3 secret key" /></label>
-      </div>
-      <div className="form">
-        <button className="pill primary" disabled={busy} onClick={() => void act(async () => { await api('/admin/backup/s3', { method: 'PUT', body: f }); setF((x) => ({ ...x, secretAccessKey: '' })); return 'Saved.'; })}>Save</button>
-        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>}
-        {st.data?.configured && <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to S3? Copies already in the bucket stay there.')) void act(async () => { await api('/admin/backup/s3', { method: 'DELETE' }); setF({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' }); return 'S3 backups are off.'; }); }}>Turn off</button>}
-      </div>
-      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      {st.data?.status && <p className="muted" style={{ fontSize: 12.5 }}>Last attempt {fmtDate(st.data.status.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}: {st.data.status.ok ? st.data.status.message : <span className="reason">{st.data.status.message}</span>}</p>}
-      <p className="muted" style={{ fontSize: 12.5 }}>Backups in the bucket are listed under Restore below. Not tested against the real services.</p>
-    </div>
-  );
-}
-
-type CloudBackupState = { connected: boolean; provider: string; account: string; status: { at: string; ok: boolean; message: string } | null };
-const PROVIDER_NAMES: Record<string, string> = { dropbox: 'Dropbox', google: 'Google Drive', onedrive: 'OneDrive' };
-
-/** Copy the daily archive to the administrator's own Dropbox, Google Drive or OneDrive, in a folder called Frames backups. */
-function CloudBackup() {
-  const st = useApi<CloudBackupState>('/admin/backup/cloud');
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(() => { const b = new URLSearchParams(window.location.search).get('backup'); return b ? { ok: b === 'connected', text: b === 'connected' ? 'Connected.' : b } : null; });
-  const [busy, setBusy] = useState(false);
-  const act = async (fn: () => Promise<string>) => { setMsg(null); setBusy(true); try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); st.reload(); };
-  const connect = (p: string) => act(async () => { const r = await api<{ url: string }>(`/admin/backup/cloud/connect/${p}`, { body: {} }); window.location.href = r.url; return 'Opening the sign-in…'; });
-  return (
-    <div className="field">
-      <h3>Back up to Dropbox, Google Drive or OneDrive</h3>
-      <p>Copy the daily whole-server archive to your own cloud account, into a folder called <span className="mono">Frames backups</span> that Frames makes. The last seven are kept. This is a separate sign-in for backups, with permission to write to that folder only where the service allows it (the connections used to read photographs never get write access). The service must first be set up under Settings, Cloud services, and its app registration must allow writing files.</p>
-      {st.data?.connected ? (
-        <div className="form">
-          <span>Connected to {PROVIDER_NAMES[st.data.provider] ?? st.data.provider}{st.data.account ? `, ${st.data.account}` : ''}.</span>
-          <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>
-          <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to this account? Copies already there stay there.')) void act(async () => { await api('/admin/backup/cloud', { method: 'DELETE' }); return 'Disconnected.'; }); }}>Disconnect</button>
-        </div>
-      ) : (
-        <div className="form">{Object.entries(PROVIDER_NAMES).map(([id, label]) => <button key={id} className="pill" disabled={busy} onClick={() => void connect(id)}>Connect {label}</button>)}</div>
-      )}
-      {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
-      {st.data?.status && <p className="muted" style={{ fontSize: 12.5 }}>Last attempt {fmtDate(st.data.status.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}: {st.data.status.ok ? st.data.status.message : <span className="reason">{st.data.status.message}</span>}</p>}
-      <p className="muted" style={{ fontSize: 12.5 }}>Not tested against the real services. A backup over 140 MB is refused for Dropbox: use S3 for archives that big.</p>
-    </div>
-  );
-}
-
-function Backup() {
-  const list = useApi<{ name: string; whose: string; bytes: number }[]>('/admin/backup/list');
-  return (
-    <>
-      <div className="field">
-        <h3>Back up the whole server</h3>
-        <p>One archive with the people (who has an account, their roles and folders) and every person’s library database (reviews, tags, compositions, settings). Photographs are not in it: back those up the way you already do. The server’s own settings (sign-in providers, the tunnel, shared AIs and keys) are left out, as are sign-in sessions: they belong in your env file, so a backup holds user data only.</p>
-        <a className="pill primary" href="/api/admin/backup" download>Download a server backup</a>
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>Each person can also download their own library under Settings, Your data.</p>
-      </div>
-      <div className="field">
-        <h3>Automatic backups</h3>
-        <p>One a day for each library, the last seven kept, in each library’s <span className="mono">backups</span> directory in the data folder. Also one whole-server archive a day (the last seven kept) in the backups folder, which is the <span className="mono">/backups</span> mount in the compose file.</p>
-        {list.data?.length === 0 && <p className="muted">None yet. The first is made shortly after start-up.</p>}
-        {list.data?.map((b) => <div className="row" key={b.whose + b.name}><span><span className="mono">{b.name}</span> <span className="muted">{b.whose}</span></span><span className="faint">{(b.bytes / 1e6).toFixed(1)} MB</span></div>)}
-      </div>
-      <S3Backup />
-      <CloudBackup />
-      <Restore />
     </>
   );
 }

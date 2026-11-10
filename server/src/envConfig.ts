@@ -30,7 +30,7 @@ export function envConfigLoaded(env: Record<string, string | undefined> = proces
 }
 
 /** Settings that are about what is happening now, not about how Frames is set up. */
-const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState)$/;
+const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState|releasesCache|smtpHealth|mailSent)$/;
 const KEY = /^[\w:.-]{1,200}$/;
 export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k);
 

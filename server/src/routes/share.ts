@@ -1,3 +1,4 @@
+import { policyOf } from '../policy.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
@@ -80,7 +81,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const kind = b.kind === 'shoot' ? 'shoot' : b.kind === 'collection' ? 'collection' : null;
     if (!kind) return rep.code(400).send({ error: 'kind must be collection or shoot' });
     if (!one(`SELECT 1 x FROM ${kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, num(b.id))) return notFound(rep);
-    let expires: string | null = null;
+    const pol = policyOf(x.sys);
+    let expires: string | null = b.expiresAt === undefined && pol.shareExpireDays ? new Date(Date.now() + pol.shareExpireDays * 86_400_000).toISOString() : null;
     if (b.expiresAt) {
       const t = new Date(String(b.expiresAt));
       if (Number.isNaN(+t) || +t < Date.now()) return rep.code(400).send({ error: 'The expiry date must be in the future' });
@@ -92,7 +94,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (b.pin === true) pin = randomPin();
     else if (typeof b.pin === 'string' && b.pin) { if (!/^\d{4}$/.test(b.pin) || isWeakPin(b.pin)) return rep.code(400).send({ error: PIN_ERR }); pin = b.pin; }
     const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at, pin, allow_suggest, see_each_other, show_guests, ask_name) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), b.allowDownload ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString(), pin, b.allowSuggest === undefined ? null : b.allowSuggest ? 1 : 0, b.seeEachOther ? 1 : 0, b.showGuests ? 1 : 0, b.askName === false ? 0 : 1).lastInsertRowid);
+      .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), (b.allowDownload === undefined ? pol.shareDownload : b.allowDownload) ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString(), pin, b.allowSuggest === undefined ? null : b.allowSuggest ? 1 : 0, b.seeEachOther ? 1 : 0, b.showGuests ? 1 : 0, (b.askName === undefined ? pol.shareAskName : b.askName !== false) ? 1 : 0).lastInsertRowid);
     if (b.onlyWall === true) db.prepare('UPDATE shares SET only_wall = 1 WHERE id = ?').run(id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });

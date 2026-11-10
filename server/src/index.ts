@@ -5,6 +5,8 @@ import path from 'node:path';
 import { buildApp } from './app.js';
 import { oauthEnabled } from './auth.js';
 import { integrity, startAutoBackup } from './backup.js';
+import { policyOf } from './policy.js';
+import { setSessionDays } from './auth.js';
 import { envBool } from './env.js';
 import { openDb, type DB } from './db.js';
 import { internalDir } from './ingest.js';
@@ -50,9 +52,10 @@ const app = buildApp(db, {
   allowedHosts: (process.env.ALLOWED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
 });
 const frames = (app as any).frames as { sys: DB; tenants: { all(): { db: DB; cfg: { dataDir: string } }[] } };
-startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: t.cfg.dataDir })), { db: frames.sys, dataDir: path.join(dataDir, 'system'), system: true }]);
+startAutoBackup(() => [...frames.tenants.all().map((t) => ({ db: t.db, dataDir: t.cfg.dataDir })), { db: frames.sys, dataDir: path.join(dataDir, 'system'), system: true }], () => { const p = policyOf(frames.sys); return { auto: p.backupAuto, everyDays: p.backupEveryDays, keep: p.backupKeep }; });
 startDerivativeCheck(() => frames.tenants.all() as any);
-startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), backupDir);
+startServerBackup(() => ({ sys: frames.sys, tenants: frames.tenants as any }), backupDir, () => { const p = policyOf(frames.sys); return { auto: p.backupAuto, everyDays: p.backupEveryDays, keep: p.backupKeep }; });
+setSessionDays(policyOf(frames.sys).sessionDays);
 (frames as any).restart = () => setTimeout(() => process.exit(0), 400); // the container's restart policy brings it back, and the restore is applied as it starts
 app.listen({ port, host: process.env.HOST ?? '0.0.0.0' }).then(() => {
   console.log(`Frames listening on :${port} (libraries: ${libraries.join(', ')}, data: ${dataDir}, login: ${authDisabled ? 'DISABLED' : [authPassword && 'password', oauthEnabled(frames.sys) && 'oauth'].filter(Boolean).join('+') || 'OFF'})`);

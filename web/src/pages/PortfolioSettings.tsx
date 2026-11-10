@@ -120,7 +120,7 @@ export function PortfolioSettings() {
                 {locked && (
                   <span style={{ display: 'block', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--hair)', fontSize: 12.5, color: 'var(--text2)' }}>
                     Switched off on this server.{' '}
-                    {me?.role === 'admin' ? <a href="/settings?section=libraries-storage" style={{ color: 'var(--text)', textDecoration: 'underline' }}>Allow it under Administration, Photo folders</a> : <span>Ask an administrator to allow it.</span>}
+                    {me?.role === 'admin' ? <a href="/settings?section=photos-storage" style={{ color: 'var(--text)', textDecoration: 'underline' }}>Allow it under Administration, Photo folders</a> : <span>Ask an administrator to allow it.</span>}
                   </span>
                 )}
               </button>

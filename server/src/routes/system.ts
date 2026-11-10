@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { loadAuth, saveAuth } from '../auth.js';
 import { clientOf, PROVIDERS } from '../cloud.js';
@@ -22,6 +24,28 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
       cloudProviders: providers,
       admin: me(req)?.role === 'admin',
     };
+  });
+
+
+  // ---------- Settings, Server, Storage & processing and Updates & system ----------
+  const dirBytes = (dir: string): number => {
+    let n = 0;
+    try { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); n += e.isDirectory() ? dirBytes(p) : fs.statSync(p).size; } } catch { /* a folder that is not there holds nothing */ }
+    return n;
+  };
+  const disk = (dir: string) => { try { const f = fs.statfsSync(dir); return { path: dir, total: f.blocks * f.bsize, free: f.bavail * f.bsize }; } catch { return { path: dir, total: 0, free: 0 }; } };
+  app.get('/api/admin/system', async () => {
+    const owner = x.tenants.owner();
+    const all = x.tenants.all();
+    const folder = owner.cfg.libraries?.[0] ?? owner.cfg.dataDir;
+    const cacheBytes = all.reduce((n, t) => n + dirBytes(path.join(t.cfg.dataDir, 'derivatives')), 0);
+    const checks = [
+      { name: 'database', ok: (() => { try { return sys.pragma('integrity_check', { simple: true }) === 'ok'; } catch { return false; } })() },
+      { name: 'library folder', ok: !!folder && fs.existsSync(folder) },
+      { name: 'cache', ok: (() => { try { fs.accessSync(owner.cfg.dataDir, fs.constants.W_OK); return true; } catch { return false; } })() },
+      { name: 'email', ok: !smtpConfigured(sys) || smtpHealthy(sys) },
+    ];
+    return { version: cfg.version ?? 'dev', image: process.env.FRAMES_IMAGE ?? 'ghcr.io/trentnbauer/frames', libraryDisk: disk(folder), dataDisk: disk(owner.cfg.dataDir), cache: { path: path.join(owner.cfg.dataDir, 'derivatives'), bytes: cacheBytes }, checks, libraries: all.length };
   });
 
   // ---------- Settings, Server, Email ----------

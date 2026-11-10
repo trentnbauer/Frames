@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import Database from 'better-sqlite3';
 import type { DB } from './db.js';
+import { madeWithin } from './policy.js';
 
 const KEEP = 7;
 
@@ -48,23 +49,25 @@ export function integrity(db: DB): string {
 }
 
 /** One snapshot per day, the last seven kept. Uses SQLite's online backup, so it is safe while the app is running. */
-export async function dailyBackup(db: DB, dataDir: string, now = new Date(), system = false): Promise<string | null> {
+export async function dailyBackup(db: DB, dataDir: string, now = new Date(), system = false, pol: { auto: boolean; everyDays: number; keep: number } = { auto: true, everyDays: 1, keep: KEEP }): Promise<string | null> {
+  if (!pol.auto) return null;
   const dir = path.join(dataDir, 'backups');
   fs.mkdirSync(dir, { recursive: true });
   const name = `auto-${now.toISOString().slice(0, 10)}.db`;
   const file = path.join(dir, name);
   if (fs.existsSync(file)) return null;
+  if (pol.everyDays > 1 && madeWithin(fs.readdirSync(dir).filter((n) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(n)).map((n) => fs.statSync(path.join(dir, n))), pol.everyDays, now.getTime())) return null;
   await db.backup(file + '.partial');
   scrubCopy(file + '.partial', system);
   fs.renameSync(file + '.partial', file); // a half-written file is never mistaken for a backup
-  for (const old of fs.readdirSync(dir).filter((n) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort().reverse().slice(KEEP)) fs.rmSync(path.join(dir, old), { force: true });
+  for (const old of fs.readdirSync(dir).filter((n) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort().reverse().slice(pol.keep)) fs.rmSync(path.join(dir, old), { force: true });
   return name;
 }
 
 /** Daily backups for every library that exists, and for the system database (people and sign-in settings). */
-export function startAutoBackup(targets: () => { db: DB; dataDir: string; system?: boolean }[]) {
+export function startAutoBackup(targets: () => { db: DB; dataDir: string; system?: boolean }[], policy?: () => { auto: boolean; everyDays: number; keep: number }) {
   const run = () => {
-    try { for (const t of targets()) dailyBackup(t.db, t.dataDir, new Date(), t.system).catch((e) => console.error('Backup failed', e)); } catch (e) { console.error('Backup could not start', e); }
+    try { for (const t of targets()) dailyBackup(t.db, t.dataDir, new Date(), t.system, policy?.()).catch((e) => console.error('Backup failed', e)); } catch (e) { console.error('Backup could not start', e); }
   };
   setTimeout(run, 10_000).unref();
   setInterval(run, 6 * 3600_000).unref(); // checks every six hours, writes at most one per day
