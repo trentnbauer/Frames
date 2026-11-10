@@ -1,5 +1,5 @@
 # cloudflared, for the optional Cloudflare tunnel (Settings, Cloudflare tunnel). Pinned; Dependabot proposes bumps.
-FROM cloudflare/cloudflared:2026.7.3 AS cloudflared
+FROM cloudflare/cloudflared:2026.10.7 AS cloudflared
 
 FROM node:22-bookworm-slim AS web
 WORKDIR /app/web
