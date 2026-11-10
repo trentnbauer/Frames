@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
-import { RATINGS } from '../data';
+import { RATINGS, ratingMark } from '../data';
 import { useStore } from '../store';
 import { Fit, Loading, useKey } from '../components/bits';
 import { CompPicker } from '../components/AddToComposition';
@@ -27,6 +27,8 @@ export function Review() {
     })().then(setS).catch((e: Error) => setError(e.message));
   }, []);
 
+  const { settings } = useStore();
+  const style = settings?.ratingStyle;
   const colls = useApi<Collection[]>('/collections');
   // After a high rating, offer the best-fit composition: the open one worked on most recently that does not hold the photo yet.
   const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
@@ -123,7 +125,7 @@ export function Review() {
       <div className="scale" role="group" aria-label="Rate this photograph">
         {RATINGS.map((x) => (
           <button key={x.value} className={sel === x.value ? 'sel' : ''} onClick={() => rate(x.value)} aria-label={`${x.value}, ${x.label}`}>
-            <span className="e">{x.emoji}</span><span className="lbl">{x.label}</span><span className="n">{x.value}</span>
+            <span className="e" style={style === 'stars' ? { fontSize: 13, letterSpacing: '.1em' } : undefined}>{ratingMark(x, style)}</span><span className="lbl">{x.label}</span><span className="n">{x.value}</span>
           </button>
         ))}
       </div>

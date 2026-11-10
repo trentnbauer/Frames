@@ -5,6 +5,7 @@ export type Settings = {
   sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; deleteBelow: number; todoReasons: string[]; gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
   ai: 'off' | 'local' | 'external'; aiActive: string;
   xmpWriteBack: boolean;
+  reviewSize: number; ratingStyle: 'emoji' | 'stars'; newShootsFirst: boolean;
 };
 export type Summary = { due: number; resumable: boolean; early: number; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 

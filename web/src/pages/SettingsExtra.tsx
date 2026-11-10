@@ -211,7 +211,8 @@ export function ReportsQueue() {
 
 /** Settings, Cloud sync: save the full-size original, or a 4096 px copy. Frames never changes anything in the cloud account. */
 export function CloudResolution() {
-  const r = useApi<{ saveOriginal: boolean; want: boolean; lockedByAdmin: boolean }>('/cloud/resolution');
+  const r = useApi<{ saveOriginal: boolean; want: boolean; lockedByAdmin: boolean; shrunkCount: number; shrunkBytes: number }>('/cloud/resolution');
+  const [msg, setMsg] = useState('');
   if (!r.data) return null;
   const d = r.data;
   return (
@@ -219,6 +220,16 @@ export function CloudResolution() {
       <h3>Save original resolution</h3>
       <p>On: imports from the cloud keep the full-size file. Off: Frames stores a copy up to 4096 px on its long edge. This only affects photos imported from now on. Frames never deletes, moves or edits anything in your cloud account.</p>
       <Row title="Save original resolution" hint={d.lockedByAdmin ? 'Turned off by an admin' : undefined}><Sw label="Save original resolution" on={d.saveOriginal} onClick={() => !d.lockedByAdmin && api('/cloud/resolution', { method: 'PUT', body: { saveOriginal: !d.want } }).then(r.reload)} /></Row>
+      {d.saveOriginal && d.shrunkCount > 0 && (
+        <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', fontSize: 13.5 }}>
+          Fetch full-size copies of {d.shrunkCount.toLocaleString()} photo{d.shrunkCount === 1 ? '' : 's'} already imported? About {(d.shrunkBytes / 1e9 >= 1 ? `${(d.shrunkBytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(d.shrunkBytes / 1e6))} MB`)} more.
+          <div style={{ display: 'flex', gap: 14, marginTop: 8, alignItems: 'center' }}>
+            <button className="btn primary" style={{ height: 34 }} onClick={() => api('/cloud/resolution/fetch', { body: {} }).then(() => setMsg('Fetching in the background. Photos update as they arrive.')).catch((e: Error) => setMsg(e.message))}>Fetch</button>
+            <button className="muted" onClick={() => setMsg('Not now.')}>Not now</button>
+            {msg && <span className="muted" role="status">{msg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -279,6 +290,20 @@ export function AiJobs() {
           })}
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** Settings, Server, Photos & storage: where XMP sidecar files go, for everyone (it changes files on disk). */
+export function XmpLocationAdmin() {
+  const r = useApi<{ location: 'next' | 'folder' }>('/admin/xmp-location');
+  if (!r.data) return null;
+  const set = (location: string) => api('/admin/xmp-location', { method: 'PUT', body: { location } }).then(r.reload).catch(() => undefined);
+  return (
+    <div className="field">
+      <h3>XMP sidecars</h3>
+      <p>Where sidecar files with ratings and tags are written. It is a server-wide setting because it changes files on disk for everyone. Each person still chooses whether to write ratings and tags (Camera &amp; XMP).</p>
+      <Row title="Write sidecars"><div className="seg"><button className={r.data.location === 'next' ? 'on' : ''} onClick={() => set('next')}>Next to the photo</button><button className={r.data.location === 'folder' ? 'on' : ''} onClick={() => set('folder')}>In a Frames folder</button></div></Row>
     </div>
   );
 }

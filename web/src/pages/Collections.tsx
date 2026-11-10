@@ -548,7 +548,7 @@ export function CollectionDetail() {
           {tab === 'ranked' && !printed && wallPrints.length > 0 && <p className="muted" style={{ fontSize: 13, margin: '0 0 14px' }}>Click a photo to put it in Print {sel + 1}. If it’s already on the wall, the two swap.</p>}
 
           {tab === 'ranked' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: '18px 14px' }}>
+            <div className="cand-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: '18px 14px', alignItems: 'start' }}>
               {order.filter((pid) => candFilter === 'fits' ? !problemOf(pid) : candFilter === 'unrated' ? !rankOf.get(pid)?.mineN : true).map((pid, i) => {
                 const p = byId.get(pid); const r = rankOf.get(pid);
                 if (!p) return null;
@@ -558,17 +558,18 @@ export function CollectionDetail() {
                 const slot = at ? at.index + 1 : 0;
                 return (
                   <div key={pid} style={{ position: 'relative' }}>
-                    <button draggable={!printed} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`} style={{ width: '100%', aspectRatio: '1.5', background: 'var(--surface)', borderRadius: 8, padding: 8, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: on ? 'inset 0 0 0 1px #efede8' : prob ? 'inset 0 0 0 1px rgba(231,140,120,.7)' : 'none', opacity: prob ? 0.6 : 1 }}>
-                      <img src={imgUrl(pid, 'thumb')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }} />
-                      <span style={{ position: 'absolute', top: 6, left: 8, font: `500 11px ${mono}`, background: 'rgba(0,0,0,.62)', padding: '2px 6px', borderRadius: 4 }}>#{i + 1}</span>
-                      {on && <span style={{ position: 'absolute', top: 6, right: printed ? 8 : 36, fontSize: 11, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, padding: '2px 8px', borderRadius: 999 }}>Print {slot}</span>}
+                    <button draggable={!printed} onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(pid)); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setOver(null)} onClick={() => toggle(pid)} aria-pressed={on} aria-label={`${p.title}${prob ? ', does not meet target' : ''}`}
+                      style={{ display: 'block', width: '100%', background: 'var(--surface)', borderRadius: 8, padding: 8, position: 'relative', boxShadow: on ? 'inset 0 0 0 1px var(--text)' : 'none' }}>
+                      <span style={{ display: 'block', position: 'relative' }}>
+                        <img src={imgUrl(pid, 'thumb')} alt="" style={{ width: '100%', aspectRatio: String(p.ar), objectFit: 'cover', display: 'block', borderRadius: 2 }} />
+                        <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 11.5, padding: '2px 8px', borderRadius: 999, background: on ? 'var(--btn-bg)' : 'rgba(13,13,13,.72)', color: on ? 'var(--btn-fg)' : prob ? 'oklch(0.78 0.11 35)' : '#efede8', fontWeight: on ? 500 : 400 }}>{on ? `Print ${slot}` : prob ? 'Too small' : 'Fits'}</span>
+                      </span>
                     </button>
-                    {!printed && <button aria-label={`Remove ${p.title} from this composition`} title="Remove from this composition" onClick={() => removeFromComp(pid)} style={{ position: 'absolute', top: 5, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,.62)', color: 'var(--text)', fontSize: 12, lineHeight: '24px', textAlign: 'center' }}>✕</button>}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
-                      <span style={{ font: `400 22px/1 ${serif}` }}>{fmt(r?.score ?? null)}</span>
-                      <span style={{ font: `400 11.5px ${mono}`, color: 'var(--muted)' }}>you {fmt(r?.mine ?? null)} · guests {fmt(r?.guest ?? null)} ({r?.guestN ?? 0})</span>
+                    {!printed && <button aria-label={`Remove ${p.title} from this composition`} title="Remove from this composition" onClick={() => removeFromComp(pid)} style={{ position: 'absolute', top: 14, right: 14, width: 24, height: 24, borderRadius: '50%', background: 'rgba(13,13,13,.72)', color: '#efede8', fontSize: 12, lineHeight: '24px', textAlign: 'center' }}>✕</button>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8, gap: 8 }}>
+                      <span title={`you ${fmt(r?.mine ?? null)} · guests ${fmt(r?.guest ?? null)} (${r?.guestN ?? 0})`} style={{ font: `400 22px/1 ${serif}` }}>{fmt(r?.score ?? null)}</span>
+                      <span className="faint" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
                     </div>
-                    <div style={{ height: 3, background: 'var(--hair)', borderRadius: 2, marginTop: 6 }}><i style={{ display: 'block', height: '100%', width: `${Math.round(((r?.score ?? 0) / 5) * 100)}%`, background: 'var(--text2)', borderRadius: 2 }} /></div>
                     {prob && <div style={{ fontSize: 12, color: 'oklch(0.78 0.11 35)', marginTop: 6, lineHeight: 1.35 }}>{prob}</div>}
                     {low && <div role="note" style={{ fontSize: 12, color: 'oklch(0.78 0.11 35)', marginTop: 6, lineHeight: 1.35 }}>⚠ {low}</div>}
                   </div>

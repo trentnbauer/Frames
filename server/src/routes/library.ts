@@ -14,6 +14,7 @@ import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, internalDir, rebuild } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
+import { getSetting, setSetting } from '../db.js';
 import { applyGear, applyShootGear, cleanGear } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
@@ -203,7 +204,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.post('/api/metadata/export', async (req) => {
     const ids = ((((req.body ?? {}) as Row).photoIds as unknown[]) ?? []).map((v) => num(v));
     const photos = ids.length ? ids.map((i) => one('SELECT * FROM photos WHERE id = ?', i)).filter((p): p is Row => !!p) : all('SELECT * FROM photos');
-    const writeBack = loadSettings(db).xmpWriteBack;
+    // Where sidecars go is the server's choice (Settings, Photos & storage): 'next' lets each person's write-back switch put them beside the photo, 'folder' keeps them all in Frames' own folder.
+    const writeBack = loadSettings(db).xmpWriteBack && getSetting<{ xmpLocation?: string }>(x.sys, 'instance', {}).xmpLocation !== 'folder';
     const dir = path.join(cfg.dataDir, 'xmp');
     fs.mkdirSync(dir, { recursive: true });
     const r = { written: 0, writtenBeside: 0, skipped: [] as { file: string; reason: string }[] };
@@ -220,6 +222,13 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       } catch { r.skipped.push({ file: p.file, reason: 'The library folder is read-only' }); }
     }
     return r;
+  });
+  app.get('/api/admin/xmp-location', async () => ({ location: getSetting<{ xmpLocation?: string }>(x.sys, 'instance', {}).xmpLocation === 'folder' ? 'folder' : 'next' }));
+  app.put('/api/admin/xmp-location', async (req, rep) => {
+    const v = ((req.body ?? {}) as Row).location;
+    if (v !== 'next' && v !== 'folder') return rep.code(400).send({ error: 'Choose next to the photo, or a Frames folder.' });
+    setSetting(x.sys, 'instance', { ...getSetting<Row>(x.sys, 'instance', {}), xmpLocation: v });
+    return { location: v };
   });
   app.get('/api/metadata/conflicts', async () => all(`SELECT c.photo_id photoId, c.field, c.mine, c.theirs, p.title, p.file FROM xmp_conflicts c JOIN photos p ON p.id = c.photo_id ORDER BY c.photo_id`));
   app.post('/api/metadata/resolve', async (req, rep) => {

@@ -13,7 +13,7 @@ import { EnvExport } from './EnvExport';
 import { People } from './People';
 import { YourData } from './YourData';
 import { Profile } from './Profile';
-import { AiJobs, CloudOriginalsAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
+import { AiJobs, CloudOriginalsAdmin, XmpLocationAdmin, CloudResolution, CommunitySettings, EmailSettings, NotificationSettings, ReportsQueue } from './SettingsExtra';
 import { GearDefaults } from '../components/GearDefaults';
 
 type Sec = 'Profile' | 'Notifications' | 'Email' | 'Reviews' | 'Tags & subjects' | 'Metadata & XMP' | 'AI' | 'Cloud sync' | 'Portfolio' | 'Your data'
@@ -165,10 +165,10 @@ export function SettingsPage() {
           {shown === 'Profile' && <Profile />}
           {shown === 'Notifications' && <NotificationSettings />}
           {shown === 'Email' && <EmailSettings />}
-          {shown === 'Reviews' && <><Reviews s={s} save={save} /><CommunitySettings /></>}
+          {shown === 'Reviews' && <Reviews s={s} save={save} />}
           {shown === 'AI' && <><AiSettings /><AiJobs /></>}
           {shown === 'Shared AI' && <AiSettings server />}
-          {shown === 'Libraries & storage' && <><Libraries /><CloudOriginalsAdmin /></>}
+          {shown === 'Libraries & storage' && <><Libraries /><XmpLocationAdmin /><CloudOriginalsAdmin /></>}
           {shown === 'Portfolio' && <PortfolioSettings />}
           {shown === 'Cloud sync' && <><CloudSettings /><CloudResolution /></>}
           {shown === 'Cloud services' && <CloudServices />}
@@ -188,34 +188,50 @@ export function SettingsPage() {
 }
 
 function Reviews({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
+  const w = useApi<{ weight: number }>('/collections/guest-weight');
+  const row = (title: string, hint: string | undefined, control: React.ReactNode, last = false) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, padding: '14px 0', borderBottom: last ? 0 : '1px solid var(--hair)' }}>
+      <div style={{ minWidth: 0 }}><div style={{ fontSize: 14 }}>{title}</div>{hint && <div className="muted" style={{ fontSize: 12.5, maxWidth: 320 }}>{hint}</div>}</div>{control}
+    </div>
+  );
+  const stepper = (v: number, set: (n: number) => void, min: number, max: number, label: string) => (
+    <div className="stepper" role="group" aria-label={label}><button aria-label={`Fewer ${label}`} onClick={() => set(Math.max(min, v - 1))}>−</button><b>{v}</b><button aria-label={`More ${label}`} onClick={() => set(Math.min(max, v + 1))}>+</button></div>
+  );
+  const sw = (on: boolean, set: (v: boolean) => void, label: string) => <button role="switch" aria-checked={on} aria-label={label} className={'sw' + (on ? ' on' : '')} onClick={() => set(!on)} />;
+  const seg = <T extends string | number>(opts: [T, string][], value: T, set: (v: T) => void, label: string) => <div className="seg" role="group" aria-label={label} style={{ alignSelf: 'auto' }}>{opts.map(([k, l]) => <button key={String(k)} aria-pressed={value === k} className={value === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>;
+  const card: React.CSSProperties = { background: 'var(--surface)', borderRadius: 14, padding: '2px 24px', marginBottom: 8 };
+  const group = (t: string) => <div className="eyebrow" style={{ margin: '28px 0 10px' }}>{t}</div>;
   return (
     <>
-      <div className="field">
-        <h3>Sessions per photo</h3><p>How many times each photograph comes back for a rating.</p>
-        <div className="stepper">
-          <button aria-label="Fewer sessions" onClick={() => save({ sessions: Math.max(1, s.sessions - 1) })}>−</button>
-          <b>{s.sessions}</b>
-          <button aria-label="More sessions" onClick={() => save({ sessions: Math.min(12, s.sessions + 1) })}>+</button>
-        </div>
+      <div style={card}>
+        {row('Sessions per photo', 'Each photo is rated this many times.', stepper(s.sessions, (n) => save({ sessions: n }), 1, 12, 'sessions'))}
+        {row('Spacing', 'The wait before each next session. Click to change.', (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {Array.from({ length: s.sessions }, (_, i) => {
+              const v = s.intervals[Math.min(i, s.intervals.length - 1)];
+              return <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{i > 0 && <span className="faint">→</span>}<button className="chip" aria-label={`Interval after session ${i + 1}: ${v}`} onClick={() => { const next = [...s.intervals]; while (next.length < s.sessions) next.push(next[next.length - 1] ?? '1 year'); next[i] = INTERVALS[(INTERVALS.indexOf(v) + 1) % INTERVALS.length]; void save({ intervals: next }); }}>{v}</button></span>;
+            })}
+          </div>
+        ))}
+        {row('Adapt to consistency', 'Steady ratings come back less often.', sw(s.adaptive, (v) => save({ adaptive: v }), 'Adapt to consistency'))}
+        {row('Photos per review', 'How many are offered at once.', stepper(s.reviewSize ?? 12, (n) => save({ reviewSize: n }), 3, 100, 'photos per review'))}
+        {row('Rating scale', undefined, seg([['emoji', '☹ → ☺'], ['stars', '★ 1–5']] as [string, string][], s.ratingStyle ?? 'emoji', (v) => save({ ratingStyle: v as 'emoji' | 'stars' }), 'Rating scale'))}
+        {row('Hide scores while rating', 'Keeps each rating independent. Always on: earlier ratings are never shown during a review.', sw(true, () => undefined, 'Hide scores while rating'), true)}
       </div>
-      <div className="field">
-        <h3>Interval after each session</h3><p>Time before a photograph returns for its next review. Tap a tile to change it.</p>
-        <div className="tiles">
-          {Array.from({ length: s.sessions }, (_, i) => {
-            const v = s.intervals[Math.min(i, s.intervals.length - 1)];
-            return <button className="tile-s" key={i} aria-label={`Interval after session ${i + 1}: ${v}`} onClick={() => {
-              const next = [...s.intervals];
-              while (next.length < s.sessions) next.push(next[next.length - 1] ?? '1 year');
-              next[i] = INTERVALS[(INTERVALS.indexOf(v) + 1) % INTERVALS.length];
-              save({ intervals: next });
-            }}><b>after {i + 1}</b>{v}</button>;
-          })}
-        </div>
+      {group('Ranking')}
+      <div style={card}>
+        {row('Guest ratings count for', 'In composition rankings.', w.data ? seg([[0, '0%'], [20, '20%'], [35, '35%'], [50, '50%']] as [number, string][], w.data.weight, (v) => { void api('/collections/guest-weight', { method: 'PUT', body: { weight: v } }).then(w.reload); }, 'Guest ratings weight') : null)}
+        {row('Review new shoots first', 'Fresh photos jump the queue.', sw(s.newShootsFirst ?? true, (v) => save({ newShootsFirst: v }), 'Review new shoots first'), true)}
       </div>
-      <Toggle on={s.adaptive} onChange={(v) => save({ adaptive: v })} label="Adapt to consistency" hint="Steady ratings come back less often. Mixed ratings come back sooner." />
-      <DeleteSuggestions s={s} save={save} />
+      {group('Community')}
+      <CommunitySettings />
+      {group('Clean-up')}
+      <div style={card}>
+        {row('Suggest removing low-rated photos', 'After every session. Nothing is removed without asking.', sw(s.archiveSuggest, (v) => save({ archiveSuggest: v }), 'Suggest removing low-rated photos'))}
+        <div style={{ padding: '12px 0' }}><DeleteSuggestions s={s} save={save} /></div>
+      </div>
+      {group('To do list')}
       <TodoReasons s={s} save={save} />
-      <Toggle on={s.archiveSuggest} onChange={(v) => save({ archiveSuggest: v })} label="Suggest leaving low-rated photos out of review" hint="After 4 sessions averaging under 2. They stay in your library, search and compositions." />
     </>
   );
 }

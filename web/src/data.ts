@@ -41,3 +41,6 @@ export const fmtDate = (iso: string | null | undefined, opts: Intl.DateTimeForma
   iso ? new Date(iso).toLocaleDateString('en-AU', opts) : '';
 
 export const fmtCoord = (lat: number, lon: number) => `${Math.abs(lat).toFixed(4)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(4)}°${lon < 0 ? 'W' : 'E'}`;
+
+/** What to show for a rating: the face, or stars, by the person's choice (Settings, Reviews, Rating scale). */
+export const ratingMark = (r: { value: number; emoji: string }, style: 'emoji' | 'stars' | undefined) => (style === 'stars' ? '★'.repeat(r.value) : r.emoji);

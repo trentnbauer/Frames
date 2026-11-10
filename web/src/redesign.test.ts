@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { optionsFor } from './components/NewComposition';
+import { optionsFor, wallFromRects } from './components/NewComposition';
 import { stepOf } from './components/Shell';
 import { greetingFor } from './pages/Today';
 import { seasonOf } from './season';
@@ -39,5 +39,16 @@ describe('new composition layouts', () => {
   it('gives each option the right number of prints, and four prints a grid that is not a row', () => {
     for (let n = 1; n <= 12; n++) for (const o of optionsFor(n)) expect(o.prints, `${o.key}`).toHaveLength(n);
     expect(optionsFor(4).some((o) => o.mode === 'grid')).toBe(true);
+  });
+  it('builds the wall as drawn: each rectangle becomes a print of the closest size, in the right shape and place', () => {
+    const c = optionsFor(3).find((o) => o.label === 'Centre feature')!;
+    const w = wallFromRects(c.rects);
+    expect(w).toHaveLength(3);
+    expect(w[1].size > w[0].size || w[1].size === 'A3').toBe(true); // the middle one is the big one
+    expect(w.every((p) => p.orientation === 'portrait')).toBe(true);
+    expect(w[0].x).toBeLessThan(w[1].x);
+    expect(w[1].x).toBeLessThan(w[2].x);
+    const landscape = wallFromRects(optionsFor(1).find((o) => o.label === 'Panorama')!.rects);
+    expect(landscape[0].orientation).toBe('landscape');
   });
 });

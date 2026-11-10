@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
-import { RATINGS } from '../data';
+import { RATINGS, ratingMark } from '../data';
+import { useStore } from '../store';
 import { Header } from '../components/bits';
 import { Modal } from '../components/Modal';
 
@@ -12,6 +13,7 @@ const REASONS: [string, string][] = [['nudity', 'Nudity'], ['violence', 'Violenc
 /** Rate other photographers' photos, anonymously both ways: the photo, "How good is it?", a note, Skip and Next photo, and a Report link. */
 export function Community() {
   const nav = useNavigate();
+  const { settings } = useStore();
   const stats = useApi<Stats>('/community/stats');
   const [cur, setCur] = useState<Next | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,7 +85,7 @@ export function Community() {
             <div style={{ background: 'var(--surface)', borderRadius: 14, padding: 20 }}>
               <div className="spread" style={{ alignItems: 'baseline', marginBottom: 14 }}><h2 className="serif" style={{ fontSize: 26 }}>How good is it?</h2><span className="faint" style={{ fontSize: 12 }}>Press 1–5</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--bg)', borderRadius: 12, padding: '14px 12px', marginBottom: 14 }} role="group" aria-label="Rate this photograph">
-                {RATINGS.map((r) => <button key={r.value} aria-pressed={pick === r.value} onClick={() => setPick(r.value)} aria-label={`${r.value} ${r.label}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1, opacity: pick && pick !== r.value ? 0.45 : 1 }}><span style={{ fontSize: 26 }}>{r.emoji}</span><span className="faint" style={{ fontSize: 11.5 }}>{r.label}</span></button>)}
+                {RATINGS.map((r) => <button key={r.value} aria-pressed={pick === r.value} onClick={() => setPick(r.value)} aria-label={`${r.value} ${r.label}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1, opacity: pick && pick !== r.value ? 0.45 : 1 }}><span style={{ fontSize: settings?.ratingStyle === 'stars' ? 14 : 26, letterSpacing: '.1em' }}>{ratingMark(r, settings?.ratingStyle)}</span><span className="faint" style={{ fontSize: 11.5 }}>{r.label}</span></button>)}
               </div>
               {cur.written && <input className="field-in" style={{ height: 40, borderRadius: 8, marginBottom: 16 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What works, or what would make it better? (optional)" aria-label="Note" maxLength={500} />}
               <div className="spread" style={{ alignItems: 'center' }}>

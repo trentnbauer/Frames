@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { saveCloudDest } from '../backupS3.js';
-import { beginConnect, finishBackupConnect, pendingPurpose, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
+import { refetching, shrunkStats, beginConnect, finishBackupConnect, pendingPurpose, CloudError, clientOf, shrinkEnforced, finishConnect, isProvider, listFolders, loadCloud, loadClients, PROVIDERS, progressOf, removeConnection, saveCloud, saveClients, syncConnection, validFolderId } from '../cloud.js';
 import { setSecret } from '../ai.js';
 import { getSetting, setSetting } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -24,13 +24,23 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   app.get('/api/cloud', async (req) => ({ ...dto(), redirectUri: redirect(req) }));
 
   // Save original resolution: the person's switch, and whether an administrator has turned full size off for everyone.
-  const resolution = () => { const admin = (getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false); return { saveOriginal: admin && (getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false), want: getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false, lockedByAdmin: !admin, copyEdge: 4096 }; };
+  const resolution = () => { const sh = shrunkStats(db); const admin = (getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false); return { saveOriginal: admin && (getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false), want: getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false, lockedByAdmin: !admin, copyEdge: 4096, shrunkCount: sh.count, shrunkBytes: sh.bytes }; };
   app.get('/api/cloud/resolution', async () => resolution());
   app.put('/api/cloud/resolution', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     if (typeof b.saveOriginal !== 'boolean') return rep.code(400).send({ error: 'saveOriginal must be true or false' });
     setSetting(db, 'cloudPrefs', { ...getSetting<Row>(db, 'cloudPrefs', {}), saveOriginal: b.saveOriginal });
     return resolution();
+  });
+  // "Fetch full-size copies of what is already imported": runs as a background job through each connection.
+  app.post('/api/cloud/resolution/fetch', async (req, rep) => {
+    if (!resolution().saveOriginal) return rep.code(400).send({ error: 'Turn on Save original resolution first.' });
+    if (progressOf(cfg).running) return rep.code(409).send({ error: 'A cloud sync is already running.' });
+    if (refetching.has(cfg.dataDir)) return rep.code(409).send({ error: 'This is already running.' });
+    const conns = loadCloud(db).connections.filter((c) => c.enabled && !c.needsReconnect && c.folderId !== null);
+    refetching.add(cfg.dataDir);
+    void (async () => { try { for (const c of conns) await run(c.id).catch(() => undefined); } finally { refetching.delete(cfg.dataDir); } })();
+    return rep.code(202).send({ started: true, connections: conns.length });
   });
   // Administrators: Photos & storage, "Allow original resolution from the cloud".
   app.put('/api/admin/cloud-originals', async (req, rep) => {

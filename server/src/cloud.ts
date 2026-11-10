@@ -302,6 +302,11 @@ export function safeName(n: string): string {
  * for everyone (default on). Off means a 4096 px long-edge copy is stored instead. Frames never changes anything in the cloud account.
  */
 export const COPY_EDGE = 4096;
+/** People whose "fetch full-size copies" run is in progress: the next sync replaces smaller copies with the originals. */
+export const refetching = new Set<string>();
+export const shrunkStats = (db: DB): { count: number; bytes: number } => {
+  try { const r = db.prepare('SELECT COUNT(*) n, COALESCE(SUM(MAX(orig_size - size, 0)), 0) b FROM cloud_files WHERE shrunk = 1').get() as { n: number; b: number }; return { count: r.n, bytes: r.b }; } catch { return { count: 0, bytes: 0 }; }
+};
 export const adminAllowsOriginals = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys ?? db;
   return getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false;
@@ -403,6 +408,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
   const shrinkOn = !!c0.shrink || shrinkEnforced(db) || !fullSizeEffective(db, (cfg as { sys?: DB }).sys);
+  const refetch = refetching.has(cfg.dataDir);
   const known = db.prepare('SELECT version, rel, shrunk FROM cloud_files WHERE conn_id = ? AND remote_id = ?');
   const taken = db.prepare('SELECT remote_id FROM cloud_files WHERE conn_id = ? AND rel = ?');
   const add = db.prepare('INSERT INTO cloud_files (conn_id, remote_id, rel, version, size, synced, shrunk, orig_size, orig_w, orig_h, remote_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -424,6 +430,33 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         const prior = known.get(id, e.id) as { version: string; rel: string; shrunk: number } | undefined;
         if (prior) {
           if (prior.version !== e.version) { res.changedRemotely++; continue; }
+          // Asked to fetch the full-size copy of something kept smaller: download the original and put it where the smaller one was.
+          if (refetch && prior.shrunk && !shrinkOn) {
+            const oldLocal = path.join(dest, ...prior.rel.split('/'));
+            const name = safeName(e.name);
+            const newRel = [...f.rel, name].join('/');
+            const target = path.join(dest, ...newRel.split('/'));
+            const part = path.join(tmpDir, `cloud-${crypto.randomBytes(6).toString('hex')}.part`);
+            if (path.resolve(target).startsWith(dest + path.sep) && !(newRel !== prior.rel && fs.existsSync(target))) {
+              try {
+                progress.current = e.name;
+                const r = await a.download(h, u, e);
+                if (!r.body) throw new CloudError('empty answer');
+                await pipeline(Readable.fromWeb(r.body as any), fs.createWriteStream(part));
+                const got = fs.statSync(part).size;
+                if (e.size && got !== e.size) throw new CloudError(`incomplete download (${got} of ${e.size} bytes)`);
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.renameSync(part, target);
+                const mt = Math.floor(fs.statSync(target).mtimeMs);
+                db.prepare('UPDATE cloud_files SET rel = ?, shrunk = 0, size = ? WHERE conn_id = ? AND remote_id = ?').run(newRel, got, id, e.id);
+                // The photograph follows its file: same record, ratings and compositions, now pointing at the full-size copy.
+                db.prepare('UPDATE photos SET path = ?, file = ?, size_bytes = ?, mtime = ? WHERE path = ?').run(target, name, got, mt, oldLocal);
+                if (newRel !== prior.rel) fs.rmSync(oldLocal, { force: true });
+                res.downloaded++; res.bytes += got; progress.downloaded = res.downloaded;
+              } catch (err) { fs.rmSync(part, { force: true }); if (err instanceof CloudError && err.reconnect) throw err; res.errors.push(`${e.name}: ${msg(err)}`); }
+              continue;
+            }
+          }
           // Still the same in the cloud, so this is the moment it is safe to keep only a smaller copy here.
           if (shrinkOn && !prior.shrunk) {
             const local = path.join(dest, ...prior.rel.split('/'));

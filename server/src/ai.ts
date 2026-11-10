@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import { getSetting, setSetting, type DB } from './db.js';
 import { derivPath, type Cfg } from './ingest.js';
 import { activeConfig, type AiCfg } from './aisources.js';
-import { orderFor } from './aiJobs.js';
+import { orderFor, type Job } from './aiJobs.js';
 import { loadSettings } from './settings.js';
 
 /**
@@ -22,6 +22,19 @@ export type ParsedQuery = { text: string; subjects: string[]; exclude: string[];
 export const getSecret = (db: DB, name: string) => getSetting<string>(db, `secret:${name}`, '');
 export const setSecret = (db: DB, name: string, v: string) => setSetting(db, `secret:${name}`, v);
 
+/** The AIs to try for a job, best first. Before anyone sets an order, it is just the one that is switched on. */
+export function aiConfigsFor(db: DB, job: Job): AiCfg[] {
+  if (!getSetting<unknown>(db, 'aiJobs', null)) { const c = activeConfig(db, loadSettings(db).aiActive); return c ? [c] : []; }
+  return orderFor(db, job).map((id) => activeConfig(db, id)).filter((c): c is AiCfg => !!c);
+}
+/** Runs `fn` with the first AI for the job; if it errors, the next one takes over. Null when no AI is set up for the job; throws the last error if all fail. */
+export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>): Promise<T | null> {
+  const list = aiConfigsFor(db, job);
+  let last: unknown = null;
+  for (const c of list) { try { return await fn(c); } catch (e) { last = e; } }
+  if (list.length) throw last;
+  return null;
+}
 export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, (getSetting<unknown>(db, 'aiJobs', null) ? orderFor(db, 'describe')[0] : undefined) ?? loadSettings(db).aiActive);
 
 /**
@@ -187,7 +200,7 @@ export function createAiWorker(db: DB, cfg: Cfg) {
       state.total = ids.length;
       for (const id of ids) {
         if (!aiConfig(db)) break; // switched off mid-run
-        try { await one(c, id); } catch (e) {
+        try { if ((await tryEach(db, 'describe', (cc) => one(cc, id))) === null) break; } catch (e) {
           state.failed++;
           state.lastError = e instanceof Error ? e.message : String(e);
           db.prepare("UPDATE photos SET ai_status = 'error', ai_attempts = ai_attempts + 1 WHERE id = ?").run(id);
@@ -204,7 +217,7 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     const sugg = () => new Set((db.prepare("SELECT name FROM tags WHERE photo_id = ? AND accepted = 0 AND source = 'ai'").all(id) as { name: string }[]).map((r) => r.name));
     const desc = () => { try { return String(JSON.parse((db.prepare('SELECT ai_json FROM photos WHERE id = ?').get(id) as { ai_json: string | null }).ai_json ?? '{}').description ?? ''); } catch { return ''; } };
     const before = sugg(), was = desc();
-    try { await one(c, id); } catch (e) { return { ai: true, added: [], descriptionChanged: false, error: e instanceof Error ? e.message : 'The AI could not look at this photograph' }; }
+    try { await tryEach(db, 'describe', (cc) => one(cc, id)); } catch (e) { return { ai: true, added: [], descriptionChanged: false, error: e instanceof Error ? e.message : 'The AI could not look at this photograph' }; }
     return { ai: true, added: [...sugg()].filter((n) => !before.has(n)), descriptionChanged: desc() !== was };
   }
   return { state, run, analyse };

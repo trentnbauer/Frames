@@ -26,6 +26,12 @@ export type Settings = {
   ai: 'off' | 'local' | 'external';
   /** Write approved metadata to .xmp sidecars next to the originals (needs the library mounted writable). */
   xmpWriteBack: boolean;
+  /** How many photographs one review offers at once. */
+  reviewSize: number;
+  /** How ratings are drawn: faces from meh to love, or one to five stars. The stored rating is the same. */
+  ratingStyle: 'emoji' | 'stars';
+  /** Photographs from the newest shoots come first in a review. */
+  newShootsFirst: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +46,9 @@ export const DEFAULT_SETTINGS: Settings = {
   aiActive: '',
   ai: 'off',
   xmpWriteBack: false,
+  reviewSize: 12,
+  ratingStyle: 'emoji',
+  newShootsFirst: true,
 };
 
 export function loadSettings(db: DB): Settings {
@@ -61,6 +70,9 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
     if (ok.length) next.intervals = ok;
   }
   if (typeof patch.adaptive === 'boolean') next.adaptive = patch.adaptive;
+  if (patch.reviewSize !== undefined) next.reviewSize = Math.min(100, Math.max(3, Math.round(Number(patch.reviewSize)) || cur.reviewSize));
+  if (patch.ratingStyle === 'emoji' || patch.ratingStyle === 'stars') next.ratingStyle = patch.ratingStyle;
+  if (typeof patch.newShootsFirst === 'boolean') next.newShootsFirst = patch.newShootsFirst;
   if (typeof patch.archiveSuggest === 'boolean') next.archiveSuggest = patch.archiveSuggest;
   if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
   if (patch.gear !== undefined) next.gear = cleanGear(patch.gear);

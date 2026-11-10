@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { COLOR_NAMES, hammingInts, hashInts, similarity, type Feat, type Swatch } from '../analysis.js';
-import { suggestFilters, aiConfig, embedText, fromBlob, parseQuery } from '../ai.js';
+import { suggestFilters, aiConfig, aiConfigsFor, tryEach, embedText, fromBlob, parseQuery } from '../ai.js';
 import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
@@ -190,20 +190,19 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   });
 
   app.post('/api/search/parse', async (req) => {
-    const c = aiConfig(db);
     const text = String(((req.body ?? {}) as Row).q ?? '').slice(0, 300);
-    const parsed = c && text ? await parseQuery(c, text) : null;
-    return { ai: !!c, parsed };
+    const on = aiConfigsFor(db, 'search').length > 0;
+    const parsed = on && text ? await tryEach(db, 'search', (c) => parseQuery(c, text)).catch(() => null) : null;
+    return { ai: on, parsed };
   });
 
   /** "Find subjects, tags and colours for a composition from its name": the model picks from names the library already has. Without AI: { ai: false }. */
   app.post('/api/ai/suggest-filters', async (req, rep) => {
-    const c = aiConfig(db);
-    if (!c) return { ai: false, picks: null };
+    if (!aiConfigsFor(db, 'ideas').length) return { ai: false, picks: null };
     const name = String(((req.body ?? {}) as Row).name ?? '').trim().slice(0, 120);
     if (!name) return rep.code(400).send({ error: 'Give the composition a name first' });
     const vocab = (kind: string) => all("SELECT name FROM tags WHERE kind = ? AND accepted = 1 GROUP BY name ORDER BY COUNT(*) DESC, name LIMIT 300", kind).map((r) => r.name as string);
-    const picks = await suggestFilters(c, name, { subjects: vocab('subject'), tags: vocab('tag'), colours: [...COLOR_NAMES] });
+    const picks = await tryEach(db, 'ideas', (c) => suggestFilters(c, name, { subjects: vocab('subject'), tags: vocab('tag'), colours: [...COLOR_NAMES] }));
     return { ai: true, picks };
   });
 

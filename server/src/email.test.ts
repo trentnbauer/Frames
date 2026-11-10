@@ -157,3 +157,26 @@ describe('the log and the templates', () => {
     saveSmtp(sys, { host: '' });
   });
 });
+
+describe('a sign-in from a new device', () => {
+  it('is not news the first time, then is told to the person (the bell) from another device', async () => {
+    saveSmtp(sys, { host: 'smtp.test', from: 'frames@x.test' });
+    await checkSmtp(sys);
+    const cookieOf = (r: { headers: Record<string, any> }) => ([] as string[]).concat(r.headers['set-cookie'] ?? []).map((c) => c.split(';')[0]).join('; ');
+    const signIn = async (existing: string) => {
+      sent.length = 0;
+      await call('POST', '/api/public/auth/email/send', { email: 'dev@x.test' });
+      const v = await call('POST', '/api/public/auth/email/verify', { email: 'dev@x.test', code: lastCode() }, existing ? { cookie: existing } : {});
+      return cookieOf(v);
+    };
+    const first = await signIn('');
+    expect(first).toContain('frames_seen=');
+    const owner = (env.app as any).frames.tenants.get((sys.prepare("SELECT id FROM users WHERE email = 'dev@x.test'").get() as { id: number }).id);
+    const before = (owner.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind = 'sign-in'").get() as { n: number }).n;
+    const again = await signIn(first.split('; ').find((c) => c.startsWith('frames_seen='))!); // same device: nothing
+    expect((owner.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind = 'sign-in'").get() as { n: number }).n).toBe(before);
+    expect(again).not.toContain('frames_seen=');
+    await signIn(''); // a different device
+    expect((owner.db.prepare("SELECT COUNT(*) n FROM notifications WHERE kind = 'sign-in'").get() as { n: number }).n).toBe(before + 1);
+  });
+});
