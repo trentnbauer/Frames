@@ -175,7 +175,7 @@ export function SharePage() {
           mine={mine} frames={frames} others={viewOthers} swap={swap} setFrame={setFrame} changes={changes} dirty={dirty} sending={sending} sendNote={sendNote} sendBack={sendBack} discard={discard} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
           openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
         {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
-        {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </>
     );
   }
@@ -186,7 +186,7 @@ export function SharePage() {
       <Shell who={reviewer}>
         <div style={{ marginBottom: 12, fontSize: 13 }} className="muted">{reviewer.trim() ? `You’re ${reviewer.trim()}. ` : ''}<button className="t2" style={{ textDecoration: 'underline' }} onClick={() => withName(() => setView('review'))}>Rate these photos</button>{d.allowDownload && <> · <button className="t2" style={{ textDecoration: 'underline' }} onClick={download}>Download files</button></>}</div>
         <GuestEditor token={token} name={d.name} owner={d.owner} layout={d.layout} chosenIds={d.chosenIds ?? []} photos={photos} askName={withName} />
-        {asking && <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </Shell>
     );
   }
@@ -297,7 +297,7 @@ export function SharePage() {
         </div>
       )}
       {asking && (
-        <NameBox initial={reviewer} token={token} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
+        <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />
       )}
       {picking !== null && (
         <div onMouseDown={(e) => e.target === e.currentTarget && setPicking(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -353,25 +353,26 @@ function CommentBox({ token, reviewer, photoId, placeholder, ask }: { token: str
 }
 
 /** "What should we call you?": a name the photographer will see next to what this person rates and suggests. */
-function NameBox({ initial, token, signIn, onDone, onCancel }: { initial: string; token: string; signIn: { id: string; name: string }[]; onDone: (n: string) => void; onCancel: () => void }) {
+function NameBox({ initial, token, title, owner, signIn, onDone, onCancel }: { initial: string; token: string; title: string; owner?: string; signIn: { id: string; name: string }[]; onDone: (n: string) => void; onCancel: () => void }) {
   const [n, setN] = useState(initial);
   const ok = n.trim().length > 0;
+  const field = { width: '100%', height: 46, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 18px', font: "400 15px 'IBM Plex Sans',sans-serif", marginBottom: 12 } as const;
+  const provider = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: 42, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, color: 'var(--text)' } as const;
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: 'var(--surface)', borderRadius: 14, padding: 28, width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
-        <h2 style={{ font: "400 30px 'Instrument Serif',serif", margin: '0 0 6px' }}>What should we call you?</h2>
-        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px' }}>Your name is shown to whoever shared these, next to what you rate and suggest. It stays on this device so you are not asked again.</p>
-        <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" className="namebox" style={{ width: '100%', marginBottom: 16 }} />
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" className="pill" onClick={onCancel}>Cancel</button>
-          <button className="pill primary" disabled={!ok}>Continue with this name</button>
-        </div>
+    <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'color-mix(in srgb, var(--bg) 85%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: 'var(--surface)', borderRadius: 14, padding: '24px 28px', width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px var(--hair), 0 12px 30px rgba(0,0,0,.5)' }}>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>{owner ? `${owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
+        <h2 style={{ font: "400 32px/1.05 'Instrument Serif',Georgia,serif", margin: '0 0 14px' }}>{title}</h2>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>Shown to {owner || 'whoever shared this'} next to what you rate and suggest. Remembered on this device.</p>
+        <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" style={field} />
+        <button className="btn primary" style={{ width: '100%', justifyContent: 'center', opacity: ok ? 1 : 0.4 }} disabled={!ok}>Start</button>
         {signIn.length > 0 && (
-          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--hair)' }}>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Or make a free guest account, and this stays in your own list of what has been shared with you, with no need for the link.</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {signIn.map((p) => <a key={p.id} className="pill" href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
+          <div style={{ borderTop: '1px solid var(--hair)', marginTop: 16, paddingTop: 14 }}>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 8px' }}>New? Make a free guest account with</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {signIn.map((p) => <a key={p.id} style={provider} href={`/auth/login/${p.id}?guest=1&returnTo=${encodeURIComponent(`/s/${token}`)}`}>Continue with {p.name}</a>)}
             </div>
+            <p style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--muted)', fontStyle: 'italic', margin: '10px 0 0' }}>Frames only gets your name, email and an account ID. Never your password, contacts or files.</p>
           </div>
         )}
       </form>
