@@ -2,12 +2,21 @@
   const root = document.documentElement;
   const THEME_KEY = 'photo-portfolio-theme';
 
-  function applyTheme(theme) {
-    root.setAttribute('data-theme', theme);
-    const label = document.getElementById('theme-label');
-    const icon = document.getElementById('theme-icon');
-    if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
-    if (icon) icon.textContent = theme === 'dark' ? '\u2600' : '\u263E';
+  function applyTheme(theme, from) {
+    // The same circular wipe as the Frames app: the new theme grows out of the button. Skipped when motion is reduced.
+    const swap = () => {
+      root.setAttribute('data-theme', theme);
+      const label = document.getElementById('theme-label');
+      const icon = document.getElementById('theme-icon');
+      if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+      if (icon) icon.textContent = theme === 'dark' ? '\u2600' : '\u263E';
+    };
+    if (from && document.startViewTransition && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      const r = Math.hypot(Math.max(from.x, window.innerWidth - from.x), Math.max(from.y, window.innerHeight - from.y));
+      document.startViewTransition(swap).ready.then(() => {
+        root.animate({ clipPath: ['circle(0 at ' + from.x + 'px ' + from.y + 'px)', 'circle(' + r + 'px at ' + from.x + 'px ' + from.y + 'px)'] }, { duration: 750, easing: 'cubic-bezier(.7,0,.25,1)', pseudoElement: '::view-transition-new(root)' });
+      }).catch(function () { /* the theme still changes */ });
+    } else swap();
   }
 
   function initTheme() {
@@ -15,9 +24,10 @@
     try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* storage blocked */ }
     const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
     applyTheme(saved || (prefersLight ? 'light' : 'dark'));
-    document.getElementById('theme-toggle').addEventListener('click', () => {
+    document.getElementById('theme-toggle').addEventListener('click', (e) => {
       const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
+      const b = e.currentTarget.getBoundingClientRect();
+      applyTheme(next, { x: e.clientX || b.left + b.width / 2, y: e.clientY || b.top + b.height / 2 });
       try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not remembered */ }
     });
   }

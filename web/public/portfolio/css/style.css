@@ -79,3 +79,6 @@ html[data-theme=light] .lightbox { background: rgba(5,5,5,.92); }
 }
 @media (prefers-reduced-motion: reduce) { .lightbox-spinner { animation-duration: 2.4s; } }
 .site-nav button { text-transform: inherit; letter-spacing: inherit; }
+
+/* theme wipe (see applyTheme in js/app.js) */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
