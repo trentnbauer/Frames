@@ -40,7 +40,10 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
         {(list.data?.passkeys ?? []).map((k) => (
           <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 14 }}>
             <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: '#8f8c86' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
+            <span style={{ display: 'flex', gap: 16 }}>
+              <button style={{ color: '#a8a59f', fontSize: 13 }} onClick={async () => { const name = window.prompt('Name this passkey', k.name)?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
             <button style={{ color: 'oklch(0.75 0.14 28)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); }}>Remove</button>
+            </span>
           </div>
         ))}
       </div>
