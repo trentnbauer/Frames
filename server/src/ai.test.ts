@@ -147,6 +147,14 @@ describe('local provider', () => {
     expect(r.photos[0].file).toBe('harbour.jpg');
     expect(r.photos[0].similarity).toBeGreaterThanOrEqual(r.photos[1].similarity);
   });
+  it('with words found in what names a photograph (file, camera, tag), shows those photographs and not every other one ranked below them', async () => {
+    const found = (await A.get('/api/photos?q=harbour&semantic=1')).body;
+    expect(found.photos.map((p: any) => p.file)).toContain('harbour.jpg');
+    expect(found.count).toBeLessThan(found.total);
+    expect(found.semantic).toBe(false); // an exact answer, not a ranking
+    for (const p of found.photos) expect(`${p.file} ${p.camera} ${p.lens} ${p.place} ${p.title}`.toLowerCase()).toContain('harbour');
+    expect((await A.get('/api/photos?q=foggy%20harbour%20boat&semantic=1')).body.semantic).toBe(true); // meaning only (the AI's words): ranked as before
+  });
   it('turns a natural-language query into chips', async () => {
     const r = (await A.post('/api/search/parse', { q: 'fog over the harbour, early morning, no people' })).body;
     expect(r.ai).toBe(true);
