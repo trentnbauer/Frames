@@ -259,7 +259,7 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
     return {
       config: { enabled: c.enabled, portfolios: c.portfolios, env: !!c.env },
       accessApps: accessApps(c, hostnames),
-      appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
+      tunnelName: c.tunnelName, appUrl: loadAuth(db).publicUrl, hostnames, hasToken: !!getSecret(db, 'cloudflare:tunnelToken'),
       allow: loadAuth(db).allow, open: !!loadAuth(db).open, protect: protectOn(db), protectForced: protectForced(db), protectApplied: c.protectApplied, accessPeople: ((p) => p.emails.length + p.domains.length)(accessPeople(db)), accountId: c.accountId, hasApiToken: !!getSecret(db, 'cloudflare:apiToken'), apiReady: hasApi(db), error: c.error, accessNote: c.accessNote, orgNote: c.orgNote, appliedAt: c.appliedAt,
       status: { ...runner.status }, signInOn: x.isProtected(), service: service(),
       managedByEnv: !!c.env,
@@ -307,6 +307,11 @@ export function registerTunnel(app: FastifyInstance, x: Ctx, runner: TunnelRunne
       const v = String(b.accountId).trim();
       if (v && !ACCOUNT_ID.test(v)) return bad('The account ID is the 32 letters and numbers shown in the Cloudflare dashboard.');
       n.accountId = v.toLowerCase();
+    }
+    if (b.tunnelName !== undefined) {
+      const v = String(b.tunnelName).trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,59}$/.test(v)) return bad('A tunnel name is up to 60 letters, numbers, spaces, dots, dashes or underscores.');
+      n.tunnelName = v;
     }
     if (typeof b.apiToken === 'string' && b.apiToken.trim()) setSecret(db, 'cloudflare:apiToken', b.apiToken.trim().slice(0, 500));
     if (b.clearApiToken === true) setSecret(db, 'cloudflare:apiToken', '');

@@ -130,7 +130,7 @@ export function CloudBackup() {
 }
 
 
-type Inst = { allowOriginals: boolean; cloudOnly: boolean; shrinkCopies: 'choice' | 'always'; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number; cacheLimitGb: number; previewPx: number; workers: number; logLevel: 'errors' | 'warnings' | 'info'; updateChannel: 'stable' | 'beta'; cloudWho: 'admins' | 'members'; cloudMinSyncMin: number; cloudQuotaGb: number; membersSeeShoots: boolean; aiMonthlyLimit: number; aiMembersOwn: boolean; aiSharedFirst: boolean; heavyJobs: 'always' | 'idle'; crashHost: string };
+type Inst = { allowOriginals: boolean; cloudOnly: boolean; storeOriginalQuality: boolean; backupAuto: boolean; backupEveryDays: 1 | 7; backupKeep: number; cacheLimitGb: number; previewPx: number; workers: number; logLevel: 'errors' | 'warnings' | 'info'; updateChannel: 'stable' | 'beta'; cloudWho: 'admins' | 'members'; cloudMinSyncMin: number; cloudQuotaGb: number; membersSeeShoots: boolean; aiMonthlyLimit: number; aiMembersOwn: boolean; aiSharedFirst: boolean; heavyJobs: 'always' | 'idle'; crashHost: string };
 type SysInfo = { version: string; image: string; libraryDisk: { path: string; total: number; free: number }; dataDisk: { path: string; total: number; free: number }; cache: { path: string; bytes: number }; checks: { name: string; ok: boolean }[]; libraries: number };
 
 /** Settings, Server, Photos & storage: where originals live, the XMP sidecar choice, the originals rules and the cloud services members can use. */
@@ -170,11 +170,8 @@ export function PhotosStorage() {
           if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload photographs to Frames, and every cloud photograph will be kept only as a smaller copy here, with the full-size original left in the cloud.\n\nPhotographs already in Frames are not touched. IMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return;
           void put({ cloudOnly: v });
         }} /></SRow>
-        <SRow title="Always keep only a smaller copy of cloud photos" hint={inst.data?.cloudOnly ? 'Required while originals are kept in cloud storage only.' : 'Off: each person chooses, per connected folder. On: required for everyone (JPEG, quality 80).'}>
-          <PSwitch label="Always keep only a smaller copy of cloud photos" on={inst.data?.shrinkCopies === 'always' || !!inst.data?.cloudOnly} disabled={!!inst.data?.cloudOnly} set={(v) => {
-            if (v && !window.confirm('Require a smaller copy of every cloud photo, for everyone?\n\nFrames will keep only a JPEG at quality 80 of each photograph from every connected cloud folder, and leave the full-size originals in the cloud. Copies already held are made smaller on the next sync.\n\nIMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return;
-            void put({ shrinkCopies: v ? 'always' : 'choice' });
-          }} />
+        <SRow title="Store original quality" hint={inst.data?.cloudOnly ? 'Smaller copies are required while originals are kept in cloud storage only.' : 'Off: cloud photos are kept as smaller copies (JPEG, quality 80) and the original stays in the cloud. On: they are kept exactly as they are.'}>
+          <PSwitch label="Store original quality" on={!!inst.data?.storeOriginalQuality && !inst.data?.cloudOnly} disabled={!!inst.data?.cloudOnly} set={(v) => void put({ storeOriginalQuality: v })} />
         </SRow>
       </SCard>
 

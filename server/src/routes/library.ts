@@ -264,7 +264,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
 
   // ---------- internally managed storage: upload ----------
   // Files land in the data folder's "originals" library and are imported like any other library file.
-  void app.register(multipart, { limits: { fileSize: (cfg.maxUploadMb ?? 2048) * 1024 * 1024, files: 500 } }).after(() => {
+  void app.register(multipart, { limits: { fileSize: 102_400 * 1024 * 1024, files: 500 } }).after(() => {
     // Uploads are counted per visitor on top of the overall limit: a few hundred files a minute is plenty for a person.
     app.post('/api/upload', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, rep) => {
       if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
@@ -277,7 +277,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
       const saved: string[] = [], rejected: { file: string; reason: string }[] = [];
-      for await (const part of (req as any).files()) {
+      // The limit is the administrator's setting (or MAX_UPLOAD_MB), read for each upload so a change applies at once.
+      for await (const part of (req as any).files({ limits: { fileSize: policyOf(x.sys).maxUploadMb * 1024 * 1024, files: 500 } })) {
         // Only the base name is used, so a crafted name cannot write outside the folder.
         const base = path.basename(String(part.filename ?? '')).replace(/[^\w. -]/g, '_');
         if (!base || base.startsWith('.') || !IMAGE_EXT.has(path.extname(base).toLowerCase())) { rejected.push({ file: base || '(unnamed)', reason: 'Not a supported photo type' }); part.file.resume(); continue; }

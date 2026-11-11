@@ -1,4 +1,4 @@
-import { policyOf } from './policy.js';
+import { policyOf, runtime } from './policy.js';
 import { dirBytes } from './cache.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -285,7 +285,7 @@ export async function listFolders(db: DB, cfg: AppCfg, conn: Conn, parent: strin
 export const validFolderId = (provider: ProviderId, id: string) => adapters[provider].validId(id);
 
 // ---------- the sync ----------
-const MAX_FILE = (Number(process.env.CLOUD_MAX_FILE_MB) || 1024) * 1024 * 1024;
+const maxFile = () => runtime.cloudMaxFileMb * 1024 * 1024; // the administrator's limit (Settings, Photos & storage), or CLOUD_MAX_FILE_MB
 const MAX_SIDECAR = 5 * 1024 * 1024;
 const MAX_DEPTH = 25;
 const MAX_ENTRIES = 200_000;
@@ -319,8 +319,10 @@ export const fullSizeEffective = (db: DB, sys?: DB): boolean => (sys ? getSettin
 export const shrinkEnforced = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys;
   if (!sys) return false;
-  const i = getSetting<{ shrinkCopies?: string; cloudOnly?: boolean }>(sys, 'instance', {});
-  return i.shrinkCopies === 'always' || !!i.cloudOnly; // keeping originals in the cloud means only smaller copies are kept here
+  const i = getSetting<{ storeOriginalQuality?: boolean; cloudOnly?: boolean }>(sys, 'instance', {});
+  // Unless the administrator chose to store original quality, photographs from the cloud are kept as smaller copies (the originals stay in
+  // the cloud). Keeping originals in the cloud means only smaller copies are kept here whatever else is chosen.
+  return !i.storeOriginalQuality || !!i.cloudOnly;
 };
 
 /**
@@ -481,7 +483,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
           res.skipped++; continue;
         }
         if (path.extname(e.name).toLowerCase() === '.xmp' && e.size > MAX_SIDECAR) { res.errors.push(`${e.name}: a metadata file larger than ${MAX_SIDECAR / 1048576} MB`); continue; }
-        if (e.size > MAX_FILE) { res.errors.push(`${e.name}: larger than the ${MAX_FILE / 1048576} MB limit`); continue; }
+        if (e.size > maxFile()) { res.errors.push(`${e.name}: larger than the ${maxFile() / 1048576} MB limit`); continue; }
         let name = safeName(e.name);
         let rel = [...f.rel, name].join('/');
         if (taken.get(id, rel)) { const x = path.extname(name); name = `${name.slice(0, name.length - x.length)} (${e.id.replace(/\W/g, '').slice(-6)})${x}`; rel = [...f.rel, name].join('/'); }

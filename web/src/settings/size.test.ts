@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSize, showSize } from './size';
+import { parseMb, parseSize, showMb, showSize } from './size';
 
 describe('storage sizes', () => {
   it('reads what a person types', () => {
@@ -16,5 +16,20 @@ describe('storage sizes', () => {
     expect(showSize(10)).toBe('10 GB');
     expect(showSize(0.5)).toBe('512 MB');
     expect(showSize(2.5)).toBe('2.5 GB');
+  });
+});
+
+describe('file size limits', () => {
+  it('reads MB and GB, at least 1 MB', () => {
+    expect(parseMb('500')).toBe(500);
+    expect(parseMb('500 MB')).toBe(500);
+    expect(parseMb('2 GB')).toBe(2048);
+    expect(parseMb('1.5g')).toBe(1536);
+    for (const bad of ['', '0', 'abc', '-3', '0.2 MB']) expect(parseMb(bad)).toBeNull();
+  });
+  it('shows them back', () => {
+    expect(showMb(2048)).toBe('2 GB');
+    expect(showMb(1536)).toBe('1536 MB');
+    expect(showMb(500)).toBe('500 MB');
   });
 });

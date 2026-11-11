@@ -14,6 +14,8 @@ export type Policy = {
   cacheLimitGb: number; // 0 = no limit
   previewPx: number; // the largest preview any photograph gets (people can choose smaller)
   previewQuality: number; // the highest JPEG quality for previews (people can choose lower)
+  maxUploadMb: number; // the largest single photograph a person can upload
+  cloudMaxFileMb: number; // the largest single file a cloud sync will copy in
   workers: number;
   logLevel: 'errors' | 'warnings' | 'info' | 'debug';
   updateChannel: 'stable' | 'beta';
@@ -31,6 +33,8 @@ export type Policy = {
 };
 type Stored = Partial<Record<keyof Policy, unknown>>;
 
+/** The most a size limit can be set to (100 GB). */
+export const MAX_FILE_MB = 102_400;
 export const PREVIEW_SIZES = [1600, 2400, 3072, 4096];
 export const PREVIEW_QUALITIES = [70, 75, 80, 85, 88, 90, 95];
 /** A storage limit in GB typed by an administrator: 0 (none) up to a petabyte, in steps of a thousandth of a GB. Null when it is not a number like that. */
@@ -50,6 +54,8 @@ export function policyOf(sys: DB): Policy {
     cacheLimitGb: [0, 10, 25, 50, 100, 250].includes(i.cacheLimitGb as number) ? (i.cacheLimitGb as number) : 0,
     previewPx: [1600, 2400, 3072, 4096].includes(i.previewPx as number) ? (i.previewPx as number) : 2400,
     previewQuality: PREVIEW_QUALITIES.includes(i.previewQuality as number) ? (i.previewQuality as number) : 90,
+    maxUploadMb: int(i.maxUploadMb, 1, MAX_FILE_MB, Number(process.env.MAX_UPLOAD_MB) > 0 ? Math.min(MAX_FILE_MB, Math.floor(Number(process.env.MAX_UPLOAD_MB))) : 2048), // set in the app, else MAX_UPLOAD_MB, else 2048
+    cloudMaxFileMb: int(i.cloudMaxFileMb, 1, MAX_FILE_MB, Number(process.env.CLOUD_MAX_FILE_MB) > 0 ? Math.min(MAX_FILE_MB, Math.floor(Number(process.env.CLOUD_MAX_FILE_MB))) : 1024),
     workers: int(i.workers, 0, 8, 0), // 0 = as many as there are processors
     logLevel: i.logLevel === 'errors' || i.logLevel === 'warnings' || i.logLevel === 'debug' ? i.logLevel : 'info',
     updateChannel: i.updateChannel === 'beta' ? 'beta' : 'stable',
@@ -79,6 +85,7 @@ export function policyPatch(b: Record<string, unknown>): Stored {
   if (typeof b.backupKeep === 'number' && Number.isInteger(b.backupKeep) && b.backupKeep >= 1 && b.backupKeep <= 90) o.backupKeep = b.backupKeep;
   const pick = (k: string, allowed: unknown[]) => { if (allowed.includes(b[k])) o[k as keyof Policy] = b[k]; };
   pick('cacheLimitGb', [0, 10, 25, 50, 100, 250]); pick('previewPx', [1600, 2400, 3072, 4096]); pick('previewQuality', PREVIEW_QUALITIES);
+  for (const k of ['maxUploadMb', 'cloudMaxFileMb'] as const) if (typeof b[k] === 'number' && Number.isInteger(b[k]) && (b[k] as number) >= 1 && (b[k] as number) <= MAX_FILE_MB) o[k] = b[k];
   if (typeof b.workers === 'number' && Number.isInteger(b.workers) && b.workers >= 0 && b.workers <= 8) o.workers = b.workers;
   pick('logLevel', ['errors', 'warnings', 'info', 'debug']); pick('rawPreview', ['embedded', 'full']);
   if (typeof b.showWhatsNew === 'boolean') o.showWhatsNew = b.showWhatsNew; pick('updateChannel', ['stable', 'beta']); pick('cloudWho', ['admins', 'members']);
@@ -91,8 +98,8 @@ export function policyPatch(b: Record<string, unknown>): Stored {
 }
 
 /** Values read on every use by code that has no database in hand (image making). Set at start-up and whenever the choices change. */
-export const runtime = { previewPx: 2400, previewQuality: 90, workers: 0, rawPreview: 'embedded' as 'embedded' | 'full' };
-export function applyRuntime(sys: DB) { const p = policyOf(sys); runtime.previewPx = p.previewPx; runtime.previewQuality = p.previewQuality; runtime.workers = p.workers; runtime.rawPreview = p.rawPreview; sharp.concurrency(p.workers); }
+export const runtime = { previewPx: 2400, previewQuality: 90, cloudMaxFileMb: 1024, workers: 0, rawPreview: 'embedded' as 'embedded' | 'full' };
+export function applyRuntime(sys: DB) { const p = policyOf(sys); runtime.previewPx = p.previewPx; runtime.previewQuality = p.previewQuality; runtime.cloudMaxFileMb = p.cloudMaxFileMb; runtime.workers = p.workers; runtime.rawPreview = p.rawPreview; sharp.concurrency(p.workers); }
 
 /** True when a file newer than `days` days exists, so a weekly schedule skips the days in between. */
 export function madeWithin(files: { mtimeMs: number }[], days: number, now = Date.now()): boolean {
