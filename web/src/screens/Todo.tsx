@@ -27,16 +27,10 @@ export function TodoPage() {
   const [skipped, setSkipped] = useState<number[]>([]);
   const [done, setDone] = useState(0);
   const [cam, setCam] = useState<string[]>(['', '', '', '', '', '']);
-  const [placeText, setPlace] = useState('');
   const [desc, setDesc] = useState('');
-  const [hits, setHits] = useState<MapHit[]>([]);
-  const [pickedHit, setPicked] = useState<MapHit | null>(null);
   const [busy, setBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const timer = useRef<number>(0);
-
-  // Places already on other photos match instantly while the map search runs.
-  const known = (q: string): MapHit[] => { const s = q.trim().toLowerCase(), seen = new Set<string>(); const out: MapHit[] = []; for (const x of lib.data?.photos ?? []) { if (!x.place || seen.has(x.place) || !(x.place + ' ' + x.placeAddress).toLowerCase().includes(s)) continue; seen.add(x.place); out.push({ name: x.place, address: x.placeAddress, kind: x.placeKind, lat: x.lat ?? undefined, lon: x.lon ?? undefined }); } return out.slice(0, 5); };
 
   const key = REASONS.find((r) => r[0] === reason)![2];
   const baseIds = reason === 'all' ? (walk.data?.photos ?? []).map((p) => p.id) : todo.data?.items.find((i) => i.key === key)?.ids ?? [];
@@ -50,7 +44,7 @@ export function TodoPage() {
   useEffect(() => {
     if (!p) return;
     setCam([p.camera, p.lens, p.aperture ? `f/${p.aperture}` : '', p.shutter, p.iso ? String(p.iso) : '', p.film]);
-    setPlace(p.place); setPicked(null); setDesc(p.description || ''); setHits([]);
+    setDesc(p.description || '');
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!todo.data || !walk.data) return <div className="page-shell"><Header /></div>;
@@ -61,9 +55,8 @@ export function TodoPage() {
   const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept') }));
   const inComp = (c: Collection) => !!p && c.photoIds.includes(p.id);
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
-  const save = async (choice?: MapHit) => {
+  const save = async () => {
     if (!p) return;
-    const place = choice ? choice.name : placeText, picked = choice ?? pickedHit;
     const body: Record<string, unknown> = {};
     if (cam[0] !== p.camera) body.camera = cam[0];
     if (cam[1] !== p.lens) body.lens = cam[1];
@@ -71,13 +64,6 @@ export function TodoPage() {
     if (cam[5] !== p.film) body.film = cam[5];
     const ap = Number(cam[2].replace(/^f\//i, '')); if (cam[2] && ap && ap !== p.aperture) body.aperture = ap;
     const iso = Number(cam[4]); if (cam[4] && iso && iso !== p.iso) body.iso = iso;
-    if (place !== p.place) body.place = place;
-    // Naming a place also drops the pin: from the suggestion picked, or else the best map match for the typed name (never over a pin already set).
-    if (place.trim() && (place !== p.place || picked) && (picked || p.lat === null)) {
-      let hit = picked;
-      if (!hit) { try { hit = (await api<MapHit[]>(`/map/search?q=${encodeURIComponent(place.trim())}`)).find((h) => h.lat !== undefined && h.lon !== undefined) ?? null; } catch { hit = null; } }
-      if (hit && hit.lat !== undefined && hit.lon !== undefined) { body.lat = hit.lat; body.lon = hit.lon; body.placeAddress = hit.address ?? ''; body.placeKind = hit.kind ?? ''; }
-    }
     if (desc !== (p.description || '')) body.description = desc;
     if (Object.keys(body).length) await api(`/photos/${p.id}`, { method: 'PATCH', body });
     setDone((d) => d + 1); advance(); todo.reload(); walk.reload(); refreshSummary();
@@ -88,9 +74,6 @@ export function TodoPage() {
     reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
     tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'),
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
-    tPlace: placeText, tPlaceHint: shoot?.place ?? '', tPlaceSuggest: !placeText && !!shoot?.place,
-    // Enter takes the first suggestion (or the typed name) and saves, so naming a place is type, Enter.
-    onPlaceKey: (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); window.clearTimeout(timer.current); void save(hits[0]); } },
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',
     useRoll: () => mate && setCam([mate.camera, mate.lens, mate.aperture ? `f/${mate.aperture}` : '', mate.shutter, mate.iso ? String(mate.iso) : '', mate.film]),
@@ -98,9 +81,7 @@ export function TodoPage() {
     tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
     tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
-    onPlace: (e: React.ChangeEvent<HTMLInputElement>) => { const q = e.target.value; setPlace(q); setPicked(null); window.clearTimeout(timer.current); if (q.trim().length < 3) { setHits([]); return; } const here = known(q); setHits(here); timer.current = window.setTimeout(() => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`).then((r) => setHits([...here, ...r.filter((h) => !here.some((k) => k.name === h.name))])).catch(() => setHits(here)), here.length ? 400 : 900); },
-    placeOpen: hits.length > 0, placeHits: hits.slice(0, 5).map((h) => ({ name: h.name, region: h.address.split(',').slice(-1)[0] ?? '', pick: () => { setPlace(h.name); setPicked(h); setHits([]); } })),
-    openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map', usePlace: () => setPlace(shoot?.place ?? ''),
+    openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },
     addSubject: (name: string) => tagAct(name, 'subject', 'accept'), addTag: (name: string) => tagAct(name, 'tag', 'accept'),
     skipTodo: advance, saveTodo: () => save(),
