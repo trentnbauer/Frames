@@ -41,7 +41,7 @@ export function useSignin(ctx: Ctx): Section {
   const reload = () => { a.reload(); inst.reload(); };
   const put = async (body: object) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body })); inst.reload(); };
   const i = inst.data;
-  const configure = () => ctx.modal(<Modal title="Sign-in methods" sub="Set up, test and remove each method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access /></Modal>);
+  const configure = (type?: string) => ctx.modal(<Modal title="Sign-in methods" sub="Set up, test and remove each method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access focus={type} /></Modal>);
   const rows: R[] = METHODS.map(([k, icon, label, hint, type, fail]) => {
     const p = a.data?.providers.find((x) => x.type === type);
     const on = k === 'passkey' ? true : !!p && !p.off;
@@ -49,7 +49,7 @@ export function useSignin(ctx: Ctx): Section {
     return {
       id: `m_${k}`, t: 'method', icon, label, hint, value: on, togDisabled: k === 'passkey' ? 'Built in: people add passkeys under Settings, Profile' : undefined,
       method: {
-        on, configured: !!p, builtIn: k === 'passkey', test: tested || on ? 'pass' : 'none', failWith: fail, configure,
+        on, configured: !!p, builtIn: k === 'passkey', test: tested || on ? 'pass' : 'none', failWith: fail, configure: () => (k === 'passkey' ? ctx.goto('lib', 'profile') : configure(type)),
         setOn: async (v) => { if (!p) { ctx.toast(`Set up ${label} first: press Configure`); return; } await act(ctx, () => api(`/auth/methods/${p.id}`, { method: 'PUT', body: { on: v } })); a.reload(); },
         runTest: () => { if (!p) { ctx.toast(`${fail} · press Configure`); return; } window.location.assign(`/auth/login/${p.id}?test=1`); },
       },
@@ -72,7 +72,7 @@ export function useSignin(ctx: Ctx): Section {
       ] },
       { title: 'Access control', rows: [
         { id: 'requireSignin', t: 'toggle', label: 'Require sign-in', hint: 'Off: anyone who can reach Frames can use it. Test a method first.', value: !!a.data?.enabled, set: async (v: boolean) => { await act(ctx, () => api('/auth/config', { method: 'PUT', body: { enabled: v } })); a.reload(); } },
-        { id: 'allowList', t: 'link', label: 'Who is allowed in, the bot check and the public address', hint: 'The allowed list, Cloudflare Turnstile and the address sign-in comes back to.', meta: 'Open', act: configure },
+        { id: 'allowList', t: 'link', label: 'Who is allowed in, the bot check and the public address', hint: 'The allowed list, Cloudflare Turnstile and the address sign-in comes back to.', meta: 'Open', act: () => configure() },
       ] },
     ],
   };
