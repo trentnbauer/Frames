@@ -12,6 +12,7 @@ let env: Env, A: ReturnType<typeof api>;
 beforeAll(async () => {
   env = makeEnv();
   A = api(env);
+  await A.put('/api/admin/instance', { storeOriginalQuality: true }); // these tests are about names and hard links: the files are stored as they arrive (quality has its own tests)
   const put = (rel: string, b: Buffer) => { fs.mkdirSync(path.dirname(path.join(env.lib, rel)), { recursive: true }); fs.writeFileSync(path.join(env.lib, rel), b); };
   // Day 1, folder "Coast": a red scene, and the same scene re-exported smaller (a near-duplicate / variant).
   put('Coast/red.jpg', await jpg(svg(1200, 800, '#b71c1c', '#e53935', [0.3, 0.3]), { exif: { IFD0: { Make: 'Fuji', Model: 'X-T5' }, IFD2: { DateTimeOriginal: '2026:10:12 06:30:00' }, IFD3: { GPSLatitudeRef: 'S', GPSLatitude: '33/1 51/1 0/1', GPSLongitudeRef: 'E', GPSLongitude: '151/1 12/1 0/1' } } }));

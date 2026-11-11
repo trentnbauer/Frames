@@ -149,6 +149,25 @@ async function makeDerivatives(db: DB, cfg: Cfg, id: number, file: string, isRaw
   return meta;
 }
 
+/**
+ * A photograph held only as a smaller copy of one in a cloud account (at most 4096 px on its longest side): the original's pixel size, the
+ * way round the picture is, so PPI and print sizes are worked out for the original and not for the copy. Null for any other photograph.
+ */
+export function cloudOriginalSize(db: DB, cfg: Cfg, file: string, w: number, h: number): { w: number; h: number } | null {
+  const rel = path.relative(path.join(cfg.dataDir, 'cloud'), file);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  const [connId, ...rest] = rel.split(path.sep);
+  const r = db.prepare('SELECT orig_w ow, orig_h oh FROM cloud_files WHERE conn_id = ? AND rel = ? AND shrunk = 1').get(connId, rest.join('/')) as { ow: number; oh: number } | undefined;
+  if (!r || !r.ow || !r.oh) return null;
+  return (r.oh > r.ow) === (h > w) ? { w: r.ow, h: r.oh } : { w: r.oh, h: r.ow }; // the header's size, turned to match the picture
+}
+/** Gives photographs already kept as smaller cloud copies the size of their originals (copies made before this was recorded for use). */
+export function fixCloudSizes(db: DB, cfg: Cfg) {
+  const rows = db.prepare('SELECT id, path, w, h FROM photos WHERE path LIKE ?').all(`${path.join(cfg.dataDir, 'cloud')}${path.sep}%`) as { id: number; path: string; w: number; h: number }[];
+  const set = db.prepare('UPDATE photos SET w = ?, h = ? WHERE id = ?');
+  for (const r of rows) { const o = cloudOriginalSize(db, cfg, r.path, r.w, r.h); if (o && (o.w !== r.w || o.h !== r.h)) set.run(o.w, o.h, r.id); }
+}
+
 /** Builds previews and the AI-free analysis for one photo. Safe to run again. */
 export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, opts: { exifW?: number; exifH?: number; derivsOnly?: boolean } = {}) {
   const isRaw = RAW_EXT.has(path.extname(file).toLowerCase());
@@ -156,8 +175,10 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
   const meta = await makeDerivatives(db, cfg, id, file, isRaw, info).catch(() => null);
   if (!meta) return false;
   const rot = (meta.orientation ?? 1) >= 5;
-  const w = rot ? meta.height : meta.width;
-  const h = rot ? meta.width : meta.height;
+  let w = rot ? meta.height : meta.width;
+  let h = rot ? meta.width : meta.height;
+  const orig = isRaw ? null : cloudOriginalSize(db, cfg, file, w ?? 0, h ?? 0); // a smaller copy of a cloud photograph: the original's size
+  if (orig) { w = orig.w; h = orig.h; }
   // For RAW the JPEG is a preview, smaller than the real picture, so its size says nothing about the real pixels:
   // keep the size from the file's own header when there is one.
   const keepExif = isRaw && !!(info?.w || opts.exifW);

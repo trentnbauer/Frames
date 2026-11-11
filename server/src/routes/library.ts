@@ -9,7 +9,7 @@ import { aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
-import { cloudOnlyOriginals } from '../cloud.js';
+import { cloudOnlyOriginals, shrinkUpload } from '../cloud.js';
 import { removeShoot } from '../remove.js';
 import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, reindex } from '../ingest.js';
@@ -277,6 +277,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
       const saved: string[] = [], rejected: { file: string; reason: string }[] = [];
+      let shrunk = 0;
       // The limit is the administrator's setting (or MAX_UPLOAD_MB), read for each upload so a change applies at once.
       for await (const part of (req as any).files({ limits: { fileSize: policyOf(x.sys).maxUploadMb * 1024 * 1024, files: 500 } })) {
         // Only the base name is used, so a crafted name cannot write outside the folder.
@@ -293,6 +294,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
             try { claimName(tmp, path.join(dir, name)); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || n > 10_000) throw e; name = `${stem}-${n++}${ext}`; }
           }
           fs.rmSync(tmp, { force: true });
+          const smaller = await shrinkUpload(db, path.join(dir, name)); // unless original quality is stored
+          if (smaller) { name = smaller; shrunk++; }
           saved.push(name);
         } catch (e) {
           fs.rmSync(tmp, { force: true });
@@ -303,7 +306,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         }
       }
       if (!saved.length && !rejected.length) return rep.code(400).send({ error: 'No files received' });
-      return { saved, rejected };
+      return { saved, rejected, shrunk };
     });
   });
 

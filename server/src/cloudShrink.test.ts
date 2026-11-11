@@ -3,6 +3,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import sharp from 'sharp';
+import { verifyDerivatives } from './derivCheck.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
@@ -133,10 +134,23 @@ describe('keeping a smaller copy of cloud photographs', () => {
     await A.put('/api/admin/instance', { storeOriginalQuality: true });
     await A.put(`/api/cloud/${id}`, { shrink: true });
   });
+  it('a smaller copy is held to 4096 px, but the photograph still counts as the original size for PPI and print sizes', async () => {
+    nodes.push({ id: 'f6', name: 'Wide.jpg', data: await noisy(4300, 900), version: 'v1' });
+    const r = await sync(id);
+    for (let k = 0; k < 200 && !env.db.prepare("SELECT 1 x FROM photos WHERE file = 'Wide.jpg' AND has_derivs = 1").get(); k++) await new Promise((ok) => setTimeout(ok, 100)); // the scan and previews that follow a sync run in the background
+    expect(r.errors).toEqual([]);
+    const p = await photoByFile('Wide.jpg');
+    expect([p.w, p.h]).toEqual([4300, 900]); // what the photograph really is
+    const file = (env.db.prepare("SELECT path FROM photos WHERE file = 'Wide.jpg'").get() as { path: string }).path;
+    expect((await sharp(file).metadata()).width).toBe(4096); // the copy kept here
+    env.db.prepare("UPDATE photos SET w = 4096, h = 858 WHERE file = 'Wide.jpg'").run(); // as a copy made before this was recorded would be
+    await verifyDerivatives(env.db, { libraries: [], dataDir: env.data });
+    expect((await photoByFile('Wide.jpg')).w).toBe(4300); // put right at start-up
+  });
   it('says plainly when the original cannot be fetched, and disconnecting does not lose the way back to it', async () => {
     const p = await photoByFile('Beach At Dawn.jpg');
     await A.del(`/api/cloud/${id}`);
-    expect(env.db.prepare('SELECT COUNT(*) n FROM cloud_files WHERE conn_id = ? AND shrunk = 1').get(id)).toEqual({ n: 4 }); // kept: it is how the original is found again
+    expect(env.db.prepare('SELECT COUNT(*) n FROM cloud_files WHERE conn_id = ? AND shrunk = 1').get(id)).toEqual({ n: 5 }); // kept: it is how the original is found again
     const r = await A.get(`/api/photos/${p.id}/original`);
     expect(r.status).toBe(502);
     expect(r.body.error).toMatch(/disconnected/);

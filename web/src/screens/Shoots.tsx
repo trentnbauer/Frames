@@ -41,7 +41,7 @@ export function Shoots() {
   const { id } = useParams();
   const sid = id ? Number(id) : null;
   const nav = useNavigate();
-  const { settings } = useStore();
+  const { settings, me } = useStore();
   const { openNew } = useUi();
   const status = useStatus();
   const shoots = useApi<Shoot[]>('/shoots');
@@ -113,7 +113,7 @@ export function Shoots() {
       <ProtoShoots
         uploadReq={req} localOn={local} cloudOn={cloudOn} today={todayName()}
         files={files} onFiles={setFiles} pickFiles={() => input.current?.click()} filesMeta={files.length ? `${mb >= 1000 ? (mb / 1000).toFixed(1) + ' GB' : Math.round(mb) + ' MB'} · ${suggestName}` : ''} suggestName={suggestName}
-        storageSub={`To your library on this server`} cloudHint={conns.length ? conns.map((c) => c.provider).join(', ') : ''}
+        storageSub={me?.storeOriginalQuality === false ? 'Uploaded photos are kept as smaller copies' : `To your library on this server`} shrinkUploads={me?.storeOriginalQuality === false} cloudHint={conns.length ? conns.map((c) => c.provider).join(', ') : ''}
         conns={conns.map((c) => ({ id: c.id, icon: (PROVIDER[c.provider] ?? [c.provider.slice(0, 2), c.provider])[0], name: (PROVIDER[c.provider] ?? [c.provider, c.provider])[1], where: c.account }))}
         existing={all.slice(0, 8).map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
         onUpload={async (o: { mode: string; name: string; split: boolean; existingId: number | null }, onProgress: (n: number) => void) => {
