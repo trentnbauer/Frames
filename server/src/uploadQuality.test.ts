@@ -30,6 +30,15 @@ it('keeps an upload as a smaller copy by default, and tells the page so it can w
   expect([m.width, m.height]).toEqual([2400, 1600]); // the same pixels
 });
 
+it('an upload keeps every pixel: it is the only copy, and print sizes depend on them', { timeout: 60_000 }, async () => {
+  const wide = await sharp({ create: { width: 4300, height: 1000, channels: 3, noise: { type: 'gaussian', mean: 128, sigma: 60 } } }).jpeg({ quality: 98 }).toBuffer();
+  expect((await send('wide.jpg', wide)).json()).toMatchObject({ saved: ['wide.jpg'], shrunk: 1 });
+  const m = await sharp(stored('wide.jpg')).metadata();
+  expect([m.width, m.height]).toEqual([4300, 1000]); // not held to 4096 as a cloud copy is
+  await A.scan();
+  expect((await A.get('/api/photos')).body.photos.find((p: any) => p.file === 'wide.jpg')).toMatchObject({ w: 4300, h: 1000 });
+});
+
 it('a PNG becomes a JPEG, and never replaces a photograph that already has that name', { timeout: 60_000 }, async () => {
   fs.writeFileSync(stored('same.jpg'), 'an earlier photograph');
   const r = (await send('same.png', png)).json();

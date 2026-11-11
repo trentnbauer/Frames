@@ -326,7 +326,7 @@ export const storesOriginalQuality = (db: DB): boolean => !!getSetting<{ storeOr
  */
 export async function shrinkUpload(db: DB, file: string): Promise<string | null> {
   if (storesOriginalQuality(db)) return null;
-  const r = await shrinkFile(file);
+  const r = await shrinkFile(file, false);
   return r ? path.basename(r.file) : null;
 }
 
@@ -352,10 +352,10 @@ const SHRINKABLE = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff']);
 export const SHRINK_QUALITY = 80;
 
 /**
- * A smaller copy of a photograph: JPEG at quality 80 with the same pixels and the camera data kept. Not done when it would save little
+ * A smaller copy of a photograph: JPEG at quality 80 with the camera data kept, and (for a cloud photograph) at most COPY_EDGE pixels on its longest side. Not done when it would save little
  * (an already small file), or for RAW and other files that cannot be shown as a JPEG without losing what makes them RAW.
  */
-async function shrinkFile(file: string): Promise<{ file: string; before: number; after: number; w: number; h: number } | null> {
+async function shrinkFile(file: string, cap = true): Promise<{ file: string; before: number; after: number; w: number; h: number } | null> {
   const ext = path.extname(file).toLowerCase();
   if (!SHRINKABLE.has(ext)) return null;
   const before = fs.statSync(file).size;
@@ -364,7 +364,8 @@ async function shrinkFile(file: string): Promise<{ file: string; before: number;
     const meta = await sharp(file, { failOn: 'none' }).metadata();
     let img = sharp(file, { failOn: 'none' });
     if (ext === '.png') img = img.flatten({ background: '#ffffff' });
-    await img.rotate().resize({ width: COPY_EDGE, height: COPY_EDGE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
+    // A copy of a cloud photograph is also held to COPY_EDGE pixels: its original stays in the cloud. An uploaded photograph keeps every pixel (cap false): it is the only copy.
+    await (cap ? img.rotate().resize({ width: COPY_EDGE, height: COPY_EDGE, fit: 'inside', withoutEnlargement: true }) : img.rotate()).jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
     const after = fs.statSync(tmp).size;
     if (after >= before * 0.9) { fs.rmSync(tmp, { force: true }); return null; }
     const out = ext === '.jpg' || ext === '.jpeg' ? file : file.slice(0, -ext.length) + '.jpg';

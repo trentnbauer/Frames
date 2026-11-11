@@ -4,7 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { dHash, hamming } from './analysis.js';
 import { getSetting, setSetting, type DB } from './db.js';
-import { derivPath, rebuild, type Cfg } from './ingest.js';
+import { derivPath, fixCloudSizes, rebuild, type Cfg } from './ingest.js';
 
 /**
  * Do the preview and thumbnail files really belong to the photographs they are filed under? They are kept by photograph number, so
@@ -22,6 +22,7 @@ const meanDiff = (a: Buffer, b: Buffer) => { let s = 0; for (let i = 0; i < a.le
  * is found again, so the same few do not raise the same warning at every start.
  */
 export async function verifyDerivatives(db: DB, cfg: Cfg, who = ''): Promise<{ checked: number; wrong: number; rebuilt: number }> {
+  fixCloudSizes(db, cfg); // once at start-up (and daily): copies of cloud photographs count as the originals' size
   const rows = db.prepare('SELECT id, dhash FROM photos WHERE has_derivs = 1 AND missing = 0 AND dhash IS NOT NULL').all() as { id: number; dhash: string }[];
   const wrong: number[] = [];
   for (const r of rows) {
