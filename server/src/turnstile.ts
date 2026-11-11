@@ -26,9 +26,21 @@ export const saveTurnstile = (sys: DB, c: Partial<TurnstileCfg> & { secret?: str
   if (typeof c.secret === 'string' && c.secret.trim()) setSecret(sys, 'turnstile', c.secret.trim().slice(0, 200));
 };
 
-/** What the pages need, or null when the check is off (switched off, not set up, or locked off by TURNSTILE_DISABLE). */
+const STARTED = Date.now();
+/**
+ * Seconds still to wait before the check is asked of anyone: for the first five minutes after Frames starts (or restarts) it is not, so
+ * a wrong key or a Cloudflare that cannot be reached never stands between the administrator and the app just after a start. The same five
+ * minutes as the emergency login. TURNSTILE_DELAY_SECONDS changes it (0 = no wait).
+ */
+export function delayLeft(): number {
+  const raw = process.env.TURNSTILE_DELAY_SECONDS;
+  const secs = raw !== undefined && raw.trim() !== '' && Number.isFinite(Number(raw)) && Number(raw) >= 0 ? Number(raw) : 300;
+  return Math.max(0, Math.ceil(secs - (Date.now() - STARTED) / 1000));
+}
+
+/** What the pages need, or null when the check is off (switched off, not set up, locked off by TURNSTILE_DISABLE, or in its first minutes after a start). */
 export function active(sys: DB, where: 'signin' | 'shares'): { siteKey: string } | null {
-  if (envBool('TURNSTILE_DISABLE', false)) return null;
+  if (envBool('TURNSTILE_DISABLE', false) || delayLeft() > 0) return null;
   const c = loadTurnstile(sys);
   return c.enabled && c.siteKey && hasSecret(sys) && c[where] ? { siteKey: c.siteKey } : null;
 }

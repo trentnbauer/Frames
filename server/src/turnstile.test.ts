@@ -6,6 +6,7 @@ import { setSetting } from './db.js';
 import { cleanup, makeEnv, type Env } from './testutil.js';
 
 /** Cloudflare Turnstile on the sign-in page and share links, against a stand-in for Cloudflare's check. */
+process.env.TURNSTILE_DELAY_SECONDS = '0'; // the five minutes after a start have their own test below
 let env: Env, srv: http.Server, url: string, answer: { success: boolean; codes?: string[]; down?: boolean };
 const posts: URLSearchParams[] = [];
 let token: string;
@@ -131,5 +132,23 @@ describe('handing the browser on to the sign-in provider', () => {
     expect(page).toContain('http-equiv="refresh" content="0;url=https://accounts.example.com/auth?a=1&amp;state=&quot;x&quot;&lt;b&gt;"');
     expect(page).toContain('href="https://accounts.example.com/auth?a=1&amp;state=&quot;x&quot;&lt;b&gt;"'); // and a link for a browser that does not follow it
     expect(page).not.toContain('<b>');
+  });
+});
+
+describe('the first minutes after a start', () => {
+  it('asks nobody for the check until five minutes have passed, then does', async () => {
+    const e = makeEnv();
+    try {
+      const sys = (e.app as any).frames.sys;
+      const { active, delayLeft, saveTurnstile } = await import('./turnstile.js');
+      saveTurnstile(sys, { enabled: true, siteKey: '0xKEY', secret: 'sekret' });
+      process.env.TURNSTILE_DELAY_SECONDS = '300';
+      expect(delayLeft()).toBeGreaterThan(290);
+      expect(active(sys, 'signin')).toBeNull(); // set up and on, but just started
+      expect((await e.app.inject({ method: 'GET', url: '/api/admin/turnstile' })).json()).toMatchObject({ enabled: true, startsInSec: expect.any(Number) });
+      process.env.TURNSTILE_DELAY_SECONDS = '0';
+      expect(delayLeft()).toBe(0);
+      expect(active(sys, 'signin')).toEqual({ siteKey: '0xKEY' });
+    } finally { process.env.TURNSTILE_DELAY_SECONDS = '0'; cleanup(e); }
   });
 });
