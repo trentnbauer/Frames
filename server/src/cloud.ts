@@ -303,59 +303,53 @@ export function safeName(n: string): string {
  * Cloud import resolution. Each person chooses whether imports keep the full-size file (default on); an administrator can switch full size off
  * for everyone (default on). Off means a 4096 px long-edge copy is stored instead. Frames never changes anything in the cloud account.
  */
-export const COPY_EDGE = 4096;
 /** People whose "fetch full-size copies" run is in progress: the next sync replaces smaller copies with the originals. */
 export const refetching = new Set<string>();
 export const shrunkStats = (db: DB): { count: number; bytes: number } => {
   try { const r = db.prepare('SELECT COUNT(*) n, COALESCE(SUM(MAX(orig_size - size, 0)), 0) b FROM cloud_files WHERE shrunk = 1').get() as { n: number; b: number }; return { count: r.n, bytes: r.b }; } catch { return { count: 0, bytes: 0 }; }
 };
-export const adminAllowsOriginals = (db: DB): boolean => {
-  const sys = (db as unknown as { sys?: DB }).sys ?? db;
-  return getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false;
-};
+const sysOf = (db: DB): DB => (db as unknown as { sys?: DB }).sys ?? db;
+/** Cloud copies at original quality (Settings, Server, Storage, Cloud storage). Off: smaller copies for everyone. */
+export const adminAllowsOriginals = (db: DB): boolean => policyOf(sysOf(db)).cloudOrig;
 export const userWantsOriginals = (db: DB): boolean => getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false;
-export const fullSizeEffective = (db: DB, sys?: DB): boolean => (sys ? getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false : adminAllowsOriginals(db)) && userWantsOriginals(db);
+export const fullSizeEffective = (db: DB, sys?: DB): boolean => policyOf(sys ?? sysOf(db)).cloudOrig && userWantsOriginals(db);
 
-/** Has the administrator chosen to store original quality (Settings, Photos & storage)? Off by default. */
-export const storesOriginalQuality = (db: DB): boolean => !!getSetting<{ storeOriginalQuality?: boolean }>((db as unknown as { sys?: DB }).sys ?? db, 'instance', {}).storeOriginalQuality;
+/** Are uploads kept exactly as they are (Local storage, Store original quality)? Off by default: a smaller copy is kept. */
+export const storesOriginalQuality = (db: DB): boolean => policyOf(sysOf(db)).localOrig;
 
 /**
- * A photograph a person uploads, when original quality is not stored: kept as a smaller copy (JPEG, quality 80, the same pixels). There is no
- * original in a cloud account to fetch later, so this is the only copy: what they export or download is the smaller one. Returns the file's
- * name afterwards (a PNG or TIFF becomes a JPEG), or null when it was left as it was (RAW and other types, or little to save).
+ * A photograph a person uploads, when original quality is not stored: kept as a smaller copy (JPEG, at the size and quality chosen for local
+ * storage). There is no original in a cloud account to fetch later, so this is the only copy: what they export or download is the smaller one.
+ * Returns the file's name afterwards (a PNG or TIFF becomes a JPEG) and the original's pixel size, or null when it was left as it was
+ * (RAW and other types, or little to save).
  */
-export async function shrinkUpload(db: DB, file: string): Promise<string | null> {
-  if (storesOriginalQuality(db)) return null;
-  const r = await shrinkFile(file, false);
-  return r ? path.basename(r.file) : null;
+export async function shrinkUpload(db: DB, file: string): Promise<{ name: string; w: number; h: number } | null> {
+  const p = policyOf(sysOf(db));
+  if (p.localOrig) return null;
+  const r = await shrinkFile(file, p.localPx, p.localQ);
+  return r ? { name: path.basename(r.file), w: r.w, h: r.h } : null;
 }
 
+/** Smaller copies for everyone (cloud storage: Store original quality is off)? */
 export const shrinkEnforced = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys;
   if (!sys) return false;
-  const i = getSetting<{ storeOriginalQuality?: boolean; cloudOnly?: boolean }>(sys, 'instance', {});
-  // Unless the administrator chose to store original quality, photographs from the cloud are kept as smaller copies (the originals stay in
-  // the cloud). Keeping originals in the cloud means only smaller copies are kept here whatever else is chosen.
-  return !i.storeOriginalQuality || !!i.cloudOnly;
+  return !policyOf(sys).cloudOrig;
 };
 
 /**
- * The administrator can require originals to live in cloud storage (Settings, Storage, Photo folders): nothing can be uploaded to
- * Frames, and cloud photographs are kept only as smaller copies. Photographs already here are not touched.
+ * With Local storage switched off (an administrator requires originals to live in cloud storage) nothing can be uploaded to Frames and
+ * library folders are not read. Photographs already here are not touched.
  */
-export const cloudOnlyOriginals = (db: DB): boolean => {
-  const sys = (db as unknown as { sys?: DB }).sys;
-  return !!sys && !!getSetting<{ cloudOnly?: boolean }>(sys, 'instance', {}).cloudOnly;
-};
+export const cloudOnlyOriginals = (db: DB): boolean => !policyOf(sysOf(db)).localOn;
 
 const SHRINKABLE = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff']);
-export const SHRINK_QUALITY = 80;
 
 /**
  * A smaller copy of a photograph: JPEG at quality 80 with the camera data kept, and (for a cloud photograph) at most COPY_EDGE pixels on its longest side. Not done when it would save little
  * (an already small file), or for RAW and other files that cannot be shown as a JPEG without losing what makes them RAW.
  */
-async function shrinkFile(file: string, cap = true): Promise<{ file: string; before: number; after: number; w: number; h: number } | null> {
+async function shrinkFile(file: string, edge: number | null, quality: number): Promise<{ file: string; before: number; after: number; w: number; h: number } | null> {
   const ext = path.extname(file).toLowerCase();
   if (!SHRINKABLE.has(ext)) return null;
   const before = fs.statSync(file).size;
@@ -364,8 +358,8 @@ async function shrinkFile(file: string, cap = true): Promise<{ file: string; bef
     const meta = await sharp(file, { failOn: 'none' }).metadata();
     let img = sharp(file, { failOn: 'none' });
     if (ext === '.png') img = img.flatten({ background: '#ffffff' });
-    // A copy of a cloud photograph is also held to COPY_EDGE pixels: its original stays in the cloud. An uploaded photograph keeps every pixel (cap false): it is the only copy.
-    await (cap ? img.rotate().resize({ width: COPY_EDGE, height: COPY_EDGE, fit: 'inside', withoutEnlargement: true }) : img.rotate()).jpeg({ quality: SHRINK_QUALITY, mozjpeg: true }).withMetadata().toFile(tmp);
+    // Held to `edge` pixels on the longest side (never enlarged), at the chosen JPEG quality.
+    await (edge ? img.rotate().resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true }) : img.rotate()).jpeg({ quality, mozjpeg: true }).withMetadata().toFile(tmp);
     const after = fs.statSync(tmp).size;
     if (after >= before * 0.9) { fs.rmSync(tmp, { force: true }); return null; }
     const out = ext === '.jpg' || ext === '.jpeg' ? file : file.slice(0, -ext.length) + '.jpg';
@@ -378,7 +372,8 @@ async function shrinkFile(file: string, cap = true): Promise<{ file: string; bef
 
 /** Make a photograph that Frames already knows about smaller, and keep its record in step with the new file. */
 async function shrinkKnown(db: DB, file: string): Promise<{ file: string; before: number; after: number } | null> {
-  const s = await shrinkFile(file);
+  const p = policyOf(sysOf(db));
+  const s = await shrinkFile(file, p.cloudPx, p.cloudQ);
   if (!s) return null;
   const hash = await hashFile(s.file);
   db.prepare("UPDATE photos SET path = ?, file = ?, size_bytes = ?, mtime = ?, hash = ?, file_type = CASE WHEN file_type IN ('PNG', 'TIF', 'TIFF') THEN 'JPG' ELSE file_type END WHERE path = ?")
@@ -412,7 +407,7 @@ const progresses = new Map<string, Progress>();
 /** What a person's sync is doing right now (one sync at a time per person). */
 export const progressOf = (cfg: AppCfg): Progress => { let p = progresses.get(cfg.dataDir); if (!p) { p = { running: false, connId: null, downloaded: 0, current: '' }; progresses.set(cfg.dataDir, p); } return p; };
 
-export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<SyncResult> {
+export async function syncConnection(db: DB, cfg: AppCfg, id: string, opts: { unlimited?: boolean } = {}): Promise<SyncResult> {
   const c0 = loadCloud(db).connections.find((c) => c.id === id);
   if (!c0) throw new CloudError('No such connection.');
   if (foldersOf(c0).length === 0) throw new CloudError('Choose at least one folder to sync first.');
@@ -425,8 +420,10 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
   fs.mkdirSync(dest, { recursive: true });
   fs.mkdirSync(tmpDir, { recursive: true });
   const sysDb = (cfg as { sys?: DB }).sys;
-  const quota = sysDb ? policyOf(sysDb).cloudQuotaGb * 1073741824 : 0; // 0: no limit
-  let used = quota ? dirBytes(path.join(cfg.dataDir, 'cloud')) : 0;
+  const copy = policyOf(sysDb ?? db); // the size and quality of a smaller copy, and the limits
+  // Storage per person is for everything they hold, local and cloud together. Administrators are not limited.
+  const quota = sysDb && !opts.unlimited ? copy.userQuotaGb * 1073741824 : 0; // 0: no limit
+  let used = quota ? Number((db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n) : 0;
   const a = adapters[c0.provider];
   const u = urls(cfg, c0.provider);
   const h = http(db, cfg, c0);
@@ -505,7 +502,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
         if (taken.get(id, rel)) { const x = path.extname(name); name = `${name.slice(0, name.length - x.length)} (${e.id.replace(/\W/g, '').slice(-6)})${x}`; rel = [...f.rel, name].join('/'); }
         const target = path.join(dest, ...rel.split('/'));
         if (!path.resolve(target).startsWith(dest + path.sep)) { res.errors.push(`${e.name}: unsafe name`); continue; }
-        if (quota && used + (e.size || 0) > quota) throw new CloudError(`Stopped: your cloud copies would pass the ${quota / 1073741824} GB the administrator allows each person. Nothing already copied was removed.`);
+        if (quota && used + (e.size || 0) > quota) throw new CloudError(`Stopped: your cloud copies would pass the ${quota / 1073741824} GB of storage the administrator allows each person. Nothing already copied was removed.`);
         progress.current = e.name;
         const part = path.join(tmpDir, `cloud-${crypto.randomBytes(6).toString('hex')}.part`);
         try {
@@ -520,7 +517,7 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string): Promise<S
           let finalRel = rel, shrunk = 0, ow = 0, oh = 0, keptSize = got;
           if (shrinkOn) {
             const meta = await sharp(target, { failOn: 'none' }).metadata().catch(() => null);
-            const sh = await shrinkFile(target);
+            const sh = await shrinkFile(target, copy.cloudPx, copy.cloudQ);
             if (sh) { finalRel = path.relative(dest, sh.file).split(path.sep).join('/'); shrunk = 1; ow = meta?.width ?? sh.w; oh = meta?.height ?? sh.h; keptSize = sh.after; res.shrunk = (res.shrunk ?? 0) + 1; res.freed = (res.freed ?? 0) + (sh.before - sh.after); }
           }
           add.run(id, e.id, finalRel, e.version, keptSize, new Date().toISOString(), shrunk, got, ow, oh, e.name);

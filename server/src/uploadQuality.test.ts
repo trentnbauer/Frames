@@ -57,3 +57,13 @@ it('with original quality stored, the file is kept byte for byte', async () => {
   expect(r).toMatchObject({ saved: ['whole.jpg'], shrunk: 0 });
   expect(fs.readFileSync(stored('whole.jpg')).equals(big)).toBe(true);
 });
+
+it('Resize to (Local storage) holds an upload to that size, and the photograph still counts as its original size', { timeout: 60_000 }, async () => {
+  await A.put('/api/admin/instance', { localOrig: false, localPx: 2048, localQ: 70 });
+  const wide = await sharp({ create: { width: 4300, height: 1000, channels: 3, noise: { type: 'gaussian', mean: 128, sigma: 60 } } }).jpeg({ quality: 98 }).toBuffer();
+  expect((await send('resized.jpg', wide)).json()).toMatchObject({ saved: ['resized.jpg'], shrunk: 1 });
+  expect((await sharp(stored('resized.jpg')).metadata()).width).toBe(2048);
+  await A.scan();
+  for (let k = 0; k < 200 && !(await (async () => { const p = (await A.get('/api/photos')).body.photos.find((q: any) => q.file === 'resized.jpg'); return p && env.db.prepare("SELECT has_derivs d FROM photos WHERE file = 'resized.jpg'").get()?.d === 1; })()); k++) await new Promise((ok) => setTimeout(ok, 100));
+  expect((await A.get('/api/photos')).body.photos.find((p: any) => p.file === 'resized.jpg')).toMatchObject({ w: 4300, h: 1000 }); // print sizes use the original
+});

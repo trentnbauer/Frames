@@ -140,12 +140,12 @@ export function useMembers(ctx: Ctx): Section {
   };
 }
 
-/* ------------------------------------------------- Photos & storage */
+/* ------------------------------------------------- Storage */
 const PREVIEW: [string, number][] = [['1600 px', 1600], ['2400 px', 2400], ['3072 px', 3072], ['4096 px', 4096]];
 const QUALITY = [70, 75, 80, 85, 88, 90, 95];
 const WHO: [string, string][] = [['Admins and members', 'members'], ['Admins only', 'admins']];
 const SYNC: [string, number][] = [['Every 15 min', 15], ['Every hour', 60], ['Every 6 hours', 360]];
-const QUOTA: [string, number][] = [['50 GB', 50], ['200 GB', 200], ['500 GB', 500], ['No limit', 0]];
+const COPY_PX = ['2048 px', '3072 px', '4096 px', '6144 px'];
 const OTHER_PROV: [string, string, string, string][] = [['cpIcloud', 'iC', 'iCloud shared albums', 'Public shared-album links only. No sign-in needed.'], ['cpS3', 'S3', 'S3-compatible', 'AWS S3, Backblaze B2, Cloudflare R2, MinIO.'], ['cpWebdav', 'WD', 'WebDAV / Nextcloud', 'Members enter their own server address.'], ['cpSmb', 'SM', 'Network share (SMB)', 'A NAS folder on your network.']];
 export function useFolders(ctx: Ctx): Section {
   const info = useApi<{ internalDir: string; libraries: { path: string }[] }>('/settings');
@@ -154,62 +154,70 @@ export function useFolders(ctx: Ctx): Section {
   const xmp = useApi<{ location: 'next' | 'folder' }>('/admin/xmp-location');
   const conv = useApi<{ running: boolean; done: number; total: number; converted: number; outdated: number }>('/admin/convert-all');
   useEffect(() => { if (!conv.data?.running) return; const t = setInterval(conv.reload, 1500); return () => clearInterval(t); }, [conv.data?.running]); // eslint-disable-line react-hooks/exhaustive-deps
-  const orig = useApi<{ allow: boolean }>('/admin/cloud-originals');
   const cl = useApi<{ providers: { id: string; label: string; configured: boolean; clientId?: string; hasSecret?: boolean }[]; redirectUri: string }>('/cloud');
   const prefs = usePrefs('server');
   const put = async (body: object) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body })); inst.reload(); };
   const libs = (info.data?.libraries ?? []).filter((l) => l.path !== info.data?.internalDir);
   const dk = sys.data?.libraryDisk;
-  const manage = () => ctx.modal(<Modal title="Cloud providers" sub="The app you registered with each service." width={720} onClose={() => { ctx.modal(null); cl.reload(); }}><CloudServices /></Modal>);
+  const [cfgOpen, setCfgOpen] = useState<string | null>(null); // the provider whose app ID and secret are showing
   const provs = cl.data?.providers ?? [];
   const ABBR: Record<string, string> = { google: 'GD', dropbox: 'DB', onedrive: 'OD' };
-  const mRows: R[] = [
-    ...provs.map((p): R => ({ id: `cp_${p.id}`, t: 'method', icon: ABBR[p.id] ?? p.id.slice(0, 2).toUpperCase(), label: p.label, hint: p.configured ? `Uses your ${p.label} app · client ID set` : 'Needs an app ID.', value: p.configured, togDisabled: 'Set or clear the app under Configure', method: { on: p.configured, configured: p.configured, test: p.configured ? 'pass' : 'none', failWith: 'App ID not set', configure: manage, setOn: () => ctx.toast('Set or clear the app under Configure'), runTest: () => ctx.toast(p.configured ? `${p.label} is set up` : 'App ID not set · press Configure') } })),
+  const C = inst.data?.cloudOn !== false, L = inst.data?.localOn !== false;
+  const cOrig = !!inst.data?.cloudOrig, lOrig = !!inst.data?.localOrig;
+  const used = dk?.total ? dk.total - dk.free : 0;
+  const redirect = cl.data?.redirectUri ?? '';
+  const providerRows: R[] = [
+    ...provs.flatMap((p): R[] => {
+      const open = cfgOpen === p.id;
+      const row: R = { id: `cp_${p.id}`, t: 'method', icon: ABBR[p.id] ?? p.id.slice(0, 2).toUpperCase(), label: p.label, hint: p.configured ? `Uses your ${p.label} app · client ID set` : 'Needs an app ID.', value: p.configured, togDisabled: 'Set or clear the app under Configure',
+        method: { open, on: p.configured, configured: p.configured, test: p.configured ? 'pass' : 'none', failWith: 'App ID not set', configure: () => setCfgOpen(open ? null : p.id), setOn: () => ctx.toast('Set or clear the app under Configure'), runTest: () => ctx.toast(p.configured ? `${p.label} is set up` : 'App ID not set · press Configure') } };
+      if (!open) return [row];
+      return [row,
+        { id: `cpId_${p.id}`, t: 'text', indent: true, label: 'App ID', value: p.clientId ?? '', ph: 'Paste the app ID', set: async (v: string) => { await act(ctx, () => api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: v } })); cl.reload(); } },
+        { id: `cpSec_${p.id}`, t: 'text', indent: true, label: 'Client secret', inputType: 'password', value: '', ph: p.hasSecret ? 'Saved. Type to replace' : 'Paste the client secret', set: async (v: string) => { if (v) { await act(ctx, () => api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientSecret: v } })); cl.reload(); } } },
+        { id: `cpRedirect_${p.id}`, t: 'link', indent: true, label: 'Redirect URL', hint: `${redirect} · paste this into your ${p.label} app settings`, meta: 'Copy', act: () => { void navigator.clipboard?.writeText(redirect); ctx.toast('Copied the redirect URL'); } },
+      ];
+    }),
     ...OTHER_PROV.map(([id, icon, label, hint]): R => ({ id, t: 'method', icon, label, hint, value: false, togDisabled: 'Not in this version of Frames', method: { on: false, test: 'none', failWith: 'Not available', configure: () => ctx.toast(`${label} is not in this version of Frames`), setOn: () => ctx.toast(`${label} is not in this version of Frames`), runTest: () => ctx.toast(`${label} is not in this version of Frames`) } })),
   ];
-  const details: R[] = provs.flatMap((p): R[] => [
-    { id: `cpId_${p.id}`, t: 'text', label: `${p.label} app ID`, dep: `cp_${p.id}`, value: p.clientId ?? '', set: async (v: string) => { await act(ctx, () => api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientId: v } })); cl.reload(); } },
-    { id: `cpSec_${p.id}`, t: 'text', label: `${p.label} client secret`, dep: `cp_${p.id}`, inputType: 'password', value: '', ph: p.hasSecret ? 'Saved. Type to replace' : 'Paste the secret', set: async (v: string) => { if (v) { await act(ctx, () => api(`/cloud/client/${p.id}`, { method: 'PUT', body: { clientSecret: v } })); cl.reload(); } } },
-  ]);
+  const setSize = (key: 'maxUploadMb' | 'cloudMaxFileMb') => (v: string) => { const mb = parseMb(v); if (mb === null || mb > 102400) { ctx.toast('Type a size like 500 MB or 2 GB (up to 100 GB)'); return; } void put({ [key]: mb }); };
+  const copyPx = (key: 'localPx' | 'cloudPx', dflt: number): R['value'] => `${inst.data?.[key] ?? dflt} px`;
+  const notice = !L && !C ? 'No storage is on, so nobody can add photos. Photos already in Frames stay where they are.'
+    : !L && C && !cOrig ? 'Originals live only in the cloud. Frames keeps smaller copies and fetches the original when someone exports it, so deleting a photo in the cloud deletes its only full-size original.' : undefined;
   return {
-    key: 'folders', name: 'Photos & storage', hint: 'Where originals live, and the cloud services members can bring photos in from.',
+    key: 'folders', name: 'Storage', hint: 'Where photos are kept: on this server, in members’ cloud accounts, or both.', notice,
     groups: [
-      { rows: [
-        { id: 'libPath', t: 'text', label: 'Library folder', hint: 'Set with LIBRARY_DIRS.', value: libs[0]?.path ?? '', disabled: true },
-        { id: 'disk', t: 'meter', label: 'Disk', hint: dk?.path, pct: dk?.total ? ((dk.total - dk.free) / dk.total) * 100 : 0, text: dk?.total ? `${gb(dk.total - dk.free)} of ${gb(dk.total)}` : '' },
-        { id: 'watch', t: 'toggle', label: 'Watch for new files', hint: 'Shows “new files” on Shoots.', value: prefs.get('watch', true), set: (v) => { prefs.set('watch', v); ctx.toast('Saved'); } },
-        { id: 'formats', t: 'chips', label: 'Import', opts: ['JPEG', 'HEIC', 'TIFF', 'RAW'], value: prefs.get<string[]>('formats', ['JPEG', 'HEIC', 'TIFF', 'RAW']), set: (v: string[]) => { prefs.set('formats', v); ctx.toast('Saved'); } },
+      { title: 'App limits', rows: [
+        { id: 'userQuota', t: 'text', label: 'Storage per person', hint: 'Total space each member can use in Frames, across local and cloud storage. Type a size such as 2 GB, 500 MB or 1 TB. Leave empty for no limit. Uploads and syncs pause at the limit. Administrators aren’t limited.', value: showSize((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0), ph: 'No limit', set: (v: string) => { const gb = parseSize(v); if (gb === null) { ctx.toast('Type a size like 2 GB or 500 MB, or leave it empty for no limit'); return; } void put({ userQuotaGb: gb }); } },
       ] },
-      { title: 'Cloud storage only', rows: [
-        { id: 'cloudOnly', t: 'toggle', label: 'Cloud storage only', hint: 'Originals live only in the cloud accounts people connect. Nobody can upload photos to Frames, and each cloud photo is kept here only as a smaller copy: the original is fetched from the cloud when someone exports it. Frees the most disk space. Nothing in the cloud is touched, but deleting a photo there deletes its only full-size original.', value: !!inst.data?.cloudOnly, set: (v) => { if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload to Frames, and every cloud photo is kept only as a smaller copy here. Deleting a photo from the cloud deletes its only full-size original.')) return; void put({ cloudOnly: v }); } },
-      ] },
-      { title: 'XMP sidecars', rows: [
-        { id: 'sidecar', t: 'seg', label: 'Where sidecar files go', hint: 'For everyone on this server. Next to photo is what Lightroom and Capture One expect.', opts: ['Next to photo', 'Frames folder'], value: xmp.data?.location === 'folder' ? 'Frames folder' : 'Next to photo', set: async (v: string) => { await act(ctx, () => api('/admin/xmp-location', { method: 'PUT', body: { location: v === 'Frames folder' ? 'folder' : 'next' } })); xmp.reload(); } },
-      ] },
-      { title: 'Originals', rows: [
-        { id: 'allowOrig', t: 'toggle', label: 'Allow original downloads on portfolios', value: !!inst.data?.allowOriginals, set: (v) => void put({ allowOriginals: v }) },
-        { id: 'srvFullRes', t: 'toggle', label: 'Allow original resolution from the cloud', hint: 'Off: everyone’s cloud imports are saved as 4096 px copies to save disk space.', value: !!orig.data?.allow, set: async (v: boolean) => { await act(ctx, () => api('/admin/cloud-originals', { method: 'PUT', body: { allow: v } })); orig.reload(); } },
-        { id: 'storeOriginal', t: 'toggle', label: 'Store original quality', hint: 'Off: photos brought in from a cloud folder are kept as smaller copies (JPEG, quality 80, up to 4096 px on the longest side) to save disk space, and the original stays in the cloud. Print sizes still use the original’s size. On: they are kept exactly as they are.', value: !!inst.data?.storeOriginalQuality && !inst.data?.cloudOnly, togDisabled: inst.data?.cloudOnly ? 'Smaller copies are required while originals are kept in cloud storage only' : undefined, set: (v: boolean) => void put({ storeOriginalQuality: v }) },
-      ] },
-      { title: 'Previews', rows: [
+      { title: 'Previews · both', rows: [
         { id: 'previewSize', t: 'select', label: 'Largest preview', hint: 'The most pixels any photo’s preview can have on this server. Everyone can choose smaller in their own settings.', opts: PREVIEW.map((p) => p[0]), value: PREVIEW.find((p) => p[1] === inst.data?.previewPx)?.[0] ?? '2400 px', set: (v) => void put({ previewPx: PREVIEW.find((p) => p[0] === v)![1] }) },
         { id: 'previewQuality', t: 'select', label: 'Highest preview quality', hint: 'JPEG quality, 70 to 95. Lower makes smaller files; 85 is hard to tell apart on screen. Everyone can choose lower.', opts: QUALITY.map(String), value: String(inst.data?.previewQuality ?? 90), set: (v) => void put({ previewQuality: Number(v) }) },
         { id: 'convertAll', t: 'button', label: 'Convert everyone’s previews', hint: conv.data?.running ? `Converting… ${conv.data.done.toLocaleString()} of ${conv.data.total.toLocaleString()}` : (conv.data?.outdated ?? 0) > 0 ? `${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? ' was' : 's were'} made to other standards (a new size or quality limit, or a person’s own setting). Converts them to what is allowed now. Originals are not touched.` : 'Every preview matches the current standards.', meta: conv.data?.running ? 'Working…' : 'Convert', act: async () => { if (conv.data?.running) return; if (!(conv.data?.outdated ?? 0)) { ctx.toast('Nothing to convert'); return; } if (!window.confirm(`Convert ${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? '' : 's'} across all members now?\n\nThis runs in the background and can take a while on a large library.`)) return; await act(ctx, () => api('/admin/convert-all', { body: {} }), 'Converting previews in the background'); conv.reload(); } },
       ] },
-      { title: 'File size limits', rows: [
-        { id: 'maxUpload', t: 'text', label: 'Largest upload', hint: 'The biggest single photo a person can upload, such as 500 MB or 2 GB. Applies at once. Overrides MAX_UPLOAD_MB.', value: showMb(Number(inst.data?.maxUploadMb) || 2048), ph: '2 GB', set: (v: string) => { const mb = parseMb(v); if (mb === null || mb > 102400) { ctx.toast('Type a size like 500 MB or 2 GB (up to 100 GB)'); return; } void put({ maxUploadMb: mb }); } },
-        { id: 'maxCloudFile', t: 'text', label: 'Largest cloud import', hint: 'The biggest single file a cloud sync will copy in. Larger files are skipped and listed as errors. Overrides CLOUD_MAX_FILE_MB.', value: showMb(Number(inst.data?.cloudMaxFileMb) || 1024), ph: '1 GB', set: (v: string) => { const mb = parseMb(v); if (mb === null || mb > 102400) { ctx.toast('Type a size like 500 MB or 2 GB (up to 100 GB)'); return; } void put({ cloudMaxFileMb: mb }); } },
+      { title: 'Local storage', meta: L ? (used ? `${gb(used)} of ${gb(dk!.total)} used` : '') : 'Off', rows: [
+        { id: 'localOn', t: 'toggle', icon: 'LS', label: 'Local storage', hint: L ? 'Upload photos to this server and read the library folder.' : 'Off: nobody can upload, and the library folder isn’t read. Photos already here stay.', value: L, set: (v: boolean) => { if (!v && !window.confirm('Turn off local storage?\n\nNobody will be able to upload photos to Frames, and the library folder will not be read. Photos already in Frames stay where they are.')) return; void put({ localOn: v }); } },
+        { id: 'libPath', t: 'text', indent: true, show: L, label: 'Library folder', hint: 'Set with LIBRARY_DIRS.', value: libs[0]?.path ?? '', disabled: true },
+        { id: 'disk', t: 'meter', indent: true, show: L, label: 'Disk', hint: dk?.path, pct: dk?.total ? ((dk.total - dk.free) / dk.total) * 100 : 0, text: dk?.total ? `${gb(dk.total - dk.free)} of ${gb(dk.total)}` : '' },
+        { id: 'formats', t: 'chips', indent: true, show: L, label: 'Import', opts: ['JPEG', 'HEIC', 'TIFF', 'RAW'], value: prefs.get<string[]>('formats', ['JPEG', 'HEIC', 'TIFF', 'RAW']), set: (v: string[]) => { prefs.set('formats', v); ctx.toast('Saved'); } },
+        { id: 'localOrig', t: 'toggle', indent: true, show: L, label: 'Store original quality', hint: lOrig ? 'Uploads are kept exactly as they are.' : 'Uploads are kept as smaller copies, so downloading one later gives that copy, not the file that was uploaded.', value: lOrig, set: (v: boolean) => void put({ localOrig: v }) },
+        { id: 'localPx', t: 'seg', indent: true, show: L && !lOrig, label: 'Resize to', hint: 'Longest side. Print sizes still use the original’s size.', opts: COPY_PX, value: copyPx('localPx', 6144), set: (v: string) => void put({ localPx: parseInt(v, 10) }) },
+        { id: 'localQ', t: 'select', indent: true, show: L && !lOrig, label: 'JPEG quality', hint: 'Lower makes smaller files.', opts: QUALITY.map(String), value: String(inst.data?.localQ ?? 80), set: (v: string) => void put({ localQ: Number(v) }) },
+        { id: 'maxUpload', t: 'text', indent: true, show: L, label: 'Largest upload', hint: 'The biggest single photo, such as 500 MB or 2 GB. Overrides MAX_UPLOAD_MB.', value: showMb(Number(inst.data?.maxUploadMb) || 2048), ph: '2 GB', set: setSize('maxUploadMb') },
       ] },
-      { title: 'Per-person limit', rows: [
-        { id: 'userQuota', t: 'text', label: 'Storage per person', hint: 'Type a size such as 2 GB, 500 MB or 1 TB. Leave it empty for no limit. Uploads pause for that member at the limit. Administrators aren’t limited.', value: showSize((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0), ph: 'No limit', set: (v: string) => { const gb = parseSize(v); if (gb === null) { ctx.toast('Type a size like 2 GB or 500 MB, or leave it empty for no limit'); return; } void put({ userQuotaGb: gb }); } },
+      { title: 'Cloud storage', meta: C ? `${provs.filter((p) => p.configured).length} of ${provs.length} providers set up` : 'Off', rows: [
+        { id: 'cloudOn', t: 'toggle', icon: 'CS', label: 'Cloud storage', hint: C ? 'Members bring photos in from their own cloud accounts. Frames only reads: it never changes, moves or deletes files there.' : 'Off: nobody can connect a cloud account. Photos already copied in stay.', value: C, set: (v: boolean) => void put({ cloudOn: v }) },
+        { id: 'cloudOrig', t: 'toggle', indent: true, show: C, label: 'Store original quality', hint: cOrig ? 'Cloud photos are copied here exactly as they are.' : 'Cloud photos are kept here as smaller copies. The original stays in the cloud and is fetched when someone exports it.', value: cOrig, set: (v: boolean) => void put({ cloudOrig: v }) },
+        { id: 'cloudPx', t: 'seg', indent: true, show: C && !cOrig, label: 'Resize to', hint: 'Longest side. Print sizes still use the original’s size.', opts: COPY_PX, value: copyPx('cloudPx', 4096), set: (v: string) => void put({ cloudPx: parseInt(v, 10) }) },
+        { id: 'cloudQ', t: 'select', indent: true, show: C && !cOrig, label: 'JPEG quality', hint: 'Lower makes smaller files.', opts: QUALITY.map(String), value: String(inst.data?.cloudQ ?? 80), set: (v: string) => void put({ cloudQ: Number(v) }) },
+        { id: 'cpWho', t: 'select', indent: true, show: C, label: 'Who can connect cloud storage', hint: 'Guests never can.', opts: WHO.map((w) => w[0]), value: WHO.find((w) => w[1] === inst.data?.cloudWho)?.[0] ?? 'Admins and members', set: (v) => void put({ cloudWho: WHO.find((w) => w[0] === v)![1] }) },
+        { id: 'cpMinSync', t: 'select', indent: true, show: C, label: 'Fastest sync allowed', hint: 'Members can’t check more often than this.', opts: SYNC.map((s) => s[0]), value: SYNC.find((s) => s[1] === inst.data?.cloudMinSyncMin)?.[0] ?? 'Every 15 min', set: (v) => void put({ cloudMinSyncMin: SYNC.find((s) => s[0] === v)![1] }) },
+        { id: 'maxCloudFile', t: 'text', indent: true, show: C, label: 'Largest cloud import', hint: 'Larger files are skipped and listed as errors. Overrides CLOUD_MAX_FILE_MB.', value: showMb(Number(inst.data?.cloudMaxFileMb) || 1024), ph: '1 GB', set: setSize('cloudMaxFileMb') },
       ] },
-      { title: 'Cloud providers', rows: mRows },
-      { title: 'Cloud sign-in details', rows: [...details, { id: 'cpRedirect', t: 'link', label: 'Redirect URL', hint: `${cl.data?.redirectUri ?? ''} · paste this into each provider’s app settings`, meta: 'Copy', act: () => { void navigator.clipboard?.writeText(cl.data?.redirectUri ?? ''); ctx.toast('Copied the redirect URL'); } }] },
-      { title: 'Cloud rules', rows: [
-        { id: 'cpWho', t: 'select', label: 'Who can connect cloud storage', opts: WHO.map((w) => w[0]), value: WHO.find((w) => w[1] === inst.data?.cloudWho)?.[0] ?? 'Admins and members', set: (v) => void put({ cloudWho: WHO.find((w) => w[0] === v)![1] }) },
-        { id: 'cpMinSync', t: 'select', label: 'Fastest sync allowed', hint: 'Members can’t check more often than this.', opts: SYNC.map((s) => s[0]), value: SYNC.find((s) => s[1] === inst.data?.cloudMinSyncMin)?.[0] ?? 'Every 15 min', set: (v) => void put({ cloudMinSyncMin: SYNC.find((s) => s[0] === v)![1] }) },
-        { id: 'cpQuota', t: 'select', label: 'Storage per person from the cloud', opts: QUOTA.map((q) => q[0]), value: QUOTA.find((q) => q[1] === inst.data?.cloudQuotaGb)?.[0] ?? 'No limit', set: (v) => void put({ cloudQuotaGb: QUOTA.find((q) => q[0] === v)![1] }) },
-        { id: 'cpRO', t: 'link', label: 'Read-only', hint: 'Frames only copies from cloud storage. It never deletes, moves or changes files there.', meta: '' },
+      { title: 'Cloud providers', rows: C ? providerRows : [] },
+      { title: 'Files · both', rows: [
+        { id: 'sidecar', t: 'seg', label: 'Where sidecar files go', hint: 'Next to photo is what Lightroom and Capture One expect.', opts: ['Next to photo', 'Frames folder'], value: xmp.data?.location === 'folder' ? 'Frames folder' : 'Next to photo', set: async (v: string) => { await act(ctx, () => api('/admin/xmp-location', { method: 'PUT', body: { location: v === 'Frames folder' ? 'folder' : 'next' } })); xmp.reload(); } },
+        { id: 'allowOrig', t: 'toggle', label: 'Allow original downloads on portfolios', hint: 'Only for photos stored at original quality.', value: !!inst.data?.allowOriginals, set: (v) => void put({ allowOriginals: v }) },
       ] },
     ],
   };

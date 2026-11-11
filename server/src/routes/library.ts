@@ -295,7 +295,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
           }
           fs.rmSync(tmp, { force: true });
           const smaller = await shrinkUpload(db, path.join(dir, name)); // unless original quality is stored
-          if (smaller) { name = smaller; shrunk++; }
+          if (smaller) { name = smaller.name; shrunk++; db.prepare('INSERT OR REPLACE INTO shrunk_uploads(file, orig_w, orig_h) VALUES (?, ?, ?)').run(name, smaller.w, smaller.h); }
           saved.push(name);
         } catch (e) {
           fs.rmSync(tmp, { force: true });

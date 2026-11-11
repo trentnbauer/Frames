@@ -309,6 +309,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'gear_items', 'serial', "TEXT NOT NULL DEFAULT ''"); },
   // which preview size and quality each photograph's preview was made with, so a change of standards can find the ones to convert
   (db) => { addColumn(db, 'photos', 'preview_spec', "TEXT NOT NULL DEFAULT ''"); },
+  // the original pixel size of an uploaded photograph that was kept as a smaller copy, so print sizes use the original's
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS shrunk_uploads (file TEXT PRIMARY KEY, orig_w INTEGER NOT NULL DEFAULT 0, orig_h INTEGER NOT NULL DEFAULT 0)'); },
 ];
 
 export function migrate(db: DB) {

@@ -21,12 +21,12 @@ export const LIB: SectionDef[] = [
 export const SRV: SectionDef[] = [
   { tab: 'srv', key: 'signin', name: 'Sign-in & access', use: useSignin },
   { tab: 'srv', key: 'people', name: 'Members', use: useMembers },
-  { tab: 'srv', key: 'folders', name: 'Photos & storage', use: useFolders },
+  { tab: 'srv', key: 'folders', name: 'Storage', use: useFolders },
   { tab: 'srv', key: 'backup', name: 'Backup', use: useBackup },
   { tab: 'srv', key: 'srvai', name: 'AI', use: useSrvAi },
   { tab: 'srv', key: 'network', name: 'Cloudflare tunnel', use: useNetwork },
   { tab: 'srv', key: 'email', name: 'Email', use: useEmail },
   { tab: 'srv', key: 'policies', name: 'Policies', use: usePolicies },
-  { tab: 'srv', key: 'processing', name: 'Storage & processing', use: useProcessing },
+  { tab: 'srv', key: 'processing', name: 'Cache & processing', use: useProcessing },
   { tab: 'srv', key: 'server', name: 'Updates & system', use: useServer },
 ];

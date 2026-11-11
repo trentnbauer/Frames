@@ -23,7 +23,7 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
     const t = x.tenant();
     return {
       smtpHealthy: smtpHealthy(sys),
-      storage: { local: !(cfg as { cloudOnly?: boolean }).cloudOnly && (t.cfg.libraries?.length ?? 0) > 0, cloud: providers.length > 0 },
+      storage: { local: policyOf(sys).localOn && (t.cfg.libraries?.length ?? 0) > 0, cloud: policyOf(sys).cloudOn && providers.length > 0 },
       cloudProviders: providers,
       admin: me(req)?.role === 'admin',
     };
