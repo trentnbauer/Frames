@@ -14,6 +14,8 @@ export type R = {
   ph?: string; inputType?: string; disabled?: boolean;
   /** false: not shown. indent: drawn as belonging to the row above (a dep does this too). */
   show?: boolean; indent?: boolean;
+  /** The environment variable(s) that set this and stop it being changed here: shown as "Set in .env" under the row's text. */
+  env?: string;
   pct?: number; text?: string;
   swatches?: [string, string][]; addAs?: string;
   /** selTog and order: the switch beside the control. */
@@ -119,6 +121,11 @@ function LinksRow({ r, last }: { r: R; last: boolean }) {
   );
 }
 
+/** "Set in .env" under a setting an environment variable has fixed, so it is clear why it cannot be changed here. */
+export function EnvFlag({ vars }: { vars: string }) {
+  return <div title="This is set by the server's environment (frames.env or docker-compose). Change it there and restart Frames." style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4, font: `400 11.5px ${mono}`, color: '#e0b36a' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>Set in .env · {vars}</div>;
+}
+
 export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: boolean; indent: boolean; open: string | null; setOpen: (id: string | null) => void; text: string }) {
   const t = r.t;
   if (t === 'links') return <LinksRow r={r} last={last} />;
@@ -138,6 +145,7 @@ export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14.5, color: r.dim ? '#a8a59f' : '#efede8' }}>{r.label}</div>
           {r.hint ? <div style={{ fontSize: 12.5, color: '#8f8c86', textWrap: 'pretty' as never }}>{r.hint}</div> : null}
+          {r.env ? <EnvFlag vars={r.env} /> : null}
           {r.note ? <div style={{ fontSize: 12.5, color: '#a8a59f', fontStyle: 'italic', textWrap: 'pretty' as never, marginTop: 4 }}>{r.note}</div> : null}
         </div>
       </div>
