@@ -1,9 +1,9 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 /** One row of a settings card, as the handover's Settings screen defines them. */
 export type R = {
   id: string;
-  t: 'toggle' | 'select' | 'seg' | 'chips' | 'seq' | 'text' | 'link' | 'button' | 'meter' | 'method' | 'stepper' | 'swatch' | 'pills' | 'selTog' | 'order' | 'hidden';
+  t: 'toggle' | 'select' | 'seg' | 'chips' | 'seq' | 'text' | 'link' | 'button' | 'meter' | 'method' | 'stepper' | 'swatch' | 'pills' | 'links' | 'selTog' | 'order' | 'hidden';
   label: ReactNode; hint?: ReactNode; note?: ReactNode;
   icon?: string; avatar?: { name: string; src?: string }; thumbs?: string[]; dim?: boolean; danger?: boolean;
   /** Shown only while another row is on (or equals depVal). */
@@ -72,8 +72,54 @@ function TextBox({ value, ph, type, set, disabled, label }: { value: string; ph?
     style={{ width: 300, height: 32, borderRadius: 999, border: 0, outline: 'none', background: '#0d0d0d', boxShadow: ringBtn, color: '#efede8', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", opacity: disabled ? 0.6 : 1 }} />;
 }
 
+/** A menu link on the portfolio: a full name, a short name (up to 4 characters, or one emoji) and where it goes. */
+export type LinkItem = { short: string; name: string; url: string };
+const linkOk = (l: LinkItem) => !!l.name.trim() && !!l.short.trim() && Array.from(l.short.trim()).length <= 4 && /^(https?:\/\/|mailto:)\S+/i.test(l.url.trim());
+const linkBox: CSSProperties = { height: 32, borderRadius: 999, border: 0, outline: 'none', background: '#0d0d0d', boxShadow: ringBtn, color: '#efede8', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", minWidth: 0 };
+
+/** The rows of links: Add puts a blank row to fill in; a row is saved once it is complete and valid, and dropping it saves too. */
+function LinksRow({ r, last }: { r: R; last: boolean }) {
+  const server = (r.value as LinkItem[]) ?? [];
+  const [rows, setRows] = useState<LinkItem[]>(server);
+  const [focus, setFocus] = useState(-1);
+  const sent = useRef(JSON.stringify(server)); // what this editor last saved, so its own save does not reset the rows being typed
+  const now = JSON.stringify(server);
+  const [seen, setSeen] = useState(now);
+  if (now !== seen) { setSeen(now); if (now !== sent.current) setRows([...server, ...rows.filter((x) => !linkOk(x))]); }
+  const clean = (list: LinkItem[]) => list.filter(linkOk).map((l) => ({ short: l.short.trim(), name: l.name.trim(), url: l.url.trim() }));
+  const save = (list: LinkItem[]) => { const good = clean(list); const j = JSON.stringify(good); if (j !== JSON.stringify(server)) { sent.current = j; r.set?.(good); } };
+  const edit = (i: number, p: Partial<LinkItem>) => setRows((x) => x.map((l, k) => (k === i ? { ...l, ...p } : l)));
+  const max = r.max ?? 8;
+  return (
+    <div style={{ padding: '14px 0', borderBottom: last ? 'none' : '1px solid rgba(255,255,255,.08)' }}>
+      <div style={{ fontSize: 14.5 }}>{r.label}</div>
+      {r.hint && <div style={{ fontSize: 12.5, color: '#a8a59f', marginTop: 3 }}>{r.hint}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+        {rows.map((l, i) => {
+          const some = !!(l.short || l.name || l.url), bad = some && !linkOk(l);
+          return (
+            <div key={i}>
+              <div style={{ display: 'grid', gridTemplateColumns: '72px minmax(0,1fr) minmax(0,1.6fr) 28px', gap: 8, alignItems: 'center' }}>
+                <input autoFocus={focus === i} value={l.short} placeholder="Short" aria-label="Short name (up to 4 characters or an emoji)" onChange={(e) => edit(i, { short: e.target.value })} onBlur={() => save(rows)} style={{ ...linkBox, textAlign: 'center', padding: '0 8px' }} />
+                <input value={l.name} placeholder="Full name" aria-label="Full name" onChange={(e) => edit(i, { name: e.target.value })} onBlur={() => save(rows)} style={linkBox} />
+                <input value={l.url} placeholder="https://…" aria-label="Link" inputMode="url" onChange={(e) => edit(i, { url: e.target.value })} onBlur={() => save(rows)} style={linkBox} />
+                <span role="button" tabIndex={0} aria-label={`Remove ${l.name || 'link'}`} title="Remove" onClick={() => { const next = rows.filter((_, k) => k !== i); setRows(next); save(next); }} style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', color: '#a8a59f', cursor: 'pointer' }}>✕</span>
+              </div>
+              {bad && <div style={{ fontSize: 12, color: '#e79a82', margin: '4px 0 0 4px' }}>Needs a short name (up to 4 characters or an emoji), a full name, and a link starting with https:// or mailto:</div>}
+            </div>
+          );
+        })}
+        {rows.length === 0 && <div style={{ fontSize: 13, color: '#8f8c86' }}>No links yet.</div>}
+        <span role="button" tabIndex={0} aria-disabled={rows.length >= max || undefined} onClick={() => { if (rows.length >= max) return; setRows([...rows, { short: '', name: '', url: '' }]); setFocus(rows.length); }}
+          style={{ alignSelf: 'flex-start', height: 30, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 999, boxShadow: ringBtn, fontSize: 13, cursor: rows.length >= max ? 'not-allowed' : 'pointer', opacity: rows.length >= max ? 0.4 : 1 }}>+ Add link{rows.length >= max ? ` (up to ${max})` : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: boolean; indent: boolean; open: string | null; setOpen: (id: string | null) => void; text: string }) {
   const t = r.t;
+  if (t === 'links') return <LinksRow r={r} last={last} />;
   const v = r.value;
   const labelText = typeof r.label === 'string' ? r.label : text;
   const toggleLike = t === 'toggle' || t === 'selTog' || t === 'method' || t === 'order';
