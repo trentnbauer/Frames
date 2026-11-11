@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from '../components/Modal';
 import { Access } from '../pages/Access';
@@ -143,6 +143,8 @@ export function useFolders(ctx: Ctx): Section {
   const sys = useApi<{ libraryDisk: { path: string; total: number; free: number } }>('/admin/system');
   const inst = useApi<Inst>('/admin/instance');
   const xmp = useApi<{ location: 'next' | 'folder' }>('/admin/xmp-location');
+  const conv = useApi<{ running: boolean; done: number; total: number; converted: number; outdated: number }>('/admin/convert-all');
+  useEffect(() => { if (!conv.data?.running) return; const t = setInterval(conv.reload, 1500); return () => clearInterval(t); }, [conv.data?.running]); // eslint-disable-line react-hooks/exhaustive-deps
   const orig = useApi<{ allow: boolean }>('/admin/cloud-originals');
   const cl = useApi<{ providers: { id: string; label: string; configured: boolean; clientId?: string; hasSecret?: boolean }[]; redirectUri: string }>('/cloud');
   const prefs = usePrefs('server');
@@ -180,6 +182,7 @@ export function useFolders(ctx: Ctx): Section {
       { title: 'Previews', rows: [
         { id: 'previewSize', t: 'select', label: 'Largest preview', hint: 'The most pixels any photo’s preview can have on this server. Everyone can choose smaller in their own settings.', opts: PREVIEW.map((p) => p[0]), value: PREVIEW.find((p) => p[1] === inst.data?.previewPx)?.[0] ?? '2400 px', set: (v) => void put({ previewPx: PREVIEW.find((p) => p[0] === v)![1] }) },
         { id: 'previewQuality', t: 'select', label: 'Highest preview quality', hint: 'JPEG quality, 70 to 95. Lower makes smaller files; 85 is hard to tell apart on screen. Everyone can choose lower.', opts: QUALITY.map(String), value: String(inst.data?.previewQuality ?? 90), set: (v) => void put({ previewQuality: Number(v) }) },
+        { id: 'convertAll', t: 'button', label: 'Convert everyone’s previews', hint: conv.data?.running ? `Converting… ${conv.data.done.toLocaleString()} of ${conv.data.total.toLocaleString()}` : (conv.data?.outdated ?? 0) > 0 ? `${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? ' was' : 's were'} made to other standards (a new size or quality limit, or a person’s own setting). Converts them to what is allowed now. Originals are not touched.` : 'Every preview matches the current standards.', meta: conv.data?.running ? 'Working…' : 'Convert', act: async () => { if (conv.data?.running) return; if (!(conv.data?.outdated ?? 0)) { ctx.toast('Nothing to convert'); return; } if (!window.confirm(`Convert ${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? '' : 's'} across all members now?\n\nThis runs in the background and can take a while on a large library.`)) return; await act(ctx, () => api('/admin/convert-all', { body: {} }), 'Converting previews in the background'); conv.reload(); } },
       ] },
       { title: 'Per-person limit', rows: [
         { id: 'userQuota', t: 'select', label: 'Storage per person', hint: 'Uploads pause for that member at the limit. Administrators aren’t limited.', opts: PERSON.map((q) => q[0]), value: PERSON.find((q) => q[1] === ((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0))?.[0] ?? 'No limit', set: (v) => void put({ userQuotaGb: PERSON.find((q) => q[0] === v)![1] }) },

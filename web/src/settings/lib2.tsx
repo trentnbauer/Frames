@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, imgUrl, openPortfolio, useApi } from '../api';
 import { Modal, Spinner } from '../components/Modal';
 import { CloudSettings } from '../pages/CloudSettings';
@@ -226,7 +226,15 @@ export function useData(ctx: Ctx): Section {
   const sys = useApi<{ cache: { bytes: number } }>(ctx.isAdmin ? '/admin/system' : null);
   const summary = useApi<{ total: number }>('/review/summary');
   const pv = useApi<{ settings: { previewPx: number; previewQuality: number }; limits: { previewPx: number; previewQuality: number } }>('/settings');
-  const savePv = async (body: object) => { await act(ctx, () => api('/settings', { method: 'PUT', body })); pv.reload(); };
+  const cv = useApi<{ running: boolean; done: number; total: number; outdated: number }>('/library/convert/status');
+  useEffect(() => { if (!cv.data?.running) return; const t = setInterval(cv.reload, 1500); return () => clearInterval(t); }, [cv.data?.running]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startConvert = async () => { await act(ctx, () => api('/library/convert', { body: {} }), 'Converting previews in the background'); cv.reload(); };
+  // After a change of size or quality, offer to convert the previews already made.
+  const savePv = async (body: object) => {
+    await act(ctx, () => api('/settings', { method: 'PUT', body })); pv.reload();
+    const st = await api<{ outdated: number }>('/library/convert/status').catch(() => null); cv.reload();
+    if (st && st.outdated > 0 && window.confirm(`Convert the ${st.outdated.toLocaleString()} existing preview${st.outdated === 1 ? '' : 's'} to the new setting now?\n\nThis runs in the background. Your original files are not touched.`)) await startConvert();
+  };
   const gb = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
   void s;
   const manage = () => ctx.modal(<Modal title="Your data" sub="Back up, delete or reset everything Frames keeps for you." width={680} onClose={close(ctx)}><YourData /></Modal>);
@@ -238,6 +246,7 @@ export function useData(ctx: Ctx): Section {
         { id: 'stCache', t: 'button', label: 'Previews & thumbnails', hint: `${sys.data ? gb(sys.data.cache.bytes) + ' · ' : ''}rebuilt when needed`, meta: 'Clear', act: async () => { if (!window.confirm('Clear all previews and thumbnails? They are made again in the background.')) return; await act(ctx, () => api('/library/clear-cache', { body: {} }), 'Previews cleared · they’ll rebuild in the background'); sys.reload(); } },
         { id: 'pvSize', t: 'select', label: 'Preview size', hint: 'What you see on the Photo page and in Review. Smaller saves space. Sizes above the server’s limit are greyed out. Clear previews above to apply it to photos already here.', opts: PV_SIZES.map((x) => `${x} px`), offOpts: PV_SIZES.filter((x) => x > (pv.data?.limits.previewPx ?? 4096)).map((x) => `${x} px`), value: `${Math.min(pv.data?.settings.previewPx ?? 2400, pv.data?.limits.previewPx ?? 4096)} px`, set: (v: string) => void savePv({ previewPx: parseInt(v, 10) }) },
         { id: 'pvQuality', t: 'select', label: 'Preview quality', hint: 'JPEG quality, 70 to 95. Lower makes smaller files; 85 is hard to tell apart on screen. Values above the server’s limit are greyed out.', opts: PV_QUALITY.map(String), offOpts: PV_QUALITY.filter((x) => x > (pv.data?.limits.previewQuality ?? 95)).map(String), value: String(Math.min(pv.data?.settings.previewQuality ?? 85, pv.data?.limits.previewQuality ?? 95)), set: (v: string) => void savePv({ previewQuality: Number(v) }) },
+        { id: 'pvConvert', t: 'button', label: 'Convert existing previews', hint: cv.data?.running ? `Converting… ${cv.data.done.toLocaleString()} of ${cv.data.total.toLocaleString()}` : (cv.data?.outdated ?? 0) > 0 ? `${cv.data!.outdated.toLocaleString()} preview${cv.data!.outdated === 1 ? ' was' : 's were'} made with other settings. Converts them to the size and quality above.` : 'Every preview matches your settings.', meta: cv.data?.running ? 'Working…' : 'Convert', act: () => { if (cv.data?.running) return; if (!(cv.data?.outdated ?? 0)) { ctx.toast('Nothing to convert'); return; } void startConvert(); } },
       ] },
       { title: 'Export', rows: [
         { id: 'exportAll', t: 'button', label: 'Everything', hint: 'Ratings, tags and compositions as a library backup.', meta: 'Export', act: () => { window.location.href = '/api/backup'; ctx.toast('Downloading your library backup'); } },

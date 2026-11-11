@@ -145,11 +145,12 @@ async function makeDerivatives(db: DB, cfg: Cfg, id: number, file: string, isRaw
   await base.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80, mozjpeg: true }).toFile(derivPath(cfg, id, 'thumb'));
   const { px, quality } = previewSpec(db); // this person's choice, never above the server's limits
   await base.clone().resize({ width: px, height: px, fit: 'inside', withoutEnlargement: true }).jpeg({ quality, mozjpeg: true }).toFile(derivPath(cfg, id, 'preview'));
+  db.prepare('UPDATE photos SET preview_spec = ? WHERE id = ?').run(`${px}:${quality}`, id);
   return meta;
 }
 
 /** Builds previews and the AI-free analysis for one photo. Safe to run again. */
-export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, opts: { exifW?: number; exifH?: number } = {}) {
+export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, opts: { exifW?: number; exifH?: number; derivsOnly?: boolean } = {}) {
   const isRaw = RAW_EXT.has(path.extname(file).toLowerCase());
   const info = isRaw ? await rawInfo(file) : null;
   const meta = await makeDerivatives(db, cfg, id, file, isRaw, info).catch(() => null);
@@ -162,6 +163,7 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
   const keepExif = isRaw && !!(info?.w || opts.exifW);
   db.prepare('UPDATE photos SET has_derivs = 1, w = CASE WHEN ? THEN w ELSE ? END, h = CASE WHEN ? THEN h ELSE ? END WHERE id = ?')
     .run(keepExif ? 1 : 0, w ?? 0, keepExif ? 1 : 0, h ?? 0, id);
+  if (opts.derivsOnly) return true; // converting to new standards: the analysis stays as it was
   try {
     const a = await analyseLocal(derivPath(cfg, id, 'thumb'));
     db.prepare('UPDATE photos SET dhash = ?, palette = ?, colors = ?, brightness = ?, contrast = ?, saturation = ? WHERE id = ?')
@@ -305,6 +307,30 @@ export async function reindex(db: DB, onProgress?: (done: number, total: number)
     onProgress?.(++done, rows.length);
   }
   return { checked: rows.length, read };
+}
+
+/** The size and quality a person's previews should have now, as the text stored on each photograph. */
+export const specKey = (db: DB) => { const s = previewSpec(db); return `${s.px}:${s.quality}`; };
+/** How many photographs have a preview made to different standards than this person's current ones. */
+export const outdatedPreviews = (db: DB) => (db.prepare("SELECT COUNT(*) n FROM photos WHERE missing = 0 AND has_derivs = 1 AND preview_spec != ?").get(specKey(db)) as { n: number }).n;
+
+/**
+ * Makes the previews and thumbnails of photographs again to this person's current size and quality (and the server's limits). Only the
+ * ones made to different standards are touched; the analysis and everything else about the photograph is left as it is.
+ */
+export async function convertPreviews(db: DB, cfg: Cfg, onProgress?: (done: number, total: number) => void, gate?: () => Promise<void>) {
+  const rows = db.prepare("SELECT id, path FROM photos WHERE missing = 0 AND has_derivs = 1 AND preview_spec != ?").all(specKey(db)) as { id: number; path: string }[];
+  let done = 0, converted = 0, next = 0;
+  const lanes = Math.max(1, runtime.workers || 2);
+  await Promise.all(Array.from({ length: Math.min(lanes, rows.length) }, async () => {
+    while (next < rows.length) {
+      const r = rows[next++];
+      if (gate) await gate();
+      try { if (await processPhoto(db, cfg, r.id, r.path, { derivsOnly: true })) converted++; } catch { /* left for the next try */ }
+      onProgress?.(++done, rows.length);
+    }
+  }));
+  return { checked: rows.length, converted };
 }
 
 /** Regenerates previews and analysis for photos that lack them (or all of them). */

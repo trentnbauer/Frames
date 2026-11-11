@@ -12,7 +12,7 @@ import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals } from '../cloud.js';
 import { removeShoot } from '../remove.js';
 import { tenantProxy } from '../tenants.js';
-import { IMAGE_EXT, internalDir, rebuild, reindex } from '../ingest.js';
+import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, reindex } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting } from '../db.js';
@@ -353,6 +353,15 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     return rep.code(202).send({ started: true });
   });
   app.get('/api/library/rebuild/status', async () => rb);
+  // Convert this person's existing previews to their current size and quality (only those made to other standards).
+  const cv = tenantProxy(() => x.bag('convert', () => ({ running: false, done: 0, total: 0, result: null as null | { checked: number; converted: number } })));
+  app.post('/api/library/convert', async (_req, rep) => {
+    if (cv.running) return rep.code(409).send({ error: 'Already converting' });
+    Object.assign(cv, { running: true, done: 0, total: 0, result: null });
+    void convertPreviews(db, cfg, (d, t) => { cv.done = d; cv.total = t; }).then((r) => { cv.result = r; }).catch(() => undefined).finally(() => { cv.running = false; });
+    return rep.code(202).send({ started: true });
+  });
+  app.get('/api/library/convert/status', async () => ({ ...cv, outdated: outdatedPreviews(db) }));
   const ri = tenantProxy(() => x.bag('reindex', () => ({ running: false, done: 0, total: 0 })));
   app.post('/api/library/reindex', async (_req, rep) => {
     if (ri.running) return rep.code(409).send({ error: 'Already re-indexing' });
