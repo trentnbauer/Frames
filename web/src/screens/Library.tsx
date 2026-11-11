@@ -43,6 +43,7 @@ export function Library() {
   const shoots = useApi<Shoot[]>('/shoots');
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
   const tags = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
+  const gear = useApi<{ cameras: { name: string; n: number }[]; lenses: { name: string; n: number }[] }>('/gear');
   const list = useApi<{ total: number; count: number; photos: PhotoLite[]; semantic: boolean }>(`/photos?${sp.toString()}`);
   const group = (['shoot', 'uploaded', 'taken'] as const).find((g) => g === sp.get('group')) ?? 'shoot';
   const newest = sp.get('order') !== 'oldest';
@@ -83,6 +84,8 @@ export function Library() {
   for (const s of multi(sp.get('colour'))) chips.push({ label: `Colour: ${s}`, remove: () => toggle('colour', s) });
   if (sp.get('rating')) chips.push({ label: `Score ${sp.get('rating')}`, remove: () => set('rating', null) });
   if (sp.get('from') || sp.get('to')) chips.push({ label: `Date: ${sp.get('from') ?? '…'} to ${sp.get('to') ?? '…'}`, remove: () => { set('from', null); set('to', null); } });
+  if (sp.get('camera')) chips.push({ label: `Camera: ${sp.get('camera')}`, remove: () => set('camera', null) });
+  if (sp.get('lens')) chips.push({ label: `Lens: ${sp.get('lens')}`, remove: () => set('lens', null) });
   if (sp.get('file')) chips.push({ label: `File name: ${sp.get('file')}`, remove: () => set('file', null) });
   if (sp.get('place')) chips.push({ label: `Place: ${sp.get('place')}`, remove: () => set('place', null) });
   if (sp.get('gps')) chips.push({ label: 'Has location', remove: () => set('gps', null) });
@@ -131,6 +134,14 @@ export function Library() {
         <Menu id="date" label="Date">
           <label className="menu-field">From <input type="date" value={sp.get('from') ?? ''} onChange={(e) => set('from', e.target.value || null)} /></label>
           <label className="menu-field">To <input type="date" value={sp.get('to') ?? ''} onChange={(e) => set('to', e.target.value || null)} /></label>
+        </Menu>
+        <Menu id="camera" label="Camera">
+          {(gear.data?.cameras ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
+          {(gear.data?.cameras ?? []).map((c) => <Item key={c.name} on={sp.get('camera') === c.name} onClick={() => { set('camera', sp.get('camera') === c.name ? null : c.name); setOpen(null); }}>{c.name} <span className="faint">{c.n}</span></Item>)}
+        </Menu>
+        <Menu id="lens" label="Lens">
+          {(gear.data?.lenses ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
+          {(gear.data?.lenses ?? []).map((c) => <Item key={c.name} on={sp.get('lens') === c.name} onClick={() => { set('lens', sp.get('lens') === c.name ? null : c.name); setOpen(null); }}>{c.name} <span className="faint">{c.n}</span></Item>)}
         </Menu>
         <Menu id="file" label="File name">
           <label className="menu-field">Contains <input value={sp.get('file') ?? ''} placeholder="e.g. R01 or IMG_20" onChange={(e) => set('file', e.target.value || null)} /></label>
