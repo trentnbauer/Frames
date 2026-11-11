@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { Modal } from '../components/Modal';
 import { AiSettings } from '../pages/AiSettings';
@@ -263,6 +264,14 @@ export function useServer(ctx: Ctx): Section {
   const logs = useApi<{ bytes: number }>('/admin/logs/info');
   const [secrets, setSecrets] = useState(false);
   const [checked, setChecked] = useState(false);
+  // The "Settings out of sync" banner comes here to show the differences straight away.
+  const loc = useLocation();
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get('env') !== 'diff') return;
+    u.searchParams.delete('env'); window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+    ctx.modal(<Diff ctx={ctx} secrets={false} />);
+  }, [loc.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const put = async (body: object) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body })); inst.reload(); rel.reload(); };
   const bad = (sys.data?.checks ?? []).filter((c) => !c.ok);
   const newer = rel.data?.releases[0];
