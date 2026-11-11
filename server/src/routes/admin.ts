@@ -306,8 +306,11 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   // What the saved settings would write to the file, against what this container was actually started with. Names and verdicts only:
   // a value, a secret above all, is never sent.
   const envCompare = () => {
-    const pairs: [string, string][] = [];
-    buildEnvFile(sys, x.tenants.owner().db, { pairs });
+    const all: [string, string][] = [];
+    buildEnvFile(sys, x.tenants.owner().db, { pairs: all });
+    // Who passed the sign-in test is a result Frames records and the file may carry (it makes that person the owner of a new install). It is not a setting to keep in step, so it is left out of the comparison.
+    const result = (k: string) => /^FRAMES_SYSTEM__auth__testedBy__/.test(k);
+    const pairs = all.filter(([k]) => !result(k));
     const env = process.env;
     // A secret is never sent, in either column: only whether it is set. Anything that might hold one is treated as one (and the whole-config variables, which hold every secret).
     const secret = (k: string) => /KEY|SECRET|TOKEN|PASSWORD|AUD|CREDENTIAL|PRIVATE/i.test(k) || /^FRAMES_CONFIG_/.test(k);
@@ -318,7 +321,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
       return { name, secret: secret(name), status, env: show(name, env[name]), app: status === 'same' ? undefined : show(name, text) }; // the app's value is shown only where it is not the same
     });
     const known = new Set(pairs.map(([k]) => k));
-    for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k) && !isStateVar(k)).sort()) {
+    for (const name of Object.keys(env).filter((k) => /^(SHARED_AI|AI|AUTH)_\d+_[A-Z0-9_]+$|^CLOUD_(GOOGLE|DROPBOX|ONEDRIVE)_(CLIENT_ID|CLIENT_SECRET)$|^FRAMES_(SYSTEM|OWNER)__|^FRAMES_CONFIG_/.test(k) && !known.has(k) && !isStateVar(k) && !result(k)).sort()) {
       rows.push({ name, secret: secret(name), status: 'env only', env: show(name, env[name]) });
     }
     return { rows, counts: { same: rows.filter((r) => r.status === 'same').length, differs: rows.filter((r) => r.status === 'differs').length, appOnly: rows.filter((r) => r.status === 'app only').length, envOnly: rows.filter((r) => r.status === 'env only').length } };

@@ -316,4 +316,14 @@ describe('several AIs in the export', () => {
     applyEnvConfig(sysOf(b), b.db); // what the next start does
     expect(await names()).toEqual(['From the file']);
   });
+
+  it('does not count the recorded sign-in test result as a difference, but does count other settings', async () => {
+    const e = mk();
+    setSetting(sysOf(e), 'auth', { enabled: false, providers: [], allow: [], publicUrl: '', testedBy: { provider: 'google', sub: '1094', name: 'Someone' } });
+    setSetting(sysOf(e), 'instance', { previewQuality: 85 });
+    useVars({ FRAMES_SYSTEM__auth__testedBy__provider: 'cloudflare' }); // the file disagrees about who tested
+    const rows = ((await api(e).get('/api/admin/env/compare')).body as { rows: { name: string; status: string }[] }).rows;
+    expect(rows.some((r) => r.name.includes('testedBy'))).toBe(false);
+    expect(rows.find((r) => r.name === 'FRAMES_SYSTEM__instance__previewQuality')?.status).toBe('app only');
+  });
 });
