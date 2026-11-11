@@ -37,7 +37,7 @@ const SESSION: [string, number][] = [['1 day', 1], ['1 week', 7], ['30 days', 30
 const EXPIRY: [string, number][] = [['1 week', 7], ['3 weeks', 21], ['3 months', 90], ['Never', 0]];
 
 export function useSignin(ctx: Ctx): Section {
-  const a = useApi<{ enabled: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string }>('/auth/config');
+  const a = useApi<{ enabled: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string; disabledByEnv?: boolean }>('/auth/config');
   const inst = useApi<Inst>('/admin/instance');
   const ts = useApi<{ enabled: boolean; siteKey: string; signin: boolean; shares: boolean; hasSecret: boolean; disabledByEnv: boolean; startsInSec?: number }>('/admin/turnstile');
   const saveTs = async (body: object, ok: string) => { await act(ctx, () => api('/admin/turnstile', { method: 'PUT', body }), ok); ts.reload(); };
@@ -64,9 +64,9 @@ export function useSignin(ctx: Ctx): Section {
     groups: [
       { title: 'Sign-in methods · test before turning on', rows },
       { title: 'Sessions', rows: [
-        { id: 'signup', t: 'toggle', label: 'Allow anyone to sign up', hint: 'Off: invite only.', value: !!i?.signups, togDisabled: i?.signupsLocked ? 'Set by ALLOW_SIGNUPS on this server' : undefined, set: (v) => void put({ signups: v }) },
+        { id: 'signup', t: 'toggle', label: 'Allow anyone to sign up', hint: 'Off: invite only.', value: !!i?.signups, togDisabled: i?.signupsLocked ? 'Set by ALLOW_SIGNUPS on this server' : undefined, env: i?.signupsLocked ? 'ALLOW_SIGNUPS' : undefined, set: (v) => void put({ signups: v }) },
         { id: 'newRole', t: 'select', label: 'New people join as', opts: ROLES, value: ROLE[i?.defaultRole ?? 'member'], set: (v) => void put({ defaultRole: roleKey(v) }) },
-        { id: 'session', t: 'select', label: 'Stay signed in for', opts: [...SESSION.map((s) => s[0]), ...(i && !SESSION.some((s) => s[1] === i.sessionDays) ? [closeSess(i.sessionDays)] : [])], value: closeSess(i?.sessionDays ?? 14), set: (v) => { const n = SESSION.find((s) => s[0] === v)?.[1]; if (n) void put({ sessionDays: n }); } },
+        { id: 'session', t: 'select', label: 'Stay signed in for', opts: [...SESSION.map((s) => s[0]), ...(i && !SESSION.some((s) => s[1] === i.sessionDays) ? [closeSess(i.sessionDays)] : [])], value: closeSess(i?.sessionDays ?? 14), env: i?.sessionDaysLocked ? 'SESSION_DAYS' : undefined, set: (v) => { if (i?.sessionDaysLocked) { ctx.toast('Set by SESSION_DAYS on this server'); return; } const n = SESSION.find((s) => s[0] === v)?.[1]; if (n) void put({ sessionDays: n }); } },
       ] },
       { title: 'Guest links', rows: [
         { id: 'guestExpiry', t: 'select', label: 'Expire after', opts: EXPIRY.map((e) => e[0]), value: EXPIRY.find((e) => e[1] === i?.shareExpireDays)?.[0] ?? '3 weeks', set: (v) => void put({ shareExpireDays: EXPIRY.find((e) => e[0] === v)![1] }) },
@@ -74,14 +74,14 @@ export function useSignin(ctx: Ctx): Section {
         { id: 'guestName', t: 'toggle', label: 'Ask guests for their name', hint: 'So you know whose ratings are whose.', value: i?.shareAskName !== false, set: (v) => void put({ shareAskName: v }) },
       ] },
       { title: 'Bot check · Cloudflare Turnstile', rows: [
-        { id: 'tsOn', t: 'toggle', label: 'Use the bot check', hint: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.' : 'Ask people to pass a short check, run by Cloudflare, before they sign in or open a share link. If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out. The check is not asked for the first five minutes after Frames starts or restarts.' + ((ts.data?.startsInSec ?? 0) > 0 && ts.data?.enabled ? ` It starts in ${Math.ceil((ts.data?.startsInSec ?? 0) / 60)} min.` : ''), value: !!ts.data?.enabled, togDisabled: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server' : undefined, set: (v: boolean) => void saveTs({ enabled: v }, v ? 'The bot check is on' : 'The bot check is off') },
+        { id: 'tsOn', t: 'toggle', label: 'Use the bot check', hint: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.' : 'Ask people to pass a short check, run by Cloudflare, before they sign in or open a share link. If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out. The check is not asked for the first five minutes after Frames starts or restarts.' + ((ts.data?.startsInSec ?? 0) > 0 && ts.data?.enabled ? ` It starts in ${Math.ceil((ts.data?.startsInSec ?? 0) / 60)} min.` : ''), value: !!ts.data?.enabled, togDisabled: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server' : undefined, env: ts.data?.disabledByEnv ? 'TURNSTILE_DISABLE' : undefined, set: (v: boolean) => void saveTs({ enabled: v }, v ? 'The bot check is on' : 'The bot check is off') },
         { id: 'tsSite', t: 'text', label: 'Site key', hint: 'From your Turnstile widget in the Cloudflare dashboard. A wrong site key cannot be detected: if the check stops showing, start Frames with TURNSTILE_DISABLE=true and correct the keys.', dep: 'tsOn', value: ts.data?.siteKey ?? '', ph: '0x4AAAAAAA…', set: (v: string) => void saveTs({ siteKey: v }, 'Site key saved') },
         { id: 'tsSecret', t: 'text', label: 'Secret key', hint: 'Never shown again.', dep: 'tsOn', inputType: 'password', value: '', ph: ts.data?.hasSecret ? 'Saved. Type to replace' : '0x4AAAAAAA…', set: (v: string) => { if (v.trim()) void saveTs({ secret: v }, 'Secret key saved'); } },
         { id: 'tsSignin', t: 'toggle', label: 'On the sign-in page', dep: 'tsOn', value: !!ts.data?.signin, set: (v: boolean) => void saveTs({ signin: v }, 'Saved') },
         { id: 'tsShares', t: 'toggle', label: 'On share links', hint: 'A signed-in person is not asked.', dep: 'tsOn', value: !!ts.data?.shares, set: (v: boolean) => void saveTs({ shares: v }, 'Saved') },
       ] },
       { title: 'Access control', rows: [
-        { id: 'requireSignin', t: 'toggle', label: 'Require sign-in', hint: 'Off: anyone who can reach Frames can use it. Test a method first.', value: !!a.data?.enabled, set: async (v: boolean) => { await act(ctx, () => api('/auth/config', { method: 'PUT', body: { enabled: v } })); a.reload(); } },
+        { id: 'requireSignin', t: 'toggle', label: 'Require sign-in', hint: 'Off: anyone who can reach Frames can use it. Test a method first.', value: !!a.data?.enabled && !a.data?.disabledByEnv, env: a.data?.disabledByEnv ? 'AUTH_DISABLE' : undefined, togDisabled: a.data?.disabledByEnv ? 'All sign-in is switched off by AUTH_DISABLE on this server' : undefined, set: async (v: boolean) => { await act(ctx, () => api('/auth/config', { method: 'PUT', body: { enabled: v } })); a.reload(); } },
         { id: 'allowList', t: 'link', label: 'Who is allowed in and the public address', hint: 'The allowed list and the address sign-in comes back to.', meta: 'Open', act: () => configure() },
       ] },
     ],
@@ -197,7 +197,7 @@ export function useFolders(ctx: Ctx): Section {
       ] },
       { title: 'Local storage', meta: L ? (used ? `${gb(used)} of ${gb(dk!.total)} used` : '') : 'Off', rows: [
         { id: 'localOn', t: 'toggle', icon: 'LS', label: 'Local storage', hint: L ? 'Upload photos to this server and read the library folder.' : 'Off: nobody can upload, and the library folder isn’t read. Photos already here stay.', value: L, set: (v: boolean) => { if (!v && !window.confirm('Turn off local storage?\n\nNobody will be able to upload photos to Frames, and the library folder will not be read. Photos already in Frames stay where they are.')) return; void put({ localOn: v }); } },
-        { id: 'libPath', t: 'text', indent: true, show: L, label: 'Library folder', hint: 'Set with LIBRARY_DIRS.', value: libs[0]?.path ?? '', disabled: true },
+        { id: 'libPath', t: 'text', indent: true, show: L, label: 'Library folder', value: libs[0]?.path ?? '', disabled: true, env: 'LIBRARY_DIRS' },
         { id: 'disk', t: 'meter', indent: true, show: L, label: 'Disk', hint: dk?.path, pct: dk?.total ? ((dk.total - dk.free) / dk.total) * 100 : 0, text: dk?.total ? `${gb(dk.total - dk.free)} of ${gb(dk.total)}` : '' },
         { id: 'formats', t: 'chips', indent: true, show: L, label: 'Import', opts: ['JPEG', 'HEIC', 'TIFF', 'RAW'], value: prefs.get<string[]>('formats', ['JPEG', 'HEIC', 'TIFF', 'RAW']), set: (v: string[]) => { prefs.set('formats', v); ctx.toast('Saved'); } },
         { id: 'localOrig', t: 'toggle', indent: true, show: L, label: 'Store original quality', hint: lOrig ? 'Uploads are kept exactly as they are.' : 'Uploads are kept as smaller copies, so downloading one later gives that copy, not the file that was uploaded.', value: lOrig, set: (v: boolean) => void put({ localOrig: v }) },

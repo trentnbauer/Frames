@@ -20,7 +20,7 @@ export class Logic extends DCLogic {
   COL = { Black: '#151514', White: '#e9e7e1', Oak: '#b08a5e', Walnut: '#5b3f2c', Silver: '#a3a3a0' };
   MAT = { White: '#f4f2ec', Ivory: '#e6dfcc', Black: 'var(--raised)' };
   wallRef = React.createRef();
-  state = { sel: null, full: false, wall: { w: 964, h: 560 }, candTab: 'best', dragging: null, toast: '', tOp: 0 };
+  state = { shDraft: null, sel: null, full: false, wall: { w: 964, h: 560 }, candTab: 'best', dragging: null, toast: '', tOp: 0 };
   componentDidUpdate(pp) { if (pp.printsKey !== this.props.printsKey && !this.state.dragging) { this.state = { ...this.state, prints: this.props.prints }; this.__update(); } }
   applyDeep(d) { if (!d || this.props.guest || !String(d.what || '').startsWith('guests')) return; window.__framesDeep = null; const t = String(d.what).split(':')[1]; this.setState({ gOpen: true, gSee: null, ...(t ? { gTab: t } : {}) }); }
   componentDidMount() {
@@ -135,30 +135,33 @@ export class Logic extends DCLogic {
     };
   }
   shareVals() {
-    const S = this.state, P = this.props; const H = P.share || { active: false };
+    const S = this.state, P = this.props; const H0 = P.share || { active: false };
+    // Before a link exists the settings are a draft, kept here and sent when the link is created (the last step). With a link they change it at once.
+    const D = { allowReview: true, allowSuggest: true, allowDownload: false, onlyWall: false, askName: true, pin: '', expOpt: '3 weeks', ...(S.shDraft || {}) };
+    const H = H0.active ? H0 : { ...H0, ...D };
     const tog = (on) => ({ track: on ? 'var(--text)' : 'color-mix(in srgb, var(--text) 14%, transparent)', knob: on ? '21px' : '3px', knobBg: on ? 'var(--bg)' : 'var(--text2)' });
     const nm = tog(H.askName), pw = tog(!!H.pin);
     const pin4 = () => { let p; do { p = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); } while (/^(\d)\1{3}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p)); return p; };
     const email = S.shEmailText || ''; const okEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
     const send = async () => { if (!okEmail) return; try { await P.onInvite(email.trim()); this.setState({ shEmailText: '' }); this.flash('Link sent to ' + email.trim()); } catch (e) { this.flash(e.message || 'Could not send'); } };
-    const patch = (b) => P.onSharePatch(b);
+    const patch = (b) => (H0.active ? P.onSharePatch(b) : this.setState({ shDraft: { ...D, ...b } }));
     return {
       shOpen: !!S.shOpen, openSh: () => this.setState({ shOpen: true, gOpen: false }), closeSh: () => this.setState({ shOpen: false, shCopied: false }),
-      shPreview: () => { if (H.url) window.open(H.url, '_blank', 'noopener'); }, shActive: !!H.active, shInactive: !H.active, shStart: () => P.onShareStart(),
-      shLink: H.display || '', shLinkBg: S.shFresh ? 'rgba(239,237,232,.12)' : 'var(--bg)',
-      shCopyLabel: S.shCopied ? 'Copied ✓' : 'Copy link', shCopy: async () => { try { await navigator.clipboard.writeText(H.url); } catch (e) { window.prompt('Copy this', H.url); } this.setState({ shCopied: true }); },
-      shLinkNote: H.active ? 'Expires ' + H.expLabel + (H.pin ? ' · PIN ' + H.pin : '') : '',
+      shPreview: () => { if (H0.url) window.open(H0.url, '_blank', 'noopener'); }, shActive: !!H0.active, shInactive: !H0.active, shStart: async () => { await P.onShareStart(D); this.setState({ shDraft: null }); },
+      shLink: H0.display || '', shLinkBg: S.shFresh ? 'rgba(239,237,232,.12)' : 'var(--bg)',
+      shCopyLabel: S.shCopied ? 'Copied ✓' : 'Copy link', shCopy: async () => { try { await navigator.clipboard.writeText(H0.url); } catch (e) { window.prompt('Copy this', H0.url); } this.setState({ shCopied: true }); },
+      shLinkNote: H0.active ? 'Expires ' + H0.expLabel + (H0.pin ? ' · PIN ' + H0.pin : '') : '',
       shRegen: async () => { await P.onShareRegen(); this.setState({ shCopied: false, shFresh: true }); clearTimeout(this.fT); this.fT = setTimeout(() => this.setState({ shFresh: false }), 900); this.flash('New link made · the old one stops working'); },
       shPerms: [['rate', 'Rate photos', 'allowReview'], ['suggest', 'Suggest changes', 'allowSuggest'], ['dl', 'Download files', 'allowDownload']].map(([k, l, f]) => ({ label: (H[f] ? '✓ ' : '') + l, bg: H[f] ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: H[f] ? 'var(--text)' : 'var(--muted)', ring: H[f] ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)', go: () => patch({ [f]: !H[f] }) })),
       shShow: [['All candidates', false], ['Only the wall', true]].map(([l, v]) => ({ label: l, bg: !!H.onlyWall === v ? 'var(--text)' : 'transparent', fg: !!H.onlyWall === v ? 'var(--bg)' : 'var(--text2)', go: () => patch({ onlyWall: v }) })),
-      shExp: ['1 week', '3 weeks', '3 months', 'Never'].map((l) => ({ label: l, bg: H.expOpt === l ? 'var(--text)' : 'transparent', fg: H.expOpt === l ? 'var(--bg)' : 'var(--text2)', go: () => P.onShareExpiry(l) })),
+      shExp: ['1 week', '3 weeks', '3 months', 'Never'].map((l) => ({ label: l, bg: H.expOpt === l ? 'var(--text)' : 'transparent', fg: H.expOpt === l ? 'var(--bg)' : 'var(--text2)', go: () => (H0.active ? P.onShareExpiry(l) : this.setState({ shDraft: { ...D, expOpt: l } })) })),
       shNameTrack: nm.track, shNameKnob: nm.knob, shNameKnobBg: nm.knobBg, shNameTog: () => patch({ askName: !H.askName }),
       shPw: !!H.pin, shPwTrack: pw.track, shPwKnob: pw.knob, shPwKnobBg: pw.knobBg, shPwTog: () => patch({ pin: H.pin ? '' : pin4() }), shPwVal: H.pin || '', shOnPw: (e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); if (v.length === 4) patch({ pin: v }); },
       shPwNew: () => { patch({ pin: pin4() }); this.setState({ pinCopied: false }); }, shPwCopyLabel: S.pinCopied ? 'Copied ✓' : 'Copy', shPwCopy: async () => { try { await navigator.clipboard.writeText(H.pin); } catch (e) {} this.setState({ pinCopied: true }); },
-      shEmail: email, shOnEmail: (e) => this.setState({ shEmailText: e.target.value }), shEmailKey: (e) => { if (e.key === 'Enter') send(); }, shSend: send, shSendOp: okEmail && H.canEmail !== false ? 1 : 0.4,
-      shSent: (H.invites || []).map((i) => ({ email: i.email, state: i.status === 'failed' ? 'failed' : 'sent', remove: () => P.onRemoveInvite(i.email) })),
-      shStop: async () => { if (!H.active) return; await P.onShareStop(); this.flash('Sharing stopped · the link no longer works'); }, shStopOp: H.active ? 1 : 0.35,
-      shBtnMeta: H.active ? '· on' : '', shSummary: H.active ? 'Shared · link expires ' + H.expLabel : 'Not shared right now',
+      shEmail: email, shOnEmail: (e) => this.setState({ shEmailText: e.target.value }), shEmailKey: (e) => { if (e.key === 'Enter') send(); }, shSend: send, shSendOp: okEmail && H0.canEmail !== false ? 1 : 0.4,
+      shSent: (H0.invites || []).map((i) => ({ email: i.email, state: i.status === 'failed' ? 'failed' : 'sent', remove: () => P.onRemoveInvite(i.email) })),
+      shStop: async () => { if (!H0.active) return; await P.onShareStop(); this.flash('Sharing stopped · the link no longer works'); }, shStopOp: H0.active ? 1 : 0.35,
+      shBtnMeta: H0.active ? '· on' : '', shSummary: H0.active ? 'Shared · link expires ' + H0.expLabel : 'Not shared right now',
     };
   }
   guestVals() {
