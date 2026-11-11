@@ -35,6 +35,7 @@ beforeAll(async () => {
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
   env = makeEnv({ cloudBase: base }); A = api(env);
+  await A.put('/api/admin/instance', { storeOriginalQuality: true }); // the tests below are about what each person chose; the default (smaller copies) is tested at the end
 });
 afterAll(() => { env.app.close(); srv.close(); cleanup(env); });
 
@@ -115,20 +116,21 @@ describe('keeping a smaller copy of cloud photographs', () => {
     expect(env.db.prepare('SELECT shrunk FROM cloud_files WHERE remote_id = ?').get('f2')).toEqual({ shrunk: 0 });
   });
 
-  it('an administrator can require smaller copies for everyone: then a connection that did not ask still keeps only a smaller copy', async () => {
-    expect((await A.get('/api/admin/instance')).body.shrinkCopies).toBe('choice'); // each person's own choice, by default
+  it('unless the administrator chooses to store original quality, a connection that did not ask still keeps only a smaller copy', async () => {
+    await A.put('/api/admin/instance', { storeOriginalQuality: true }); // the choice every other test here is made under
+    expect((await A.put('/api/admin/instance', { storeOriginalQuality: 'nonsense' })).body.storeOriginalQuality).toBe(true); // only true or false
     await A.put(`/api/cloud/${id}`, { shrink: false });
     nodes.push({ id: 'f4', name: 'Chosen By Nobody.jpg', data: await noisy(1600, 900), version: 'v1' });
     let r = await sync(id);
-    expect(r.shrunk ?? 0).toBe(0); // not asked, not required: whole
-    expect((await A.put('/api/admin/instance', { shrinkCopies: 'always' })).body.shrinkCopies).toBe('always');
+    expect(r.shrunk ?? 0).toBe(0); // original quality is stored and this connection did not ask: whole
+    expect((await A.get('/api/cloud')).body.shrinkEnforced).toBe(false);
+    expect((await A.put('/api/admin/instance', { storeOriginalQuality: false })).body.storeOriginalQuality).toBe(false); // the default
     expect((await A.get('/api/cloud')).body.shrinkEnforced).toBe(true);
     nodes.push({ id: 'f5', name: 'Required.jpg', data: await noisy(1600, 900), version: 'v1' });
     r = await sync(id);
     expect(r.shrunk).toBe(2); // the one already here, and the new one
     expect(env.db.prepare('SELECT shrunk FROM cloud_files WHERE remote_id IN (?, ?)').all('f4', 'f5')).toEqual([{ shrunk: 1 }, { shrunk: 1 }]);
-    expect((await A.put('/api/admin/instance', { shrinkCopies: 'nonsense' })).body.shrinkCopies).toBe('always'); // only the two values
-    await A.put('/api/admin/instance', { shrinkCopies: 'choice' });
+    await A.put('/api/admin/instance', { storeOriginalQuality: true });
     await A.put(`/api/cloud/${id}`, { shrink: true });
   });
   it('says plainly when the original cannot be fetched, and disconnecting does not lose the way back to it', async () => {

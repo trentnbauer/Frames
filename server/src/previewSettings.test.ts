@@ -52,3 +52,33 @@ it('converts existing previews to new standards, for a person and for everyone',
   expect((await settle('/api/admin/convert-all')).converted).toBe(1);
   expect(await longEdge(id)).toBe(2400);
 });
+
+it('the largest upload, the largest cloud file and the tunnel name are settings with limits', async () => {
+  expect((await A.get('/api/admin/instance')).body).toMatchObject({ maxUploadMb: 2048, cloudMaxFileMb: 1024 });
+  expect((await A.put('/api/admin/instance', { maxUploadMb: 50, cloudMaxFileMb: 200 })).body).toMatchObject({ maxUploadMb: 50, cloudMaxFileMb: 200 });
+  expect(runtime.cloudMaxFileMb).toBe(200); // read by the cloud sync as it goes
+  for (const bad of [0, -5, 1.5, 'big', 999_999_999]) expect((await A.put('/api/admin/instance', { maxUploadMb: bad })).body.maxUploadMb).toBe(50);
+  await A.put('/api/admin/instance', { maxUploadMb: 2048, cloudMaxFileMb: 1024 });
+});
+
+it('an upload larger than the limit is refused, and the limit applies at once', async () => {
+  const send = (size: number) => {
+    const boundary = '----frames-test';
+    const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="big.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`);
+    return env.app.inject({ method: 'POST', url: '/api/upload', payload: Buffer.concat([head, Buffer.alloc(size, 7), Buffer.from(`\r\n--${boundary}--\r\n`)]), headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+  };
+  await A.put('/api/admin/instance', { maxUploadMb: 1 });
+  const r = await send(1.5 * 1024 * 1024);
+  expect(r.statusCode).toBe(413); // refused: larger than the 1 MB limit just set
+  await A.put('/api/admin/instance', { maxUploadMb: 2 });
+  expect((await send(1.5 * 1024 * 1024)).statusCode).not.toBe(413); // and a larger limit applies at once
+  await A.put('/api/admin/instance', { maxUploadMb: 2048 });
+});
+
+it('the tunnel name can be set, and must be a plain name', async () => {
+  process.env.CLOUDFLARE_API_BASE = 'http://127.0.0.1:9'; // nothing here may reach the real Cloudflare (no token is saved, so nothing is asked)
+  expect((await A.get('/api/tunnel')).body.tunnelName).toBe('Frames');
+  expect((await A.put('/api/tunnel', { tunnelName: ' Home Frames ' })).body.tunnelName).toBe('Home Frames');
+  for (const bad of ['', '-x', 'a'.repeat(61), 'no/slash', '<b>']) expect((await A.put('/api/tunnel', { tunnelName: bad })).status).toBe(400);
+  expect((await A.get('/api/tunnel')).body.tunnelName).toBe('Home Frames');
+});

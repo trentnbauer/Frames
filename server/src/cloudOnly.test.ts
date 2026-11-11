@@ -32,6 +32,8 @@ describe('requiring originals to be kept in cloud storage', () => {
   it('only a true or false changes it, and turning it off brings uploads back', async () => {
     expect((await A.put('/api/admin/instance', { cloudOnly: 'yes' })).body).toMatchObject({ cloudOnly: true }); // not a boolean: ignored
     expect((await A.put('/api/admin/instance', { cloudOnly: false })).body).toMatchObject({ cloudOnly: false });
+    expect((await A.get('/api/cloud')).body.shrinkEnforced).toBe(true); // original quality is off by default: smaller copies
+    await A.put('/api/admin/instance', { storeOriginalQuality: true });
     expect((await A.get('/api/cloud')).body.shrinkEnforced).toBe(false);
     expect((await upload()).statusCode).toBe(200);
   });
