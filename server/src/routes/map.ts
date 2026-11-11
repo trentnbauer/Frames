@@ -9,20 +9,26 @@ import type { Ctx, Row } from '../ctx.js';
 export const mapSource = {
   /** Replaced in tests, which must never reach the real service. */
   fetch: (url: string, init?: RequestInit): Promise<Response> => fetch(url, init),
-  tileUrl: (z: number, x: number, y: number) => `https://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,
+  tileUrl: (z: number, x: number, y: number) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`, // (Carto's free dark tiles now answer "API key required")
   searchUrl: (q: string) => `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&q=${encodeURIComponent(q)}`,
   reverseUrl: (lat: number, lon: number) => `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${lat}&lon=${lon}`,
   /** How long to wait between the tries of one search (the service allows a request a second). Zero in tests. */
   pauseMs: 1100,
 };
 const UA = 'Frames (self-hosted photo archive; https://github.com/trentnbauer/Frames)';
-/** The text as typed, then the same words as "name, place": the first word(s) taken as the place and the rest as the name, and the last word as the place. At most four. */
+/**
+ * What to try when searching for a name: the text as typed, then the same words as "name, place" (the first word(s) as the place and the rest as
+ * the name, and the last word as the place). The search service matches whole words, so each is also tried with the last word of the name
+ * made plural or singular ("Mill Market" finds nothing where "Mill Markets" finds "The Amazing Mill Markets"). At most six.
+ */
 export function searchVariants(q: string): string[] {
   const w = q.split(/\s+/).filter(Boolean);
-  const out = [q];
-  for (let i = 1; i <= Math.min(2, w.length - 1); i++) out.push(`${w.slice(i).join(' ')}, ${w.slice(0, i).join(' ')}`);
-  if (w.length > 2) out.push(`${w.slice(0, -1).join(' ')}, ${w[w.length - 1]}`);
-  return [...new Set(out)].slice(0, 4);
+  const base = [q];
+  for (let i = 1; i <= Math.min(2, w.length - 1); i++) base.push(`${w.slice(i).join(' ')}, ${w.slice(0, i).join(' ')}`);
+  if (w.length > 2) base.push(`${w.slice(0, -1).join(' ')}, ${w[w.length - 1]}`);
+  const flip = (t: string) => { const [name, ...rest] = t.split(','); const m = /^(.*?)(\S+)$/.exec(name.trimEnd()); if (!m || m[2].length < 3) return t; const last = /s$/i.test(m[2]) && m[2].length > 3 ? m[2].slice(0, -1) : `${m[2]}s`; return [m[1] + last, ...rest].join(','); };
+  const out = w.length > 1 ? base.flatMap((t) => [t, flip(t)]) : base;
+  return [...new Set(out)].slice(0, 6);
 }
 type NominatimHit = { display_name?: unknown; name?: unknown; type?: unknown; category?: unknown; address?: Record<string, string>; lat?: unknown; lon?: unknown };
 /** The design's place row: a short name, the address under it, and the kind of place. */

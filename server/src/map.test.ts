@@ -47,13 +47,27 @@ describe('searching for a business', () => {
     const r = await A.get('/api/map/search?q=Geelong%20Mill%20Market');
     expect(r.body).toMatchObject([{ lat: -38.14, lon: 144.35 }]);
     expect(r.body[0].address).toContain('Geelong');
-    expect(asked).toEqual(['Geelong Mill Market', 'Mill Market, Geelong']); // stops at the first that finds something
+    expect(asked).toEqual(['Geelong Mill Market', 'Geelong Mill Markets', 'Mill Market, Geelong']); // stops at the first that finds something
+  });
+
+  it('finds a business whose name is a plural of what was typed (issue 206)', async () => {
+    await new Promise((r) => setTimeout(r, 1100));
+    const asked: string[] = [];
+    mapSource.fetch = async (url) => {
+      const q = decodeURIComponent(new URL(url).searchParams.get('q') ?? '');
+      asked.push(q);
+      return new Response(JSON.stringify(q === 'geelong mill markets' ? [{ display_name: 'The Amazing Mill Markets, 114, Bellarine Highway, Newcomb, Geelong, Victoria', name: 'The Amazing Mill Markets', lat: '-38.17', lon: '144.39', category: 'shop', type: 'second_hand', address: { shop: 'second_hand' } }] : []), { status: 200 });
+    };
+    const r = await A.get('/api/map/search?q=geelong%20mill%20market');
+    expect(r.body).toMatchObject([{ name: 'The Amazing Mill Markets', kind: 'business' }]);
+    expect(asked).toEqual(['geelong mill market', 'geelong mill markets']);
   });
 
   it('makes a few sensible variants and no more', () => {
-    expect(searchVariants('Geelong Mill Market')).toEqual(['Geelong Mill Market', 'Mill Market, Geelong', 'Market, Geelong Mill', 'Geelong Mill, Market']);
+    expect(searchVariants('Geelong Mill Market')).toEqual(['Geelong Mill Market', 'Geelong Mill Markets', 'Mill Market, Geelong', 'Mill Markets, Geelong', 'Market, Geelong Mill', 'Markets, Geelong Mill']);
     expect(searchVariants('Geelong')).toEqual(['Geelong']);
-    expect(searchVariants('Mill Market')).toEqual(['Mill Market', 'Market, Mill']);
+    expect(searchVariants('Mill Market')).toEqual(['Mill Market', 'Mill Markets', 'Market, Mill', 'Markets, Mill']);
+    expect(searchVariants('Mill Markets')).toEqual(['Mill Markets', 'Mill Market', 'Markets, Mill', 'Market, Mill']); // and the other way round
   });
 });
 
@@ -64,7 +78,7 @@ describe('the map proxy', () => {
     const r = await env.app.inject({ method: 'GET', url: '/api/map/tile/3/2/1' });
     expect(r.statusCode).toBe(200);
     expect(r.headers['content-type']).toBe('image/png');
-    expect(seen).toMatchObject({ url: 'https://a.basemaps.cartocdn.com/dark_all/3/2/1.png' });
+    expect(seen).toMatchObject({ url: 'https://tile.openstreetmap.org/3/2/1.png' });
     expect(seen!.ua).toContain('Frames');
     for (const u of ['/api/map/tile/3/8/0', '/api/map/tile/20/0/0', '/api/map/tile/x/0/0', '/api/map/tile/2/-1/0']) expect((await env.app.inject({ method: 'GET', url: u })).statusCode).toBe(404);
   });
