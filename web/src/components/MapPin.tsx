@@ -46,7 +46,7 @@ export function MapPin({ lat, lon, onSave, onClose }: { lat: number | null; lon:
 
   return (
     <div className="sheet-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div role="dialog" aria-label="Place a pin on the map" style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: W + 40, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
+      <div role="dialog" aria-label="Place a pin on the map" style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: W + 40, maxWidth: '100%', maxHeight: 'calc(100dvh - 32px)', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <h2 style={{ font: "400 26px 'Instrument Serif',Georgia,serif", margin: 0 }}>Place a pin</h2>
           <button onClick={onClose} aria-label="Close" style={{ color: 'var(--text2)' }}>✕</button>
