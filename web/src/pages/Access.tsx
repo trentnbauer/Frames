@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
 import { Link } from 'react-router-dom';
@@ -93,7 +93,8 @@ const KINDS: { type: Provider['type']; label: string; hint: string }[] = [
 ];
 
 /** Optional sign-in through OAuth providers. Off until it has been tested, so it can never lock you out. */
-export function Access() {
+/** `focus`: a provider type ("google", ...) to open straight away, adding it first when it is not set up yet. */
+export function Access({ focus }: { focus?: string } = {}) {
   const cfg = useApi<Cfg>('/auth/config');
   const [openId, setOpenId] = useState<string | null>(null); // before the early return below: hooks always run in the same order
   const tunnel = useApi<{ protect: boolean; protectForced: boolean; config: { enabled: boolean }; hostnames: { kind: string }[] }>('/tunnel');
@@ -107,7 +108,22 @@ export function Access() {
   const [dirty, setDirty] = useState(false);
   const c = cfg.data;
 
-  useEffect(() => { if (c) { setProviders(c.providers); setAllow(c.allow.join('\n')); setPublicUrl(c.publicUrl); setDirty(false); } }, [c]);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!c) return;
+    setProviders(c.providers); setAllow(c.allow.join('\n')); setPublicUrl(c.publicUrl); setDirty(false);
+    if (focus && !focused.current) {
+      focused.current = true;
+      const have = c.providers.find((p) => p.type === focus);
+      let id = have?.id ?? focus, n = 2;
+      if (!have) {
+        while (c.providers.some((p) => p.id === id)) id = `${focus}-${n++}`;
+        setProviders([...c.providers, { id, type: focus as Provider['type'], name: KINDS.find((k) => k.type === focus)?.label ?? focus, clientId: '' }]); setDirty(true);
+      }
+      setOpenId(id);
+      setTimeout(() => document.getElementById(`prov-${have ? id : `new-${focus}`}`)?.scrollIntoView({ block: 'center' }), 150);
+    }
+  }, [c]); // eslint-disable-line react-hooks/exhaustive-deps
   // Coming back from "Test sign-in" lands on /settings?section=access&access=tested or =notallowed.
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('access');
@@ -152,7 +168,7 @@ export function Access() {
             const isOpen = openId === id;
             const passed = !!p && !!c.testedBy && (c.testedBy.provider === p.id || c.testedBy.provider === p.type);
             return (
-              <div key={id}>
+              <div key={id} id={`prov-${id}`}>
                 <SRow lead={<Badge>{k.abbr}</Badge>} title={<>{p?.name || k.label}{mine.length > 1 && p && <span className="faint mono" style={{ fontSize: 11, marginLeft: 8 }}>{p.id}</span>}</>} hint={k.hint}>
                   <button className="ghost plain" aria-expanded={isOpen} aria-label={`Configure ${p?.name || k.label}`} onClick={() => { if (!p) { add(k.type); setOpenId(uniqueId(k.type)); } else setOpenId(isOpen ? null : id); }}>{isOpen ? 'Close' : 'Configure'}</button>
                   {p && p.hasSecret !== undefined && ((!dirty && !locked) || locked) ? <a className="ghost" href={`/auth/login/${p.id}?test=1`}>{passed ? '✓ Passed' : 'Test'}</a> : <span className="ghost" style={{ opacity: .5 }}>{passed ? '✓ Passed' : 'Test'}</span>}
