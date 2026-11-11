@@ -316,6 +316,20 @@ export const adminAllowsOriginals = (db: DB): boolean => {
 export const userWantsOriginals = (db: DB): boolean => getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false;
 export const fullSizeEffective = (db: DB, sys?: DB): boolean => (sys ? getSetting<{ allowCloudOriginals?: boolean }>(sys, 'instance', {}).allowCloudOriginals !== false : adminAllowsOriginals(db)) && userWantsOriginals(db);
 
+/** Has the administrator chosen to store original quality (Settings, Photos & storage)? Off by default. */
+export const storesOriginalQuality = (db: DB): boolean => !!getSetting<{ storeOriginalQuality?: boolean }>((db as unknown as { sys?: DB }).sys ?? db, 'instance', {}).storeOriginalQuality;
+
+/**
+ * A photograph a person uploads, when original quality is not stored: kept as a smaller copy (JPEG, quality 80, the same pixels). There is no
+ * original in a cloud account to fetch later, so this is the only copy: what they export or download is the smaller one. Returns the file's
+ * name afterwards (a PNG or TIFF becomes a JPEG), or null when it was left as it was (RAW and other types, or little to save).
+ */
+export async function shrinkUpload(db: DB, file: string): Promise<string | null> {
+  if (storesOriginalQuality(db)) return null;
+  const r = await shrinkFile(file);
+  return r ? path.basename(r.file) : null;
+}
+
 export const shrinkEnforced = (db: DB): boolean => {
   const sys = (db as unknown as { sys?: DB }).sys;
   if (!sys) return false;
@@ -354,6 +368,7 @@ async function shrinkFile(file: string): Promise<{ file: string; before: number;
     const after = fs.statSync(tmp).size;
     if (after >= before * 0.9) { fs.rmSync(tmp, { force: true }); return null; }
     const out = ext === '.jpg' || ext === '.jpeg' ? file : file.slice(0, -ext.length) + '.jpg';
+    if (out !== file && fs.existsSync(out)) { fs.rmSync(tmp, { force: true }); return null; } // never write over another photograph
     if (out !== file) fs.rmSync(file, { force: true });
     fs.renameSync(tmp, out);
     return { file: out, before, after, w: meta.width ?? 0, h: meta.height ?? 0 };

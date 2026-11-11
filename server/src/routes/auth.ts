@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
 import { sessionUser, cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
-import { clientOf } from '../cloud.js';
+import { clientOf, storesOriginalQuality } from '../cloud.js';
 import { getSetting } from '../db.js';
 import { notify } from '../notifications.js';
 import { queueMail } from '../mailEvents.js';
@@ -330,6 +330,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
       displayName: displayNameOf(x.db), hasAvatar: fs.existsSync(avatarPath(x.cfg.dataDir)),
       id: u?.id ?? 1, owner: (u?.id ?? 1) === 1, role: u?.role ?? 'member', canSignOut: signedIn, envConfig: ((l) => l.system || l.owner)(envConfigLoaded()), signups: signupsOn(db, cfg.allowSignups !== false), signupsLocked: cfg.allowSignups === false, cloudOnly: !!getSetting<{ cloudOnly?: boolean }>(db, 'instance', {}).cloudOnly,
+      storeOriginalQuality: storesOriginalQuality(db), // off: photographs a person uploads are kept as smaller copies (see shrinkUpload)
     };
   });
 
