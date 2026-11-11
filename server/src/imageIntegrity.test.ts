@@ -76,4 +76,18 @@ describe('checking the files against the database', () => {
     fs.rmSync(dp(a.id, 'preview'));
     expect(await verifyDerivatives(env.db, { libraries: [], dataDir: env.data })).toMatchObject({ wrong: 0 });
   });
+  it('names whose library it was, and says so once: the same photographs found again are made again quietly', async () => {
+    env.db.prepare("DELETE FROM settings WHERE key = 'derivCheckTold'").run(); // earlier tests reported this photograph already
+    const warn: string[] = [];
+    const old = console.warn; console.warn = (m: unknown) => { warn.push(String(m)); };
+    try {
+      for (let round = 0; round < 2; round++) {
+        fs.writeFileSync(dp(a.id, 'thumb'), 'not an image');
+        expect(await verifyDerivatives(env.db, { libraries: [], dataDir: env.data }, 'Trent Bauer')).toMatchObject({ wrong: 1, rebuilt: 1 });
+      }
+    } finally { console.warn = old; }
+    expect(warn).toHaveLength(1);
+    expect(warn[0]).toContain('in Trent Bauer’s library');
+    expect(warn[0]).toContain(`photograph ${a.id}`);
+  });
 });
