@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
@@ -30,7 +30,6 @@ export function TodoPage() {
   const [desc, setDesc] = useState('');
   const [busy, setBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const timer = useRef<number>(0);
 
   const key = REASONS.find((r) => r[0] === reason)![2];
   const baseIds = reason === 'all' ? (walk.data?.photos ?? []).map((p) => p.id) : todo.data?.items.find((i) => i.key === key)?.ids ?? [];
@@ -94,8 +93,8 @@ export function TodoPage() {
           place={p.place || p.lat !== null ? { name: p.place, address: p.placeAddress, kind: p.placeKind, lat: p.lat, lng: p.lon, precision: p.placePrecision, suburb: '', city: '' } : null}
           searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
           reversePlace={async (lat: number, lon: number) => api<MapHit>(`/map/reverse?lat=${lat}&lon=${lon}`)}
-          onSavePlace={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: pl.name, placeAddress: pl.address, placeKind: pl.kind, placePrecision: pl.precision, lat: pl.lat, lon: pl.lng } }); setPlace(pl.name); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
-          onRemovePlace={async () => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: '', placeAddress: '', placeKind: '', lat: null, lon: null } }); setPlace(''); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
+          onSavePlace={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: pl.name, placeAddress: pl.address, placeKind: pl.kind, placePrecision: pl.precision, lat: pl.lat, lon: pl.lng } }); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
+          onRemovePlace={async () => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: '', placeAddress: '', placeKind: '', lat: null, lon: null } }); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
           onClose={() => setMapOpen(false)} />
       )}
       {id ? <ProtoMore page="todo" v={v} /> : (
