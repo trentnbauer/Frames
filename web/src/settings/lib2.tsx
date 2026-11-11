@@ -182,13 +182,6 @@ export function usePortfolio(ctx: Ctx): Section {
   const app = (d.data?.dnsTarget || 'frames.example.com');
   const fav = marks.data?.favourites ?? [];
   const nearest = (SCORES.find((s) => s[1] === c?.autoThreshold) ?? SCORES.reduce((a, b) => (Math.abs(b[1] - (c?.autoThreshold ?? 4)) < Math.abs(a[1] - (c?.autoThreshold ?? 4)) ? b : a)))[0];
-  const addButton = () => {
-    const url = window.prompt('Address of the link (https://…)')?.trim();
-    if (!url) return;
-    const name = (window.prompt('What should it say?', 'Website') ?? 'Website').trim() || 'Website';
-    void save({ buttons: [...(c?.buttons ?? []), { short: name.slice(0, 4), name, url }] });
-  };
-  const names = (c?.buttons ?? []).map((b) => `${b.name} ↗`);
   return {
     key: 'portfolio', name: 'Portfolio', hint: 'A public website of your best work.',
     action: { label: 'View site ↗', act: () => void openPortfolio() },
@@ -209,7 +202,7 @@ export function usePortfolio(ctx: Ctx): Section {
         { id: 'pfName', t: 'link', avatar: { name: prof.data?.displayName ?? '', src: prof.data?.hasAvatar ? '/api/profile/avatar' : undefined }, label: 'Name & picture', hint: 'From your profile', meta: 'Edit', act: () => ctx.goto('lib', 'profile') },
         { id: 'pfTagline', t: 'text', label: 'Tagline', value: c?.tagline ?? '', ph: 'Film photographer from…', set: (v) => void save({ tagline: v }) },
         { id: 'pfAccent', t: 'swatch', label: 'Accent', swatches: ACCENTS, value: ACCENTS.find((a) => a[1] === c?.accentColor)?.[0] ?? 'Clay', set: (v) => void save({ accentColor: ACCENTS.find((a) => a[0] === v)![1] }) },
-        { id: 'pfButtons', t: 'pills', label: 'Menu links', hint: 'Shown after Index, Favourites and Gear, in this order.', value: names, addAs: 'Website ↗', set: (v: string[]) => { if (v.length > names.length) { addButton(); return; } void save({ buttons: (c?.buttons ?? []).filter((b) => v.includes(`${b.name} ↗`)) }); } },
+        { id: 'pfButtons', t: 'links', label: 'Menu links', hint: 'Shown after Index, Favourites and Gear, in this order. Each needs a full name, a short name (up to 4 characters or an emoji) and a link.', value: c?.buttons ?? [], max: 8, set: (v: { short: string; name: string; url: string }[]) => void save({ buttons: v }) },
         { id: 'pfGear', t: 'button', label: 'Gear page', hint: 'Synced from your gear list. The want-to-buy list is optional.', meta: 'Open gear →', act: () => window.location.assign('/gear') },
         { id: 'pfFull', t: 'seg', label: 'Opening a photo shows', hint: 'Camera data is removed from resized copies.', opts: FULL.map((x) => x[0]), value: FULL.find((x) => x[1] === c?.fullSize)?.[0] ?? 'Resized', set: (v) => void save({ fullSize: FULL.find((x) => x[0] === v)![1] }) },
         { id: 'pfFilters', t: 'toggle', label: 'Subject filters', hint: 'Buttons above “All work”.', value: prefs.get('pfFilters', true), set: (v) => { prefs.set('pfFilters', v); ctx.toast('Saved'); } },
