@@ -27,10 +27,10 @@ export function TodoPage() {
   const [skipped, setSkipped] = useState<number[]>([]);
   const [done, setDone] = useState(0);
   const [cam, setCam] = useState<string[]>(['', '', '', '', '', '']);
-  const [place, setPlace] = useState('');
+  const [placeText, setPlace] = useState('');
   const [desc, setDesc] = useState('');
   const [hits, setHits] = useState<MapHit[]>([]);
-  const [picked, setPicked] = useState<MapHit | null>(null);
+  const [pickedHit, setPicked] = useState<MapHit | null>(null);
   const [busy, setBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const timer = useRef<number>(0);
@@ -61,8 +61,9 @@ export function TodoPage() {
   const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept') }));
   const inComp = (c: Collection) => !!p && c.photoIds.includes(p.id);
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
-  const save = async () => {
+  const save = async (choice?: MapHit) => {
     if (!p) return;
+    const place = choice ? choice.name : placeText, picked = choice ?? pickedHit;
     const body: Record<string, unknown> = {};
     if (cam[0] !== p.camera) body.camera = cam[0];
     if (cam[1] !== p.lens) body.lens = cam[1];
@@ -87,7 +88,9 @@ export function TodoPage() {
     reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
     tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'),
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
-    tPlace: place, tPlaceHint: shoot?.place ?? '', tPlaceSuggest: !place && !!shoot?.place,
+    tPlace: placeText, tPlaceHint: shoot?.place ?? '', tPlaceSuggest: !placeText && !!shoot?.place,
+    // Enter takes the first suggestion (or the typed name) and saves, so naming a place is type, Enter.
+    onPlaceKey: (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); window.clearTimeout(timer.current); void save(hits[0]); } },
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',
     useRoll: () => mate && setCam([mate.camera, mate.lens, mate.aperture ? `f/${mate.aperture}` : '', mate.shutter, mate.iso ? String(mate.iso) : '', mate.film]),
@@ -100,7 +103,7 @@ export function TodoPage() {
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map', usePlace: () => setPlace(shoot?.place ?? ''),
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },
     addSubject: (name: string) => tagAct(name, 'subject', 'accept'), addTag: (name: string) => tagAct(name, 'tag', 'accept'),
-    skipTodo: advance, saveTodo: save,
+    skipTodo: advance, saveTodo: () => save(),
   };
   return (
     <div className="page-shell">
