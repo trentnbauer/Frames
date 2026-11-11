@@ -591,7 +591,8 @@ main.auth.terms { width: 640px; }
 
 @media (max-width: 767px) {
   .dc-root div[style*="display: flex"]:not([style*="column"]):not([style*="position: absolute"]):not([style*="overflow-x"]) { flex-wrap: wrap; }
-  .dc-root { overflow-x: hidden; }
+  .dc-root { overflow-x: clip; }
+  .dc-root .pin-head { top: 56px !important; }
 }
 
 @media (max-width: 767px) {

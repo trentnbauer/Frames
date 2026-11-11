@@ -34,6 +34,9 @@ export function TodoPage() {
   const [mapOpen, setMapOpen] = useState(false);
   const timer = useRef<number>(0);
 
+  // Places already on other photos match instantly while the map search runs.
+  const known = (q: string): MapHit[] => { const s = q.trim().toLowerCase(), seen = new Set<string>(); const out: MapHit[] = []; for (const x of lib.data?.photos ?? []) { if (!x.place || seen.has(x.place) || !(x.place + ' ' + x.placeAddress).toLowerCase().includes(s)) continue; seen.add(x.place); out.push({ name: x.place, address: x.placeAddress, kind: x.placeKind, lat: x.lat ?? undefined, lon: x.lon ?? undefined }); } return out.slice(0, 5); };
+
   const key = REASONS.find((r) => r[0] === reason)![2];
   const baseIds = reason === 'all' ? (walk.data?.photos ?? []).map((p) => p.id) : todo.data?.items.find((i) => i.key === key)?.ids ?? [];
   const ids = baseIds.filter((i) => !skipped.includes(i));
@@ -85,7 +88,7 @@ export function TodoPage() {
     tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
     tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
-    onPlace: (e: React.ChangeEvent<HTMLInputElement>) => { const q = e.target.value; setPlace(q); window.clearTimeout(timer.current); if (q.trim().length < 3) { setHits([]); return; } timer.current = window.setTimeout(() => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`).then(setHits).catch(() => setHits([])), 900); },
+    onPlace: (e: React.ChangeEvent<HTMLInputElement>) => { const q = e.target.value; setPlace(q); window.clearTimeout(timer.current); if (q.trim().length < 3) { setHits([]); return; } const here = known(q); setHits(here); timer.current = window.setTimeout(() => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`).then((r) => setHits([...here, ...r.filter((h) => !here.some((k) => k.name === h.name))])).catch(() => setHits(here)), here.length ? 400 : 900); },
     placeOpen: hits.length > 0, placeHits: hits.slice(0, 5).map((h) => ({ name: h.name, region: h.address.split(',').slice(-1)[0] ?? '', pick: () => { setPlace(h.name); setHits([]); } })),
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map', usePlace: () => setPlace(shoot?.place ?? ''),
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },
