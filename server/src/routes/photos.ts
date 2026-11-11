@@ -112,8 +112,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     // The typed words, each of which must be found somewhere in the photograph's text (file name, title, camera, lens, place, description, tags...).
     const textW: string[] = [], textA: unknown[] = [];
     for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-      textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-      textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
+      textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.place_address) LIKE ? ESCAPE '\\' OR lower(p.film) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+      textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
     }
     // The narrower test for "this is a name": only fields that name a photograph (not the AI's description of it, which is prose).
     const nameW: string[] = [], nameA: unknown[] = [];
