@@ -18,6 +18,7 @@ import { backupNow, cloudState, isArchiveName, loadCloudDest, loadS3, removeClou
 import { beginConnect, CloudError, finishBackupConnect, isProvider, pendingPurpose } from '../cloud.js';
 import { applyRuntime, policyOf, policyPatch } from '../policy.js';
 import { trimCache } from '../cache.js';
+import { convertPreviews, outdatedPreviews } from '../ingest.js';
 import { archivesIn, cancelRestore, pendingRestore, serverParts, stageRestore, writeServerArchive } from '../serverBackup.js';
 import { userDir } from '../tenants.js';
 import { countAdmins, deleteUserRow, getUser, invite, listUsers, OWNER_ID, signupsOn, updateUser, validFolder, type User } from '../users.js';
@@ -137,6 +138,23 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
   app.get('/api/admin/logs/download', async (_req, rep) => rep.header('Content-Type', 'application/zip').header('Content-Disposition', 'attachment; filename="frames-logs.zip"').header('Cache-Control', 'no-store').send(zipOne('frames.log', Buffer.from(readLog(7).text || 'Nothing logged yet.\n'))));
   app.get('/api/admin/logs', async (_req, rep) => rep.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', 'attachment; filename="frames.log"').header('Cache-Control', 'no-store').send(readLog(7).text || 'Nothing logged yet.\n'));
+  // Convert every person's existing previews to the standards in force (each person's own size and quality, held to the server's limits).
+  const conv = { running: false, done: 0, total: 0, converted: 0, people: 0 };
+  const outdatedAll = () => x.tenants.all().reduce((n, t) => n + outdatedPreviews(t.db), 0);
+  app.get('/api/admin/convert-all', async () => ({ ...conv, outdated: outdatedAll() }));
+  app.post('/api/admin/convert-all', async (_req, rep) => {
+    if (conv.running) return rep.code(409).send({ error: 'Already converting' });
+    const tenants = x.tenants.all();
+    Object.assign(conv, { running: true, done: 0, total: 0, converted: 0, people: tenants.length });
+    void (async () => {
+      for (const t of tenants) {
+        let seen = 0;
+        const r = await convertPreviews(t.db, t.cfg, (d, tot) => { conv.done += d - seen; if (seen === 0) conv.total += tot; seen = d; }).catch(() => ({ converted: 0 }));
+        conv.converted += r.converted;
+      }
+    })().finally(() => { conv.running = false; });
+    return rep.code(202).send({ started: true });
+  });
   app.put('/api/admin/instance', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const cur = getSetting<Instance>(sys, 'instance', {});

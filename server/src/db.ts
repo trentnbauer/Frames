@@ -307,6 +307,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'photos', 'place_address', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_kind', "TEXT NOT NULL DEFAULT ''"); addColumn(db, 'photos', 'place_precision', "TEXT NOT NULL DEFAULT 'exact'"); },
   // the serial number of a piece of gear
   (db) => { addColumn(db, 'gear_items', 'serial', "TEXT NOT NULL DEFAULT ''"); },
+  // which preview size and quality each photograph's preview was made with, so a change of standards can find the ones to convert
+  (db) => { addColumn(db, 'photos', 'preview_spec', "TEXT NOT NULL DEFAULT ''"); },
 ];
 
 export function migrate(db: DB) {
