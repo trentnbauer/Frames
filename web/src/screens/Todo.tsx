@@ -5,10 +5,11 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import { Header } from '../components/Shell';
 import { useStore } from '../store';
 import ProtoMore from '../proto/ProtoMore';
+import ProtoMapPicker from '../proto/ProtoMapPicker';
 
 type Todo = { total: number; items: { key: string; count: number; ids?: number[] }[] };
 type Walk = { photos: { id: number }[]; things: number };
-type MapHit = { name: string; address: string };
+type MapHit = { name: string; address: string; kind?: string; suburb?: string; city?: string; lat?: number; lon?: number };
 const REASONS: [string, string, string][] = [['all', 'Everything', ''], ['camera', 'Camera specs', 'camera'], ['location', 'Location', 'place'], ['subjects', 'Subjects', 'subjects'], ['tags', 'Tags', 'tags'], ['composition', 'Not in a composition', 'composition']];
 const WHAT: Record<string, string> = { all: 'details', camera: 'camera specs', location: 'a location', subjects: 'subjects', tags: 'tags', composition: 'a composition' };
 
@@ -30,6 +31,7 @@ export function TodoPage() {
   const [desc, setDesc] = useState('');
   const [hits, setHits] = useState<MapHit[]>([]);
   const [busy, setBusy] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const timer = useRef<number>(0);
 
   const key = REASONS.find((r) => r[0] === reason)![2];
@@ -73,7 +75,7 @@ export function TodoPage() {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     todoCount: ids.length.toLocaleString(), todoDone: done, todoWhat: WHAT[reason],
     reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
-    tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'), mapH: '0px',
+    tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'),
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tPlace: place, tPlaceHint: shoot?.place ?? '', tPlaceSuggest: !place && !!shoot?.place,
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
@@ -85,13 +87,23 @@ export function TodoPage() {
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     onPlace: (e: React.ChangeEvent<HTMLInputElement>) => { const q = e.target.value; setPlace(q); window.clearTimeout(timer.current); if (q.trim().length < 3) { setHits([]); return; } timer.current = window.setTimeout(() => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`).then(setHits).catch(() => setHits([])), 900); },
     placeOpen: hits.length > 0, placeHits: hits.slice(0, 5).map((h) => ({ name: h.name, region: h.address.split(',').slice(-1)[0] ?? '', pick: () => { setPlace(h.name); setHits([]); } })),
-    pinX: '50%', pinY: '50%', pinOp: 0, pinLabel: '', pinCoords: '', mapHint: '', dropPin: () => undefined, usePlace: () => setPlace(shoot?.place ?? ''),
+    openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map', usePlace: () => setPlace(shoot?.place ?? ''),
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },
+    addSubject: (name: string) => tagAct(name, 'subject', 'accept'), addTag: (name: string) => tagAct(name, 'tag', 'accept'),
     skipTodo: advance, saveTodo: save,
   };
   return (
     <div className="page-shell">
       <Header />
+      {mapOpen && p && (
+        <ProtoMapPicker
+          place={p.place || p.lat !== null ? { name: p.place, address: p.placeAddress, kind: p.placeKind, lat: p.lat, lng: p.lon, precision: p.placePrecision, suburb: '', city: '' } : null}
+          searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
+          reversePlace={async (lat: number, lon: number) => api<MapHit>(`/map/reverse?lat=${lat}&lon=${lon}`)}
+          onSavePlace={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: pl.name, placeAddress: pl.address, placeKind: pl.kind, placePrecision: pl.precision, lat: pl.lat, lon: pl.lng } }); setPlace(pl.name); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
+          onRemovePlace={async () => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: '', placeAddress: '', placeKind: '', lat: null, lon: null } }); setPlace(''); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
+          onClose={() => setMapOpen(false)} />
+      )}
       {id ? <ProtoMore page="todo" v={v} /> : (
         <div style={{ padding: '64px 0' }}><h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>All caught up</h1><p className="muted">Nothing is waiting for {WHAT[reason]}. <button style={{ textDecoration: 'underline' }} onClick={() => nav('/')}>Back to Home</button></p></div>
       )}
