@@ -7,7 +7,7 @@ import path from 'node:path';
 import { applyGear } from './gear.js';
 import exifr from 'exifr';
 import sharp from 'sharp';
-import { analyseLocal } from './analysis.js';
+import { analyseLocal, dHash } from './analysis.js';
 import type { DB } from './db.js';
 import { rawInfo, rawToJpeg, type RawInfo } from './raw.js';
 import { findSidecar, readSidecar, type XmpData } from './xmp.js';
@@ -163,7 +163,10 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
   const keepExif = isRaw && !!(info?.w || opts.exifW);
   db.prepare('UPDATE photos SET has_derivs = 1, w = CASE WHEN ? THEN w ELSE ? END, h = CASE WHEN ? THEN h ELSE ? END WHERE id = ?')
     .run(keepExif ? 1 : 0, w ?? 0, keepExif ? 1 : 0, h ?? 0, id);
-  if (opts.derivsOnly) return true; // converting to new standards: the analysis stays as it was
+  if (opts.derivsOnly) { // converting to new standards: the analysis stays as it was, but the hash must follow the new thumbnail
+    try { db.prepare('UPDATE photos SET dhash = ? WHERE id = ?').run(await dHash(derivPath(cfg, id, 'thumb')), id); } catch { /* the check will find it */ }
+    return true;
+  }
   try {
     const a = await analyseLocal(derivPath(cfg, id, 'thumb'));
     db.prepare('UPDATE photos SET dhash = ?, palette = ?, colors = ?, brightness = ?, contrast = ?, saturation = ? WHERE id = ?')
