@@ -109,12 +109,19 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
 
     const cfgAi = aiConfig(db);
     const semantic = q.semantic === '1' && !!cfgAi && !!q.q;
-    if (!semantic) {
-      for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
-        where.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-        args.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
-      }
+    // The typed words, each of which must be found somewhere in the photograph's text (file name, title, camera, lens, place, description, tags...).
+    const textW: string[] = [], textA: unknown[] = [];
+    for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
+      textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+      textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
     }
+    // The narrower test for "this is a name": only fields that name a photograph (not the AI's description of it, which is prose).
+    const nameW: string[] = [], nameA: unknown[] = [];
+    for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
+      nameW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
+      nameA.push(like(w), like(w), like(w), like(w), like(w), like(w));
+    }
+    if (!semantic) { where.push(...textW); args.push(...textA); }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
     const limit = Math.min(20000, Math.max(1, Math.round(num(q.limit, 5000))));
     const offset = Math.min(1_000_000_000, Math.max(0, Math.round(num(q.offset, 0)))); // SQLite takes a whole number here, so a huge value must not reach it as a float
@@ -132,14 +139,21 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
         rows = rows.filter((r) => scores.has(r.id)).sort((a, b) => scores.get(b.id)! - scores.get(a.id)!);
       }
     } else if (semantic) {
-      try {
+      // Words found in what names a photograph (a file name like MinoltaSRT, a camera, a lens, a tag) are an exact answer: show those. Ranking every
+      // photograph by "meaning" would put unrelated ones (other cameras, other rolls) after them, because a made-up word means nothing to the model.
+      const exact = new Set<number>((all(`SELECT p.id FROM photos p WHERE ${[...where, ...nameW].join(' AND ')}`, ...args, ...nameA) as Row[]).map((r) => r.id as number));
+      if (exact.size) rows = rows.filter((r) => exact.has(r.id));
+      else try {
         const qv = await embedText(cfgAi!, String(q.q));
         const f = loadFeatures(x, rows.map((r) => r.id));
         for (const r of rows) { const e = f.get(r.id)?.embedding; if (e && e.length === qv.length) scores.set(r.id, cosine(qv, e)); }
         rows = rows.filter((r) => scores.has(r.id)).sort((a, b) => scores.get(b.id)! - scores.get(a.id)!);
+        // A meaning search ranks everything, so cut it: the best few always, then only those clearly above the rest.
+        const v = rows.map((r) => scores.get(r.id)!), mean = v.reduce((a, b) => a + b, 0) / (v.length || 1), sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length || 1));
+        rows = rows.filter((r, i) => i < 5 || scores.get(r.id)! >= mean + 0.5 * sd);
         semanticUsed = true;
       } catch { /* provider down: fall through to plain text below */ }
-      if (!semanticUsed) {
+      if (!semanticUsed && !exact.size) {
         const words = String(q.q).toLowerCase().split(/\s+/).filter(Boolean);
         rows = rows.filter((r) => words.every((w) => `${r.file} ${r.title} ${r.description} ${r.place}`.toLowerCase().includes(w)));
       }
