@@ -14,6 +14,14 @@ export type Policy = {
   cacheLimitGb: number; // 0 = no limit
   previewPx: number; // the largest preview any photograph gets (people can choose smaller)
   previewQuality: number; // the highest JPEG quality for previews (people can choose lower)
+  /** Local storage: uploads and the library folders. Off: nobody can upload and library folders are not read (photos already here stay). */
+  localOn: boolean;
+  /** Cloud storage: members bring photos in from their own cloud accounts. Off: nobody can connect or sync (photos already copied stay). */
+  cloudOn: boolean;
+  /** Store original quality, for uploads (local) and for cloud copies. Off: a smaller copy is kept, at the size and JPEG quality below. */
+  localOrig: boolean; cloudOrig: boolean;
+  localPx: number; cloudPx: number; // longest side of a smaller copy
+  localQ: number; cloudQ: number; // its JPEG quality
   maxUploadMb: number; // the largest single photograph a person can upload
   cloudMaxFileMb: number; // the largest single file a cloud sync will copy in
   workers: number;
@@ -31,10 +39,12 @@ export type Policy = {
   rawPreview: 'embedded' | 'full';
   showWhatsNew: boolean;
 };
-type Stored = Partial<Record<keyof Policy, unknown>>;
+type Stored = Partial<Record<keyof Policy, unknown>> & { cloudOnly?: unknown; storeOriginalQuality?: unknown }; // the last two are the older switches
 
 /** The most a size limit can be set to (100 GB). */
 export const MAX_FILE_MB = 102_400;
+/** The sizes (longest side, px) a smaller copy of a photograph can be held to. */
+export const COPY_SIZES = [2048, 3072, 4096, 6144];
 export const PREVIEW_SIZES = [1600, 2400, 3072, 4096];
 export const PREVIEW_QUALITIES = [70, 75, 80, 85, 88, 90, 95];
 /** A storage limit in GB typed by an administrator: 0 (none) up to a petabyte, in steps of a thousandth of a GB. Null when it is not a number like that. */
@@ -54,6 +64,13 @@ export function policyOf(sys: DB): Policy {
     cacheLimitGb: [0, 10, 25, 50, 100, 250].includes(i.cacheLimitGb as number) ? (i.cacheLimitGb as number) : 0,
     previewPx: [1600, 2400, 3072, 4096].includes(i.previewPx as number) ? (i.previewPx as number) : 2400,
     previewQuality: PREVIEW_QUALITIES.includes(i.previewQuality as number) ? (i.previewQuality as number) : 90,
+    // The older single switches still read: cloudOnly was "no local storage", storeOriginalQuality was both of the two below.
+    localOn: typeof i.localOn === 'boolean' ? i.localOn : i.cloudOnly !== true,
+    cloudOn: i.cloudOn !== false,
+    localOrig: typeof i.localOrig === 'boolean' ? i.localOrig : i.storeOriginalQuality === true,
+    cloudOrig: typeof i.cloudOrig === 'boolean' ? i.cloudOrig : i.storeOriginalQuality === true,
+    localPx: COPY_SIZES.includes(i.localPx as number) ? (i.localPx as number) : 6144, cloudPx: COPY_SIZES.includes(i.cloudPx as number) ? (i.cloudPx as number) : 4096,
+    localQ: PREVIEW_QUALITIES.includes(i.localQ as number) ? (i.localQ as number) : 80, cloudQ: PREVIEW_QUALITIES.includes(i.cloudQ as number) ? (i.cloudQ as number) : 80,
     maxUploadMb: int(i.maxUploadMb, 1, MAX_FILE_MB, Number(process.env.MAX_UPLOAD_MB) > 0 ? Math.min(MAX_FILE_MB, Math.floor(Number(process.env.MAX_UPLOAD_MB))) : 2048), // set in the app, else MAX_UPLOAD_MB, else 2048
     cloudMaxFileMb: int(i.cloudMaxFileMb, 1, MAX_FILE_MB, Number(process.env.CLOUD_MAX_FILE_MB) > 0 ? Math.min(MAX_FILE_MB, Math.floor(Number(process.env.CLOUD_MAX_FILE_MB))) : 1024),
     workers: int(i.workers, 0, 8, 0), // 0 = as many as there are processors
@@ -85,6 +102,8 @@ export function policyPatch(b: Record<string, unknown>): Stored {
   if (typeof b.backupKeep === 'number' && Number.isInteger(b.backupKeep) && b.backupKeep >= 1 && b.backupKeep <= 90) o.backupKeep = b.backupKeep;
   const pick = (k: string, allowed: unknown[]) => { if (allowed.includes(b[k])) o[k as keyof Policy] = b[k]; };
   pick('cacheLimitGb', [0, 10, 25, 50, 100, 250]); pick('previewPx', [1600, 2400, 3072, 4096]); pick('previewQuality', PREVIEW_QUALITIES);
+  for (const k of ['localOn', 'cloudOn', 'localOrig', 'cloudOrig'] as const) if (typeof b[k] === 'boolean') o[k] = b[k];
+  pick('localPx', COPY_SIZES); pick('cloudPx', COPY_SIZES); pick('localQ', PREVIEW_QUALITIES); pick('cloudQ', PREVIEW_QUALITIES);
   for (const k of ['maxUploadMb', 'cloudMaxFileMb'] as const) if (typeof b[k] === 'number' && Number.isInteger(b[k]) && (b[k] as number) >= 1 && (b[k] as number) <= MAX_FILE_MB) o[k] = b[k];
   if (typeof b.workers === 'number' && Number.isInteger(b.workers) && b.workers >= 0 && b.workers <= 8) o.workers = b.workers;
   pick('logLevel', ['errors', 'warnings', 'info', 'debug']); pick('rawPreview', ['embedded', 'full']);

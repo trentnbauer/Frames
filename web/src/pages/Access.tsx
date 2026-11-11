@@ -184,7 +184,7 @@ export function Access({ focus }: { focus?: string } = {}) {
               </>}
               {['google', 'microsoft', 'dropbox'].includes(p.type) && (
                 <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <input type="checkbox" disabled={lockedFor(p)} aria-label={`${p.id}: use the app from Photos & storage`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
+                  <input type="checkbox" disabled={lockedFor(p)} aria-label={`${p.id}: use the app from Storage`} checked={!!p.useCloudApp} onChange={(e) => edit(i, { useCloudApp: e.target.checked })} />
                   <span>Use the app already set up under <b>Settings, Photos & storage</b> ({p.type === 'google' ? 'Google Drive' : p.type === 'microsoft' ? 'OneDrive' : 'Dropbox'}): the same client ID and secret, so there is nothing to enter here. Add the redirect address below to that app too.</span>
                 </label>
               )}

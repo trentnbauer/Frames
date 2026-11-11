@@ -153,7 +153,7 @@ export function useCloud(ctx: Ctx): Section {
   return {
     key: 'cloud', name: 'Cloud folders', hint: 'Bring photos in from other places.',
     groups: [
-      { title: 'Connected', rows: rows.length ? rows : [{ id: 'none', t: 'link', label: 'Nothing connected', hint: 'An administrator sets up the services under Server → Photos & storage.', meta: '' }] },
+      { title: 'Connected', rows: rows.length ? rows : [{ id: 'none', t: 'link', label: 'Nothing connected', hint: 'An administrator sets up the services under Server → Storage.', meta: '' }] },
       { title: 'Importing', rows: [
         { id: 'syncEvery', t: 'select', label: 'Check for new photos', opts: EVERY.map((e) => e[0]), value: every, set: async (v: string) => { const n = EVERY.find((e) => e[0] === v)![1]; await act(ctx, () => Promise.all(conns.map((c) => api(`/cloud/${c.id}`, { method: 'PUT', body: { intervalMin: n } })))); d.reload(); } },
         { id: 'grouping', t: 'select', label: 'File new photos as', opts: ['One shoot per day', 'One shoot per folder', 'Ask each time'], value: prefs.get('grouping', 'One shoot per day'), set: (v) => { prefs.set('grouping', v); ctx.toast('Saved'); } },

@@ -117,6 +117,7 @@ function SectionView({ def, ctx, filter, onJump }: { def: SectionDef; ctx: Ctx; 
         {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
       </div>
       {def.tab === 'srv' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12)', fontSize: 13, color: '#a8a59f' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#efede8' }} />Changes here apply to everyone on this server.</div>}
+      {s.notice && <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: 'rgba(231,140,120,.1)', fontSize: 13, color: '#e79a82' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e79a82', flex: 'none', marginTop: 6 }} /><span>{s.notice}</span></div>}
       {s.groups.map((g, i) => <GroupView key={i} g={g} vis={vis} open={open} setOpen={setOpen} />)}
       {s.after}
     </>

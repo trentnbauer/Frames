@@ -190,7 +190,7 @@ export function useProcessing(ctx: Ctx): Section {
   const run = async (path: string, ok: string) => { await act(ctx, () => api(path, { body: {} }), ok); q.reload(); };
   const workers = inst.data?.workers || Math.min(sys.data?.cpus ?? 4, 8);
   return {
-    key: 'processing', name: 'Storage & processing', hint: 'Thumbnails, previews and background work.',
+    key: 'processing', name: 'Cache & processing', hint: 'Thumbnails, previews and background work.',
     groups: [
       { title: 'Cache', rows: [
         { id: 'cachePath', t: 'text', label: 'Cache folder', hint: 'Thumbnails and previews. Safe to delete; they rebuild.', value: c?.path ?? '', disabled: true },

@@ -25,7 +25,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   app.get('/api/cloud', async (req) => ({ ...dto(), redirectUri: redirect(req) }));
 
   // Save original resolution: the person's switch, and whether an administrator has turned full size off for everyone.
-  const resolution = () => { const sh = shrunkStats(db); const admin = (getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false); return { saveOriginal: admin && (getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false), want: getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false, lockedByAdmin: !admin, copyEdge: 4096, shrunkCount: sh.count, shrunkBytes: sh.bytes }; };
+  const resolution = () => { const sh = shrunkStats(db); const admin = policyOf(x.sys).cloudOrig; return { saveOriginal: admin && (getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false), want: getSetting<{ saveOriginal?: boolean }>(db, 'cloudPrefs', {}).saveOriginal !== false, lockedByAdmin: !admin, copyEdge: 4096, shrunkCount: sh.count, shrunkBytes: sh.bytes }; };
   app.get('/api/cloud/resolution', async () => resolution());
   app.put('/api/cloud/resolution', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
@@ -40,17 +40,17 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     if (refetching.has(cfg.dataDir)) return rep.code(409).send({ error: 'This is already running.' });
     const conns = loadCloud(db).connections.filter((c) => c.enabled && !c.needsReconnect && c.folderId !== null);
     refetching.add(cfg.dataDir);
-    void (async () => { try { for (const c of conns) await run(c.id).catch(() => undefined); } finally { refetching.delete(cfg.dataDir); } })();
+    void (async () => { try { for (const c of conns) await run(c.id, ((req as any).authUser?.role ?? 'admin') === 'admin').catch(() => undefined); } finally { refetching.delete(cfg.dataDir); } })();
     return rep.code(202).send({ started: true, connections: conns.length });
   });
-  // Administrators: Photos & storage, "Allow original resolution from the cloud".
+  // Administrators: Storage, Cloud storage, Store original quality (this route is the older address for it).
   app.put('/api/admin/cloud-originals', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     if (typeof b.allow !== 'boolean') return rep.code(400).send({ error: 'allow must be true or false' });
-    setSetting(x.sys, 'instance', { ...getSetting<Row>(x.sys, 'instance', {}), allowCloudOriginals: b.allow });
+    setSetting(x.sys, 'instance', { ...getSetting<Row>(x.sys, 'instance', {}), cloudOrig: b.allow }); // the same switch as Cloud storage, Store original quality
     return { allow: b.allow };
   });
-  app.get('/api/admin/cloud-originals', async () => ({ allow: getSetting<{ allowCloudOriginals?: boolean }>(x.sys, 'instance', {}).allowCloudOriginals !== false }));
+  app.get('/api/admin/cloud-originals', async () => ({ allow: policyOf(x.sys).cloudOrig }));
 
   // The app's own client id (and optional secret) from the provider's developer console. Write-only.
   app.put('/api/cloud/client/:provider', async (req, rep) => {
@@ -76,6 +76,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   app.post('/api/cloud/connect/:provider', async (req, rep) => {
     const { provider } = req.params as Row;
     if (!isProvider(provider)) return x.notFound(rep);
+    if (!policyOf(x.sys).cloudOn) return rep.code(403).send({ error: 'Cloud storage is turned off by the administrator.' });
     if (policyOf(x.sys).cloudWho === 'admins' && ((req as any).authUser?.role ?? 'admin') !== 'admin') return rep.code(403).send({ error: 'Only an administrator can connect cloud storage on this server.' });
     try { return { url: beginConnect(db, cfg, provider, redirect(req)) }; } catch (e) { return fail(rep, e); }
   });
@@ -148,8 +149,9 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
   });
 
   // Copy now. Runs in the background; the page polls GET /api/cloud for progress. ?wait=1 holds the request (scripts, tests).
-  const run = async (id: string) => {
-    const r = await syncConnection(db, cfg, id);
+  const run = async (id: string, unlimited = false) => {
+    if (!policyOf(x.sys).cloudOn) throw new Error('Cloud storage is turned off by the administrator.');
+    const r = await syncConnection(db, cfg, id, { unlimited });
     if (r.downloaded > 0 && !x.scanning()) void x.startScan().catch(() => {});
     return r;
   };
@@ -158,7 +160,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
     if (!c) return x.notFound(rep);
     if (c.folderId === null) return rep.code(400).send({ error: 'Choose a folder first.' });
     if (progressOf(cfg).running) return rep.code(409).send({ error: 'A cloud sync is already running.' });
-    const p = run(c.id);
+    const p = run(c.id, ((req as any).authUser?.role ?? 'admin') === 'admin');
     if ((req.query as Row).wait === '1') { try { return await p; } catch (e) { return fail(rep, e); } }
     p.catch(() => {});
     return rep.code(202).send({ started: true });
@@ -174,7 +176,7 @@ export function registerCloud(app: FastifyInstance, x: Ctx) {
           if (progressOf(cfg).running) return;
           const now = Date.now();
           const due = loadCloud(db).connections.find((c) => c.enabled && !c.needsReconnect && c.folderId !== null && c.intervalMin > 0 && (!c.lastSync || now - Date.parse(c.lastSync) >= Math.max(c.intervalMin, policyOf(x.sys).cloudMinSyncMin) * 60_000));
-          if (due) run(due.id).catch(() => {});
+          if (due) run(due.id, t.user.role === 'admin').catch(() => {});
         });
       } catch (e) { console.error(`Scheduled cloud sync could not run for person ${t.user.id}`, e); } // one person's problem never stops the others
     }

@@ -1,4 +1,4 @@
-import { runtime } from './policy.js';
+import { policyOf, runtime } from './policy.js';
 import { addDays, intervalDays } from './schedule.js';
 import { loadSettings, previewSpec } from './settings.js';
 import crypto from 'node:crypto';
@@ -40,6 +40,13 @@ function* walk(dir: string, skip: string[] = []): Generator<string> {
 }
 
 /** Files on disk that are not in the database yet, grouped by library folder. */
+/** The folders a scan reads: all of them, or with Local storage switched off only the cloud copies (library folders and uploads are left alone). */
+export function libsToRead(db: DB, cfg: Cfg): string[] {
+  const sys = (db as unknown as { sys?: DB }).sys;
+  if (!sys || policyOf(sys).localOn) return cfg.libraries;
+  const cloud = path.join(cfg.dataDir, 'cloud') + path.sep;
+  return cfg.libraries.filter((l) => (l + path.sep).startsWith(cloud));
+}
 export function pending(db: DB, cfg: Cfg) {
   const known = new Set([
     ...(db.prepare('SELECT path FROM photos').all() as { path: string }[]).map((r) => r.path),
@@ -47,10 +54,10 @@ export function pending(db: DB, cfg: Cfg) {
   ]);
   const files: string[] = [];
   const skip = cfg.skip ?? [];
-  for (const lib of cfg.libraries) for (const f of walk(lib, skip)) if (!known.has(f)) files.push(f);
+  for (const lib of libsToRead(db, cfg)) for (const f of walk(lib, skip)) if (!known.has(f)) files.push(f);
   const folders = new Map<string, number>();
   for (const f of files) {
-    const lib = cfg.libraries.find((l) => f.startsWith(l + path.sep))!;
+    const lib = cfg.libraries.find((l) => f.startsWith(l + path.sep))!; // (every pending file is in one of the folders read)
     const rel = path.relative(lib, path.dirname(f));
     const key = path.join(path.basename(lib), rel) || path.basename(lib);
     folders.set(key, (folders.get(key) ?? 0) + 1);
@@ -154,16 +161,20 @@ async function makeDerivatives(db: DB, cfg: Cfg, id: number, file: string, isRaw
  * way round the picture is, so PPI and print sizes are worked out for the original and not for the copy. Null for any other photograph.
  */
 export function cloudOriginalSize(db: DB, cfg: Cfg, file: string, w: number, h: number): { w: number; h: number } | null {
+  let r: { ow: number; oh: number } | undefined;
   const rel = path.relative(path.join(cfg.dataDir, 'cloud'), file);
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
-  const [connId, ...rest] = rel.split(path.sep);
-  const r = db.prepare('SELECT orig_w ow, orig_h oh FROM cloud_files WHERE conn_id = ? AND rel = ? AND shrunk = 1').get(connId, rest.join('/')) as { ow: number; oh: number } | undefined;
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+    const [connId, ...rest] = rel.split(path.sep);
+    r = db.prepare('SELECT orig_w ow, orig_h oh FROM cloud_files WHERE conn_id = ? AND rel = ? AND shrunk = 1').get(connId, rest.join('/')) as typeof r;
+  } else if (path.dirname(file) === internalDir(cfg)) { // an upload kept as a smaller copy
+    r = db.prepare('SELECT orig_w ow, orig_h oh FROM shrunk_uploads WHERE file = ?').get(path.basename(file)) as typeof r;
+  }
   if (!r || !r.ow || !r.oh) return null;
   return (r.oh > r.ow) === (h > w) ? { w: r.ow, h: r.oh } : { w: r.oh, h: r.ow }; // the header's size, turned to match the picture
 }
-/** Gives photographs already kept as smaller cloud copies the size of their originals (copies made before this was recorded for use). */
+/** Gives photographs already kept as smaller copies the size of their originals (copies made before this was recorded for use). */
 export function fixCloudSizes(db: DB, cfg: Cfg) {
-  const rows = db.prepare('SELECT id, path, w, h FROM photos WHERE path LIKE ?').all(`${path.join(cfg.dataDir, 'cloud')}${path.sep}%`) as { id: number; path: string; w: number; h: number }[];
+  const rows = db.prepare('SELECT id, path, w, h FROM photos WHERE path LIKE ? OR path LIKE ?').all(`${path.join(cfg.dataDir, 'cloud')}${path.sep}%`, `${internalDir(cfg)}${path.sep}%`) as { id: number; path: string; w: number; h: number }[];
   const set = db.prepare('UPDATE photos SET w = ?, h = ? WHERE id = ?');
   for (const r of rows) { const o = cloudOriginalSize(db, cfg, r.path, r.w, r.h); if (o && (o.w !== r.w || o.h !== r.h)) set.run(o.w, o.h, r.id); }
 }

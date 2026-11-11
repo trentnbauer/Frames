@@ -12,17 +12,19 @@ export type R = {
   opts?: string[]; /** select: choices that cannot be picked (shown greyed out). */ offOpts?: string[]; step?: number; min?: number; max?: number; unit?: string; prefix?: string;
   meta?: string; act?: () => void;
   ph?: string; inputType?: string; disabled?: boolean;
+  /** false: not shown. indent: drawn as belonging to the row above (a dep does this too). */
+  show?: boolean; indent?: boolean;
   pct?: number; text?: string;
   swatches?: [string, string][]; addAs?: string;
   /** selTog and order: the switch beside the control. */
   tog?: boolean; togSet?: (v: boolean) => void; togDisabled?: string;
   /** method: a sign-in or cloud provider that is tested before it is turned on. */
-  method?: { configured?: boolean; builtIn?: boolean; on: boolean; setOn: (v: boolean) => void; test: 'none' | 'pass' | 'fail' | 'busy'; failWith?: string; runTest: () => void; configure: () => void };
+  method?: { open?: boolean; configured?: boolean; builtIn?: boolean; on: boolean; setOn: (v: boolean) => void; test: 'none' | 'pass' | 'fail' | 'busy'; failWith?: string; runTest: () => void; configure: () => void };
   /** order: which provider comes first, how many follow, and how to open the order. */
   order?: { first: string; more: number; open: () => void };
 };
-export type Group = { title?: string; rows: R[]; jump?: () => void };
-export type Section = { after?: ReactNode; key: string; name: string; hint: string; badge?: string; action?: { label: string; act: () => void }; groups: Group[] };
+export type Group = { title?: string; /** Shown at the right of the title. */ meta?: string; rows: R[]; jump?: () => void };
+export type Section = { /** A note above the groups, in the warning colour. */ notice?: ReactNode; after?: ReactNode; key: string; name: string; hint: string; badge?: string; action?: { label: string; act: () => void }; groups: Group[] };
 
 const mono = "'IBM Plex Mono',monospace";
 const ringBtn = 'inset 0 0 0 1px rgba(255,255,255,.2)';
@@ -30,7 +32,7 @@ export const truthy = (v: unknown) => !!v && v !== 'Off';
 
 export function visibleRows(all: R[]): (r: R) => boolean {
   const byId = new Map(all.map((r) => [r.id, r]));
-  const vis = (r: R): boolean => r.t !== 'hidden' && (!r.dep || (!!byId.get(r.dep) && vis(byId.get(r.dep)!) && (r.depVal ? byId.get(r.dep)!.value === r.depVal : truthy(byId.get(r.dep)!.value))));
+  const vis = (r: R): boolean => r.t !== 'hidden' && r.show !== false && (!r.dep || (!!byId.get(r.dep) && vis(byId.get(r.dep)!) && (r.depVal ? byId.get(r.dep)!.value === r.depVal : truthy(byId.get(r.dep)!.value))));
   return vis;
 }
 
@@ -201,7 +203,7 @@ export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: 
           <>
             {m.builtIn
               ? <span style={{ fontSize: 13, color: '#6f6c67' }}>Built in</span>
-              : <span role="button" tabIndex={0} onClick={m.configure} className="slink" style={{ fontSize: 13, color: m.configured ? '#6f6c67' : '#a8a59f', cursor: 'pointer' }}>{m.configured ? '✓ Configured' : 'Configure'}</span>}
+              : <span role="button" tabIndex={0} onClick={m.configure} className="slink" style={{ fontSize: 13, color: m.configured ? '#6f6c67' : '#a8a59f', cursor: 'pointer' }}>{m.open ? 'Close ▴' : m.configured ? '✓ Configured' : 'Configure'}</span>}
             <span role="button" tabIndex={0} onClick={() => m.test !== 'busy' && m.runTest()} className="sbtn" style={{ height: 30, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: ringBtn, color: testFg }}>
               {m.test === 'busy' && <i style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(255,255,255,.2)', borderTopColor: '#efede8', animation: 'spin .8s linear infinite', display: 'inline-block' }} />}{testLabel}
             </span>
@@ -227,9 +229,9 @@ export function GroupView({ g, vis, open, setOpen, title, jump, rowText }: { g: 
   const t = title ?? g.title;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {t ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: `500 11px ${mono}`, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' }}>{t}</span>{jump && <span role="button" tabIndex={0} onClick={jump} style={{ fontSize: 12.5, color: '#a8a59f', cursor: 'pointer' }}>Open section →</span>}</div> : null}
+      {t ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><span style={{ font: `500 11px ${mono}`, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' }}>{t}</span>{g.meta && <span style={{ font: `400 11px ${mono}`, color: '#6f6c67' }}>{g.meta}</span>}{jump && <span role="button" tabIndex={0} onClick={jump} style={{ fontSize: 12.5, color: '#a8a59f', cursor: 'pointer' }}>Open section →</span>}</div> : null}
       <div style={{ background: '#161615', borderRadius: 12, padding: '4px 24px' }}>
-        {rows.map((r, i) => <RowView key={r.id} r={r} last={i === rows.length - 1} indent={!!r.dep} open={open} setOpen={setOpen} text={rowText ? rowText(r) : ''} />)}
+        {rows.map((r, i) => <RowView key={r.id} r={r} last={i === rows.length - 1} indent={r.indent ?? !!r.dep} open={open} setOpen={setOpen} text={rowText ? rowText(r) : ''} />)}
       </div>
     </div>
   );

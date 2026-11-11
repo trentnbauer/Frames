@@ -2,7 +2,7 @@
  * Shown when photographs are uploaded and this server does not store original quality: the copy kept here is a smaller one, and there is
  * no original in a cloud account to fetch later, so exporting or downloading gives the smaller copy.
  */
-export const SMALLER_COPY_WARNING = 'JPEG, PNG and TIFF photos you upload are kept as smaller copies (JPEG, quality 80, the same pixels), so exporting or downloading them later gives that copy, not the file you upload. Keep your originals somewhere else. An administrator can turn on “Store original quality” (Settings, Photos & storage). Photos synced from a cloud folder are different: their originals are fetched from the cloud when you export them.';
+export const SMALLER_COPY_WARNING = 'JPEG, PNG and TIFF photos you upload are kept as smaller copies (JPEG, quality 80, the same pixels), so exporting or downloading them later gives that copy, not the file you upload. Keep your originals somewhere else. An administrator can turn on “Store original quality” (Settings, Server, Storage). Photos synced from a cloud folder are different: their originals are fetched from the cloud when you export them.';
 
 export function SmallerCopyNote() {
   return (

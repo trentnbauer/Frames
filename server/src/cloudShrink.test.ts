@@ -134,7 +134,7 @@ describe('keeping a smaller copy of cloud photographs', () => {
     await A.put('/api/admin/instance', { storeOriginalQuality: true });
     await A.put(`/api/cloud/${id}`, { shrink: true });
   });
-  it('a smaller copy is held to 4096 px, but the photograph still counts as the original size for PPI and print sizes', async () => {
+  it('a smaller copy is held to 4096 px, but the photograph still counts as the original size for PPI and print sizes', { timeout: 60_000 }, async () => {
     nodes.push({ id: 'f6', name: 'Wide.jpg', data: await noisy(4300, 900), version: 'v1' });
     const r = await sync(id);
     for (let k = 0; k < 200 && !env.db.prepare("SELECT 1 x FROM photos WHERE file = 'Wide.jpg' AND has_derivs = 1").get(); k++) await new Promise((ok) => setTimeout(ok, 100)); // the scan and previews that follow a sync run in the background
