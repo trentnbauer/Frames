@@ -49,7 +49,8 @@ export function TodoPage() {
   if (!todo.data || !walk.data) return <div className="page-shell"><Header /></div>;
   const counts: Record<string, number> = { all: walk.data.photos.length };
   for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
-  const show = (k: string) => reason === k || (reason === 'all' && ['location', 'subjects', 'desc'].includes(k));
+  // Tags can be added on any to-do photo, whichever list it came from.
+  const show = (k: string) => k === 'tags' || reason === k || (reason === 'all' && ['location', 'subjects', 'desc'].includes(k));
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
   const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept') }));
   const inComp = (c: Collection) => !!p && c.photoIds.includes(p.id);
