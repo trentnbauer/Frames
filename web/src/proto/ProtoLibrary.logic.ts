@@ -52,6 +52,7 @@ export class Logic extends DCLogic {
       toggleSel: () => this.setState({ selMode: !sel, picked: sel ? [] : S.picked }),
       selMode: sel, actOp: n ? 1 : 0.4, actPe: n ? 'auto' : 'none', pickedLabel: n + ' selected', pickedN: n, mvThumbs: thumbs,
       review: () => P.onReview && P.onReview(S.picked),
+      openEdit: () => P.onEditDetails && P.onEditDetails(S.picked),
       addPf: async () => { await P.onPortfolio(S.picked); this.setState({ picked: [], selMode: false }); this.flash(n + (n === 1 ? ' photo' : ' photos') + ' added to your portfolio'); },
       openMove: () => this.setState({ mv: { mode: 'existing', name: '', q: '', target: null } }),
       mvOpen: !!S.mv, closeMv: () => this.setState({ mv: null }), stopMv: (e) => e.stopPropagation(),

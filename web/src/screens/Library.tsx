@@ -4,6 +4,7 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { Header } from '../components/Shell';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
+import { BulkEdit } from '../components/BulkEdit';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { CompPicker } from './CompPicker';
@@ -37,6 +38,7 @@ export function Library() {
   const [open, setOpen] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editIds, setEditIds] = useState<number[] | null>(null);
   const colls = useApi<Collection[]>('/collections');
   const shoots = useApi<Shoot[]>('/shoots');
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
@@ -154,6 +156,7 @@ export function Library() {
         shoots={(shoots.data ?? []).map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos · ${s.dates}`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
         fromLabel={(ids: number[]) => [...new Set(ids.map((id) => shootById.get(byId.get(id)?.shootId ?? -1)?.name).filter(Boolean))].join(', ')}
         onOpenPhoto={(id: number) => nav(`/photo/${id}`)}
+        onEditDetails={(ids: number[]) => setEditIds(ids)}
         onReview={async (ids: number[]) => { await api('/review/start', { body: { photoIds: ids } }); nav('/review'); }}
         onPortfolio={async (ids: number[]) => { for (const id of ids) await api(`/portfolio/photos/${id}`, { body: { on: true } }); }}
         onMove={async (ids: number[], m: { mode: string; name: string; shootId: number | null }) => {
@@ -166,6 +169,7 @@ export function Library() {
       />
       {list.error && <p role="alert" className="muted" style={{ textAlign: 'center' }}>Something went wrong: {list.error}</p>}
       {list.data && count === 0 && <div className="empty">{chips.length ? 'No photographs match.' : 'No photographs yet. Add some on the Photoshoots page.'}</div>}
+      {editIds && <BulkEdit ids={editIds} onClose={() => setEditIds(null)} onDone={reload} />}
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
     </div>
   );
