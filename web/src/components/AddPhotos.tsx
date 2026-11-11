@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { Shoot } from '../data';
 import { Img } from './bits';
+import { SmallerCopyNote } from './SmallerCopyNote';
+import { useStore } from '../store';
 import { Modal, Spinner } from './Modal';
 
 export type Status = { smtpHealthy: boolean; storage: { local: boolean; cloud: boolean }; cloudProviders: string[]; admin: boolean };
@@ -34,6 +36,7 @@ export function AddPhotosButton({ onDone, big }: { onDone?: () => void; big?: bo
  * A split by day makes one shoot per day ("9 Nov 2026 · Fri"). Cloud: tick services, Sync now, then Add N photos.
  */
 export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { me } = useStore();
   const st = useStatus();
   const shoots = useApi<Shoot[]>('/shoots');
   const cloud = useApi<{ connections: Conn[] }>('/cloud');
@@ -112,7 +115,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
   const shootsList = shoots.data ?? [];
 
   return (
-    <Modal title="Add photos" sub="Originals are never changed." width={600} onClose={phase === 'working' ? () => undefined : onClose}
+    <Modal title="Add photos" sub={source === 'upload' && me?.storeOriginalQuality === false ? 'Uploaded photos are kept as smaller copies.' : 'Originals are never changed.'} width={600} onClose={phase === 'working' ? () => undefined : onClose}
       foot={phase === 'pick'
         ? <><span className="grow">{err ? <span className="reason" style={{ margin: 0 }}>{err}</span> : ''}</span><button className="btn" onClick={onClose}>Cancel</button>
             {source === 'upload' ? <button className="btn primary" disabled={!ready} onClick={upload}>{files.length ? `Add ${files.length} photo${files.length === 1 ? '' : 's'}` : 'Add photos'}</button>
@@ -127,6 +130,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
             </div>
           )}
           {st.data && !local && !hasCloud && <p className="muted">Nothing to add from yet. {st.data.admin ? <>Turn on storage in <Link to="/settings?section=storage">Settings</Link>.</> : 'Ask an admin to enable storage.'}</p>}
+          {source === 'upload' && local && me?.storeOriginalQuality === false && <SmallerCopyNote />}
           {(local || hasCloud) && (
             <>
               <div>

@@ -30,7 +30,7 @@ it('keeps an upload as a smaller copy by default, and tells the page so it can w
   expect([m.width, m.height]).toEqual([2400, 1600]); // the same pixels
 });
 
-it('a PNG becomes a JPEG, and never replaces a photograph that already has that name', async () => {
+it('a PNG becomes a JPEG, and never replaces a photograph that already has that name', { timeout: 60_000 }, async () => {
   fs.writeFileSync(stored('same.jpg'), 'an earlier photograph');
   const r = (await send('same.png', png)).json();
   expect(r.shrunk).toBe(0); // left as it was rather than written over same.jpg

@@ -132,6 +132,7 @@ export class Logic extends DCLogic {
       upOpen: S.up, openUp: () => this.open(), closeUp: () => { if (!uploading) this.setState({ up: false }); }, stop: (e) => e.stopPropagation(),
       canAdd: lo || co, cantAdd: !(lo || co), upBothSrc: lo && co, upSrcCloud: src === 'cloud', isCloud: src === 'cloud',
       cloudCs: S.cs, cloudAny: anyCl,
+      upWarn: !!P.shrinkUploads && src !== 'cloud', upNote: P.shrinkUploads ? 'JPEG, PNG and TIFF are kept as smaller copies (see the warning above) · RAW and HEIC are kept as they are' : 'JPEG, HEIC, TIFF and RAW · originals are copied, never changed',
       upSub: src === 'cloud' ? 'Check your cloud folders for new photos now, instead of waiting for the hourly sync' : P.storageSub,
       upSrcs: [['upload', 'Upload from this computer', 'Drop files or choose a folder'], ['cloud', 'Sync from the cloud', P.cloudHint]].map(([key, label, hint]) => ({ label, hint, bg: src === key ? 'var(--raised2)' : 'transparent', fg: src === key ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ src: key }) })),
       upClouds: conns.map((c) => ({ icon: c.icon, name: c.name, where: c.where, tick: cl[c.id] ? '✓' : '', boxBg: cl[c.id] ? 'var(--text)' : 'transparent', boxRing: cl[c.id] ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', status: S.cs === 'done' && cl[c.id] ? 'synced' : S.cs === 'busy' && cl[c.id] ? 'syncing…' : '', stFg: 'var(--muted)', toggle: () => this.setState({ clouds: { ...cl, [c.id]: !cl[c.id] } }) })),
