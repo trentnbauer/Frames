@@ -10,7 +10,7 @@ import { buildEnvFile, collectEnvConfig, envConfigLoaded, isSecretName, isStateV
 import { AI_TYPES, aiType, applySource, BadSetting, isReady, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiSource } from '../aisources.js';
 import { ping } from '../ai.js';
 import { pipeline } from 'node:stream/promises';
-import { hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
+import { delayLeft, hasSecret, loadTurnstile, saveTurnstile } from '../turnstile.js';
 import { footer, sendMail, smtpHealthy } from '../email.js';
 import { envBool } from '../env.js';
 import { tarOf } from '../backup.js';
@@ -260,7 +260,7 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
   });
 
   // Cloudflare Turnstile for the sign-in page and share links. The secret key is write-only: it is never sent back, only whether one is set.
-  const turnstile = () => { const c = loadTurnstile(sys); return { enabled: c.enabled, siteKey: c.siteKey, signin: c.signin, shares: c.shares, hasSecret: hasSecret(sys), disabledByEnv: envBool('TURNSTILE_DISABLE', false) }; };
+  const turnstile = () => { const c = loadTurnstile(sys); return { enabled: c.enabled, siteKey: c.siteKey, signin: c.signin, shares: c.shares, hasSecret: hasSecret(sys), disabledByEnv: envBool('TURNSTILE_DISABLE', false), startsInSec: delayLeft() }; };
   app.get('/api/admin/turnstile', async () => turnstile());
   app.put('/api/admin/turnstile', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
