@@ -83,6 +83,7 @@ export function Library() {
   for (const s of multi(sp.get('colour'))) chips.push({ label: `Colour: ${s}`, remove: () => toggle('colour', s) });
   if (sp.get('rating')) chips.push({ label: `Score ${sp.get('rating')}`, remove: () => set('rating', null) });
   if (sp.get('from') || sp.get('to')) chips.push({ label: `Date: ${sp.get('from') ?? '…'} to ${sp.get('to') ?? '…'}`, remove: () => { set('from', null); set('to', null); } });
+  if (sp.get('file')) chips.push({ label: `File name: ${sp.get('file')}`, remove: () => set('file', null) });
   if (sp.get('place')) chips.push({ label: `Place: ${sp.get('place')}`, remove: () => set('place', null) });
   if (sp.get('gps')) chips.push({ label: 'Has location', remove: () => set('gps', null) });
   for (const k of ['shape', 'light', 'contrast'] as const) if (sp.get(k)) chips.push({ label: `${k[0].toUpperCase()}${k.slice(1)}: ${sp.get(k)}`, remove: () => set(k, null) });
@@ -130,6 +131,9 @@ export function Library() {
         <Menu id="date" label="Date">
           <label className="menu-field">From <input type="date" value={sp.get('from') ?? ''} onChange={(e) => set('from', e.target.value || null)} /></label>
           <label className="menu-field">To <input type="date" value={sp.get('to') ?? ''} onChange={(e) => set('to', e.target.value || null)} /></label>
+        </Menu>
+        <Menu id="file" label="File name">
+          <label className="menu-field">Contains <input value={sp.get('file') ?? ''} placeholder="e.g. R01 or IMG_20" onChange={(e) => set('file', e.target.value || null)} /></label>
         </Menu>
         <Menu id="place" label="Location">
           <label className="menu-field">Place <input value={sp.get('place') ?? ''} placeholder="e.g. Fremantle" onChange={(e) => set('place', e.target.value || null)} /></label>
