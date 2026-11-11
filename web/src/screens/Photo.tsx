@@ -128,7 +128,7 @@ export function Photo() {
         sensitive={SENSITIVE.map((n) => ({ name: n, on: sensOn(n) }))}
         onSensitive={async (name: string, on: boolean) => { await tagAct(name.toLowerCase(), 'tag', on ? 'accept' : 'remove'); }}
         tags={accepted.filter((t) => !SENSITIVE.some((n) => n.toLowerCase() === t.name.toLowerCase())).map((t) => ({ label: t.name, accepted: t.source === 'ai', remove: () => tagAct(t.name, t.kind, 'remove') }))}
-        aiTags={suggested.map((t) => ({ label: t.name, mark: '+', fg: 'var(--text2)', bg: 'transparent', ring: 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', accept: () => tagAct(t.name, t.kind, 'accept') }))}
+        aiTags={suggested.map((t) => ({ label: t.name, mark: '+', fg: 'var(--text2)', bg: 'transparent', ring: 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', accept: () => tagAct(t.name, t.kind, 'accept'), reject: () => tagAct(t.name, t.kind, 'reject') }))}
         onAddTag={async (name: string) => { await tagAct(name, 'tag', 'accept'); }}
         description={p.description || (ai && p.aiSuggestion?.description) || ''}
         detailFields={[['camera', 'Camera', 'Camera', p.camera], ['lens', 'Lens', 'Lens', p.lens], ['aperture', 'Aperture', 'f/–', p.aperture ? `f/${p.aperture}` : '']].map(([k, t, ph, val]) => ({ kind: k === 'camera' || k === 'lens' ? k : '', onCommit: (v: string) => { if (v !== String(val)) void patch({ [k]: v }); }, value: val, title: `${t} · click to edit`, ph, size: Math.max(3, String(val || ph).length), onChange: () => undefined, onBlur: (e: React.FocusEvent<HTMLInputElement>) => { const v = e.target.value.trim(); if (v !== String(val)) void patch(k === 'aperture' ? { aperture: Number(v.replace(/^f\//i, '')) || null } : { [k]: v }); } }))}
