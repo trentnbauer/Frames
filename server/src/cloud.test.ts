@@ -115,6 +115,7 @@ describe.each(['google', 'dropbox', 'onedrive'] as const)('cloud sync: %s', (pro
     refreshOk = true;
     env = makeEnv({ cloudBase: base });
     A = api(env);
+    await A.put('/api/admin/instance', { storeOriginalQuality: true }); // these tests are about what is copied, byte for byte: smaller copies have their own tests (cloudShrink)
   });
   afterAll(() => cleanup(env));
 
