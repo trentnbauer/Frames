@@ -105,7 +105,7 @@ export function Editor() {
         onPrints={(ds: DPrint[]) => saveLayout(fromDesign(ds, layoutPrints, origin.current!))}
         photoMeta={(pid: number) => [title(pid), '', rk.get(pid)?.score ?? 0]} photoDims={(pid: number) => { const p = byId.get(pid); return [p?.w ?? 6000, p?.h ?? 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview')}
         order={order} unrated={unrated}
-        share={share} onShareStart={async () => { await api('/shares', { body: { kind: 'collection', id: c.id, allowReview: true, allowSuggest: true, onlyWall: false } }); links.reload(); }}
+        share={share} onShareStart={async (d?: { allowReview: boolean; allowSuggest: boolean; allowDownload: boolean; onlyWall: boolean; askName: boolean; pin: string; expOpt: string }) => { const n = d ? EXPIRY.find((e) => e[0] === d.expOpt)?.[1] : undefined; await api('/shares', { body: { kind: 'collection', id: c.id, allowReview: d?.allowReview ?? true, allowSuggest: d?.allowSuggest ?? true, allowDownload: d?.allowDownload, onlyWall: d?.onlyWall ?? false, askName: d?.askName, ...(d?.pin ? { pin: d.pin } : {}), ...(d ? { expiresAt: n == null ? null : inDays(n) } : {}) } }); links.reload(); }}
         onShareStop={async () => { if (link) { await api(`/shares/${link.id}`, { method: 'DELETE' }); links.reload(); } }}
         onShareRegen={async () => { if (link) { await api(`/shares/${link.id}/regenerate`, { body: {} }); links.reload(); } }}
         onSharePatch={patchShare} onShareExpiry={(l: string) => { const n = EXPIRY.find((e) => e[0] === l)?.[1]; return patchShare({ expiresAt: n == null ? null : inDays(n) }); }}
