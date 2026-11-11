@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
+import { parseSize, showSize } from './size';
 import { Modal } from '../components/Modal';
 import { Access } from '../pages/Access';
 import { CloudServices } from '../pages/CloudSettings';
@@ -136,7 +137,6 @@ const QUALITY = [70, 75, 80, 85, 88, 90, 95];
 const WHO: [string, string][] = [['Admins and members', 'members'], ['Admins only', 'admins']];
 const SYNC: [string, number][] = [['Every 15 min', 15], ['Every hour', 60], ['Every 6 hours', 360]];
 const QUOTA: [string, number][] = [['50 GB', 50], ['200 GB', 200], ['500 GB', 500], ['No limit', 0]];
-const PERSON: [string, number][] = [['No limit', 0], ['10 GB', 10], ['25 GB', 25], ['50 GB', 50], ['100 GB', 100], ['250 GB', 250], ['500 GB', 500]];
 const OTHER_PROV: [string, string, string, string][] = [['cpIcloud', 'iC', 'iCloud shared albums', 'Public shared-album links only. No sign-in needed.'], ['cpS3', 'S3', 'S3-compatible', 'AWS S3, Backblaze B2, Cloudflare R2, MinIO.'], ['cpWebdav', 'WD', 'WebDAV / Nextcloud', 'Members enter their own server address.'], ['cpSmb', 'SM', 'Network share (SMB)', 'A NAS folder on your network.']];
 export function useFolders(ctx: Ctx): Section {
   const info = useApi<{ internalDir: string; libraries: { path: string }[] }>('/settings');
@@ -185,7 +185,7 @@ export function useFolders(ctx: Ctx): Section {
         { id: 'convertAll', t: 'button', label: 'Convert everyone’s previews', hint: conv.data?.running ? `Converting… ${conv.data.done.toLocaleString()} of ${conv.data.total.toLocaleString()}` : (conv.data?.outdated ?? 0) > 0 ? `${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? ' was' : 's were'} made to other standards (a new size or quality limit, or a person’s own setting). Converts them to what is allowed now. Originals are not touched.` : 'Every preview matches the current standards.', meta: conv.data?.running ? 'Working…' : 'Convert', act: async () => { if (conv.data?.running) return; if (!(conv.data?.outdated ?? 0)) { ctx.toast('Nothing to convert'); return; } if (!window.confirm(`Convert ${conv.data!.outdated.toLocaleString()} preview${conv.data!.outdated === 1 ? '' : 's'} across all members now?\n\nThis runs in the background and can take a while on a large library.`)) return; await act(ctx, () => api('/admin/convert-all', { body: {} }), 'Converting previews in the background'); conv.reload(); } },
       ] },
       { title: 'Per-person limit', rows: [
-        { id: 'userQuota', t: 'select', label: 'Storage per person', hint: 'Uploads pause for that member at the limit. Administrators aren’t limited.', opts: PERSON.map((q) => q[0]), value: PERSON.find((q) => q[1] === ((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0))?.[0] ?? 'No limit', set: (v) => void put({ userQuotaGb: PERSON.find((q) => q[0] === v)![1] }) },
+        { id: 'userQuota', t: 'text', label: 'Storage per person', hint: 'Type a size such as 2 GB, 500 MB or 1 TB. Leave it empty for no limit. Uploads pause for that member at the limit. Administrators aren’t limited.', value: showSize((inst.data as unknown as { userQuotaGb?: number })?.userQuotaGb ?? 0), ph: 'No limit', set: (v: string) => { const gb = parseSize(v); if (gb === null) { ctx.toast('Type a size like 2 GB or 500 MB, or leave it empty for no limit'); return; } void put({ userQuotaGb: gb }); } },
       ] },
       { title: 'Cloud providers', rows: mRows },
       { title: 'Cloud sign-in details', rows: [...details, { id: 'cpRedirect', t: 'link', label: 'Redirect URL', hint: `${cl.data?.redirectUri ?? ''} · paste this into each provider’s app settings`, meta: 'Copy', act: () => { void navigator.clipboard?.writeText(cl.data?.redirectUri ?? ''); ctx.toast('Copied the redirect URL'); } }] },

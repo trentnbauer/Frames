@@ -12,7 +12,9 @@ describe('the redesigned app: server support', () => {
   it('keeps a storage limit per person and refuses values that are not on the list', async () => {
     expect((await A.get('/api/admin/instance')).body).toMatchObject({ userQuotaGb: 0 });
     expect((await A.put('/api/admin/instance', { userQuotaGb: 50 })).body).toMatchObject({ userQuotaGb: 50 });
-    expect((await A.put('/api/admin/instance', { userQuotaGb: 7 })).body).toMatchObject({ userQuotaGb: 50 });
+    expect((await A.put('/api/admin/instance', { userQuotaGb: 0.5 })).body).toMatchObject({ userQuotaGb: 0.5 }); // any size can be typed
+    expect((await A.put('/api/admin/instance', { userQuotaGb: 7 })).body).toMatchObject({ userQuotaGb: 7 });
+    for (const bad of [-1, 'abc', null, 1e9, NaN]) expect((await A.put('/api/admin/instance', { userQuotaGb: bad })).body).toMatchObject({ userQuotaGb: 7 }); // not a size: unchanged
     await A.put('/api/admin/instance', { userQuotaGb: 0 });
   });
   it('does not offer crash reporting any more', async () => {

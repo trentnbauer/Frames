@@ -272,7 +272,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       const limitGb = policyOf(x.sys).userQuotaGb;
       if (limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin') {
         const used = (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n;
-        if (used >= limitGb * 1073741824) return rep.code(413).send({ error: `You have used the ${limitGb} GB of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
+        if (used >= limitGb * 1073741824) return rep.code(413).send({ error: `You have used the ${limitGb >= 1 ? `${limitGb} GB` : `${Math.round(limitGb * 1024)} MB`} of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
       }
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });

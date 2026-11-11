@@ -20,7 +20,7 @@ export type Policy = {
   cloudWho: 'admins' | 'members';
   cloudMinSyncMin: number;
   cloudQuotaGb: number; // 0 = none
-  userQuotaGb: number; // storage per member, 0 = no limit (administrators are never limited)
+  userQuotaGb: number; // storage per member in GB (decimals allowed: 0.5 is 512 MB), 0 = no limit (administrators are never limited)
   membersSeeShoots: boolean;
   aiMonthlyLimit: number; // requests to a shared AI per person per month, 0 = none
   aiMembersOwn: boolean;
@@ -33,6 +33,8 @@ type Stored = Partial<Record<keyof Policy, unknown>>;
 
 export const PREVIEW_SIZES = [1600, 2400, 3072, 4096];
 export const PREVIEW_QUALITIES = [70, 75, 80, 85, 88, 90, 95];
+/** A storage limit in GB typed by an administrator: 0 (none) up to a petabyte, in steps of a thousandth of a GB. Null when it is not a number like that. */
+export const quotaGb = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1_000_000 ? Math.round(v * 1000) / 1000 : null);
 const int = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi ? v : d);
 
 export function policyOf(sys: DB): Policy {
@@ -54,7 +56,7 @@ export function policyOf(sys: DB): Policy {
     cloudWho: i.cloudWho === 'admins' ? 'admins' : 'members',
     cloudMinSyncMin: [15, 30, 60, 360, 1440].includes(i.cloudMinSyncMin as number) ? (i.cloudMinSyncMin as number) : 15,
     cloudQuotaGb: [0, 50, 100, 200, 500].includes(i.cloudQuotaGb as number) ? (i.cloudQuotaGb as number) : 0,
-    userQuotaGb: [0, 10, 25, 50, 100, 250, 500].includes(i.userQuotaGb as number) ? (i.userQuotaGb as number) : 0,
+    userQuotaGb: quotaGb(i.userQuotaGb) ?? 0,
     membersSeeShoots: i.membersSeeShoots === true,
     aiMonthlyLimit: [0, 100, 500, 2000, 10000].includes(i.aiMonthlyLimit as number) ? (i.aiMonthlyLimit as number) : 0,
     aiMembersOwn: i.aiMembersOwn !== false,
@@ -80,7 +82,7 @@ export function policyPatch(b: Record<string, unknown>): Stored {
   if (typeof b.workers === 'number' && Number.isInteger(b.workers) && b.workers >= 0 && b.workers <= 8) o.workers = b.workers;
   pick('logLevel', ['errors', 'warnings', 'info', 'debug']); pick('rawPreview', ['embedded', 'full']);
   if (typeof b.showWhatsNew === 'boolean') o.showWhatsNew = b.showWhatsNew; pick('updateChannel', ['stable', 'beta']); pick('cloudWho', ['admins', 'members']);
-  pick('cloudMinSyncMin', [15, 30, 60, 360, 1440]); pick('cloudQuotaGb', [0, 50, 100, 200, 500]); pick('userQuotaGb', [0, 10, 25, 50, 100, 250, 500]); pick('aiMonthlyLimit', [0, 100, 500, 2000, 10000]);
+  pick('cloudMinSyncMin', [15, 30, 60, 360, 1440]); pick('cloudQuotaGb', [0, 50, 100, 200, 500]); if (quotaGb(b.userQuotaGb) !== null) o.userQuotaGb = quotaGb(b.userQuotaGb)!; pick('aiMonthlyLimit', [0, 100, 500, 2000, 10000]);
   if (typeof b.membersSeeShoots === 'boolean') o.membersSeeShoots = b.membersSeeShoots;
   if (typeof b.aiMembersOwn === 'boolean') o.aiMembersOwn = b.aiMembersOwn;
   if (typeof b.aiSharedFirst === 'boolean') o.aiSharedFirst = b.aiSharedFirst;
