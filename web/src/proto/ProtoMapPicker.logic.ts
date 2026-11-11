@@ -23,6 +23,11 @@ const W = 552, H = 280, ZMIN = 3, ZMAX = 19;
 const toPx = (lat, lng, N) => { const r = lat * Math.PI / 180; return [(lng + 180) / 360 * N, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * N]; };
 const toLL = (x, y, N) => [Math.atan(Math.sinh(Math.PI * (1 - 2 * y / N))) * 180 / Math.PI, x / N * 360 - 180];
 
+// The last few places saved, offered when the search box is empty.
+const RKEY = 'frames.recentPlaces', RMAX = 4;
+const recents = () => { try { const r = JSON.parse(localStorage.getItem(RKEY) || '[]'); return Array.isArray(r) ? r : []; } catch { return []; } };
+const remember = (pl) => { try { localStorage.setItem(RKEY, JSON.stringify([pl, ...recents().filter((r) => r.name !== pl.name)].slice(0, RMAX))); } catch { /* blocked storage: no recents */ } };
+
 export class Logic extends DCLogic {
   state = { map: null };
   mT = 0;
@@ -93,7 +98,8 @@ export class Logic extends DCLogic {
     const [pxp, pyp] = toPx(M.lat, M.lng, N);
     const q = M.q.trim();
     const near = M.name ? [{ name: M.name, address: M.address, kind: M.kind || 'place', lat: M.lat, lon: M.lng, suburb: M.suburb, city: M.city }] : [];
-    const list = q ? M.results : near;
+    const recent = recents().filter((r) => r.name !== M.name);
+    const list = q ? M.results : [...near, ...recent];
     const pick = (p) => this.setMap({ name: p.name, address: p.address, kind: p.kind, suburb: p.suburb, city: p.city, lat: p.lat, lng: p.lon, vlat: p.lat, vlng: p.lon, picked: p.name, q: '', results: [], prec: p.kind === 'city' ? 'city' : p.kind === 'suburb' ? 'suburb' : M.prec });
     const shown = !M.name ? '' : M.prec === 'exact' ? M.name : M.prec === 'suburb' ? (M.suburb || M.city || M.name) : (M.city || M.suburb || M.name);
     const cap = (k) => k[0].toUpperCase() + k.slice(1);
@@ -101,14 +107,14 @@ export class Logic extends DCLogic {
       mapOpen: true, closeMap: () => this.props.onClose(), mapQ: M.q,
       onMapQ: (e) => { const v = e.target.value; this.setMap({ q: v }); clearTimeout(this.mT); this.mT = setTimeout(() => this.search(v), 900); },
       mapKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); if (list[0] && q && !M.busy) pick(list[0]); else if (q) { clearTimeout(this.mT); this.search(q); } } if (e.key === 'Escape') this.props.onClose(); },
-      mapListTitle: q ? (M.busy ? 'Searching…' : list.length + (list.length === 1 ? ' place' : ' places')) : 'Near the pin', mapNone: !!q && !M.busy && !list.length,
+      mapListTitle: q ? (M.busy ? 'Searching…' : list.length + (list.length === 1 ? ' place' : ' places')) : near.length ? 'Near the pin' : 'Recent places', mapNone: !!q && !M.busy && !list.length,
       mapResults: list.map((p) => ({ name: p.name, sub: p.address, kind: cap(p.kind || 'place'), icon: ICON[p.kind] || 'PL', bg: M.picked === p.name ? 'var(--hair)' : 'transparent', pick: () => pick(p) })),
       mapTiles: tiles, mapRef: this.mapRef, mapDown: this.down, mapMove: this.move, mapUp: this.up, pinLeft: Math.round(pxp - x0) + 'px', pinTop: Math.round(pyp - y0) + 'px', mapCoords: M.lat.toFixed(4) + ', ' + M.lng.toFixed(4),
       mapClick: (e) => { if (this.moved) { this.moved = false; return; } const r = e.currentTarget.getBoundingClientRect(); const k = r.width / W; const [lat, lng] = toLL(cx + ((e.clientX - r.left) / k - W / 2), cy + ((e.clientY - r.top) / k - H / 2), N); this.setMap({ lat, lng, name: M.name || 'Dropped pin', address: '', picked: null }); this.reverse(lat, lng); },
       mapPrec: [['exact', 'Exact'], ['suburb', 'Suburb'], ['city', 'City']].map(([k, label]) => ({ label, bg: M.prec === k ? 'var(--text)' : 'transparent', fg: M.prec === k ? 'var(--bg)' : 'var(--text2)', pick: () => this.setMap({ prec: k }) })),
       mapSummary: M.name ? M.name + (M.picked ? '' : ' · pin moved') + ' · shows as “' + shown + '”' : 'No place yet', mapHasPlace: !!(P.place && P.place.name),
       mapRemove: async () => { this.props.onClose(); await P.onRemovePlace(); this.props.onToast?.('Place removed'); },
-      mapSave: async () => { if (!M.name) return; this.props.onClose(); await P.onSavePlace({ name: M.name, address: M.address, kind: M.kind, suburb: M.suburb, city: M.city, lat: M.lat, lng: M.lng, precision: M.prec }); this.props.onToast?.('Place saved · ' + M.name); },
+      mapSave: async () => { if (!M.name) return; this.props.onClose(); remember({ name: M.name, address: M.address, kind: M.kind, suburb: M.suburb, city: M.city, lat: M.lat, lon: M.lng }); await P.onSavePlace({ name: M.name, address: M.address, kind: M.kind, suburb: M.suburb, city: M.city, lat: M.lat, lng: M.lng, precision: M.prec }); this.props.onToast?.('Place saved · ' + M.name); },
     };
   }
   renderVals() { return { ...this.mapVals(), stop: (e) => e.stopPropagation() }; }
