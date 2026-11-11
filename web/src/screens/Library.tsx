@@ -5,7 +5,6 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { Header } from '../components/Shell';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { BulkEdit } from '../components/BulkEdit';
-import { useStore } from '../store';
 import { useUi } from '../ui';
 import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
@@ -31,10 +30,8 @@ const Item = ({ on, onClick, children }: { on?: boolean; onClick: () => void; ch
 export function Library() {
   const [sp, setSp] = useSearchParams();
   const nav = useNavigate();
-  const { settings } = useStore();
   const { openSearch } = useUi();
   const status = useStatus();
-  const ai = !!settings && settings.ai !== 'off';
   const [open, setOpen] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -45,6 +42,11 @@ export function Library() {
   const tags = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
   const gear = useApi<{ cameras: { name: string; n: number }[]; lenses: { name: string; n: number }[] }>('/gear');
   const list = useApi<{ total: number; count: number; photos: PhotoLite[]; semantic: boolean }>(`/photos?${sp.toString()}`);
+  // The library's own text search (file name, metadata, place, tags); typing waits a moment before it asks.
+  const [qText, setQText] = useState(sp.get('q') ?? '');
+  const qTimer = useRef(0);
+  useEffect(() => { setQText(sp.get('q') ?? ''); }, [sp.get('q')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onSearch = (e: React.ChangeEvent<HTMLInputElement>) => { const v = e.target.value; setQText(v); window.clearTimeout(qTimer.current); qTimer.current = window.setTimeout(() => set('q', v.trim() || null), 250); };
   const group = (['shoot', 'uploaded', 'taken'] as const).find((g) => g === sp.get('group')) ?? 'shoot';
   const newest = sp.get('order') !== 'oldest';
 
@@ -164,7 +166,7 @@ export function Library() {
         photoOf={(id: number) => { const p = byId.get(id); const n = inComps.get(id) ?? 0; return { src: imgUrl(id, 'thumb'), ar: p?.ar ?? 1, badge: n ? `In ${n}` : '' }; }}
         countLabel={list.data ? `${count.toLocaleString()}${count !== list.data.total ? ` of ${list.data.total.toLocaleString()}` : ''}` : ''}
         canAdd={!status.data || status.data.storage.local || status.data.storage.cloud} onAddPhotos={() => nav('/shoots?upload=1')}
-        searchPh={ai ? 'Search or describe a photo' : 'Search filenames, places, tags and metadata'}
+        searchVal={qText} onSearch={onSearch} searchPh="Search file names, cameras, places and tags"
         chips={chips} onClear={clear} onToggleFilters={() => setFiltersOpen(!filtersOpen)} filtersPanel={filtersPanel}
         orderLabel={newest ? 'Newest' : 'Oldest'} toggleOrder={() => set('order', newest ? 'oldest' : null)}
         years={years.map((y) => ({ label: y, go: () => { const n = new URLSearchParams(sp); n.set('from', `${y}-01-01`); n.set('to', `${y}-12-31`); setSp(n, { replace: true }); } }))}
