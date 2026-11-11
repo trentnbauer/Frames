@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header, Loading } from '../components/bits';
 import { useStore } from '../store';
 import proto from './proto.json';
@@ -18,19 +19,22 @@ const OLD: Record<string, [Tab, string]> = {
   'cloudflare-tunnel': ['srv', 'network'], email: ['srv', 'email'], 'env-file': ['srv', 'server'], 'storage-processing': ['srv', 'processing'], 'updates-system': ['srv', 'server'], about: ['srv', 'server'],
 };
 
+/** Which tab and section an address asks for (the current ones, the older Settings page names, or the old ?access= and ?cloud= returns). */
+function parseAddress(params: URLSearchParams): { tab: Tab; key: string } {
+  const s = params.get('section') ?? '';
+  const t = params.get('tab');
+  if (t === 'srv' || t === 'lib') return { tab: t as Tab, key: s };
+  const o = OLD[s]; if (o) return { tab: o[0], key: o[1] };
+  if (params.has('access')) return { tab: 'srv' as Tab, key: 'signin' };
+  if (params.has('cloud')) return { tab: 'lib' as Tab, key: 'cloud' };
+  return { tab: 'lib' as Tab, key: s };
+}
+
 export function SettingsPage() {
   const { me, settings } = useStore();
   const isAdmin = me?.role === 'admin';
   const params = new URLSearchParams(window.location.search);
-  const start = (() => {
-    const s = params.get('section') ?? '';
-    const t = params.get('tab');
-    if (t === 'srv' || t === 'lib') return { tab: t as Tab, key: s };
-    const o = OLD[s]; if (o) return { tab: o[0], key: o[1] };
-    if (params.has('access')) return { tab: 'srv' as Tab, key: 'signin' };
-    if (params.has('cloud')) return { tab: 'lib' as Tab, key: 'cloud' };
-    return { tab: 'lib' as Tab, key: s };
-  })();
+  const start = parseAddress(params);
   const [tab, setTab] = useState<Tab>(start.tab);
   const [sec, setSec] = useState<Record<Tab, string>>({ lib: start.tab === 'lib' && start.key ? start.key : 'profile', srv: start.tab === 'srv' && start.key ? start.key : 'signin' });
   const [q, setQ] = useState('');
@@ -43,6 +47,15 @@ export function SettingsPage() {
   useEffect(() => { const u = new URL(window.location.href); u.searchParams.set('tab', shownTab); u.searchParams.set('section', cur.key); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); }, [shownTab, cur.key]);
 
   const goto = (t: Tab, key: string) => { setQ(''); setTab(t); setSec((s) => ({ ...s, [t]: key })); };
+  // A link to another section while this page is already open (the "Settings out of sync" banner, for one) changes the address but not
+  // this page's state, so follow it.
+  const loc = useLocation();
+  const opened = useRef(true);
+  useEffect(() => {
+    if (opened.current) { opened.current = false; return; }
+    const want = parseAddress(new URLSearchParams(loc.search));
+    if (want.key) goto(want.tab, want.key);
+  }, [loc.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctx: Ctx = useMemo(() => ({ toast: setToast, modal: setModal, goto, me, isAdmin: !!isAdmin }), [me, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
   const needle = q.trim().toLowerCase();
   const hits = needle ? ROWS.filter((r) => (isAdmin || r.tab === 'lib') && `${r.label} ${r.hint} ${NAMES.get(`${r.tab}:${r.sec}`)} ${r.g}`.toLowerCase().includes(needle)) : [];
