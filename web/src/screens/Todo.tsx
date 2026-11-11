@@ -81,7 +81,7 @@ export function TodoPage() {
     tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
     tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
-    openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
+    openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },
     addSubject: (name: string) => tagAct(name, 'subject', 'accept'), addTag: (name: string) => tagAct(name, 'tag', 'accept'),
     skipTodo: advance, saveTodo: () => save(),
