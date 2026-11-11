@@ -39,7 +39,9 @@ const EXPIRY: [string, number][] = [['1 week', 7], ['3 weeks', 21], ['3 months',
 export function useSignin(ctx: Ctx): Section {
   const a = useApi<{ enabled: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string }>('/auth/config');
   const inst = useApi<Inst>('/admin/instance');
-  const reload = () => { a.reload(); inst.reload(); };
+  const ts = useApi<{ enabled: boolean; siteKey: string; signin: boolean; shares: boolean; hasSecret: boolean; disabledByEnv: boolean }>('/admin/turnstile');
+  const saveTs = async (body: object, ok: string) => { await act(ctx, () => api('/admin/turnstile', { method: 'PUT', body }), ok); ts.reload(); };
+  const reload = () => { a.reload(); inst.reload(); ts.reload(); };
   const put = async (body: object) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body })); inst.reload(); };
   const i = inst.data;
   const configure = (type?: string) => ctx.modal(<Modal title="Sign-in methods" sub="Set up, test and remove each method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access focus={type} /></Modal>);
@@ -71,9 +73,16 @@ export function useSignin(ctx: Ctx): Section {
         { id: 'guestDl', t: 'toggle', label: 'Guests can download files', value: !!i?.shareDownload, set: (v) => void put({ shareDownload: v }) },
         { id: 'guestName', t: 'toggle', label: 'Ask guests for their name', hint: 'So you know whose ratings are whose.', value: i?.shareAskName !== false, set: (v) => void put({ shareAskName: v }) },
       ] },
+      { title: 'Bot check · Cloudflare Turnstile', rows: [
+        { id: 'tsOn', t: 'toggle', label: 'Use the bot check', hint: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server. Remove that setting and restart to use it.' : 'Ask people to pass a short check, run by Cloudflare, before they sign in or open a share link. If Cloudflare cannot be reached, or does not accept the secret key, people are let through rather than locked out.', value: !!ts.data?.enabled, togDisabled: ts.data?.disabledByEnv ? 'Switched off by TURNSTILE_DISABLE=true on this server' : undefined, set: (v: boolean) => void saveTs({ enabled: v }, v ? 'The bot check is on' : 'The bot check is off') },
+        { id: 'tsSite', t: 'text', label: 'Site key', hint: 'From your Turnstile widget in the Cloudflare dashboard. A wrong site key cannot be detected: if the check stops showing, start Frames with TURNSTILE_DISABLE=true and correct the keys.', dep: 'tsOn', value: ts.data?.siteKey ?? '', ph: '0x4AAAAAAA…', set: (v: string) => void saveTs({ siteKey: v }, 'Site key saved') },
+        { id: 'tsSecret', t: 'text', label: 'Secret key', hint: 'Never shown again.', dep: 'tsOn', inputType: 'password', value: '', ph: ts.data?.hasSecret ? 'Saved. Type to replace' : '0x4AAAAAAA…', set: (v: string) => { if (v.trim()) void saveTs({ secret: v }, 'Secret key saved'); } },
+        { id: 'tsSignin', t: 'toggle', label: 'On the sign-in page', dep: 'tsOn', value: !!ts.data?.signin, set: (v: boolean) => void saveTs({ signin: v }, 'Saved') },
+        { id: 'tsShares', t: 'toggle', label: 'On share links', hint: 'A signed-in person is not asked.', dep: 'tsOn', value: !!ts.data?.shares, set: (v: boolean) => void saveTs({ shares: v }, 'Saved') },
+      ] },
       { title: 'Access control', rows: [
         { id: 'requireSignin', t: 'toggle', label: 'Require sign-in', hint: 'Off: anyone who can reach Frames can use it. Test a method first.', value: !!a.data?.enabled, set: async (v: boolean) => { await act(ctx, () => api('/auth/config', { method: 'PUT', body: { enabled: v } })); a.reload(); } },
-        { id: 'allowList', t: 'link', label: 'Who is allowed in, the bot check and the public address', hint: 'The allowed list, Cloudflare Turnstile and the address sign-in comes back to.', meta: 'Open', act: () => configure() },
+        { id: 'allowList', t: 'link', label: 'Who is allowed in and the public address', hint: 'The allowed list and the address sign-in comes back to.', meta: 'Open', act: () => configure() },
       ] },
     ],
   };
