@@ -7,6 +7,18 @@ import { DCLogic } from './runtime';
 
 const ICON = { business: 'BU', suburb: 'SU', city: 'CI', landmark: 'LM', place: 'PL' };
 
+// Place lookups cached in memory and localStorage so a repeated search or pin drop loads instantly.
+// shortcut: no expiry, only a size cap; place data rarely changes, clear the key if it ever goes stale.
+const KEY = 'frames.mapCache', MAX = 200;
+let cache = null;
+const load = () => { if (!cache) { try { cache = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { cache = {}; } } return cache; };
+const cget = (k) => load()[k];
+const cset = (k, v) => {
+  const c = load(); delete c[k]; c[k] = v;
+  const ks = Object.keys(c); if (ks.length > MAX) ks.slice(0, ks.length - MAX).forEach((x) => delete c[x]);
+  try { localStorage.setItem(KEY, JSON.stringify(c)); } catch { /* storage full or blocked: memory cache still works */ }
+};
+
 export class Logic extends DCLogic {
   state = { map: null };
   mT = 0;
@@ -22,11 +34,15 @@ export class Logic extends DCLogic {
   setMap(p) { this.setState((s) => ({ map: s.map ? { ...s.map, ...p } : s.map })); }
   async search(q) {
     if (!q.trim()) { this.setMap({ results: [], busy: false, err: '' }); return; }
+    const key = 's:' + q.trim().toLowerCase(), hit = cget(key);
+    if (hit) { this.setMap({ results: hit, busy: false, err: '' }); return; }
     this.setMap({ busy: true, err: '' });
-    try { const r = await this.props.searchPlaces(q); if (this.state.map && this.state.map.q === q) this.setMap({ results: r, busy: false }); } catch (e) { this.setMap({ busy: false, results: [], err: e.message || 'Search is not available right now' }); }
+    try { const r = await this.props.searchPlaces(q); if (Array.isArray(r) && r.length) cset(key, r); if (this.state.map && this.state.map.q === q) this.setMap({ results: r, busy: false }); } catch (e) { this.setMap({ busy: false, results: [], err: e.message || 'Search is not available right now' }); }
   }
   async reverse(lat, lng) {
-    try { const r = await this.props.reversePlace(lat, lng); if (this.state.map) this.setMap({ name: r.name, address: r.address, kind: r.kind, suburb: r.suburb, city: r.city, picked: null }); } catch { /* keeps the pin and "Dropped pin" */ }
+    const key = 'r:' + lat.toFixed(4) + ',' + lng.toFixed(4), hit = cget(key);
+    if (hit) { if (this.state.map) this.setMap({ name: hit.name, address: hit.address, kind: hit.kind, suburb: hit.suburb, city: hit.city, picked: null }); return; }
+    try { const r = await this.props.reversePlace(lat, lng); if (r && r.name) cset(key, r); if (this.state.map) this.setMap({ name: r.name, address: r.address, kind: r.kind, suburb: r.suburb, city: r.city, picked: null }); } catch { /* keeps the pin and "Dropped pin" */ }
   }
   mapVals() {
     const S = this.state, P = this.props; const M = S.map;
