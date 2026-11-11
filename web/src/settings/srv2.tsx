@@ -45,7 +45,7 @@ export function useSrvAi(ctx: Ctx): Section {
 
 /* ------------------------------------------------------------ Tunnel */
 type T = {
-  config: { enabled: boolean; portfolios: boolean }; appUrl: string; hostnames: { hostname: string; kind: string; who: string }[]; service: string; allow: string[]; protect: boolean; protectForced: boolean; accessPeople: number; accountId: string; tunnelName: string; hasApiToken: boolean; error: string | null; appliedAt: string | null;
+  config: { enabled: boolean; portfolios: boolean }; appUrl: string; hostnames: { hostname: string; kind: string; who: string }[]; service: string; allow: string[]; protect: boolean; protectForced: boolean; accessPeople: number; accountId: string; tunnelName: string; managedByEnv?: boolean; hasApiToken: boolean; error: string | null; appliedAt: string | null;
   status: { state: string; error: string | null }; accessApps: { name: string; decision: 'allow' | 'bypass'; addresses: string[]; who: string[] }[];
 };
 export function useNetwork(ctx: Ctx): Section {
@@ -71,12 +71,12 @@ export function useNetwork(ctx: Ctx): Section {
   return {
     key: 'network', name: 'Cloudflare tunnel', hint: 'Reach Frames from outside your network without opening ports.',
     groups: [
-      { rows: [{ id: 'tunnel', t: 'toggle', label: 'Run the tunnel', hint, value: !!t?.config.enabled, set: async (v: boolean) => { await act(ctx, () => api(v ? '/tunnel/start' : '/tunnel/stop', { body: {} })); d.reload(); } }] },
+      { rows: [{ id: 'tunnel', t: 'toggle', label: 'Run the tunnel', env: t?.managedByEnv ? 'TUNNEL_TOKEN or CLOUDFLARE_API_TOKEN' : undefined, hint, value: !!t?.config.enabled, set: async (v: boolean) => { await act(ctx, () => api(v ? '/tunnel/start' : '/tunnel/stop', { body: {} })); d.reload(); } }] },
       { title: '1 · Let Frames use your Cloudflare account', rows: [
         { id: 'cfIntro', t: 'link', label: 'Frames makes the tunnel, its routes and the DNS records itself', hint: 'And keeps them right when an address changes. It needs your account ID and an API token.', meta: 'How to get them ↗', act: help },
-        { id: 'cfAccount', t: 'text', label: 'Account ID', hint: 'On the right of the Cloudflare dashboard home page, and in its address after dash.cloudflare.com/.', value: t?.accountId ?? '', ph: '32 letters and numbers', set: (v) => void save({ accountId: v }) },
-        { id: 'cfName', t: 'text', label: 'Tunnel name', hint: 'The name of the tunnel Frames makes in your Cloudflare account. Changing it makes a new tunnel; the old one stays in your account until you delete it there. Up to 60 letters, numbers, spaces, dots, dashes or underscores.', value: t?.tunnelName ?? 'Frames', ph: 'Frames', set: (v) => { if (v.trim()) void save({ tunnelName: v }); } },
-        { id: 'cfApiToken', t: 'text', label: 'API token', hint: 'Kept on this server only, never shown again, and left out of backups.', value: '', ph: t?.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token', inputType: 'password', set: (v) => { if (v) void save({ apiToken: v }); } },
+        { id: 'cfAccount', t: 'text', label: 'Account ID', env: t?.managedByEnv ? 'CLOUDFLARE_ACCOUNT_ID' : undefined, disabled: t?.managedByEnv ? true : undefined, hint: 'On the right of the Cloudflare dashboard home page, and in its address after dash.cloudflare.com/.', value: t?.accountId ?? '', ph: '32 letters and numbers', set: (v) => void save({ accountId: v }) },
+        { id: 'cfName', t: 'text', label: 'Tunnel name', env: t?.managedByEnv ? 'TUNNEL_NAME' : undefined, disabled: t?.managedByEnv ? true : undefined, hint: 'The name of the tunnel Frames makes in your Cloudflare account. Changing it makes a new tunnel; the old one stays in your account until you delete it there. Up to 60 letters, numbers, spaces, dots, dashes or underscores.', value: t?.tunnelName ?? 'Frames', ph: 'Frames', set: (v) => { if (v.trim()) void save({ tunnelName: v }); } },
+        { id: 'cfApiToken', t: 'text', label: 'API token', env: t?.managedByEnv ? 'CLOUDFLARE_API_TOKEN' : undefined, disabled: t?.managedByEnv ? true : undefined, hint: 'Kept on this server only, never shown again, and left out of backups.', value: '', ph: t?.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token', inputType: 'password', set: (v) => { if (v) void save({ apiToken: v }); } },
         { id: 'cfApplied', t: 'link', label: t?.error ? 'Cloudflare is not set up' : t?.appliedAt ? 'Cloudflare is set up' : 'Not set up yet', hint: t?.error ?? (t?.appliedAt ? `Matches the addresses below · ${fmtDate(t.appliedAt, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : 'Save the account ID and token and Frames sets it up.'), meta: 'Details', act: status },
       ] },
       { title: '2 · Addresses', rows: [
