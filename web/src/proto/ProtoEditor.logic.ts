@@ -13,8 +13,11 @@ export class Logic extends DCLogic {
   px(n) { return this.props.photoDims(n); }
   pr() { return this.state.prints ?? this.props.prints ?? []; }
   save() { const ps = this.state.prints; if (ps && !this.state.dragging) this.props.onPrints(ps); }
-  crop(n, size, or, z) { z = z || 1; let [pw, ph] = this.SIZES[size]; if (or === 'L') [pw, ph] = [ph, pw]; const [W, H] = this.px(n); const pa = pw / ph; let [cw, ch] = W / H > pa ? [H * pa, H] : [W, W / pa]; cw /= z; ch /= z; return { ppi: Math.round(ch / (ph / 2.54)), cw: Math.round(cw), ch: Math.round(ch), cut: Math.round((1 - (cw * ch) / (W * H)) * 100) }; }
-  ppiFor(n, size, or, z) { return this.crop(n, size, or, z).ppi; }
+  /** The space one photo fills, in cm: the whole print, or half of it when two photos share the print. */
+  cellCm(size, or, stack) { let [w, h] = this.SIZES[size]; if (or === 'L') [w, h] = [h, w]; return stack ? (or === 'P' ? [w, h / 2] : [w / 2, h]) : [w, h]; }
+  crop(n, size, or, z, stack) { z = z || 1; let [pw, ph] = this.cellCm(size, or, stack); const [W, H] = this.px(n); const pa = pw / ph; let [cw, ch] = W / H > pa ? [H * pa, H] : [W, W / pa]; cw /= z; ch /= z; return { ppi: Math.round(ch / (ph / 2.54)), cw: Math.round(cw), ch: Math.round(ch), cut: Math.round((1 - (cw * ch) / (W * H)) * 100) }; }
+  ppiFor(n, size, or, z, stack) { return this.crop(n, size, or, z, stack).ppi; }
+  held(p) { return [p.photo, p.stack ? p.photo2 : null]; }
   area(k) { const [w, h] = this.SIZES[k]; return w * h; }
   fits(frame, print) { const [fw, fh] = this.SIZES[frame], [pw, ph] = this.SIZES[print]; return fw >= pw && fh >= ph; }
   COL = { Black: '#151514', White: '#e9e7e1', Oak: '#b08a5e', Walnut: '#5b3f2c', Silver: '#a3a3a0' };
@@ -39,7 +42,7 @@ export class Logic extends DCLogic {
   }
   scale() { const { w, h } = this.state.wall; return Math.max(1, Math.min(w / 330, h / 180)); }
   dims(p) { let [w, h] = this.SIZES[p.size]; let [fw, fh] = this.SIZES[p.framed ? p.frame : p.size]; if (p.or === 'L') { [w, h] = [h, w]; [fw, fh] = [fh, fw]; } const b = p.framed ? 2 : 0; return { pw: w, ph: h, fw, fh, ow: fw + 2 * b, oh: fh + 2 * b, b }; }
-  bg(p) { let [pw, ph] = this.SIZES[p.size]; if (p.or === 'L') [pw, ph] = [ph, pw]; const [W, H] = this.px(p.photo); const z = Math.round((p.zoom || 1) * 100); const sz = W / H > pw / ph ? 'auto ' + z + '%' : z + '% auto'; return `url(${this.props.photoUrl(p.photo)}) ${50 + (p.sx || 0)}% ${50 + (p.sy || 0)}% / ${sz} no-repeat`; }
+  bg(p, n = p.photo) { const [pw, ph] = this.cellCm(p.size, p.or, p.stack); const [W, H] = this.px(n); const z = Math.round((p.stack ? 1 : p.zoom || 1) * 100); const sz = W / H > pw / ph ? 'auto ' + z + '%' : z + '% auto'; return `url(${this.props.photoUrl(n)}) ${50 + (p.stack ? 0 : p.sx || 0)}% ${50 + (p.stack ? 0 : p.sy || 0)}% / ${sz} no-repeat`; }
   upd(id, patch) { this.setState((s) => ({ prints: (s.prints ?? this.pr()).map((p) => (p.id === id ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)) })); this.save(); }
   endDrag() { window.removeEventListener('pointermove', this.mv); window.removeEventListener('pointerup', this.up); }
   startDrag(e, p) {
@@ -52,11 +55,20 @@ export class Logic extends DCLogic {
     this.up = () => { this.endDrag(); this.setState({ dragging: null }); this.save(); };
     window.addEventListener('pointermove', this.mv); window.addEventListener('pointerup', this.up);
   }
-  place(n, id) {
-    this.setState((s) => { const target = (s.prints ?? this.pr()).find((p) => p.id === id); if (!target) return null; const old = target.photo; return { sel: id, prints: (s.prints ?? this.pr()).map((p) => (p.id === id ? { ...p, photo: n } : p.photo === n ? { ...p, photo: old } : p)) }; });
+  place(n, id, slot) {
+    this.setState((s) => {
+      const ps = (s.prints ?? this.pr()).map((p) => ({ ...p })); const target = ps.find((p) => p.id === id); if (!target) return null;
+      const key = (slot ?? (target.stack && target.photo ? 1 : 0)) && target.stack ? 'photo2' : 'photo'; const old = target[key] ?? null;
+      // A photo already on the wall (another print, or the other half of this one) swaps places with whatever was here.
+      ps.forEach((p) => { for (const k of ['photo', 'photo2']) if ((k === 'photo' || p.stack) && p[k] === n && !(p === target && k === key)) p[k] = old; });
+      target[key] = n; if (key === 'photo') { delete target.zoom; delete target.sx; delete target.sy; }
+      return { sel: id, prints: ps };
+    });
     this.save();
     this.flash(this.ph(n)[0] + ' → Print ' + (this.pr().findIndex((p) => p.id === id) + 1));
   }
+  /** Which half of a two-photo print a drop landed on: the top or bottom of a portrait print, the left or right of a landscape one. */
+  slotAt(e, p) { const r = e.currentTarget.getBoundingClientRect(); return (p.or === 'P' ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width) < 0.5 ? 0 : 1; }
   wallVals() {
     const S = this.state; const s = this.scale(); const { w: W, h: H } = S.wall; const px = (v) => Math.round(v * s) + 'px';
     let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
@@ -66,12 +78,13 @@ export class Logic extends DCLogic {
       return {
         left: Math.round(W / 2 + (p.x - d.ow / 2) * s) + 'px', top: Math.round(H / 2 + (p.y - d.oh / 2) * s) + 'px', w: px(d.ow), h: px(d.oh), pad: px(d.b),
         frameBg: p.framed ? this.COL[p.colour] : 'transparent', matBg: p.framed && p.mat !== 'None' ? this.MAT[p.mat] : 'transparent', matPad: px(my) + ' ' + px(mx),
-        img: p.photo ? this.bg(p) : 'rgba(0,0,0,.22)', empty: p.photo ? 'none' : 'inset 0 0 0 1px rgba(239,237,232,.6)', emptyLabel: p.photo ? '' : 'Drop a candidate here',
+        cells: this.held(p).slice(0, p.stack ? 2 : 1).map((n, k) => ({ img: n ? this.bg(p, n) : 'rgba(0,0,0,.22)', empty: n ? 'none' : 'inset 0 0 0 1px rgba(239,237,232,.6)', emptyLabel: n ? '' : p.stack ? (p.or === 'P' ? ['Top', 'Bottom'] : ['Left', 'Right'])[k] : 'Drop a candidate here' })),
+        dir: p.or === 'P' ? 'column' : 'row', gap: p.stack ? '2%' : '0', paper: p.stack ? '#fff' : 'transparent', slotsFull: this.held(p).slice(0, p.stack ? 2 : 1).every(Boolean),
         shadow: S.dragging === p.id ? '0 18px 40px rgba(0,0,0,.55)' : '0 6px 16px rgba(0,0,0,.4)', outline: on ? '2px solid var(--text)' : '2px solid transparent', cursor: S.dragging === p.id ? 'grabbing' : 'grab', trans: S.dragging ? 'box-shadow .15s' : 'left .25s, top .25s, width .25s, height .25s, box-shadow .15s',
-        label: 'Print ' + (i + 1) + ' · ' + p.size + (p.or === 'L' ? ' landscape' : ''),
+        label: 'Print ' + (i + 1) + ' · ' + p.size + (p.or === 'L' ? ' landscape' : '') + (p.stack ? ' · two photos' : ''),
         sub: (p.framed ? p.frame + ' frame' : 'no frame') + (p.photo ? ' · ' : ''),
-        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = this.ppiFor(p.photo, p.size, p.or, p.zoom); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'oklch(0.72 0.16 28)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
-        down: (e) => this.startDrag(e, p), drop: (e) => { e.preventDefault(); const n = +e.dataTransfer.getData('text/plain'); if (n) this.place(n, p.id); },
+        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'oklch(0.72 0.16 28)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
+        down: (e) => this.startDrag(e, p), drop: (e) => { e.preventDefault(); const n = +e.dataTransfer.getData('text/plain'); if (n) this.place(n, p.id, p.stack ? this.slotAt(e, p) : 0); },
       };
     });
     const spanW = this.pr().length ? ((maxX - minX) / 100).toFixed(1) : '0', spanH = this.pr().length ? ((maxY - minY) / 100).toFixed(1) : '0';
@@ -80,7 +93,7 @@ export class Logic extends DCLogic {
     const isFull = !!S.full; const overlay = S.full === 'overlay';
     const sp = this.pr().find((p) => p.id === S.sel); let popLeft = '0px', popTop = '0px';
     if (sp) { const d = this.dims(sp); const l = W / 2 + (sp.x - d.ow / 2) * s, r = W / 2 + (sp.x + d.ow / 2) * s, t = H / 2 + (sp.y - d.oh / 2) * s; const PW = 280, PH = 470; const right = r + 24 + PW <= W - 12 && (sp.x <= 0 || l - 24 - PW < 12); popLeft = Math.round(right ? r + 24 : Math.max(12, l - 24 - PW)) + 'px'; popTop = Math.round(Math.max(60, Math.min(H - PH - 12, t))) + 'px'; }
-    const empty = this.pr().filter((p) => !p.photo).length;
+    const empty = this.pr().filter((p) => !p.photo || (p.stack && !p.photo2)).length;
     return {
       popShow: isFull && !!sp, popLeft, popTop, stopDown: (e) => e.stopPropagation(), deselect: () => this.setState({ sel: null }),
       prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, gridSize: px(10) + ' ' + px(10),
@@ -88,7 +101,7 @@ export class Logic extends DCLogic {
       wallPos: overlay ? 'fixed' : 'absolute', wallZ: overlay ? 80 : 1, wallRadius: overlay ? '0' : '8px',
       isFull, fullLabel: isFull ? 'Exit fullscreen · Esc' : 'Fullscreen', toggleFull: () => this.setFull(!isFull),
       compName: this.props.name, compMeta: (sizes || 'No prints') + ' · ' + spanW + ' × ' + spanH + ' m', spanLabel: 'spans ' + spanW + ' × ' + spanH + ' m',
-      addPrint: () => { const id = Math.max(0, ...this.pr().map((p) => p.id)) + 1; const xs = this.pr().map((p) => p.x + this.dims(p).ow / 2); const x = xs.length ? Math.min(Math.max(...xs) + 30, 130) : 0; this.setState({ prints: [...this.pr(), { id, x, y: 0, size: 'A3', or: 'P', photo: null, framed: true, colour: 'Black', frame: 'A3', mat: 'None' }], sel: id }); this.save(); this.flash('Print added · drag it into place'); },
+      addPrint: () => { const id = Math.max(0, ...this.pr().map((p) => p.id)) + 1; const xs = this.pr().map((p) => p.x + this.dims(p).ow / 2); const x = xs.length ? Math.min(Math.max(...xs) + 30, 130) : 0; this.setState({ prints: [...this.pr(), { id, x, y: 0, size: 'A3', or: 'P', photo: null, stack: false, photo2: null, framed: true, colour: 'Black', frame: 'A3', mat: 'None' }], sel: id }); this.save(); this.flash('Print added · drag it into place'); },
       tidy: () => { const ps = [...this.pr()].sort((a, b) => a.x - b.x); const gap = 8; const total = ps.reduce((t, p) => t + this.dims(p).ow, 0) + gap * (ps.length - 1); let cur = -total / 2; const pos = {}; ps.forEach((p) => { const w = this.dims(p).ow; pos[p.id] = Math.round(cur + w / 2); cur += w + gap; }); this.setState({ prints: this.pr().map((p) => ({ ...p, x: pos[p.id], y: 0 })) }); this.save(); this.flash('Lined up · 8 cm apart, centred'); },
       exportLabel: empty ? 'Export · ' + empty + (empty === 1 ? ' print empty' : ' prints empty') : 'Export ' + this.pr().length + ' prints', exportBg: empty ? 'rgba(239,237,232,.35)' : 'var(--text)',
       exportGo: () => { if (empty) { this.flash('Fill every print before exporting'); return; } this.flash('Exporting originals'); this.props.onExport(); },
@@ -98,17 +111,18 @@ export class Logic extends DCLogic {
     const S = this.state; const p = this.pr().find((x) => x.id === S.sel); const idx = this.pr().findIndex((x) => x.id === S.sel);
     if (!p) return { hasSel: false, noSel: true, framed: false };
     const rank = (k) => this.area(k); const set = (patch) => this.upd(p.id, patch); const menu = S.sizeMenu;
-    const d = this.dims(p); const ph = p.photo ? this.ph(p.photo) : null; const cr = p.photo ? this.crop(p.photo, p.size, p.or, p.zoom) : null; const sharp = !ph || cr.ppi >= 300; const upTo = ph ? [...this.ORDER].reverse().find((k) => this.ppiFor(p.photo, k, p.or) >= 300) || 'none' : '';
+    const d = this.dims(p); const wp = this.held(p).filter(Boolean).sort((x, y) => this.ppiFor(x, p.size, p.or, p.zoom, p.stack) - this.ppiFor(y, p.size, p.or, p.zoom, p.stack))[0] ?? null; const ph = wp ? this.ph(wp) : null; const cr = wp ? this.crop(wp, p.size, p.or, p.zoom, p.stack) : null; const sharp = !ph || cr.ppi >= 300; const upTo = ph ? [...this.ORDER].reverse().find((k) => this.ppiFor(wp, k, p.or, 1, p.stack) >= 300) || 'none' : '';
     return {
       hasSel: true, noSel: false,
-      cropZoom: Math.round((p.zoom || 1) * 100), cropZoomLabel: Math.round((p.zoom || 1) * 100) + '%', cropX: p.sx || 0, cropY: p.sy || 0, cropOff: !p.photo, cropOp: p.photo ? 1 : 0.4,
+      cropZoom: Math.round((p.zoom || 1) * 100), cropZoomLabel: Math.round((p.zoom || 1) * 100) + '%', cropX: p.sx || 0, cropY: p.sy || 0, cropOff: !p.photo || !!p.stack, cropOp: p.photo && !p.stack ? 1 : 0.4,
       onZoom: (e) => set({ zoom: +e.target.value / 100 }), onCropX: (e) => set({ sx: +e.target.value }), onCropY: (e) => set({ sy: +e.target.value }), cropReset: () => set({ zoom: 1, sx: 0, sy: 0 }), cropChanged: !!((p.zoom && p.zoom !== 1) || p.sx || p.sy),
-      ...(() => { if (!p.photo) return { cropPpi: '—', cropPpiFg: 'var(--muted)', cropPpiSub: 'Place a photo to crop it', cropBar: '0%', cropBarBg: 'var(--outline)' }; const v = this.ppiFor(p.photo, p.size, p.or, p.zoom), base = this.ppiFor(p.photo, p.size, p.or, 1); const ok = v >= 300; return { cropPpi: (ok ? '' : '⚠ ') + v + ' PPI', cropPpiFg: ok ? 'var(--text)' : 'oklch(0.75 0.14 28)', cropPpiSub: (p.zoom && p.zoom !== 1 ? 'was ' + base + ' at 100% · ' : '') + (ok ? 'sharp at ' + p.size : 'below 300 · may look soft at ' + p.size), cropBar: Math.min(100, Math.round(v / Math.max(base, 300) * 100)) + '%', cropBarBg: ok ? 'var(--text)' : 'oklch(0.7 0.16 28)' }; })(), selTitle: 'Print ' + (idx + 1), selStatus: p.photo ? 'filled' : 'empty',
-      selThumb: p.photo ? `url(${this.props.photoUrl(p.photo)}) center/cover` : 'rgba(0,0,0,.25)', selHasPhoto: !!p.photo,
-      selPhotoHint: p.photo ? ph[0] + ' · score ' + ph[2].toFixed(1) + '. Click a candidate below to swap.' : 'Click a candidate below, or drag one onto the print.',
-      clearPhoto: () => set({ photo: null, zoom: 1, sx: 0, sy: 0 }),
+      ...(() => { if (!wp) return { cropPpi: '—', cropPpiFg: 'var(--muted)', cropPpiSub: 'Place a photo to crop it', cropBar: '0%', cropBarBg: 'var(--outline)' }; const v = this.ppiFor(wp, p.size, p.or, p.zoom, p.stack), base = this.ppiFor(wp, p.size, p.or, 1, p.stack); const ok = v >= 300; return { cropPpi: (ok ? '' : '⚠ ') + v + ' PPI', cropPpiFg: ok ? 'var(--text)' : 'oklch(0.75 0.14 28)', cropPpiSub: (p.zoom && p.zoom !== 1 ? 'was ' + base + ' at 100% · ' : '') + (ok ? 'sharp at ' + p.size : 'below 300 · may look soft at ' + p.size), cropBar: Math.min(100, Math.round(v / Math.max(base, 300) * 100)) + '%', cropBarBg: ok ? 'var(--text)' : 'oklch(0.7 0.16 28)' }; })(), selTitle: 'Print ' + (idx + 1), selStatus: p.photo ? 'filled' : 'empty',
+      selThumb: p.photo ? `url(${this.props.photoUrl(p.photo)}) center/cover` : 'rgba(0,0,0,.25)', selStack: !!p.stack, selThumb2: p.photo2 ? `url(${this.props.photoUrl(p.photo2)}) center/cover` : 'rgba(0,0,0,.25)', selHasPhoto: !!(p.photo || (p.stack && p.photo2)),
+      selPhotoHint: p.stack ? (p.or === 'P' ? 'Two landscape photos, one above the other, with a white gap between.' : 'Two portrait photos, side by side, with a white gap between.') : '',
+      stackOpts: [[false, 'One photo'], [true, 'Two photos']].map(([k, label]) => ({ label, bg: !!p.stack === k ? 'var(--text)' : 'transparent', fg: !!p.stack === k ? 'var(--bg)' : 'var(--text2)', pick: () => set(k ? { stack: true } : { stack: false, photo2: null }) })),
+      clearPhoto: () => set({ photo: null, photo2: null, zoom: 1, sx: 0, sy: 0 }),
       printSize: p.size, printMenuOpen: menu === 'print', togglePrintMenu: () => this.setState({ sizeMenu: menu === 'print' ? false : 'print' }),
-      printGroups: this.GROUPS.map(([name, ks]) => ({ name, sizes: ks.map((k) => { const on = p.size === k; const soft = ph && this.ppiFor(p.photo, k, p.or) < 300; const [w, h] = this.SIZES[k]; return { label: k, note: on ? '✓' : soft ? 'soft' : Math.round(w) + ' × ' + Math.round(h) + ' cm', fg: soft ? 'var(--muted)' : 'var(--text)', bg: on ? 'var(--hair)' : 'transparent', pick: () => { this.setState({ sizeMenu: false }); set((q) => { const fr = this.fits(q.frame, k) ? q.frame : k; return { size: k, frame: fr, mat: fr === k ? 'None' : q.mat === 'None' ? 'White' : q.mat }; }); } }; }) })),
+      printGroups: this.GROUPS.map(([name, ks]) => ({ name, sizes: ks.map((k) => { const on = p.size === k; const soft = ph && this.ppiFor(wp, k, p.or, 1, p.stack) < 300; const [w, h] = this.SIZES[k]; return { label: k, note: on ? '✓' : soft ? 'soft' : Math.round(w) + ' × ' + Math.round(h) + ' cm', fg: soft ? 'var(--muted)' : 'var(--text)', bg: on ? 'var(--hair)' : 'transparent', pick: () => { this.setState({ sizeMenu: false }); set((q) => { const fr = this.fits(q.frame, k) ? q.frame : k; return { size: k, frame: fr, mat: fr === k ? 'None' : q.mat === 'None' ? 'White' : q.mat }; }); } }; }) })),
       orientOpts: [['P', 'Portrait', '9px', '12px'], ['L', 'Landscape', '12px', '9px']].map(([k, label, iw, ih]) => ({ label, iw, ih, bg: p.or === k ? 'var(--text)' : 'transparent', fg: p.or === k ? 'var(--bg)' : 'var(--text2)', pick: () => set({ or: k }) })),
       framed: p.framed, frameLabel: p.framed ? 'Framed' : 'No frame', frameTrack: p.framed ? 'var(--text)' : 'color-mix(in srgb, var(--text) 14%, transparent)', frameKnob: p.framed ? '21px' : '3px', frameKnobBg: p.framed ? 'var(--bg)' : 'var(--text2)',
       toggleFrame: () => set({ framed: !p.framed }),
@@ -118,20 +132,20 @@ export class Logic extends DCLogic {
       mats: ['None', 'White', 'Ivory', 'Black'].map((x) => { const exact = p.frame === p.size; const off = exact ? x !== 'None' : x === 'None'; const on = p.mat === x; return { label: x, bg: on ? 'var(--text)' : 'transparent', fg: on ? 'var(--bg)' : off ? '#4a4845' : 'var(--text2)', pick: () => { if (!off) set({ mat: x }); } }; }),
       frameSummary: !p.framed ? `Print only, ${d.pw} × ${d.ph} cm, edge to edge on the wall.` : p.mat === 'None' ? `${p.colour} ${p.frame} frame, no mat · outside ${d.ow.toFixed(0)} × ${d.oh.toFixed(0)} cm` : `${p.colour} ${p.frame} frame, ${p.mat.toLowerCase()} mat around the ${p.size} print · outside ${d.ow.toFixed(0)} × ${d.oh.toFixed(0)} cm`,
       sharpLine: !ph ? 'Sharpness: pick a photo first' : (sharp ? '' : '⚠ ') + `${cr.ppi} PPI at ${p.size} after cropping` + (sharp ? '' : ` · sharp up to ${upTo}`), sharpFg: sharp ? 'var(--muted)' : 'oklch(0.78 0.11 35)',
-      sharpSub: !ph ? '' : `Uses ${cr.cw} × ${cr.ch} of ${this.px(p.photo)[0]} × ${this.px(p.photo)[1]} px` + (cr.cut ? ` · ${cr.cut}% cropped to fit` : ' · no crop') + (sharp ? '' : ` · looks sharp from ${(0.85 * 300 / cr.ppi).toFixed(1)} m away`),
+      sharpSub: !ph ? '' : `Uses ${cr.cw} × ${cr.ch} of ${this.px(wp)[0]} × ${this.px(wp)[1]} px` + (cr.cut ? ` · ${cr.cut}% cropped to fit` : ' · no crop') + (sharp ? '' : ` · looks sharp from ${(0.85 * 300 / cr.ppi).toFixed(1)} m away`),
       removePrint: () => { const rest = this.pr().filter((x) => x.id !== p.id); this.setState({ prints: rest, sel: rest.length ? rest[Math.max(0, idx - 1)].id : null }); this.save(); this.flash('Print ' + (idx + 1) + ' removed'); },
     };
   }
   candVals() {
     const S = this.state; const sel = this.pr().find((x) => x.id === S.sel); const rank = (k) => this.area(k);
     const order = this.props.order || []; const unrated = this.props.unrated || [];
-    const fits = (n) => !sel || this.ppiFor(n, sel.size, sel.or) >= 300;
+    const fits = (n) => !sel || this.ppiFor(n, sel.size, sel.or, 1, sel.stack) >= 300;
     const lists = { best: order, fits: order.filter(fits), unrated };
-    const used = {}; this.pr().forEach((p, i) => { if (p.photo) used[p.photo] = i + 1; });
+    const used = {}; this.pr().forEach((p, i) => { this.held(p).forEach((n) => { if (n) used[n] = i + 1; }); });
     return {
       candTabs: [['best', 'Best first'], ['fits', sel ? 'Fits ' + sel.size : 'Fits'], ['unrated', 'Unrated']].map(([k, l]) => ({ label: l + ' · ' + lists[k].length, bg: S.candTab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: S.candTab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ candTab: k }) })),
       candHint: sel ? 'Click a photo to put it in Print ' + (this.pr().indexOf(sel) + 1) + '. If it’s already on the wall, the two swap.' : 'Select a print on the wall, then click a photo to fill it.',
-      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: this.props.photoUrl(n), score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'rgba(0,0,0,.62)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'oklch(0.78 0.11 35)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && sel.photo === n ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
+      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: this.props.photoUrl(n), score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'rgba(0,0,0,.62)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'oklch(0.78 0.11 35)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
     };
   }
   shareVals() {
@@ -187,7 +201,7 @@ export class Logic extends DCLogic {
     cur.forEach((p, i) => {
       const o = base.find((x) => x.id === p.id); const n = 'Print ' + (i + 1);
       if (!o) { ch.push(['Added', n + (p.photo ? ' · ' + this.ph(p.photo)[0] : '')]); return; }
-      if (o.photo !== p.photo) ch.push(['Photo', n + ' → ' + (p.photo ? this.ph(p.photo)[0] : 'empty')]);
+      if (o.photo !== p.photo || !!o.stack !== !!p.stack || (p.stack && o.photo2 !== p.photo2)) ch.push(['Photo', n + ' → ' + (p.photo ? this.ph(p.photo)[0] : 'empty') + (p.stack ? ' + ' + (p.photo2 ? this.ph(p.photo2)[0] : 'empty') : '')]);
       if (o.framed !== p.framed || o.colour !== p.colour || o.frame !== p.frame || o.mat !== p.mat) ch.push(['Frame', n + ' · ' + (p.framed ? [p.colour, p.frame + ' frame', p.mat && p.mat !== 'None' ? p.mat.toLowerCase() + ' mat' : ''].filter(Boolean).join(', ') : 'no frame')]);
       if (o.size !== p.size || o.or !== p.or) ch.push(['Size', n + ' · ' + p.size + (p.or === 'L' ? ' landscape' : ' portrait')]);
       if (o.x !== p.x || o.y !== p.y) ch.push(['Moved', n]);
