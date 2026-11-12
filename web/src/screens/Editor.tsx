@@ -1,10 +1,12 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { arrange, dims, FRAMES, type Print } from '../layout';
 import { Header } from '../components/Shell';
 import ProtoEditor from '../proto/ProtoEditor';
+import { SharePanel } from '../components/SharePanel';
+import { EditableCompositionName } from '../components/EditableCompositionName';
 import { RoomBackground } from '../components/RoomBackground';
 
 type Ranking = { weight: number; guests: number; items: { id: number; mine: number | null; mineN: number; guest: number | null; guestN: number; score: number }[] };
@@ -36,6 +38,7 @@ export const centreOf = (ps: Print[]) => { if (!ps.length) return { x: 0, y: 0 }
 
 /** The composition editor (design: Proto Editor, host). Prints are saved as you place them. */
 export function Editor() {
+  const [sharing, setSharing] = useState(false);
   const { id } = useParams();
   const nav = useNavigate();
   const coll = useApi<Collection>(`/collections/${id}`);
@@ -101,7 +104,10 @@ export function Editor() {
   return (
     <div className="page-shell">
       <Header />
+      {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => { setSharing(false); links.reload(); }} />}
       <ProtoEditor
+        onOpenShare={() => setSharing(true)}
+        nameControl={<EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
         roomControl={<RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} />}
         roomImage={c.background ? { url: `/api/collections/${c.id}/background?v=${c.background.v}`, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}

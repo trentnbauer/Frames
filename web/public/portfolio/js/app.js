@@ -287,6 +287,11 @@
     const openLightbox = initLightbox();
     const config = (await loadJSON('config.json')) || {};
     renderHero(config);
+    if (config.edit) {
+      document.getElementById('edit-portfolio').href = config.edit.portfolio;
+      document.getElementById('edit-gear').href = config.edit.gear;
+      document.getElementById('owner-edit').hidden = false;
+    }
     const gearData = await loadJSON('gear.json');
     const hasGear = !!config.gearUrl || !!(gearData && !gearData.empty);
     initNav(config, hasGear);

@@ -565,7 +565,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerBackground(app, ctx);
   registerMap(app, ctx);
   registerShare(app, ctx);
-  registerPortfolio(app, ctx);
+  registerPortfolio(app, ctx, (req) => { const v = auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
   registerAuth(app, ctx, auth);
   registerProfile(app, ctx);
   registerNotifications(app, ctx);

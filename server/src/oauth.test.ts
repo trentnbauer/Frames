@@ -203,7 +203,7 @@ describe('with sign-in on', () => {
   });
   it('keeps the health check, sign-in pages and share links reachable', async () => {
     expect((await call('GET', '/api/health')).statusCode).toBe(200);
-    expect((await call('GET', '/auth/signin')).statusCode).toBe(200);
+    expect((await call('GET', '/auth/signin')).headers.location).toBe('/signin');
     expect((await call('GET', '/api/s/AAAAAAAAAAAAAAAAAAAAAA')).statusCode).toBe(404); // reaches the share code (unknown link), not the sign-in wall
   });
   it('sets a safe cookie, and stores only a hash of it', async () => {
@@ -249,8 +249,8 @@ describe('with sign-in on', () => {
   });
 
   describe('who gets in', () => {
-    it('gives the sign-in and privacy pages the site icon, which is served without signing in', async () => {
-      for (const page of ['/auth/signin', '/privacy']) expect((await call('GET', page)).body, page).toContain('<link rel="icon" type="image/svg+xml" href="/icon.svg">');
+    it('gives the privacy page the site icon, which is served without signing in', async () => {
+      expect((await call('GET', '/privacy')).body).toContain('<link rel="icon" type="image/svg+xml" href="/icon.svg">');
       expect((await call('GET', '/icon.svg')).statusCode).not.toBe(401); // no web folder in a test, so 404; what matters is that it is not behind the sign-in
     });
     it('turns away an account that is not on the list, with no session', async () => {

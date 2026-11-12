@@ -61,13 +61,19 @@ Pull requests validate image changes on native Linux AMD64 and ARM64 runners, wi
 
 Docker installs system packages before copying application files or applying the release version, so ordinary code/version changes can reuse that layer. A cold cache, changed dependencies or an updated base image still requires the corresponding installation work. If a build network uses a private trusted CA, supply it without disabling TLS verification: `docker build --secret id=extra_ca,src=/path/to/trusted-ca.pem -t frames .`. The certificate is mounted only during networked build steps and is not copied into the image.
 
-The composition Share dialog uses the current composition name, including after a rename.
-
 ## Photo and composition tools
+
+The composition Share dialog uses the current composition name, including after a rename. Type directly into the composition title to rename it: Enter or leaving the field saves, Escape cancels, and a blank name restores the saved title. Save failures appear below the title.
+
+Photoshoot and composition sharing use the same dialog. Choose permissions, expiry, name and optional PIN before **Create link**; existing links can be copied, previewed, updated, regenerated or stopped. Photoshoots offer ratings and downloads; compositions also offer suggestions and wall-only viewing.
+
+Your own public portfolio shows **Edit Portfolio** and **Edit Gear** at the top left when your sign-in is available on that address. Other visitors do not see them. A separate portfolio hostname needs the app's public URL configured and an owner session available there; cookies do not carry across unrelated domains. Shared-password access and an unprotected local instance also show the owner's links. Portfolio configuration containing these links is never cached.
+
+`/auth/signin` redirects to `/signin`, preserving the return address, guest mode and error message. Provider buttons use the same light filled style on sign-in and sign-up. OAuth, email codes, passkeys and the shared password keep their existing flows; live third-party sign-in must be checked with your configured providers.
 
 The **To do** page uses the same **Add to composition** picker as the Library and photo pages, including search and new compositions. The editor's **Remove** action removes a candidate only from that composition; if a print holds it, confirmation is required and that print is left empty. Candidate previews use thumbnails, while the wall uses larger previews.
 
-Photoshoots have a **Share** button with the existing link, expiry, PIN and guest review controls. On a photo, **Colour & variants** opens its palette and actual linked photographs. Accepted AI tags show a non-clickable tick; the separate × button removes a tag. Settings → Tags & subjects has one searchable management modal for both types, with create, rename, merge within a type, and delete. These changes use existing data and do not merge tag and subject records automatically.
+Photoshoots have a **Share** button with the existing link, expiry, PIN and guest review controls. On a photo, **Colour & variants** opens its palette and actual linked photographs. AI tags show a ✦ marker before their name instead of an inert tick; the separate × button removes a tag. Settings → Tags & subjects has one searchable management modal for both types, with create, rename, merge within a type, and delete. These changes use existing data and do not merge tag and subject records automatically.
 
 Composition cards show the saved layout, orientation, frames, mats, crops and both photographs in a stacked print, fitted closely into the preview. **Room photo** in the editor uploads a room picture; **Set scale** calibrates it against a known width. The room picture follows wall zoom and pan and stays private to its owner.
 

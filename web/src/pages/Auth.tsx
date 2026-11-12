@@ -30,9 +30,9 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
     <div className="auth-shell">
       <ProtoAuth
         key={view} view={view} options={options} terms={(terms.data?.sections ?? []).map((t) => ({ h: t.h, p: plain(t.p) }))} initialError={err}
-        sendCode={async (a: { email: string; name?: string; token: string }) => { await api('/public/auth/email/send', { body: { email: a.email, name: a.name, turnstile: a.token } }); }}
-        verify={async (a: { email: string; code: string; name?: string }) => (await api<{ returnTo: string }>('/public/auth/email/verify', { body: { ...a, returnTo: rt } })).returnTo}
-        provider={(id: string, token: string) => { const q = new URLSearchParams({ returnTo: rt }); if (token) q.set('cf-turnstile-response', token); window.location.assign(`/auth/login/${id}?${q}`); }}
+        sendCode={async (a: { email: string; name?: string; token: string }) => { await api('/public/auth/email/send', { body: { email: a.email, name: a.name, turnstile: a.token, guest: qs.get('guest') === '1', returnTo: rt } }); }}
+        verify={async (a: { email: string; code: string; name?: string }) => (await api<{ returnTo: string }>('/public/auth/email/verify', { body: { ...a, returnTo: rt, guest: qs.get('guest') === '1' } })).returnTo}
+        provider={(id: string, token: string) => { const q = new URLSearchParams({ returnTo: rt }); if (token) q.set('cf-turnstile-response', token); if (qs.get('guest') === '1') q.set('guest', '1'); window.location.assign(`/auth/login/${id}?${q}`); }}
         passkey={async () => {
           const { options: opts, cid } = await api<{ options: PublicKeyCredentialRequestOptionsJSON; cid: string }>('/public/auth/passkey/options', { method: 'POST', body: {} });
           const response = await startAuthentication({ optionsJSON: opts });
