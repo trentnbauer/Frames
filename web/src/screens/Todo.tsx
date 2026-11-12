@@ -5,6 +5,7 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import { Header } from '../components/Shell';
 import { useStore } from '../store';
 import ProtoMore from '../proto/ProtoMore';
+import { AddToComposition } from '../components/AddToComposition';
 import ProtoMapPicker from '../proto/ProtoMapPicker';
 
 type Todo = { total: number; items: { key: string; count: number; ids?: number[] }[] };
@@ -53,7 +54,6 @@ export function TodoPage() {
   const show = (k: string) => k === 'tags' || reason === k || (reason === 'all' && ['location', 'subjects', 'desc'].includes(k));
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
   const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
-  const inComp = (c: Collection) => !!p && c.photoIds.includes(p.id);
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
   const save = async () => {
     if (!p) return;
@@ -72,13 +72,13 @@ export function TodoPage() {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     todoCount: ids.length.toLocaleString(), todoDone: done, todoWhat: WHAT[reason],
     reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
-    tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: show('composition'),
+    tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: !!p,
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',
     useRoll: () => mate && setCam([mate.camera, mate.lens, mate.aperture ? `f/${mate.aperture}` : '', mate.shutter, mate.iso ? String(mate.iso) : '', mate.film]),
     tTags: chip('tag'), tSubjects: chip('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
-    tComps: (colls.data ?? []).filter((c) => !c.printedAt).slice(0, 5).map((c) => { const on = inComp(c); return { name: c.name, why: `${c.layout.prints.length} prints`, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: async () => { await api(`/collections/${c.id}/photos/${p!.id}`, { method: on ? 'DELETE' : 'PUT' }); colls.reload(); } }; }),
+    tComps: [], tCompPicker: p ? <AddToComposition key={p.id} ids={[p.id]} label="Add to composition" onDone={() => { colls.reload(); todo.reload(); walk.reload(); refreshSummary(); }} /> : null,
     tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',

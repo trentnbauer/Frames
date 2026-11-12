@@ -13,7 +13,7 @@ const pct = (v: number) => `${v}%`;
 export type Pic = { id: number; title: string; w: number; h: number; ar: number };
 
 /** The wall, drawn to scale: each print at its size, with its frame and mount, and the photographs in it. */
-export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, warn, stage, onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
+export function Wall({ prints, mode, editing, sel, photos, over, locked, share, compact, fill, warn, stage, fitRatio, hideLabels, padding = PAD, imageKind = 'preview', onSelect, onEdit, onMoved, onOver, onDropPhoto }: {
   prints: Print[]; mode: Mode; editing: boolean; sel: number; photos: Map<number, Pic>; over: number | null; locked: boolean;
   /** A share link's token, when the pictures are served through it (a guest's page). */
   share?: string;
@@ -21,6 +21,8 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   compact?: boolean;
   /** Use the whole width there is (a phone), only held back so that a tall wall is not taller than the screen. */
   fill?: boolean;
+  /** Fit inside a card of this aspect ratio, without reserving space for editor labels. */
+  fitRatio?: number; hideLabels?: boolean; padding?: number; imageKind?: 'preview' | 'thumb';
   /** Print index -> a short warning drawn in its label ("294 PPI"). */
   warn?: Record<number, string>;
   /** A picture of a room to hang the prints on: its size in mm of wall, and where the picture is. The prints are drawn where they are in mm, on it. */
@@ -33,7 +35,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
   const [live, setLive] = useState<Print[] | null>(null);
   const drag = useRef<{ i: number; sx: number; sy: number; ox: number; oy: number; k: number; moved: boolean; prints: Print[] } | null>(null);
   const shown = live ?? prints;
-  const frameFor = (ps: Print[]): Frame2D => (stage ? { ...frameOf(ps, 0), x0: 0, y0: 0, pad: 0, W: stage.w, H: stage.h } : frameOf(ps, PAD));
+  const frameFor = (ps: Print[]): Frame2D => (stage ? { ...frameOf(ps, 0), x0: 0, y0: 0, pad: 0, W: stage.w, H: stage.h } : frameOf(ps, padding));
   const f = frozen ?? frameFor(shown);
   const rects = rectsIn(shown, f);
 
@@ -64,7 +66,7 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
 
   const cell = (100 / f.W) * 100, cellH = (100 / f.H) * 100;
   return (
-    <div ref={ref} style={{ position: 'relative', width: fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(${stage ? 560 : 430}px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), ...(stage ? { backgroundImage: `url(${stage.url})`, backgroundSize: '100% 100%' } : { backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }) }} data-mode={mode}>
+    <div ref={ref} style={{ position: 'relative', width: fitRatio ? `${Math.min(1, f.W / f.H / fitRatio) * 94}%` : fill ? `min(100%, calc(76vh * ${f.W / f.H}))` : `min(100%, calc(${stage ? 560 : 430}px * ${f.W / f.H}))`, aspectRatio: String(f.W / f.H), ...(stage ? { backgroundImage: `url(${stage.url})`, backgroundSize: '100% 100%' } : { backgroundImage: 'linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px)', backgroundSize: `${cell}% ${cellH}%`, backgroundPosition: `${((f.pad - f.x0) / f.W) * 100}% ${((f.pad - f.y0) / f.H) * 100}%` }) }} data-mode={mode}>
       {shown.map((p, i) => {
         const [W, H] = dims(p), on = i === sel, isOver = over === i;
         const [pw, phh] = or(p.size, p.orientation), fm = mouldOf(p);
@@ -84,13 +86,13 @@ export function Wall({ prints, mode, editing, sel, photos, over, locked, share, 
                 const ph = pid !== null ? photos.get(pid) : undefined;
                 return (
                   <div key={k} style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {ph ? <span style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}><img src={imgUrl(ph.id, 'preview', share)} alt={ph.title} draggable={false} style={{ width: '100%', height: '100%', ...cropStyle(k === 0 ? p.crop : undefined), display: 'block' }} /></span>
+                    {ph ? <span style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}><img src={imgUrl(ph.id, imageKind, share)} alt={ph.title} draggable={false} style={{ width: '100%', height: '100%', ...cropStyle(k === 0 ? p.crop : undefined), display: 'block' }} /></span>
                       : <span style={{ fontSize: 12, color: 'var(--faint)', textAlign: 'center', padding: '0 8px' }}>{p.stack ? `Print ${i + 1} · ${p.orientation === 'portrait' ? (k === 0 ? 'top' : 'bottom') : (k === 0 ? 'left' : 'right')}` : `Print ${i + 1}`}</span>}
                   </div>
                 );
               })}
             </div>
-            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 10px)', whiteSpace: 'nowrap', textAlign: 'center', font: `400 10.5px ${mono}`, color: sel === i ? 'var(--text)' : 'var(--muted)' }}>{compact ? label : <>Print {i + 1} · {sizeName(p.size)}{p.stack ? ' · two stacked' : ''}<div style={{ fontStyle: 'italic', color: warn?.[i] ? 'oklch(0.78 0.11 35)' : 'var(--faint)', marginTop: 2 }}>{p.frame ? (p.frame.size === p.size ? 'framed' : `${sizeName(p.frame.size)} frame`) : 'poster'}{warn?.[i] ? ` · ⚠ ${warn[i]}` : ''}</div></>}</div>
+            {!hideLabels && <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 10px)', whiteSpace: 'nowrap', textAlign: 'center', font: `400 10.5px ${mono}`, color: sel === i ? 'var(--text)' : 'var(--muted)' }}>{compact ? label : <>Print {i + 1} · {sizeName(p.size)}{p.stack ? ' · two stacked' : ''}<div style={{ fontStyle: 'italic', color: warn?.[i] ? 'oklch(0.78 0.11 35)' : 'var(--faint)', marginTop: 2 }}>{p.frame ? (p.frame.size === p.size ? 'framed' : `${sizeName(p.frame.size)} frame`) : 'poster'}{warn?.[i] ? ` · ⚠ ${warn[i]}` : ''}</div></>}</div>}
           </div>
         );
       })}

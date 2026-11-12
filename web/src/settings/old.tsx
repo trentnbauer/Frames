@@ -61,39 +61,44 @@ const Toggle = ({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 );
 
 export function Vocabulary() {
-  const [kind, setKind] = useState<'subject' | 'tag'>('subject');
-  const list = useApi<{ name: string; kind: string; n: number }[]>(`/tags?kind=${kind}`);
+  const [kind, setKind] = useState<'subject' | 'tag'>('tag');
+  const list = useApi<{ name: string; kind: 'subject' | 'tag'; n: number }[]>('/tags');
   const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [to, setTo] = useState('');
-  const act = async (fn: () => Promise<unknown>) => { await fn(); list.reload(); };
-  return (
-    <div className="field">
-      <p>Subjects are what is in a picture (a harbour, a heron). Tags are everything else: style, mood, projects. Renaming to a name that exists merges the two.</p>
-      <div className="tabs" role="tablist">
-        {(['subject', 'tag'] as const).map((k) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k === 'subject' ? 'Subjects' : 'Tags'}</button>)}
-      </div>
-      <form className="form" style={{ margin: '14px 0' }} onSubmit={(e) => { e.preventDefault(); if (name.trim()) act(() => api('/tags', { body: { name, kind } })).then(() => setName('')); }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`New ${kind}`} aria-label={`New ${kind}`} />
-        <button className="pill">Create</button>
-      </form>
-      {list.loading && <Loading error={list.error} />}
-      {list.data?.length === 0 && <div className="empty" style={{ padding: '10px 0' }}>None yet.</div>}
-      {list.data?.map((t) => (
-        <div className="row" key={t.name}>
-          {editing === t.name ? (
-            <form className="form" onSubmit={(e) => { e.preventDefault(); act(() => api(`/tags/${kind}/${encodeURIComponent(t.name)}`, { method: 'PATCH', body: { name: to } })).then(() => setEditing(null)); }}>
-              <input autoFocus value={to} onChange={(e) => setTo(e.target.value)} aria-label={`Rename ${t.name}`} /><button className="pill">Save</button>
-            </form>
-          ) : <Link to={`/library?${kind}=${encodeURIComponent(t.name)}`}>{t.name} <span className="faint">{t.n}</span></Link>}
-          <span className="t2" style={{ display: 'flex', gap: 14, fontSize: 12.5 }}>
-            <button onClick={() => { setEditing(t.name); setTo(t.name); }}>Rename</button>
-            <button onClick={() => { if (confirm(`Delete “${t.name}”${t.n ? ` from ${t.n} photographs` : ''}? The photographs are not touched.`)) act(() => api(`/tags/${kind}/${encodeURIComponent(t.name)}`, { method: 'DELETE' })); }}>Delete</button>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<unknown>, done?: () => void) => {
+    setError(''); setBusy(true);
+    try { await fn(); list.reload(); done?.(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  const shown = (list.data ?? []).filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
+  return <div className="field">
+    <p>Manage all tags and subjects here. Renaming to an existing name merges entries of the same type.</p>
+    {error && <p role="alert" className="reason">{error}</p>}
+    <form className="form" style={{ margin: '14px 0' }} onSubmit={(e) => { e.preventDefault(); if (name.trim() && !busy) void act(() => api('/tags', { body: { name, kind } }), () => setName('')); }}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New tag or subject" aria-label="New tag or subject" />
+      <select aria-label="Type" value={kind} onChange={(e) => setKind(e.target.value as 'tag' | 'subject')}><option value="tag">Tag</option><option value="subject">Subject</option></select>
+      <button className="btn outline" disabled={!name.trim() || busy}>Create</button>
+    </form>
+    <input aria-label="Find tags and subjects" placeholder="Find tags and subjects" value={query} onChange={(e) => setQuery(e.target.value)} />
+    {list.loading && <Loading error={list.error} />}
+    {list.error && <p role="alert">{list.error}</p>}
+    {!list.loading && !shown.length && <p className="muted">{query ? 'No matches.' : 'None yet.'}</p>}
+    <div style={{ maxHeight: '45vh', overflow: 'auto' }}>{shown.map((t) => {
+      const key = `${t.kind}:${t.name}`, path = `/tags/${t.kind}/${encodeURIComponent(t.name)}`;
+      return <div className="row" key={key}>
+        {editing === key ? <form className="form" onSubmit={(e) => { e.preventDefault(); if (to.trim() && !busy) void act(() => api(path, { method: 'PATCH', body: { name: to } }), () => setEditing(null)); }}>
+          <input autoFocus value={to} onChange={(e) => setTo(e.target.value)} aria-label={`Rename ${t.kind} ${t.name}`} /><button className="btn outline" disabled={!to.trim() || busy}>Save</button><button type="button" onClick={() => setEditing(null)}>Cancel</button>
+        </form> : <Link to={`/library?${t.kind}=${encodeURIComponent(t.name)}`}>{t.name} <span className="faint">{t.n} · {t.kind}</span></Link>}
+        <span style={{ display: 'flex', gap: 14, fontSize: 12.5 }}>
+          <button disabled={busy} aria-label={`Rename ${t.kind} ${t.name}`} onClick={() => { setEditing(key); setTo(t.name); }}>Rename</button>
+          <button disabled={busy} aria-label={`Delete ${t.kind} ${t.name}`} onClick={() => { if (confirm(`Delete ${t.kind} “${t.name}”${t.n ? ` from ${t.n} photographs` : ''}? The photographs are not touched.`)) void act(() => api(path, { method: 'DELETE' })); }}>Delete</button>
+        </span>
+      </div>;
+    })}</div>
+  </div>;
 }
 
 

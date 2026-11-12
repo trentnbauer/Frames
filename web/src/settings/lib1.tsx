@@ -171,25 +171,14 @@ export function useTags(ctx: Ctx): Section {
   const subj = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
   const prefs = usePrefs('user');
   const hidden = prefs.get<string[]>('hidden', []);
-  const setSubjects = async (next: string[]) => {
-    const cur = (subj.data ?? []).map((x) => x.name);
-    try {
-      for (const a of next.filter((x) => !cur.includes(x))) await api('/tags', { body: { name: a, kind: 'subject' } });
-      for (const r of cur.filter((x) => !next.includes(x))) {
-        const n = subj.data?.find((x) => x.name === r)?.n ?? 0;
-        if (window.confirm(`Delete the subject “${r}”${n ? ` from ${n} photographs` : ''}? The photographs are not touched.`)) await api(`/tags/subject/${encodeURIComponent(r)}`, { method: 'DELETE' });
-      }
-      ctx.toast('Saved');
-    } catch (e) { ctx.toast(msg(e)); }
-    subj.reload();
-  };
+  const manage = () => ctx.modal(<Modal title="Tags & subjects" sub="Create, rename, merge or delete tags and subjects." width={640} onClose={() => { ctx.modal(null); subj.reload(); }}><Vocabulary /></Modal>);
   return {
     key: 'tags', name: 'Tags & subjects', hint: 'How photos get described and found.',
     groups: [
       { title: 'Subjects', rows: [
         { id: 'aiSubjects', t: 'toggle', label: 'Suggest subjects with AI', hint: 'Suggestions wait for you to accept.', value: prefs.get('aiSubjects', true), set: (v) => { prefs.set('aiSubjects', v); ctx.toast('Saved'); } },
         { id: 'autoAccept', t: 'select', label: 'Accept automatically above', dep: 'aiSubjects', opts: ['Never', '80% sure', '90% sure', '95% sure'], value: prefs.get('autoAccept', '95% sure'), set: (v) => { prefs.set('autoAccept', v); ctx.toast('Saved'); } },
-        { id: 'subjects', t: 'pills', label: 'Your subjects', hint: 'Used for filters and portfolio buttons.', value: (subj.data ?? []).map((x) => x.name), addAs: 'new subject', set: (v: string[]) => void setSubjects(v) },
+        { id: 'subjects', t: 'button', label: 'Tags & subjects', hint: 'Create, search, rename, merge or delete in one list.', meta: 'Manage tags', act: manage },
       ] },
       { title: 'Sensitive content', rows: [
         { id: 'sensAiLink', t: 'link', label: 'Flag sensitive photos with AI', hint: 'Set which AI does this in AI → Which AI does what.', meta: 'AI settings', act: () => ctx.goto('lib', 'ai') },
@@ -199,9 +188,9 @@ export function useTags(ctx: Ctx): Section {
       ] },
       { title: 'Tags', rows: [
         { id: 'autoTags', t: 'chips', label: 'Tag automatically from', opts: ['Camera', 'Lens', 'Film', 'Place', 'Season'], value: prefs.get<string[]>('autoTags', ['Camera', 'Film', 'Place']), set: (v: string[]) => { prefs.set('autoTags', v); ctx.toast('Saved'); } },
-        { id: 'merge', t: 'link', label: 'Similar tags', hint: '“autumn” and “fall”, for example.', meta: 'Merge tags', act: () => ctx.modal(<Modal title="Tags & subjects" sub="Rename, merge (rename to an existing name) or delete." width={640} onClose={close(ctx)}><Vocabulary /></Modal>) },
+
         { id: 'hidden', t: 'pills', label: 'Hidden tags', hint: 'Never shown to guests or on the portfolio.', value: hidden, addAs: 'private', set: (v: string[]) => { prefs.set('hidden', v); ctx.toast('Saved'); } },
-        { id: 'tagList', t: 'link', label: 'All tags', meta: 'Open the tag list', act: () => ctx.modal(<Modal title="All tags" sub="Rename, merge (rename to an existing name) or delete." width={640} onClose={close(ctx)}><Vocabulary /></Modal>) },
+
       ] },
     ],
   };

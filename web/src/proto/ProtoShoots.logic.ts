@@ -77,7 +77,7 @@ export class Logic extends DCLogic {
       inShoot: true,
       sv: {
         name: S.shootName != null ? S.shootName : sh.name, onName: (e) => this.setState({ shootName: e.target.value }), onNameBlur: () => { if (S.shootName != null && S.shootName.trim() && S.shootName !== sh.name) P.onRename(S.shootName.trim()); },
-        place: sh.place, dates: sh.dates, kit: sh.kit,
+        place: sh.place, dates: sh.dates, dateControl: sh.dateControl, kit: sh.kit,
         ...(() => { // the place and camera in the heading: click to edit, saved on leaving the box, and applied to every photograph in the shoot
           const ed = S.shootEdit && S.shootEdit.id === sh.id ? S.shootEdit : { id: sh.id };
           const set = (k, v) => this.setState({ shootEdit: { ...ed, id: sh.id, [k]: v } });
@@ -85,6 +85,7 @@ export class Logic extends DCLogic {
           return { placeVal: sh.placeVal,
             camVal: sh.camVal, onCamCommit: (v) => { if (v !== sh.camVal) P.onCamera(v); },
             placeOpen: S.placeOpen, openPlace: () => this.setState({ placeOpen: true }), closePlace: () => this.setState({ placeOpen: false }), placePin: sh.placePin, kitRest: sh.kitRest }; })(),
+        shareControl: P.shareControl,
         unrated: photos.length - rated.length,
         aiLabel: ai === 'busy' ? 'Analyzing…' : ai === 'done' ? '✓ Analyzed' : '✦ Analyze with AI', aiFg: ai === 'busy' ? 'var(--text2)' : 'var(--text)', aiSpin: ai === 'busy' ? spin() : null,
         ai: async () => { if (ai === 'busy' || !P.aiOn) { if (!P.aiOn) this.flash('AI is off. Turn it on in Settings.'); return; } const msg = await P.onAnalyse(); if (msg) this.flash(msg); },

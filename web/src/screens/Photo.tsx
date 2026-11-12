@@ -8,6 +8,7 @@ import { Header } from '../components/Shell';
 import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
+import { PhotoColourVariants } from '../components/PhotoColourVariants';
 
 type MapHit = { name: string; address: string; kind: string; suburb: string; city: string; lat: number; lon: number };
 const SENSITIVE = ['Nudity', 'Violence', 'Adult'];
@@ -88,6 +89,7 @@ export function Photo() {
     <div className="page-shell">
       <Header />
       <ProtoPhoto
+        colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}
         photoSrc={imgUrl(p.id, 'preview')} idx={idx >= 0 ? idx + 1 : 1} total={stepIds.length || 1} shootName={shoot?.name ?? 'Library'} onBack={back}
         onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)}
         mates={mates.map((m) => ({ id: m.id, src: imgUrl(m.id, 'thumb'), ar: m.ar, current: m.id === p.id }))} onOpenMate={(mid: number) => nav(`/photo/${mid}`)}

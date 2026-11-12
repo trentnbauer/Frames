@@ -41,7 +41,7 @@ import { registerCloud } from './routes/cloud.js';
 import { registerPrivacy } from './privacy.js';
 import { registerLibrary } from './routes/library.js';
 import { isPublicPath, registerShare } from './routes/share.js';
-import { createPortfolioGate, isPortfolioPath, portfolioHandleRewrite, registerPortfolio } from './portfolio.js';
+import { createPortfolioGate, isPortfolioPath, loadPortfolio, portfolioHandleRewrite, registerPortfolio } from './portfolio.js';
 import { registerPhotos } from './routes/photos.js';
 import { createTunnelRunner, loadTunnel, registerTunnel } from './tunnel.js';
 import { applyEnvTunnel, readEnvTunnel, seedTunnelFromEnv } from './tunnelEnv.js';
@@ -430,7 +430,13 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   });
 
   // ---------- collections ----------
-  app.get('/api/collections', async () => (db.prepare('SELECT * FROM collections ORDER BY id DESC').all() as Row[]).map(collectionDto));
+  app.get('/api/collections', async () => {
+    const portfolioId = loadPortfolio(db).collectionId;
+    // Manage the implicit portfolio backing list in settings. A regular composition selected for the portfolio still appears here.
+    return (db.prepare('SELECT * FROM collections ORDER BY id DESC').all() as Row[])
+      .filter((c) => c.id !== portfolioId || c.description !== 'Shown on the public portfolio website')
+      .map(collectionDto);
+  });
   app.post('/api/collections', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const name = String(b.name ?? '').trim();

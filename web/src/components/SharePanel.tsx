@@ -58,7 +58,7 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   return (
-    <Modal title={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} sub="Anyone with the link can see the wall and its candidates. Nothing changes until you approve it." width={580} onClose={onClose}
+    <Modal title={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} sub={kind === 'shoot' ? "Anyone with the link can see the photos in this shoot and rate them if you allow it." : "Anyone with the link can see the wall and its candidates. Nothing changes until you approve it."} width={580} onClose={onClose}
       foot={<>
         <button style={{ flex: 1, textAlign: 'left', fontSize: 13.5, color: 'var(--danger)', opacity: link ? 1 : 0.35 }} onClick={stop} disabled={!link}>Stop sharing</button>
         {link ? <a className="btn outline" href={urlOf(link.token)} target="_blank" rel="noopener noreferrer">Preview as guest</a> : <span className="btn outline disabled">Preview as guest</span>}
@@ -77,7 +77,7 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--hair)' }}>
-          <span style={{ fontSize: 13.5, color: 'var(--text2)' }}>Not shared. No one can open this wall.</span>
+          <span style={{ fontSize: 13.5, color: 'var(--text2)' }}>Not shared. No one can open this {kind === 'shoot' ? 'photoshoot' : 'wall'}.</span>
           <button className="btn primary" onClick={start}>Create link</button>
         </div>
       )}

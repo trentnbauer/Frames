@@ -103,7 +103,9 @@ export class Logic extends DCLogic {
       popShow: isFull && !!sp, popLeft, popTop, stopDown: (e) => e.stopPropagation(), deselect: () => this.setState({ sel: null }),
       view: S.view, onView: (view) => this.setState({ view }), onPinchStart: () => this.cancelDrag(),
       gridPosition: `${W / 2 + S.view.x}px ${H / 2 + S.view.y}px`,
-      prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, gridSize: px(10) + ' ' + px(10),
+      prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, roomControl: this.props.roomControl,
+      wallBackground: this.props.roomImage ? `url(${this.props.roomImage.url})` : 'linear-gradient(color-mix(in srgb, var(--text) 3.5%, transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb, var(--text) 3.5%, transparent) 1px,transparent 1px)',
+      wallRepeat: this.props.roomImage ? 'no-repeat' : 'repeat', gridSize: this.props.roomImage ? px(this.props.roomImage.w) + ' ' + px(this.props.roomImage.h) : px(10) + ' ' + px(10),
       wallDown: () => this.setState({ sel: null, sizeMenu: false }),
       wallPos: overlay ? 'fixed' : 'absolute', wallZ: overlay ? 80 : 1, wallRadius: overlay ? '0' : '8px',
       isFull, fullLabel: isFull ? 'Exit fullscreen · Esc' : 'Fullscreen', toggleFull: () => this.setFull(!isFull),
@@ -152,7 +154,7 @@ export class Logic extends DCLogic {
     return {
       candTabs: [['best', 'Best first'], ['fits', sel ? 'Fits ' + sel.size : 'Fits'], ['unrated', 'Unrated']].map(([k, l]) => ({ label: l + ' · ' + lists[k].length, bg: S.candTab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: S.candTab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ candTab: k }) })),
       candHint: sel ? 'Click a photo to put it in Print ' + (this.pr().indexOf(sel) + 1) + '. If it’s already on the wall, the two swap.' : 'Select a print on the wall, then click a photo to fill it.',
-      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: this.props.photoUrl(n), score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'rgba(0,0,0,.62)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'oklch(0.78 0.11 35)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
+      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: (this.props.photoThumb ?? this.props.photoUrl)(n), remove: !this.props.guest && this.props.onRemoveCandidate ? async () => { try { await this.props.onRemoveCandidate(n); } catch (e) { this.flash(e.message); } } : null, score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'rgba(0,0,0,.62)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'oklch(0.78 0.11 35)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
     };
   }
   shareVals() {

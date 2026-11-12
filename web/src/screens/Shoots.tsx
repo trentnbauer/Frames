@@ -8,6 +8,8 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import ProtoShoots from '../proto/ProtoShoots';
 import { reviewUrl } from '../reviewScope';
+import { SharePanel } from '../components/SharePanel';
+import { ShootDate } from '../components/ShootDate';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
@@ -52,6 +54,7 @@ export function Shoots() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const cloud = useApi<{ connections: Conn[] }>(status.data?.storage.cloud || status.data?.cloudProviders.length ? '/cloud' : null);
   const shootPhotos = useApi<{ photos: PhotoLite[] }>(sid ? `/photos?shoot=${sid}&order=oldest` : null);
+  const [shareId, setShareId] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [newest, setNewest] = useState(true);
   const [filter, setFilter] = useState<'' | 'uncomposed' | 'review'>('');
@@ -85,7 +88,7 @@ export function Shoots() {
   const ph = shootPhotos.data?.photos ?? [];
   const inComp = new Set((colls.data ?? []).flatMap((c) => c.photoIds));
   const view = sh ? {
-    id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates,
+    id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates, dateControl: <ShootDate key={sh.id} shoot={sh} onSaved={reloadAll} />,
     placeVal: sh.place,
     placePin: { name: sh.place, address: ph.find((p) => p.place === sh.place)?.placeAddress ?? '', kind: ph.find((p) => p.place === sh.place)?.placeKind ?? '', suburb: '', city: '', lat: ph.find((p) => p.lat !== null)?.lat ?? null, lng: ph.find((p) => p.lat !== null)?.lon ?? null, precision: ph.find((p) => p.place === sh.place)?.placePrecision ?? 'exact' },
     camVal: sh.gear?.camera || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
@@ -93,7 +96,7 @@ export function Shoots() {
     kit: [sh.gear?.camera, sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · ') || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
   } : null;
   const askAll = (what: string, v: string) => !v || window.confirm(`Set the ${what} to “${v}” on all ${ph.length} photos in this shoot?`);
-  const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.capturedAt) }));
+  const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.dateEdit ?? p.capturedAt) }));
 
   const place = async (r: ScanResult, o: { mode: string; name: string; existingId: number | null; split: boolean }) => {
     if (!r.shootId || r.imported === 0) return;
@@ -110,7 +113,9 @@ export function Shoots() {
   return (
     <BrowsePage>
       <input ref={input} type="file" multiple hidden accept="image/*,.heic,.tif,.tiff,.raw,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2" onChange={(e) => { setFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+      {shareId !== null && <SharePanel kind="shoot" id={shareId} name={all.find((s) => s.id === shareId)?.name} onClose={() => setShareId(null)} />}
       <ProtoShoots
+        shareControl={sid !== null ? <button className="btn outline" onClick={() => setShareId(sid)}>Share</button> : null}
         uploadReq={req} localOn={local} cloudOn={cloudOn} today={todayName()}
         files={files} onFiles={setFiles} pickFiles={() => input.current?.click()} filesMeta={files.length ? `${mb >= 1000 ? (mb / 1000).toFixed(1) + ' GB' : Math.round(mb) + ' MB'} · ${suggestName}` : ''} suggestName={suggestName}
         storageSub={me?.storeOriginalQuality === false ? 'Uploaded photos are kept as smaller copies' : `To your library on this server`} shrinkUploads={me?.storeOriginalQuality === false} cloudHint={conns.length ? conns.map((c) => c.provider).join(', ') : ''}

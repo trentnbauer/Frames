@@ -5,6 +5,7 @@ import { CloudSettings } from '../pages/CloudSettings';
 import { AiSettings } from '../pages/AiSettings';
 import { YourData } from '../pages/YourData';
 import { Profile } from '../pages/Profile';
+import { PortfolioSelection } from '../components/PortfolioSelection';
 import { usePrefs } from './hooks';
 import type { Ctx } from './sections';
 import type { Section } from './ui';
@@ -194,7 +195,7 @@ export function usePortfolio(ctx: Ctx): Section {
       { title: 'What’s shown', rows: [
         { id: 'pfFavs', t: 'link', thumbs: fav.slice(0, 4).map((id) => imgUrl(id, 'thumb')), label: `★ Favourites · ${fav.length}`, hint: 'Pinned to the top. Only you add these.', meta: 'Arrange', act: () => ctx.toast('Star a photo on its page to add it to Favourites') },
         { id: 'pfAutoMin', t: 'selTog', label: 'Add photos automatically', hint: `Any photo whose combined score reaches the threshold. ${marks.data?.count ?? 0} photos right now.`, prefix: 'Score ', opts: SCORES.map((s) => s[0]), value: nearest, set: (v) => void save({ autoThreshold: SCORES.find((s) => s[0] === v)![1] }), tog: !!c?.autoAdd, togSet: (v) => void save({ autoAdd: v }) },
-        { id: 'pfHand', t: 'link', label: `Added by hand · ${marks.data?.hand.length ?? 0}`, hint: 'From a photo’s page or a Library selection.', meta: 'See all', act: () => window.location.assign('/collections') },
+        { id: 'pfHand', t: 'link', label: `Added by hand · ${marks.data?.hand.length ?? 0}`, hint: 'From a photo’s page or a Library selection.', meta: 'See all', act: () => ctx.modal(<Modal title="Added to portfolio by hand" sub="Manage this selection here. Removing a photograph keeps it in your library." onClose={() => ctx.modal(null)} width={640}><PortfolioSelection onChanged={() => { marks.reload(); d.reload(); }} /></Modal>) },
         { id: 'pfOut', t: 'link', label: `Left out · ${marks.data?.out.length ?? 0}`, hint: 'Never shown, even if they meet the score.', meta: 'See all', act: () => ctx.toast('Use “Leave out” on a photo’s page to change this') },
         { id: 'pfOrder', t: 'select', label: 'Order', opts: ORDERS.map((o) => o[0]), value: ORDERS.find((o) => o[1] === c?.order)?.[0] ?? 'Newest taken first', set: (v) => void save({ order: ORDERS.find((o) => o[0] === v)![1] }) },
       ] },

@@ -42,7 +42,7 @@ export function GuestEditor({ token, name, owner, layout, chosenIds, photos, ask
     <ProtoEditor
       guest name={name} owner={owner} printsKey={JSON.stringify(base)} prints={baseD} basePrints={baseD}
       onPrints={(ds: DPrint[]) => setDraft(ds)}
-      photoMeta={(pid: number) => [byId.get(pid)?.title || `Photo ${pid}`, '', 0]} photoDims={(pid: number) => { const p = byId.get(pid); return p?.w && p?.h ? [p.w, p.h] : [Math.round((p?.ar ?? 1.5) * 4000), 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview', token)}
+      photoMeta={(pid: number) => [byId.get(pid)?.title || `Photo ${pid}`, '', 0]} photoDims={(pid: number) => { const p = byId.get(pid); return p?.w && p?.h ? [p.w, p.h] : [Math.round((p?.ar ?? 1.5) * 4000), 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview', token)} photoThumb={(pid: number) => imgUrl(pid, 'thumb', token)}
       order={others.length ? others : chosenIds} unrated={[]}
       onSend={send}
     />
