@@ -23,7 +23,7 @@ import { FRAME_COLOURS, parseLayout } from '../layout.js';
  * This is the one part of Frames reachable without the login, so it is deliberately narrow:
  *  - the token is 128 random bits, so it cannot be guessed, and guessing is rate-limited;
  *  - a link opens exactly one collection or photoshoot, nothing else;
- *  - guests only ever get a photo's id, title and shape. No location, camera, notes, file paths or other photos;
+ *  - guests only ever get a photo's id, title, pixel dimensions and shape. No location, camera, notes, file paths or other photos;
  *  - downloads and reviews are separate switches; links can expire and can be revoked at any time.
  */
 
@@ -309,7 +309,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const r = resolve((req.params as Row).token, req, rep);
     if (!r) return;
     db.prepare('UPDATE shares SET views = views + 1 WHERE id = ?').run(r.share.id);
-    const photos = r.photoIds.map((id, i) => { const p = one('SELECT id, title, w, h FROM photos WHERE id = ?', id); return p ? { id: p.id, title: p.title, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
+    const photos = r.photoIds.map((id, i) => { const p = one('SELECT id, title, w, h FROM photos WHERE id = ?', id); return p ? { id: p.id, title: p.title, w: p.w ?? 0, h: p.h ?? 0, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
     return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, layout: r.layout ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, allowSuggest: canSuggest(r.share), askName: !!r.share.ask_name, owner: displayNameOf(db) || x.tenant().user.name.split(' ')[0] || '', expiresAt: r.share.expires_at, photos,
       // Who is looking, if they are signed in, and how a visitor could make an account (a guest one) instead of only giving a name.
       viewer: ((req as any).shareViewer as { name: string; role: string } | null) ? { name: (req as any).shareViewer.name, role: (req as any).shareViewer.role } : null,
