@@ -22,7 +22,7 @@ export class Logic extends DCLogic {
   area(k) { const [w, h] = this.SIZES[k]; return w * h; }
   fits(frame, print) { const [fw, fh] = this.SIZES[frame], [pw, ph] = this.SIZES[print]; return fw >= pw && fh >= ph; }
   COL = { Black: '#151514', White: '#e9e7e1', Oak: '#b08a5e', Walnut: '#5b3f2c', Silver: '#a3a3a0' };
-  MAT = { White: '#f4f2ec', Ivory: '#e6dfcc', Black: 'var(--raised)' };
+  MAT = { White: '#f4f2ec', Ivory: '#e6dfcc', Black: '#1a1a19' };
   wallRef = React.createRef();
   state = { view: { ...HOME_VIEW }, shDraft: null, sel: null, full: false, wall: { w: 964, h: 560 }, candTab: 'best', dragging: null, toast: '', tOp: 0 };
   componentDidUpdate(pp) { if (pp.readOnly !== this.props.readOnly) { this.endDrag(); this.setState({ prints: this.props.prints, sel: null, dragging: null, full: false }); } if (pp.printsKey !== this.props.printsKey && !this.state.dragging) { this.state = { ...this.state, prints: this.props.prints }; this.__update(); } }
@@ -84,12 +84,12 @@ export class Logic extends DCLogic {
       return {
         left: Math.round(W / 2 + S.view.x + (p.x - d.ow / 2) * s) + 'px', top: Math.round(H / 2 + S.view.y + (p.y - d.oh / 2) * s) + 'px', w: px(d.ow), h: px(d.oh), pad: px(d.b),
         frameBg: p.framed ? this.COL[p.colour] : 'transparent', matBg: p.framed && p.mat !== 'None' ? this.MAT[p.mat] : 'transparent', matPad: px(my) + ' ' + px(mx),
-        cells: this.held(p).slice(0, p.stack ? 2 : 1).map((n, k) => ({ img: n ? this.bg(p, n) : 'rgba(0,0,0,.22)', empty: n ? 'none' : 'inset 0 0 0 1px rgba(239,237,232,.6)', emptyLabel: n ? '' : p.stack ? (p.or === 'P' ? ['Top', 'Bottom'] : ['Left', 'Right'])[k] : 'Drop a candidate here' })),
+        cells: this.held(p).slice(0, p.stack ? 2 : 1).map((n, k) => ({ img: n ? this.bg(p, n) : 'var(--wall-empty-bg)', empty: n ? 'none' : 'inset 0 0 0 1px var(--outline)', emptyLabel: n ? '' : p.stack ? (p.or === 'P' ? ['Top', 'Bottom'] : ['Left', 'Right'])[k] : 'Drop a candidate here' })),
         dir: p.or === 'P' ? 'column' : 'row', gap: p.stack ? '2%' : '0', paper: p.stack ? '#fff' : 'transparent', slotsFull: this.held(p).slice(0, p.stack ? 2 : 1).every(Boolean),
         shadow: S.dragging === p.id ? '0 18px 40px rgba(0,0,0,.55)' : '0 6px 16px rgba(0,0,0,.4)', outline: on ? '2px solid var(--text)' : '2px solid transparent', cursor: this.props.readOnly ? 'default' : S.dragging === p.id ? 'grabbing' : 'grab', trans: S.dragging ? 'box-shadow .15s' : 'left .25s, top .25s, width .25s, height .25s, box-shadow .15s',
         label: 'Print ' + (i + 1) + ' · ' + p.size + (p.or === 'L' ? ' landscape' : '') + (p.stack ? ' · two photos' : ''),
         sub: (p.framed ? p.frame + ' frame' : 'no frame') + (p.photo ? ' · ' : ''),
-        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'oklch(0.72 0.16 28)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
+        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'var(--warn)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
         down: (e) => this.startDrag(e, p), drop: (e) => { e.preventDefault(); const n = +e.dataTransfer.getData('text/plain'); if (n) this.place(n, p.id, p.stack ? this.slotAt(e, p) : 0); },
       };
     });
@@ -105,7 +105,7 @@ export class Logic extends DCLogic {
       view: S.view, onView: (view) => this.setState({ view }), onPinchStart: () => this.cancelDrag(),
       gridPosition: `${W / 2 + S.view.x}px ${H / 2 + S.view.y}px`,
       prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, roomControl: this.props.roomControl,
-      wallBackground: this.props.roomImage ? `url(${this.props.roomImage.url})` : 'linear-gradient(color-mix(in srgb, var(--text) 3.5%, transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb, var(--text) 3.5%, transparent) 1px,transparent 1px)',
+      wallBackground: this.props.roomImage ? `url(${this.props.roomImage.url})` : 'linear-gradient(var(--wall-grid) 1px,transparent 1px),linear-gradient(90deg,var(--wall-grid) 1px,transparent 1px)',
       wallRepeat: this.props.roomImage ? 'no-repeat' : 'repeat', gridSize: this.props.roomImage ? px(this.props.roomImage.w) + ' ' + px(this.props.roomImage.h) : px(10) + ' ' + px(10),
       wallDown: () => this.setState({ sel: null, sizeMenu: false }),
       wallPos: overlay ? 'fixed' : 'absolute', wallZ: overlay ? 80 : 1, wallRadius: overlay ? '0' : '8px',
@@ -155,7 +155,7 @@ export class Logic extends DCLogic {
     return {
       candTabs: [['best', 'Best first'], ['fits', sel ? 'Fits ' + sel.size : 'Fits'], ['unrated', 'Unrated']].map(([k, l]) => ({ label: l + ' · ' + lists[k].length, bg: S.candTab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: S.candTab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ candTab: k }) })),
       candHint: this.props.readOnly ? 'Candidates saved with this composition.' : sel ? 'Click a photo to put it in Print ' + (this.pr().indexOf(sel) + 1) + '. If it’s already on the wall, the two swap.' : 'Select a print on the wall, then click a photo to fill it.',
-      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: (this.props.photoThumb ?? this.props.photoUrl)(n), remove: !this.props.guest && !this.props.readOnly && this.props.onRemoveCandidate ? async () => { try { await this.props.onRemoveCandidate(n); } catch (e) { this.flash(e.message); } } : null, score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'rgba(0,0,0,.62)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'oklch(0.78 0.11 35)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { if (this.props.readOnly) { e.preventDefault(); return; } e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
+      cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: (this.props.photoThumb ?? this.props.photoUrl)(n), remove: !this.props.guest && !this.props.readOnly && this.props.onRemoveCandidate ? async () => { try { await this.props.onRemoveCandidate(n); } catch (e) { this.flash(e.message); } } : null, score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'var(--wall-control-bg)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'var(--warn)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { if (this.props.readOnly) { e.preventDefault(); return; } e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
     };
   }
   shareVals() {

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi, imgUrl } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
-import { Header } from '../components/Shell';
 import ProtoMore from '../proto/ProtoMore';
 
 type S = {
@@ -49,7 +48,7 @@ export function Stats() {
   } : null;
   return (
     <div className="page-shell">
-      <Header />
+
       {v ? <ProtoMore page="stats" v={v} /> : st.error ? <p role="alert" className="muted">Something went wrong: {st.error}</p> : null}
     </div>
   );

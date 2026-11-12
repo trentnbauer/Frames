@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Header, Loading } from '../components/bits';
+import { Loading } from '../components/bits';
 import { useStore } from '../store';
 import proto from './proto.json';
 import { GroupView, visibleRows, useToast, type Section } from './ui';
@@ -61,11 +61,11 @@ export function SettingsPage() {
   const hits = needle ? ROWS.filter((r) => (isAdmin || r.tab === 'lib') && `${r.label} ${r.hint} ${NAMES.get(`${r.tab}:${r.sec}`)} ${r.g}`.toLowerCase().includes(needle)) : [];
   const hitSecs = needle ? [...LIB, ...(isAdmin ? SRV : [])].filter((d) => hits.some((h) => h.tab === d.tab && h.sec === d.key)) : [];
 
-  if (!settings) return <div className="page"><Header /><Loading /></div>;
+  if (!settings) return <div className="page"><Loading /></div>;
   return (
     <div className="page" style={{ paddingBottom: 140 }}>
-      <Header />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12, maxWidth: 1028, marginInline: 'auto' }}>
+
+      <div className="settings-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12, maxWidth: 1028, marginInline: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
           <h1 className="serif" style={{ fontSize: 48, lineHeight: 1, margin: 0 }}>Settings</h1>
           <span role="status" aria-live="polite" style={{ fontSize: 13, color: '#a8a59f', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>

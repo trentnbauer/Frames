@@ -6,7 +6,7 @@ import { getSetting, type DB } from './db.js';
  */
 export const KINDS = [
   'guest-suggestion', 'guest-rating', 'guest-reply', 'community-rating', 'idea', 'cloud-sync', 'report-outcome', 'report-queue',
-  'review-due', 'update', 'sign-in', 'summary',
+  'review-due', 'update', 'sign-in', 'summary', 'gear-found',
 ] as const;
 export type Kind = (typeof KINDS)[number];
 

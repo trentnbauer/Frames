@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from '../components/Modal';
 import { useStore } from '../store';
-import { getTheme, setTheme } from '../theme';
+import { useTheme, setTheme } from '../theme';
 import { Profile } from '../pages/Profile';
 import { SignInMethods } from '../pages/SignInMethods';
 import { usePrefs } from './hooks';
@@ -55,7 +55,7 @@ export function useProfile(ctx: Ctx): Section {
   const p = useApi<P>('/profile');
   const prefs = usePrefs('user');
   const { refreshMe } = useStore();
-  const [theme, setThemeNow] = useState(getTheme());
+  const theme = useTheme();
   const save = async (body: object) => { try { await api('/profile', { method: 'PUT', body }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } p.reload(); refreshMe(); };
   const d = p.data;
   const countries = d?.country && !COUNTRIES.includes(d.country) ? [d.country, ...COUNTRIES] : COUNTRIES;
@@ -70,7 +70,7 @@ export function useProfile(ctx: Ctx): Section {
         { id: 'email', t: 'text', label: 'Email', hint: 'For sign-in and guest replies.', value: ctx.me?.user?.email ?? '', disabled: true },
       ] },
       { title: 'Preferences', rows: [
-        { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); setThemeNow(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
+        { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
         { id: 'start', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },
         { id: 'units', t: 'seg', label: 'Print sizes in', opts: ['cm', 'inches'], value: prefs.get('units', 'cm'), set: (v) => { prefs.set('units', v); ctx.toast('Saved'); } },
         { id: 'dateFmt', t: 'select', label: 'Dates', opts: ['9 Nov 2026', '09/11/2026', '2026-11-09', 'Nov 9, 2026'], value: prefs.get('dateFmt', '9 Nov 2026'), set: (v) => { prefs.set('dateFmt', v); ctx.toast('Saved'); } },

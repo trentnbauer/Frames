@@ -3,8 +3,9 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api, openPortfolio, useApi } from '../api';
 import { useStore } from '../store';
 import { useUi } from '../ui';
-import { getTheme, setTheme } from '../theme';
+import { useTheme, setTheme } from '../theme';
 import { Modal, Spinner } from './Modal';
+import { useLayoutPreferences } from '../layoutPreferences';
 import { clearSiteData } from '../clearSiteData';
 
 export function Mark({ w = 24 }: { w?: number }) {
@@ -21,8 +22,8 @@ export function Mark({ w = 24 }: { w?: number }) {
 export const stepOf = (path: string): 1 | 2 | 3 | 0 => (/^\/shoots/.test(path) ? 1 : /^\/(library|collections)/.test(path) ? 2 : 0);
 
 /** Notifications point at app paths (e.g. /collections/4?guests=suggestions, /#ideas). */
-const ICON: Record<string, string> = { 'guest-suggestion': '✎', 'guest-rating': '★', 'guest-reply': '✎', 'community-rating': '★', idea: '✦', 'cloud-sync': '☁', 'report-outcome': '⚑', 'report-queue': '⚑', 'review-due': '◐', update: '↑', 'sign-in': '⎆', summary: '▦' };
-type Notif = { id: number; kind: string; text: string; createdAt: string; read: boolean; target: { screen: string; anchor?: string } };
+const ICON: Record<string, string> = { 'guest-suggestion': '✎', 'guest-rating': '★', 'guest-reply': '✎', 'community-rating': '★', idea: '✦', 'cloud-sync': '☁', 'report-outcome': '⚑', 'report-queue': '⚑', 'review-due': '◐', update: '↑', 'sign-in': '⎆', summary: '▦', 'gear-found': '▣' };
+type Notif = { gear?: { id: number; name: string; type: 'camera' | 'lens'; state: string }; id: number; kind: string; text: string; createdAt: string; read: boolean; target: { screen: string; anchor?: string } };
 
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
@@ -54,8 +55,13 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
   const nav = useNavigate();
   const loc = useLocation();
   const [items, setItems] = useState<Notif[]>([]);
-  const load = useCallback(() => { api<{ items: Notif[] }>('/notifications').then((r) => setItems(r.items)).catch(() => undefined); }, []);
+  const [clearing, setClearing] = useState(false);
+  const [acting, setActing] = useState<number | null>(null);
+  const [clearError, setClearError] = useState('');
+  const loadVersion = useRef(0);
+  const load = useCallback(() => { const version = ++loadVersion.current; api<{ items: Notif[] }>('/notifications').then((r) => { if (version === loadVersion.current) setItems(r.items); }).catch(() => undefined); }, []);
   useEffect(() => { load(); }, [load, loc.pathname]);
+  useEffect(() => { window.addEventListener('frames:gear-changed', load); return () => window.removeEventListener('frames:gear-changed', load); }, [load]);
   useEffect(() => { const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
   const unread = items.filter((i) => !i.read).length;
   const go = (n: Notif) => {
@@ -65,6 +71,24 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
     const to = n.target.screen + (n.target.anchor ? `#${n.target.anchor}` : '');
     nav(to);
     if (n.target.anchor) setTimeout(() => document.getElementById(n.target.anchor!)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+  };
+  const clear = async () => {
+    if (clearing) return;
+    ++loadVersion.current; setClearing(true); setClearError('');
+    try { await api('/notifications', { method: 'DELETE' }); setItems([]); load(); }
+    catch (e) { setClearError((e as Error).message); load(); }
+    finally { setClearing(false); }
+  };
+  const notificationAction = async (notification: Notif, action: 'dismiss' | 'add' | 'blacklist') => {
+    if (acting !== null || clearing) return;
+    ++loadVersion.current; setActing(notification.id); setClearError('');
+    try {
+      await api(`/notifications/${notification.id}${action === 'dismiss' ? '' : '/gear'}`, action === 'dismiss' ? { method: 'DELETE' } : { body: { action } });
+      setItems((list) => list.filter((n) => n.id !== notification.id));
+      if (action !== 'dismiss') window.dispatchEvent(new Event('frames:gear-changed'));
+      load();
+    } catch (e) { setClearError((e as Error).message); load(); }
+    finally { setActing(null); }
   };
   const readAll = () => { setItems((l) => l.map((i) => ({ ...i, read: true }))); api('/notifications/read', { body: { all: true } }).catch(() => undefined); };
   return (
@@ -79,19 +103,27 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
           <div className="popover notifs" role="dialog" aria-label="Notifications">
             <div className="spread" style={{ padding: '14px 16px 10px' }}>
               <span className="serif" style={{ fontSize: 22, lineHeight: 1 }}>Notifications</span>
-              <button style={{ fontSize: 12.5, color: unread ? 'var(--text2)' : 'var(--faint)' }} onClick={readAll} disabled={!unread}>Mark all read</button>
+              <div style={{ display: 'flex', gap: 12 }}><button style={{ fontSize: 12.5, color: unread ? 'var(--text2)' : 'var(--faint)' }} onClick={readAll} disabled={!unread || clearing || acting !== null}>Mark all read</button><button type="button" aria-label="Clear notifications" style={{ fontSize: 12.5, color: 'var(--text2)' }} disabled={!items.length || clearing || acting !== null} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear'}</button></div>
             </div>
+            {clearError && <div role="alert" className="reason" style={{ margin: '0 16px 8px' }}>{clearError}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 6px 6px', maxHeight: '60vh', overflow: 'auto' }}>
-              {items.length === 0 && <div className="muted" style={{ padding: '18px 10px', fontSize: 13.5 }}>Nothing yet. Guest replies, community ratings and ideas show up here.</div>}
+              {items.length === 0 && <div className="muted" style={{ padding: '18px 10px', fontSize: 13.5 }}>Nothing yet. New gear, guest replies, community ratings and ideas show up here.</div>}
               {items.map((n) => (
-                <button key={n.id} className={'nrow' + (n.read ? '' : ' unread')} onClick={() => go(n)}>
-                  <span className="nic" aria-hidden>{ICON[n.kind] ?? '•'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, lineHeight: 1.4, color: n.read ? 'var(--text2)' : 'var(--text)' }}>{n.text}</div>
-                    <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2 }}>{ago(n.createdAt)}</div>
-                  </div>
-                  <i className="ndot" />
-                </button>
+                <div key={n.id} className={'nrow' + (n.read ? '' : ' unread')} style={{ position: 'relative', display: 'block', padding: 0 }}>
+                  <button className="notification-main" onClick={() => go(n)}>
+                    <span className="nic" aria-hidden>{ICON[n.kind] ?? '•'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, lineHeight: 1.4, color: n.read ? 'var(--text2)' : 'var(--text)' }}>{n.text}</div>
+                      <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2 }}>{ago(n.createdAt)}</div>
+                    </div>
+                    <i className="ndot" />
+                  </button>
+                  <button type="button" className="notification-dismiss" aria-label={`Dismiss ${n.text}`} title="Dismiss notification" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>×</button>
+                  {n.gear?.state === 'new' && <div style={{ display: 'flex', gap: 8, padding: '0 34px 12px 46px', flexWrap: 'wrap' }}>
+                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
+                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'blacklist')}>Blacklist</button>
+                  </div>}
+                </div>
               ))}
             </div>
             <button className="mi" style={{ borderTop: '1px solid var(--hair)', borderRadius: 0, height: 'auto', padding: '10px 16px', fontSize: 12.5 }} onClick={() => { setOpen(false); nav('/settings?section=notifications'); }}>Notification settings</button>
@@ -107,7 +139,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
   const nav = useNavigate();
   const health = useApi<{ version: string }>(open ? '/health' : null);
   const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
-  const [theme, setT] = useState(getTheme());
+  const { fullWidth, setFullWidth } = useLayoutPreferences();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState('');
@@ -121,7 +153,6 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
   const close = () => setOpen(false);
   const go = (to: string) => () => { close(); nav(to); };
   const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
-  const toggleTheme = (e: React.MouseEvent) => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t, { x: e.clientX, y: e.clientY }); setT(t); close(); };
   const item = (label: string, onClick: (e: React.MouseEvent) => void, meta?: string) => <button key={label} className="mi" onClick={onClick}><span>{label}</span>{meta && <span className="meta">{meta}</span>}</button>;
   return (
     <>
@@ -141,7 +172,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Settings', go('/settings'), '⌘ ,')}
             {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
-            {item(theme === 'dark' ? 'Light mode' : 'Dark mode', toggleTheme, theme === 'dark' ? '☼' : '☾')}
+            <button className="mi" role="menuitemcheckbox" aria-checked={fullWidth} onClick={() => { setFullWidth(!fullWidth); close(); }}><span>Full width</span><span className="meta">{fullWidth ? 'On' : 'Off'}</span></button>
             <div className="msep" />
             {item('Your stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
             {item('To do', go('/todo'), todo ? todo.toLocaleString() : '')}
@@ -168,8 +199,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
 
 export function Header({ right }: { right?: ReactNode }) {
   const loc = useLocation();
-  const ui = useUi();
-  const step = stepOf(loc.pathname);
+  const theme = useTheme();
   const [menu, setMenu] = useState<'user' | 'bell' | null>(null);
   useEffect(() => setMenu(null), [loc.pathname]);
   return (
@@ -178,6 +208,7 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
+        <button type="button" className="btn theme-toggle" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={(e) => setTheme(theme === 'dark' ? 'light' : 'dark', { x: e.clientX, y: e.clientY })}>{theme === 'dark' ? '☼ Light mode' : '☾ Dark mode'}</button>
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
       </div>

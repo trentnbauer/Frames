@@ -15,15 +15,19 @@ describe('composition lifecycle controls', () => {
     const full = renderToStaticMarkup(<CompositionStage value="review" full onChange={noop} />);
     expect(full).not.toContain('disabled=""');
   });
-  it('replaces the three stages with Edit while Done', () => {
+  it('keeps the three stages visible while Done', () => {
     const html = renderToStaticMarkup(<CompositionStage value="done" full onChange={noop} />);
-    expect(html).toContain('>Edit</button>');
-    expect(html).not.toContain('aria-label="Composition stage"');
+    expect(html).not.toContain('>Edit</button>');
+    expect(html).toContain('aria-label="Composition stage"');
+    for (const name of ['Progress', 'Review', 'Done']) expect(html).toContain(name);
+    expect(html).toContain('aria-pressed="true"');
   });
   it('hides mutation controls in Done, keeps view controls and only shows Export there', () => {
     const props = { name: 'Neon Interiors', prints: [], order: [], unrated: [], share: { active: false } };
     const done = renderToStaticMarkup(<ProtoEditor {...props} readOnly showExport stageControl={<CompositionStage value="done" full onChange={noop} />} />);
-    for (const text of ['Done · Read-only', 'Edit', 'Export', 'Share', 'Guests', 'Fullscreen']) expect(done).toContain(text);
+    for (const text of ['Done · Read-only', 'Progress', 'Review', 'Done', 'Export', 'Share', 'Guests', 'Fullscreen']) expect(done).toContain(text);
+    expect(done.indexOf('>Export')).toBeGreaterThan(done.indexOf('<aside'));
+    expect(done).toContain('background-color:var(--wall-bg)');
     for (const text of ['+ Print', 'Line up', '+ Add photos', 'Help me decide', 'Nothing selected']) expect(done).not.toContain(text);
     expect(renderToStaticMarkup(<ProtoEditor {...props} />)).not.toMatch(/>Export(?: |<)/);
   });

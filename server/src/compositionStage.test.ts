@@ -80,11 +80,10 @@ describe('explicit composition stages', () => {
 it('migrates previously printed compositions to Done and other compositions to Progress without resetting reopened work', () => {
   const e = makeEnv();
   try {
-    const version = Number(e.db.pragma('user_version', { simple: true }));
     e.db.prepare("INSERT INTO collections(name, printed_at) VALUES('Printed', '2026-01-01')").run();
     e.db.prepare("INSERT INTO collections(name) VALUES('Draft')").run();
     e.db.exec('ALTER TABLE collections DROP COLUMN stage');
-    e.db.pragma(`user_version = ${version - 1}`); migrate(e.db);
+    e.db.pragma('user_version = 33'); migrate(e.db); // version before composition stages; also exercises later migrations
     expect(e.db.prepare('SELECT name, stage FROM collections ORDER BY id').all()).toEqual([{ name: 'Printed', stage: 'done' }, { name: 'Draft', stage: 'progress' }]);
     e.db.prepare("UPDATE collections SET stage = 'review', printed_at = NULL WHERE name = 'Printed'").run(); migrate(e.db);
     expect((e.db.prepare("SELECT stage FROM collections WHERE name = 'Printed'").get() as { stage: string }).stage).toBe('review');

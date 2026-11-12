@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
-import { Header } from '../components/Shell';
 import { useStore } from '../store';
 import ProtoMore from '../proto/ProtoMore';
 import { AddToComposition } from '../components/AddToComposition';
@@ -47,7 +46,7 @@ export function TodoPage() {
     setDesc(p.description || '');
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!todo.data || !walk.data) return <div className="page-shell"><Header /></div>;
+  if (!todo.data || !walk.data) return <div className="page-shell"></div>;
   const counts: Record<string, number> = { all: walk.data.photos.length };
   for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
   // Tags can be added on any to-do photo, whichever list it came from.
@@ -88,7 +87,7 @@ export function TodoPage() {
   };
   return (
     <div className="page-shell">
-      <Header />
+
       {mapOpen && p && (
         <ProtoMapPicker
           place={p.place || p.lat !== null ? { name: p.place, address: p.placeAddress, kind: p.placeKind, lat: p.lat, lng: p.lon, precision: p.placePrecision, suburb: '', city: '' } : null}

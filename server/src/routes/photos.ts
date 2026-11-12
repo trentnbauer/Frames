@@ -1,3 +1,4 @@
+import { discoverPhotoGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { searchWords } from '../searchWords.js';
 import { COLOR_NAMES, hammingInts, hashInts, similarity, type Feat, type Swatch } from '../analysis.js';
@@ -326,6 +327,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     if (b.rejectAiDescription === true && p.ai_json) set('UPDATE photos SET ai_json = ? WHERE id = ?', JSON.stringify({ ...JSON.parse(p.ai_json), descriptionRejected: true }), id);
     if (b.reanalyse === true) set('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE id = ?', id);
+    if ('camera' in b || 'lens' in b) discoverPhotoGear(db, id);
     return x.photoDto(one('SELECT * FROM photos WHERE id = ?', id)!, true);
   });
 

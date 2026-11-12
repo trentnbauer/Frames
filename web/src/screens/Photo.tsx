@@ -4,7 +4,6 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
-import { Header } from '../components/Shell';
 import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
@@ -40,7 +39,7 @@ export function Photo() {
   useEffect(() => { setTitle(p?.title ?? ''); }, [p?.id, p?.title]);
   useEffect(() => { document.title = `${p?.title || 'Photograph'} · Frames`; }, [p?.title]);
 
-  if (!p) return <div className="page-shell"><Header />{photo.error && <p role="alert" className="muted">Something went wrong: {photo.error}</p>}</div>;
+  if (!p) return <div className="page-shell">{photo.error && <p role="alert" className="muted">Something went wrong: {photo.error}</p>}</div>;
   const here = Number(id);
   const libList = all.data?.photos ?? [];
   const walk = todoKey ? (snapshot.current ?? []).filter((x) => x === here || !live || live.includes(x)) : null;
@@ -87,7 +86,7 @@ export function Photo() {
 
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoPhoto
         colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}
         photoSrc={imgUrl(p.id, 'preview')} idx={idx >= 0 ? idx + 1 : 1} total={stepIds.length || 1} shootName={shoot?.name ?? 'Library'} onBack={back}

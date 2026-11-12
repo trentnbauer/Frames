@@ -5,7 +5,6 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import { AddPhotosButton, useStatus } from '../components/AddPhotos';
-import { Header } from '../components/bits';
 
 type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: PhotoLite[] };
 type Batch = { id: number; name: string; count: number; days: number; importedAt: string; covers: number[]; done: boolean };
@@ -144,7 +143,7 @@ export function Today() {
   if (s && s.total === 0) {
     return (
       <div className="page">
-        <Header />
+
         <div style={{ maxWidth: 640 }}>
           <GettingStarted />
           <h1 className="serif" style={{ fontSize: 64, lineHeight: 1.02, margin: '0 0 20px' }}>Your library is empty.</h1>
@@ -163,7 +162,7 @@ export function Today() {
 
   return (
     <div className="page">
-      <Header />
+
       <GettingStarted />
       <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 24, flexWrap: 'wrap' }}>
         <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>{greetingFor(new Date().getHours())}{firstName ? `, ${firstName}.` : ''}</h1>

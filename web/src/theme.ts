@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 export type Theme = 'dark' | 'light';
 const KEY = 'frames-theme';
 
@@ -16,4 +17,17 @@ export function setTheme(t: Theme, from?: { x: number; y: number }) {
   doc.startViewTransition(apply).ready.then(() => {
     document.documentElement.animate({ clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] }, { duration: 750, easing: 'cubic-bezier(.7,0,.25,1)', pseudoElement: '::view-transition-new(root)' });
   }).catch(() => undefined);
+}
+
+/** Header labels also follow theme changes made in Settings or another browser tab. */
+export function useTheme(): Theme {
+  return useSyncExternalStore((notify) => {
+    const observer = new MutationObserver(notify);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const storage = (event: StorageEvent) => {
+      if (event.key === KEY && (event.newValue === 'dark' || event.newValue === 'light')) document.documentElement.setAttribute('data-theme', event.newValue);
+    };
+    window.addEventListener('storage', storage);
+    return () => { observer.disconnect(); window.removeEventListener('storage', storage); };
+  }, getTheme, () => 'dark');
 }
