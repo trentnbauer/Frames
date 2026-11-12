@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { MAX_ZOOM, MIN_ZOOM, wheelZoom, zoomAt, type WallView } from './wallView';
+import { WallButton } from './WallButton';
 
 /** View-only controls: never change print positions, sizes or photo crops. */
 export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: {
@@ -86,13 +87,13 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
       window.removeEventListener('blur', clear);
     };
   }, [wallRef]);
-  const buttonStyle = (disabled: boolean) => ({
-    width: 36, height: 32, display: 'grid', placeItems: 'center', borderRadius: 999,
-    background: 'rgba(13,13,13,.6)', color: 'var(--text)', fontSize: 18, opacity: disabled ? 0.4 : 1,
-  } as const);
   return <div data-wall-control="" role="group" aria-label="Wall zoom" onPointerDown={(e) => e.stopPropagation()}
     style={{ position: 'absolute', bottom: 14, left: 14, zIndex: 6, display: 'flex', gap: 8 }}>
-    <button type="button" aria-label="Zoom out" title="Zoom out" disabled={view.zoom <= MIN_ZOOM} style={buttonStyle(view.zoom <= MIN_ZOOM)} onClick={() => onView(zoomAt(view, view.zoom / 1.25))}>−</button>
-    <button type="button" aria-label="Zoom in" title="Zoom in" disabled={view.zoom >= MAX_ZOOM} style={buttonStyle(view.zoom >= MAX_ZOOM)} onClick={() => onView(zoomAt(view, view.zoom * 1.25))}>+</button>
+    <WallButton aria-label="Zoom out" title="Zoom out" disabled={view.zoom <= MIN_ZOOM} onClick={() => onView(zoomAt(view, view.zoom / 1.25))}>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 6h8" /></svg>
+    </WallButton>
+    <WallButton aria-label="Zoom in" title="Zoom in" disabled={view.zoom >= MAX_ZOOM} onClick={() => onView(zoomAt(view, view.zoom * 1.25))}>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 6h8M6 2v8" /></svg>
+    </WallButton>
   </div>;
 }
