@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from './Modal';
+import { newSharePin } from '../sharePin';
 
 type ShareLink = {
   id: number; token: string; label: string; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string;
@@ -10,12 +11,7 @@ type Invite = { email: string; status: 'sent' | 'failed'; error: string; at: str
 
 const urlOf = (t: string) => `${window.location.origin}/s/${t}`;
 const EXPIRY: [string, number | null][] = [['1 week', 7], ['3 weeks', 21], ['3 months', 92], ['Never', null]];
-const newPin = () => {
-  let pin: string;
-  do { pin = String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, '0'); }
-  while (/^(\d)\1{3}$/.test(pin) || '0123456789'.includes(pin) || '9876543210'.includes(pin));
-  return pin;
-};
+
 const inDays = (n: number) => { const d = new Date(Date.now() + n * 86_400_000); d.setHours(23, 59, 59, 0); return d.toISOString(); };
 const expiryLabel = (iso: string | null) => {
   if (!iso) return 'Never';
@@ -93,10 +89,10 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
                 {settings.pin && <>
                   <input className="mono" inputMode="numeric" maxLength={4} aria-label="Link PIN" value={pinEdit} onChange={(e) => setPinEdit(e.target.value.replace(/\D/g, '').slice(0, 4))} onBlur={() => pinEdit.length === 4 && pinEdit !== settings.pin && patch({ pin: pinEdit })}
                     style={{ width: 84, height: 32, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 14px', fontWeight: 500, fontSize: 14, letterSpacing: '.25em', textAlign: 'center' }} />
-                  <button style={{ fontSize: 12.5, color: 'var(--text2)' }} onClick={() => patch({ pin: newPin() })}>New</button>
+                  <button style={{ fontSize: 12.5, color: 'var(--text2)' }} onClick={() => patch({ pin: newSharePin() })}>New</button>
                   <button style={{ fontSize: 12.5, color: 'var(--text2)' }} onClick={() => copy(settings.pin, 'pin')}>{copied === 'pin' ? 'Copied ✓' : 'Copy'}</button>
                 </>}
-                <Switch label="PIN" on={!!settings.pin} onClick={() => patch({ pin: settings.pin ? '' : newPin() })} />
+                <Switch label="PIN" on={!!settings.pin} onClick={() => patch({ pin: settings.pin ? '' : newSharePin() })} />
               </div>
             </Row>
           </div>
