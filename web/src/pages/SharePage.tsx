@@ -12,7 +12,7 @@ import { imgUrl } from '../api';
 import { PinGate } from './Auth';
 import { GuestEditor } from '../screens/GuestEditor';
 
-type G = { id: number; title: string; ar: number; n: number };
+type G = { id: number; title: string; w: number; h: number; ar: number; n: number };
 type Shared = { askName?: boolean; emailCode?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** "3 × A3 · 1.6 × 0.6 m": what the wall is made of and how much room it takes. */
