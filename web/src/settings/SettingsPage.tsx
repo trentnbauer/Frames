@@ -65,7 +65,7 @@ export function SettingsPage() {
   return (
     <div className="page" style={{ paddingBottom: 140 }}>
       <Header />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12, maxWidth: 1028, marginInline: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
           <h1 className="serif" style={{ fontSize: 48, lineHeight: 1, margin: 0 }}>Settings</h1>
           <span role="status" aria-live="polite" style={{ fontSize: 13, color: '#a8a59f', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>
@@ -79,7 +79,7 @@ export function SettingsPage() {
           </div>
         )}
       </div>
-      <div className="settings-wrap" style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 48 }}>
+      <div className="settings-wrap" style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 48, maxWidth: 1028, marginInline: 'auto' }}>
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14, color: '#a8a59f', alignSelf: 'start' }}>
           <div style={{ height: 36, borderRadius: 999, background: '#161615', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', marginBottom: 12 }}>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: '#efede8', font: "400 13px 'IBM Plex Sans',sans-serif", boxShadow: 'none', padding: 0, borderRadius: 0 }} />
