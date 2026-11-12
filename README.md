@@ -47,6 +47,10 @@ cd web && npm install && npm run dev         # UI on :5173, proxies /api to :300
 
 `npm test`, `npm run typecheck` and `npm run build` work in both folders. Node 22 or newer. See [`CLAUDE.md`](CLAUDE.md) for how changes are made (pull requests, release labels, checks).
 
+## Composition editor zoom
+
+Scroll over the composition wall, pinch a trackpad, or use two fingers on a touchscreen to zoom from 50% to 400%. The bottom-left **−** and **+** buttons zoom around the centre. Drag empty wall space to pan. These controls also work in fullscreen and guest editors. Zoom and pan affect only the current view: print sizes, positions, photo crops and exports stay the same. Scrolling a settings panel keeps scrolling that panel. The view resets when the editor is reopened.
+
 ## Security
 
 To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
