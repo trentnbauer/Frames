@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
-import { Header } from '../components/Shell';
+import { BrowsePage } from '../components/BrowsePage';
 import { useStatus } from '../components/AddPhotos';
 import { useStore } from '../store';
 import { useUi } from '../ui';
 import ProtoShoots from '../proto/ProtoShoots';
+import { reviewUrl } from '../reviewScope';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
@@ -107,8 +108,7 @@ export function Shoots() {
   const mb = files.reduce((n, f) => n + f.size, 0) / 1e6;
 
   return (
-    <div className="page-shell">
-      <Header />
+    <BrowsePage>
       <input ref={input} type="file" multiple hidden accept="image/*,.heic,.tif,.tiff,.raw,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2" onChange={(e) => { setFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
       <ProtoShoots
         uploadReq={req} localOn={local} cloudOn={cloudOn} today={todayName()}
@@ -150,9 +150,9 @@ export function Shoots() {
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
         aiOn={!!settings && settings.ai !== 'off'}
         onAnalyse={async () => { try { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; } catch (e) { return (e as Error).message; } }}
-        onStartReview={async () => { await api('/review/start', { body: { photoIds: ph.filter((p) => p.reviewCount === 0).map((p) => p.id) } }); nav('/review'); }}
+        onStartReview={() => nav(reviewUrl(ph.filter((p) => p.reviewCount === 0).map((p) => p.id)))}
         onCompose={() => openNew({ name: sh?.name, photoIds: ph.map((p) => p.id) })}
       />
-    </div>
+    </BrowsePage>
   );
 }

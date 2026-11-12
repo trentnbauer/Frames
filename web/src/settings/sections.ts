@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Me } from '../store';
 import type { Section } from './ui';
-import { useProfile, useNotifications, useReviews, useTags, useXmp, useAi, useCloud, usePortfolio, useData } from './lib';
+import { useProfile, useSecurity, useNotifications, useReviews, useTags, useXmp, useAi, useCloud, usePortfolio, useData } from './lib';
 import { useSignin, useMembers, useFolders, useBackup, useSrvAi, useNetwork, useEmail, useProcessing, useServer, usePolicies } from './srv';
 
 export type Ctx = { toast: (m: string) => void; modal: (n: ReactNode) => void; goto: (tab: 'lib' | 'srv', key: string) => void; me: Me | null; isAdmin: boolean };
@@ -9,6 +9,7 @@ export type SectionDef = { tab: 'lib' | 'srv'; key: string; name: string; badge?
 
 export const LIB: SectionDef[] = [
   { tab: 'lib', key: 'profile', name: 'Profile', use: useProfile },
+  { tab: 'lib', key: 'security', name: 'Password & security', use: useSecurity },
   { tab: 'lib', key: 'notifications', name: 'Notifications', use: useNotifications },
   { tab: 'lib', key: 'reviews', name: 'Reviews', use: useReviews },
   { tab: 'lib', key: 'tags', name: 'Tags & subjects', use: useTags },

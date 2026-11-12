@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   created TEXT NOT NULL, expires TEXT NOT NULL, last_seen TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires);
+CREATE TABLE IF NOT EXISTS sign_in_events (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created TEXT NOT NULL, ip TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS sign_in_events_user ON sign_in_events(user_id, created);
+
 -- More ways to sign in to the same person. The first is on the person's own row; these are the ones linked later.
 CREATE TABLE IF NOT EXISTS identities (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -67,6 +74,9 @@ export function openSystemDb(dataDir: string): DB {
   db.pragma('foreign_keys = ON');
   db.exec(SYSTEM_SCHEMA);
   db.exec(PASSKEY_SCHEMA);
+  // Preserve pre-upgrade active sessions; historical client details were never recorded.
+  db.exec(`INSERT OR IGNORE INTO sign_in_events(id, session_id, user_id, created)
+    SELECT lower(hex(randomblob(18))), id, user_id, created FROM sessions`);
   ensureOwner(db);
   return attachKey(db, dataDir);
 }

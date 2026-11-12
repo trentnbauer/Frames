@@ -105,6 +105,8 @@ export function createSession(sys: DB, userId: number): string {
   sys.prepare('DELETE FROM sessions WHERE expires < ?').run(now.toISOString());
   sys.prepare('INSERT INTO sessions(id, user_id, created, expires, last_seen) VALUES(?, ?, ?, ?, ?)')
     .run(hash(token), userId, now.toISOString(), new Date(now.getTime() + SESSION_DAYS * 86_400_000).toISOString(), now.toISOString());
+  sys.prepare('INSERT INTO sign_in_events(id, session_id, user_id, created) VALUES(?, ?, ?, ?)').run(rand(18), hash(token), userId, now.toISOString());
+  sys.prepare('DELETE FROM sign_in_events WHERE user_id = ? AND session_id NOT IN (SELECT id FROM sessions) AND id NOT IN (SELECT id FROM sign_in_events WHERE user_id = ? ORDER BY created DESC, rowid DESC LIMIT 1000)').run(userId, userId);
   return token;
 }
 const cookieOf = (req: FastifyRequest, name: string) => {
@@ -112,6 +114,7 @@ const cookieOf = (req: FastifyRequest, name: string) => {
   return '';
 };
 export const SESSION_COOKIE = 'frames_session';
+export const sessionIdOf = (req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); return t ? hash(t) : null; };
 
 export function sessionUser(sys: DB, req: FastifyRequest): User | null {
   const t = cookieOf(req, SESSION_COOKIE);
