@@ -129,7 +129,7 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
 }
 
 import { gearJson, gearMarkdown } from './routes/gearitems.js';
-export function registerPortfolio(app: FastifyInstance, x: Ctx) {
+export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: FastifyRequest) => number | null) {
   const { db, cfg, num, one, all, notFound } = x;
 
   /**
@@ -182,10 +182,16 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx) {
   };
   app.get('/portfolio', async (req, rep) => (handleOfReq(req) ? pageFor(req, rep) : ownHandle() ? rep.redirect(`/${ownHandle()}/`, 301) : rep.redirect('/portfolio/')));
   app.get('/portfolio/', async (req, rep) => pageFor(req, rep));
-  app.get('/portfolio/config.json', async (_req, rep) => {
+  app.get('/portfolio/config.json', async (req, rep) => {
     const c = live(rep); if (!c) return;
+    const own = viewerId(req) === x.tenant().user.id;
+    // A separate portfolio hostname cannot serve the app; use its configured public address.
+    const dedicated = !!x.sys.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ?').get(hostOf(req));
+    const appUrl = dedicated ? loadAuth(x.sys).publicUrl.replace(/\/+$/, '') : '';
+    const edit = own && (!dedicated || appUrl) ? { portfolio: `${appUrl}/settings?section=portfolio`, gear: `${appUrl}/gear` } : null;
+    rep.header('Cache-Control', 'private, no-store').header('Vary', 'Cookie');
     // The name and picture are the person's profile (Settings, Profile); a name typed here by an older version is used only until they set one.
-    return open(rep).send({ country: String(getSetting<{ country?: string }>(db, 'profile', {}).country ?? ''), photographerName: displayNameOf(db) || c.photographerName, avatar: fs.existsSync(avatarPath(cfg.dataDir)) ? 'avatar.jpg' : '', tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
+    return rep.send({ edit, country: String(getSetting<{ country?: string }>(db, 'profile', {}).country ?? ''), photographerName: displayNameOf(db) || c.photographerName, avatar: fs.existsSync(avatarPath(cfg.dataDir)) ? 'avatar.jpg' : '', tagline: c.tagline, accentColor: c.accentColor, buttons: c.buttons, gearUrl: 'gear.md', footer: c.footer });
   });
   app.get('/portfolio/avatar.jpg', async (_req, rep) => {
     if (!live(rep)) return;

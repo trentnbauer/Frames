@@ -95,12 +95,12 @@ describe('share links', () => {
 describe('the sign-in page', () => {
   it('shows the check, and a provider cannot be started without its answer', async () => {
     setSetting((env.app as any).frames.sys, 'auth', { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['a@x.test'], publicUrl: '', testedBy: null });
-    const page = (await call('GET', '/auth/signin?returnTo=%2Fs%2FAAAAAAAAAAAAAAAAAAAAAA&guest=1')).body as string;
-    expect(page).toContain('class="cf-turnstile"');
-    expect(page).toContain('data-sitekey="site-key"');
-    expect(page).toContain('formaction="/auth/login/g"');
-    expect(page).toContain('name="guest" value="1"');
-    expect(page).toContain('name="returnTo"');
+    const page = await call('GET', '/auth/signin?returnTo=%2Fs%2FAAAAAAAAAAAAAAAAAAAAAA&guest=1&e=Try%20again');
+    expect(page.status).toBe(302);
+    expect(String(page.headers.location)).toBe('/signin?e=Try+again&returnTo=%2Fs%2FAAAAAAAAAAAAAAAAAAAAAA&guest=1');
+    const options = (await call('GET', '/api/public/auth')).body as any;
+    expect(options.turnstile).toEqual({ siteKey: 'site-key' });
+    expect(options.providers[0].id).toBe('g');
     const bare = await call('GET', '/auth/login/g');
     expect(bare.status).toBe(302);
     expect(String(bare.headers.location)).toMatch(/^\/auth\/signin\?e=/);
@@ -120,9 +120,11 @@ describe('the sign-in page', () => {
   });
   it('is the plain page when the check is off for sign-in', async () => {
     (env.app as any).frames.sys.prepare("UPDATE settings SET value = json_set(value, '$.signin', json('false')) WHERE key = 'turnstile'").run();
-    const page = (await call('GET', '/auth/signin')).body as string;
-    expect(page).not.toContain('cf-turnstile');
-    expect(page).toContain('href="/auth/login/g"');
+    const page = await call('GET', '/auth/signin');
+    expect(page.status).toBe(302);
+    expect(String(page.headers.location)).toBe('/signin');
+    expect(((await call('GET', '/api/public/auth')).body as any).turnstile).toBeNull();
+    expect(String((await call('GET', '/auth/signin?returnTo=https://elsewhere.test')).headers.location)).toBe('/signin');
   });
 });
 

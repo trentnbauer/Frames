@@ -169,7 +169,7 @@ export class Logic extends DCLogic {
     const send = async () => { if (!okEmail) return; try { await P.onInvite(email.trim()); this.setState({ shEmailText: '' }); this.flash('Link sent to ' + email.trim()); } catch (e) { this.flash(e.message || 'Could not send'); } };
     const patch = (b) => (H0.active ? P.onSharePatch(b) : this.setState({ shDraft: { ...D, ...b } }));
     return {
-      shOpen: !!S.shOpen, openSh: () => this.setState({ shOpen: true, gOpen: false }), closeSh: () => this.setState({ shOpen: false, shCopied: false }),
+      shOpen: !!S.shOpen, openSh: () => P.onOpenShare ? P.onOpenShare() : this.setState({ shOpen: true, gOpen: false }), closeSh: () => this.setState({ shOpen: false, shCopied: false }),
       shPreview: () => { if (H0.url) window.open(H0.url, '_blank', 'noopener'); }, shActive: !!H0.active, shInactive: !H0.active, shStart: async () => { await P.onShareStart(D); this.setState({ shDraft: null }); },
       shLink: H0.display || '', shLinkBg: S.shFresh ? 'rgba(239,237,232,.12)' : 'var(--bg)',
       shCopyLabel: S.shCopied ? 'Copied ✓' : 'Copy link', shCopy: async () => { try { await navigator.clipboard.writeText(H0.url); } catch (e) { window.prompt('Copy this', H0.url); } this.setState({ shCopied: true }); },
@@ -193,7 +193,7 @@ export class Logic extends DCLogic {
     const ch = G.changes.find((c) => c.id === S.gSee) || G.changes[0]; const view = S.gView || 'theirs'; const theirs = view === 'theirs';
     const pending = G.changes.length;
     return {
-      gOpen: !!S.gOpen, openG: () => this.setState({ gOpen: true }), closeG: () => this.setState({ gOpen: false, gSee: null }), stop: (e) => e.stopPropagation(), gToShare: () => this.setState({ gOpen: false, shOpen: true }),
+      gOpen: !!S.gOpen, openG: () => this.setState({ gOpen: true }), closeG: () => this.setState({ gOpen: false, gSee: null }), stop: (e) => e.stopPropagation(), gToShare: () => { this.setState({ gOpen: false }); if (P.onOpenShare) P.onOpenShare(); else this.setState({ shOpen: true }); },
       gBadge: String(pending), gIsRatings: tab === 'ratings' && !S.gSee, gSeeing: tab === 'changes' && !!S.gSee && !!ch, gListChanges: tab === 'changes' && !S.gSee,
       seeWall: ch ? (theirs ? ch.theirs : ch.mine) : [], seeInitial: ch ? ch.initial : '', seeWho: ch ? ch.who : '', seeWhat: ch ? ch.what : '',
       seeApprove: async () => { await ch.approve(); this.setState({ gSee: null }); }, seeDeny: async () => { await ch.deny(); this.setState({ gSee: null }); }, backG: () => this.setState({ gSee: null }),

@@ -34,7 +34,13 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   };
 
   // ---------- public: the sign-in pages ----------
-  app.get('/auth/signin', async (req, rep) => { const q = req.query as Row; return rep.type('text/html').send(auth.signinPage(String(q.e ?? '').slice(0, 200) || undefined, { returnTo: safeReturn(q.returnTo) === '/' ? undefined : safeReturn(q.returnTo), guest: q.guest === '1' })); });
+  app.get('/auth/signin', async (req, rep) => {
+    const q = req.query as Row, params = new URLSearchParams();
+    if (q.e) params.set('e', String(q.e).slice(0, 200));
+    if (safeReturn(q.returnTo) !== '/') params.set('returnTo', safeReturn(q.returnTo));
+    if (q.guest === '1') params.set('guest', '1');
+    return rep.redirect(`/signin${params.size ? `?${params}` : ''}`);
+  });
 
   app.get('/auth/login/:id', async (req, rep) => {
     if (tooMany(req.ip)) return rep.code(429).type('text/html').send(auth.messagePage('Slow down', 'Too many sign-in attempts. Try again in a minute.'));

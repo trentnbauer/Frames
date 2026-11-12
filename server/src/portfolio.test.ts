@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createSession, saveAuth, loadAuth } from './auth.js';
+import { invite, resolveUser } from './users.js';
 import { isPortfolioPath, parseFilenameMeta } from './portfolio.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
@@ -94,7 +96,7 @@ describe('the public site', () => {
   it('serves the page and its config', async () => {
     expect((await get('/portfolio/')).body).toContain('Portfolio page');
     expect((await get('/portfolio')).statusCode).toBe(302);
-    expect((await get('/portfolio/config.json')).json()).toEqual({ country: '', photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
+    expect((await get('/portfolio/config.json')).json()).toEqual({ edit: { portfolio: '/settings?section=portfolio', gear: '/gear' }, country: '', photographerName: 'Trent Bauer', avatar: '', tagline: 'Film photographer', accentColor: 'coral', buttons: [{ short: '📷', name: 'Instagram', url: 'https://instagram.com/me' }], gearUrl: 'gear.md', footer: 'Made by me' });
     expect((await get('/portfolio/gear.md')).body).toBe('# Gear\n- Leica');
     expect((await get('/portfolio/css/style.css')).statusCode).toBe(200);
     // The gear page as data: nothing owned yet, so it is empty; and the files the new design needs are public.
@@ -225,10 +227,50 @@ describe('with a login on', () => {
       const h = { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') };
       await e.app.inject({ method: 'PUT', url: '/api/portfolio', headers: h, payload: { enabled: true, collectionId: (await e.app.inject({ method: 'POST', url: '/api/collections', headers: h, payload: { name: 'S' } })).json().id } });
       expect((await e.app.inject('/portfolio/config.json')).statusCode).toBe(200);
+      expect((await e.app.inject('/portfolio/config.json')).json().edit).toBeNull();
+      const own = await e.app.inject({ url: '/portfolio/config.json', headers: h });
+      expect(own.json().edit).toEqual({ portfolio: '/settings?section=portfolio', gear: '/gear' });
+      expect(own.headers['cache-control']).toBe('private, no-store');
+      expect(own.headers.vary).toContain('Cookie');
+      const sys = (e.app as any).frames.sys;
+      saveAuth(sys, { ...loadAuth(sys), enabled: true, providers: [{ id: 'example', type: 'google', name: 'Example', clientId: 'browser' }] });
+      const ownerCookie = `frames_session=${createSession(sys, 1)}`;
+      expect((await e.app.inject({ url: '/portfolio/config.json', headers: { cookie: ownerCookie } })).json().edit).toEqual(own.json().edit);
+      for (const role of ['member', 'guest'] as const) {
+        const person = invite(sys, `${role}@example.test`, role);
+        const cookie = `frames_session=${createSession(sys, person.id)}`;
+        expect((await e.app.inject({ url: '/portfolio/config.json', headers: { cookie } })).json().edit).toBeNull();
+      }
+      expect((await e.app.inject({ url: '/portfolio/config.json', headers: { cookie: 'frames_session=expired' } })).json().edit).toBeNull();
       expect((await e.app.inject('/portfolio/images/manifest.json')).statusCode).toBe(200);
       expect((await e.app.inject('/api/photos')).statusCode).toBe(401);
       expect((await e.app.inject('/api/portfolio')).statusCode).toBe(401); // the settings are not public
       expect((await e.app.inject({ method: 'PUT', url: '/api/portfolio', payload: { enabled: false } })).statusCode).toBe(401);
+    } finally { cleanup(e); }
+  });
+});
+
+describe('portfolio edit ownership', () => {
+  it('shows member edit links only on their own portfolio and uses the app origin on a dedicated hostname', async () => {
+    const e = makeEnv({ webDir: web });
+    try {
+      const sys = (e.app as any).frames.sys;
+      saveAuth(sys, { ...loadAuth(sys), enabled: true, providers: [{ id: 'example', type: 'google', name: 'Example', clientId: 'browser' }] });
+      invite(sys, 'photographer@example.test');
+      const person = resolveUser(sys, { provider: 'example', sub: 'photographer', email: 'photographer@example.test', emailVerified: true, name: 'Photographer' }, true)!;
+      const headers = { cookie: `frames_session=${createSession(sys, person.id)}` };
+      const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) => e.app.inject({ method, url, headers, payload });
+      const col = (await call('POST', '/api/collections', { name: 'Member portfolio' })).json();
+      expect((await call('PUT', '/api/portfolio', { enabled: true, collectionId: col.id, handle: 'member-page', host: 'photos.example.test' })).statusCode).toBe(200);
+      const mine = await call('GET', '/member-page/config.json');
+      expect(mine.json().edit).toEqual({ portfolio: '/settings?section=portfolio', gear: '/gear' });
+      expect((await e.app.inject('/member-page/config.json')).json().edit).toBeNull();
+      expect((await e.app.inject({ url: '/member-page/config.json', headers: { cookie: `frames_session=${createSession(sys, 1)}` } })).json().edit).toBeNull();
+      const onHost = () => e.app.inject({ url: '/portfolio/config.json', headers: { ...headers, host: 'photos.example.test' } });
+      expect((await onHost()).json().edit).toBeNull(); // app URL is not configured yet
+      saveAuth(sys, { ...loadAuth(sys), publicUrl: 'https://frames.example.test/' });
+      expect((await onHost()).json().edit).toEqual({ portfolio: 'https://frames.example.test/settings?section=portfolio', gear: 'https://frames.example.test/gear' });
+      expect((await e.app.inject({ url: '/portfolio/config.json', headers: { host: 'photos.example.test' } })).json().edit).toBeNull();
     } finally { cleanup(e); }
   });
 });

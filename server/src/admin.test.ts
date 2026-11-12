@@ -154,9 +154,9 @@ describe('the privacy page', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('Line one');
   });
-  it('can only be edited by an administrator, and the sign-in page links to it', async () => {
+  it('can only be edited by an administrator, and the legacy sign-in redirects to the app', async () => {
     expect((await call('PUT', '/api/admin/privacy', cookie(resolveUser(sys, who('e1', 'eve@x.test', 'Eve'), true)!), { operator: 'x' })).status).toBe(403);
-    expect((await call('GET', '/auth/signin')).body).toContain('href="/privacy"');
+    expect((await call('GET', '/auth/signin')).headers.location).toBe('/signin');
   });
   it('reflects whether new accounts are allowed', async () => {
     expect((await call('GET', '/privacy')).body).toContain('can create an account');
