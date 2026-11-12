@@ -1,10 +1,17 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
-  workflow_call: # lets the release workflow run the same checks first
+  workflow_call:
+    inputs:
+      release-version:
+        description: 'Nonempty only when staging tested release images by digest.'
+        type: string
+        default: ''
+      source-ref:
+        description: 'The exact source ref to test and build; defaults to the event ref.'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -14,7 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref }}
       - run: .github/scripts/next-version.test.sh
+      - run: .github/scripts/publish-tested-images.test.sh
 
   test:
     runs-on: ubuntu-latest
@@ -26,63 +36,181 @@ jobs:
         working-directory: ${{ matrix.package }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
-      # The server reads RAW files through these two programs (the Docker image has them too).
       - if: matrix.package == 'server'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libimage-exiftool-perl dcraw
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # Fails on high-severity problems in what actually ships.
       - run: npm audit --omit=dev --audit-level=high
 
-  docker:
+  image-plan:
     runs-on: ubuntu-latest
-    # No `needs: test`: when this has nothing to do it should finish at once, not wait for the tests.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+      image: ${{ steps.plan.outputs.image }}
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
-      # Building and starting the image is slow and can only newly break when the Dockerfile or the dependencies change, so a pull
-      # request does it only then (and otherwise this check finishes in seconds and passes). Every push to main, and every release,
-      # always does it, so a problem is caught right after a merge at the latest, and the release builds it again before publishing.
-      - name: Does this change affect the image?
-        id: image
+          ref: ${{ inputs.source-ref }}
+      - name: Select image build and version
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          RELEASE_VERSION: ${{ inputs.release-version }}
         run: |
-          run=true
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            git fetch -q --depth=1 origin "${{ github.base_ref }}"
-            git diff --name-only FETCH_HEAD... | grep -qE '^(Dockerfile|\.dockerignore|(server|web)/package(-lock)?\.json)$' || run=false
+          set -euo pipefail
+          build=true
+          if [ "$EVENT_NAME" = pull_request ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            git diff --name-only FETCH_HEAD HEAD > "$RUNNER_TEMP/changed-files"
+            if ! grep -qE '^(Dockerfile|\.dockerignore|(server|web)/package(-lock)?\.json|\.github/workflows/(ci|release|publish-image|version)\.yml|\.github/scripts/(generate-changelog|publish-tested-images|publish-tested-images\.test)\.sh)$' "$RUNNER_TEMP/changed-files"; then
+              build=false
+            fi
           fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-      - if: steps.image.outputs.run == 'true'
-        run: docker build -t frames:ci .
-      - name: Starts and reports healthy
-        if: steps.image.outputs.run == 'true'
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          version="${RELEASE_VERSION#v}"
+          if [ -n "$version" ]; then
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/frames" >> "$GITHUB_OUTPUT"
+      - name: Generate one changelog for both architectures
+        if: inputs.release-version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/generate-changelog.sh
+      - uses: actions/upload-artifact@v7
+        if: inputs.release-version != ''
+        with:
+          name: frames-changelog
+          path: web/public/changelog.json
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-build:
+    needs: image-plan
+    if: needs.image-plan.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.image-plan.outputs.image }}
+      IMAGE_VERSION: ${{ needs.image-plan.outputs.version || 'dev' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-ref }}
+      - uses: actions/download-artifact@v8
+        if: inputs.release-version != ''
+        with:
+          name: frames-changelog
+          path: web/public
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v3
+        if: inputs.release-version != ''
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        if: inputs.release-version != ''
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=semver,pattern={{version}},value=v${{ env.IMAGE_VERSION }}
+      - name: Build once on the native architecture
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: ${{ inputs.release-version == '' }}
+          tags: ${{ inputs.release-version == '' && 'frames:ci' || '' }}
+          outputs: ${{ inputs.release-version != '' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || '' }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ env.IMAGE_VERSION }}
+          cache-from: type=gha,scope=frames-linux-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=frames-linux-${{ matrix.arch }}
+      - name: Start and test this exact image
+        env:
+          RELEASE_VERSION: ${{ inputs.release-version }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p photos
-          docker run -d --name frames -p 3000:3000 -v "$PWD/photos:/library:ro" -v frames-data:/data frames:ci
+          set -euo pipefail
+          image=frames:ci
+          if [ -n "$RELEASE_VERSION" ]; then
+            image="$IMAGE@$DIGEST"
+            docker pull "$image"
+          fi
+          test "$(docker image inspect "$image" --format '{{.Architecture}}')" = "$EXPECTED_ARCH"
+          docker run -d --name frames -p 127.0.0.1:3000:3000 -v frames-data:/data "$image"
           for i in $(seq 1 30); do
-            [ "$(docker inspect -f '{{.State.Health.Status}}' frames)" = healthy ] && exit 0
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' frames)" = healthy ]; then
+              curl --fail --silent http://127.0.0.1:3000/api/health | jq -e --arg version "$IMAGE_VERSION" '.ok == true and .version == $version'
+              docker exec frames exiftool -ver
+              docker exec frames sh -c 'command -v dcraw && command -v cloudflared'
+              exit 0
+            fi
             sleep 2
           done
           docker logs frames
           exit 1
-      # The release publishes arm64 too. Building it under emulation takes two minutes.
-      - if: steps.image.outputs.run == 'true'
-        uses: docker/setup-qemu-action@v4
-      - if: steps.image.outputs.run == 'true'
-        uses: docker/setup-buildx-action@v4
-      - if: steps.image.outputs.run == 'true'
-        uses: docker/build-push-action@v7
+      - name: Record the tested digest
+        if: inputs.release-version != ''
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@v7
+        if: inputs.release-version != ''
         with:
-          context: .
-          platforms: linux/arm64
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: frames-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+      - name: Stop test container
+        if: always()
+        run: docker rm -f frames || true
+
+  # Keep the existing required check name, including when image builds are unnecessary for a PR.
+  docker:
+    needs: [image-plan, docker-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful image validation
+        env:
+          PLAN_RESULT: ${{ needs.image-plan.result }}
+          SHOULD_BUILD: ${{ needs.image-plan.outputs.build }}
+          BUILD_RESULT: ${{ needs.docker-build.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          if [ "$SHOULD_BUILD" = true ]; then
+            test "$BUILD_RESULT" = success
+          fi

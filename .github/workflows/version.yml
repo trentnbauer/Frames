@@ -45,14 +45,27 @@ jobs:
           gh release create "v$version" --verify-tag --title "v$version" --generate-notes
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  publish:
+  # Run CI once for every main push, including release:none and direct pushes.
+  # For releases these jobs also stage and health-test both native image digests.
+  checks:
     needs: tag
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+    with:
+      release-version: ${{ needs.tag.outputs.version }}
+      source-ref: ${{ needs.tag.outputs.version && format('refs/tags/v{0}', needs.tag.outputs.version) || github.sha }}
+
+  publish:
+    needs: [tag, checks]
     if: needs.tag.outputs.version != ''
-    # A tag pushed with the workflow's own token does not start other workflows, so publish from here.
-    uses: ./.github/workflows/release.yml
+    # No second CI run or image build: publish the digests the checks just tested.
+    uses: ./.github/workflows/publish-image.yml
     with:
       version: ${{ needs.tag.outputs.version }}
     permissions:
       contents: read
       packages: write
-      pull-requests: read
