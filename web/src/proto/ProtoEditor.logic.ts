@@ -3,6 +3,7 @@
 // Ported from the logic class in design_handoff_frames/prototype/Proto Editor.dc.html. Behaviour is the spec; sample data is replaced by real data passed in props.
 import React from 'react';
 import { DCLogic } from './runtime';
+import { HOME_VIEW } from '../components/wallView';
 
 
 export class Logic extends DCLogic {
@@ -23,7 +24,7 @@ export class Logic extends DCLogic {
   COL = { Black: '#151514', White: '#e9e7e1', Oak: '#b08a5e', Walnut: '#5b3f2c', Silver: '#a3a3a0' };
   MAT = { White: '#f4f2ec', Ivory: '#e6dfcc', Black: 'var(--raised)' };
   wallRef = React.createRef();
-  state = { shDraft: null, sel: null, full: false, wall: { w: 964, h: 560 }, candTab: 'best', dragging: null, toast: '', tOp: 0 };
+  state = { view: { ...HOME_VIEW }, shDraft: null, sel: null, full: false, wall: { w: 964, h: 560 }, candTab: 'best', dragging: null, toast: '', tOp: 0 };
   componentDidUpdate(pp) { if (pp.printsKey !== this.props.printsKey && !this.state.dragging) { this.state = { ...this.state, prints: this.props.prints }; this.__update(); } }
   applyDeep(d) { if (!d || this.props.guest || !String(d.what || '').startsWith('guests')) return; window.__framesDeep = null; const t = String(d.what).split(':')[1]; this.setState({ gOpen: true, gSee: null, ...(t ? { gTab: t } : {}) }); }
   componentDidMount() {
@@ -40,20 +41,24 @@ export class Logic extends DCLogic {
     if (on) { const el = this.wallRef.current; const p = el && el.requestFullscreen ? el.requestFullscreen() : null; if (p && p.then) p.then(() => this.setState({ full: 'native' })).catch(() => { this.setState({ full: 'overlay' }); window.scrollTo(0, 0); }); else { this.setState({ full: 'overlay' }); window.scrollTo(0, 0); } }
     else { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); this.setState({ full: false }); }
   }
-  scale() { const { w, h } = this.state.wall; return Math.max(1, Math.min(w / 330, h / 180)); }
+  baseScale() { const { w, h } = this.state.wall; return Math.max(1, Math.min(w / 330, h / 180)); }
+  scale() { return this.baseScale() * this.state.view.zoom; }
+  cancelDrag() { this.endDrag(); if (this.dragOriginal) this.setState({ prints: this.dragOriginal, dragging: null }); this.dragOriginal = null; }
   dims(p) { let [w, h] = this.SIZES[p.size]; let [fw, fh] = this.SIZES[p.framed ? p.frame : p.size]; if (p.or === 'L') { [w, h] = [h, w]; [fw, fh] = [fh, fw]; } const b = p.framed ? 2 : 0; return { pw: w, ph: h, fw, fh, ow: fw + 2 * b, oh: fh + 2 * b, b }; }
   bg(p, n = p.photo) { const [pw, ph] = this.cellCm(p.size, p.or, p.stack); const [W, H] = this.px(n); const z = Math.round((p.stack ? 1 : p.zoom || 1) * 100); const sz = W / H > pw / ph ? 'auto ' + z + '%' : z + '% auto'; return `url(${this.props.photoUrl(n)}) ${50 + (p.stack ? 0 : p.sx || 0)}% ${50 + (p.stack ? 0 : p.sy || 0)}% / ${sz} no-repeat`; }
   upd(id, patch) { this.setState((s) => ({ prints: (s.prints ?? this.pr()).map((p) => (p.id === id ? { ...p, ...(typeof patch === 'function' ? patch(p) : patch) } : p)) })); this.save(); }
-  endDrag() { window.removeEventListener('pointermove', this.mv); window.removeEventListener('pointerup', this.up); }
+  endDrag() { window.removeEventListener('pointermove', this.mv); window.removeEventListener('pointerup', this.up); window.removeEventListener('pointercancel', this.cancel); }
   startDrag(e, p) {
     if (e.button !== 0) return; e.stopPropagation();
     const el = this.wallRef.current; const z = el ? el.getBoundingClientRect().width / el.offsetWidth : 1; const s = this.scale();
-    const d = this.dims(p); const { w, h } = this.state.wall; const mx = (w / s - d.ow) / 2 - 2, my = (h / s - d.oh) / 2 - 6;
+    const d = this.dims(p); const { w, h } = this.state.wall; const base = this.baseScale(); const mx = Math.max(0, (w / base - d.ow) / 2 - 2), my = Math.max(0, (h / base - d.oh) / 2 - 6);
+    this.dragOriginal = this.pr();
     const st = { sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, moved: false };
     this.setState({ sel: p.id, sizeMenu: false });
     this.mv = (ev) => { const dx = (ev.clientX - st.sx) / (s * z), dy = (ev.clientY - st.sy) / (s * z); if (!st.moved && Math.abs(dx) + Math.abs(dy) < 1) return; st.moved = true; if (this.state.dragging !== p.id) this.setState({ dragging: p.id }); this.upd(p.id, { x: Math.round(Math.max(-mx, Math.min(mx, st.ox + dx))), y: Math.round(Math.max(-my, Math.min(my, st.oy + dy))) }); };
-    this.up = () => { this.endDrag(); this.setState({ dragging: null }); this.save(); };
-    window.addEventListener('pointermove', this.mv); window.addEventListener('pointerup', this.up);
+    this.up = () => { this.endDrag(); this.setState({ dragging: null }); this.dragOriginal = null; this.save(); };
+    this.cancel = () => this.cancelDrag();
+    window.addEventListener('pointermove', this.mv); window.addEventListener('pointerup', this.up); window.addEventListener('pointercancel', this.cancel);
   }
   place(n, id, slot) {
     this.setState((s) => {
@@ -76,7 +81,7 @@ export class Logic extends DCLogic {
       const d = this.dims(p); minX = Math.min(minX, p.x - d.ow / 2); maxX = Math.max(maxX, p.x + d.ow / 2); minY = Math.min(minY, p.y - d.oh / 2); maxY = Math.max(maxY, p.y + d.oh / 2);
       const on = S.sel === p.id; const mx = (d.fw - d.pw) / 2, my = (d.fh - d.ph) / 2;
       return {
-        left: Math.round(W / 2 + (p.x - d.ow / 2) * s) + 'px', top: Math.round(H / 2 + (p.y - d.oh / 2) * s) + 'px', w: px(d.ow), h: px(d.oh), pad: px(d.b),
+        left: Math.round(W / 2 + S.view.x + (p.x - d.ow / 2) * s) + 'px', top: Math.round(H / 2 + S.view.y + (p.y - d.oh / 2) * s) + 'px', w: px(d.ow), h: px(d.oh), pad: px(d.b),
         frameBg: p.framed ? this.COL[p.colour] : 'transparent', matBg: p.framed && p.mat !== 'None' ? this.MAT[p.mat] : 'transparent', matPad: px(my) + ' ' + px(mx),
         cells: this.held(p).slice(0, p.stack ? 2 : 1).map((n, k) => ({ img: n ? this.bg(p, n) : 'rgba(0,0,0,.22)', empty: n ? 'none' : 'inset 0 0 0 1px rgba(239,237,232,.6)', emptyLabel: n ? '' : p.stack ? (p.or === 'P' ? ['Top', 'Bottom'] : ['Left', 'Right'])[k] : 'Drop a candidate here' })),
         dir: p.or === 'P' ? 'column' : 'row', gap: p.stack ? '2%' : '0', paper: p.stack ? '#fff' : 'transparent', slotsFull: this.held(p).slice(0, p.stack ? 2 : 1).every(Boolean),
@@ -96,6 +101,8 @@ export class Logic extends DCLogic {
     const empty = this.pr().filter((p) => !p.photo || (p.stack && !p.photo2)).length;
     return {
       popShow: isFull && !!sp, popLeft, popTop, stopDown: (e) => e.stopPropagation(), deselect: () => this.setState({ sel: null }),
+      view: S.view, onView: (view) => this.setState({ view }), onPinchStart: () => this.cancelDrag(),
+      gridPosition: `${W / 2 + S.view.x}px ${H / 2 + S.view.y}px`,
       prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, gridSize: px(10) + ' ' + px(10),
       wallDown: () => this.setState({ sel: null, sizeMenu: false }),
       wallPos: overlay ? 'fixed' : 'absolute', wallZ: overlay ? 80 : 1, wallRadius: overlay ? '0' : '8px',
