@@ -38,7 +38,8 @@ describe('provider buttons', () => {
       const html = renderToStaticMarkup(<ProtoAuth view={view} options={{ providers: [{ id: 'example', name: 'Example' }] }} />);
       expect(html).toContain('background:#efede8;color:#0d0d0d');
       expect(html).toContain('Example');
-      expect(html).toContain('href="/privacy"');
+      expect(html.match(/href="\/privacy"/g)).toHaveLength(1);
+      expect(html.match(/>Privacy</g)).toHaveLength(1);
     }
   });
 });
