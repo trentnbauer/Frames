@@ -8,6 +8,7 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import ProtoShoots from '../proto/ProtoShoots';
 import { reviewUrl } from '../reviewScope';
+import { SharePanel } from '../components/SharePanel';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
@@ -52,6 +53,7 @@ export function Shoots() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const cloud = useApi<{ connections: Conn[] }>(status.data?.storage.cloud || status.data?.cloudProviders.length ? '/cloud' : null);
   const shootPhotos = useApi<{ photos: PhotoLite[] }>(sid ? `/photos?shoot=${sid}&order=oldest` : null);
+  const [shareId, setShareId] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [newest, setNewest] = useState(true);
   const [filter, setFilter] = useState<'' | 'uncomposed' | 'review'>('');
@@ -110,7 +112,9 @@ export function Shoots() {
   return (
     <BrowsePage>
       <input ref={input} type="file" multiple hidden accept="image/*,.heic,.tif,.tiff,.raw,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2" onChange={(e) => { setFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+      {shareId !== null && <SharePanel kind="shoot" id={shareId} name={all.find((s) => s.id === shareId)?.name} onClose={() => setShareId(null)} />}
       <ProtoShoots
+        shareControl={sid !== null ? <button className="btn outline" onClick={() => setShareId(sid)}>Share</button> : null}
         uploadReq={req} localOn={local} cloudOn={cloudOn} today={todayName()}
         files={files} onFiles={setFiles} pickFiles={() => input.current?.click()} filesMeta={files.length ? `${mb >= 1000 ? (mb / 1000).toFixed(1) + ' GB' : Math.round(mb) + ' MB'} · ${suggestName}` : ''} suggestName={suggestName}
         storageSub={me?.storeOriginalQuality === false ? 'Uploaded photos are kept as smaller copies' : `To your library on this server`} shrinkUploads={me?.storeOriginalQuality === false} cloudHint={conns.length ? conns.map((c) => c.provider).join(', ') : ''}

@@ -85,6 +85,7 @@ export class Logic extends DCLogic {
           return { placeVal: sh.placeVal,
             camVal: sh.camVal, onCamCommit: (v) => { if (v !== sh.camVal) P.onCamera(v); },
             placeOpen: S.placeOpen, openPlace: () => this.setState({ placeOpen: true }), closePlace: () => this.setState({ placeOpen: false }), placePin: sh.placePin, kitRest: sh.kitRest }; })(),
+        shareControl: P.shareControl,
         unrated: photos.length - rated.length,
         aiLabel: ai === 'busy' ? 'Analyzing…' : ai === 'done' ? '✓ Analyzed' : '✦ Analyze with AI', aiFg: ai === 'busy' ? 'var(--text2)' : 'var(--text)', aiSpin: ai === 'busy' ? spin() : null,
         ai: async () => { if (ai === 'busy' || !P.aiOn) { if (!P.aiOn) this.flash('AI is off. Turn it on in Settings.'); return; } const msg = await P.onAnalyse(); if (msg) this.flash(msg); },

@@ -103,7 +103,8 @@ export function Editor() {
       <ProtoEditor
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}
         onPrints={(ds: DPrint[]) => saveLayout(fromDesign(ds, layoutPrints, origin.current!))}
-        photoMeta={(pid: number) => [title(pid), '', rk.get(pid)?.score ?? 0]} photoDims={(pid: number) => { const p = byId.get(pid); return [p?.w ?? 6000, p?.h ?? 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview')}
+        photoMeta={(pid: number) => [title(pid), '', rk.get(pid)?.score ?? 0]} photoDims={(pid: number) => { const p = byId.get(pid); return [p?.w ?? 6000, p?.h ?? 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview')} photoThumb={(pid: number) => imgUrl(pid, 'thumb')}
+        onRemoveCandidate={async (pid: number) => { const used = layoutPrints.some((p) => p.photoId === pid || (p.stack && p.photoId2 === pid)); if (used && !window.confirm('Remove this photo from the composition, including the prints holding it? It stays in your library.')) return; await api(`/collections/${c.id}/photos/${pid}`, { method: 'DELETE' }); reload(); }}
         order={order} unrated={unrated}
         share={share} onShareStart={async (d?: { allowReview: boolean; allowSuggest: boolean; allowDownload: boolean; onlyWall: boolean; askName: boolean; pin: string; expOpt: string }) => { const n = d ? EXPIRY.find((e) => e[0] === d.expOpt)?.[1] : undefined; await api('/shares', { body: { kind: 'collection', id: c.id, allowReview: d?.allowReview ?? true, allowSuggest: d?.allowSuggest ?? true, allowDownload: d?.allowDownload, onlyWall: d?.onlyWall ?? false, askName: d?.askName, ...(d?.pin ? { pin: d.pin } : {}), ...(d ? { expiresAt: n == null ? null : inDays(n) } : {}) } }); links.reload(); }}
         onShareStop={async () => { if (link) { await api(`/shares/${link.id}`, { method: 'DELETE' }); links.reload(); } }}
