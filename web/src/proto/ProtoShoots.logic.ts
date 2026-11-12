@@ -77,7 +77,7 @@ export class Logic extends DCLogic {
       inShoot: true,
       sv: {
         name: S.shootName != null ? S.shootName : sh.name, onName: (e) => this.setState({ shootName: e.target.value }), onNameBlur: () => { if (S.shootName != null && S.shootName.trim() && S.shootName !== sh.name) P.onRename(S.shootName.trim()); },
-        place: sh.place, dates: sh.dates, kit: sh.kit,
+        place: sh.place, dates: sh.dates, dateControl: sh.dateControl, kit: sh.kit,
         ...(() => { // the place and camera in the heading: click to edit, saved on leaving the box, and applied to every photograph in the shoot
           const ed = S.shootEdit && S.shootEdit.id === sh.id ? S.shootEdit : { id: sh.id };
           const set = (k, v) => this.setState({ shootEdit: { ...ed, id: sh.id, [k]: v } });

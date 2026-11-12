@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { searchWords } from '../searchWords.js';
 import { COLOR_NAMES, hammingInts, hashInts, similarity, type Feat, type Swatch } from '../analysis.js';
 import { suggestFilters, aiConfig, aiConfigsFor, tryEach, embedText, fromBlob, parseQuery } from '../ai.js';
 import { cosine } from '../analysis.js';
@@ -111,13 +112,13 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const semantic = q.semantic === '1' && !!cfgAi && !!q.q;
     // The typed words, each of which must be found somewhere in the photograph's text (file name, title, camera, lens, place, description, tags...).
     const textW: string[] = [], textA: unknown[] = [];
-    for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
+    for (const w of searchWords(String(q.q ?? ''))) {
       textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.place_address) LIKE ? ESCAPE '\\' OR lower(p.film) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
       textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
     }
     // The narrower test for "this is a name": only fields that name a photograph (not the AI's description of it, which is prose).
     const nameW: string[] = [], nameA: unknown[] = [];
-    for (const w of String(q.q ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
+    for (const w of searchWords(String(q.q ?? ''))) {
       nameW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
       nameA.push(like(w), like(w), like(w), like(w), like(w), like(w));
     }
@@ -154,7 +155,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
         semanticUsed = true;
       } catch { /* provider down: fall through to plain text below */ }
       if (!semanticUsed && !exact.size) {
-        const words = String(q.q).toLowerCase().split(/\s+/).filter(Boolean);
+        const words = searchWords(String(q.q));
         rows = rows.filter((r) => words.every((w) => `${r.file} ${r.title} ${r.description} ${r.place}`.toLowerCase().includes(w)));
       }
     }

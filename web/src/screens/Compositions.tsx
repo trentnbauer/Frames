@@ -5,8 +5,9 @@ import type { Collection, PhotoLite } from '../data';
 import { Header } from '../components/Shell';
 import { ppiOf, sizeName } from '../layout';
 import { useUi } from '../ui';
-import { chosenCount, isReady, miniWall, printsSummary, slotsOf } from './walls';
+import { chosenCount, isReady, printsSummary, slotsOf } from './walls';
 import ProtoCompositions from '../proto/ProtoCompositions';
+import { CompositionPreview } from '../components/CompositionPreview';
 
 type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
@@ -45,7 +46,7 @@ export function Compositions() {
 
   const card = (c: Collection) => {
     const slots = slotsOf(c), chosen = chosenCount(c);
-    return { id: c.id, name: c.name, prints: printsSummary(c), status: chosen === 0 ? 'Not started' : `${chosen} of ${slots} chosen`, pct: `${slots ? Math.round((chosen / slots) * 100) : 0}%`, gap: '16px', wall: miniWall(c, 0.31, 360) };
+    return { id: c.id, name: c.name, prints: printsSummary(c), status: chosen === 0 ? 'Not started' : `${chosen} of ${slots} chosen`, pct: `${slots ? Math.round((chosen / slots) * 100) : 0}%`, preview: <CompositionPreview collection={c} photos={byId} /> };
   };
   const prog = all.filter((c) => !c.printedAt && !isReady(c) && match(c)).sort(order).map(card);
   const ready = all.filter((c) => isReady(c) && match(c)).sort(order).map((c) => {
@@ -56,7 +57,7 @@ export function Compositions() {
     const low = ps.filter((p) => { const ph = p.photoId ? byId.get(p.photoId) : undefined; const v = ppiOf(ph, p); return v != null && v < (c.layout.ppi ?? 300); }).length;
     const mb = photos.reduce((n, p) => n + (p.sizeMb || 0), 0);
     return {
-      id: c.id, name: c.name, when: `Finished ${ago(c.updatedAt)}`, gap: '16px', wall: miniWall(c, 0.28, 400),
+      id: c.id, name: c.name, when: `Finished ${ago(c.updatedAt)}`, preview: <CompositionPreview collection={c} photos={byId} />,
       rows: [
         { k: 'Prints', v: [...sizes].map(([k, n]) => `${n} × ${k}`).join(', '), ok: '' },
         { k: 'Frames', v: frames.size ? [...frames].map(([k, n]) => `${n} × ${k}`).join(', ') : 'None, posters', ok: '' },
@@ -66,7 +67,7 @@ export function Compositions() {
     };
   });
   const printedAll = all.filter((c) => !!c.printedAt).sort((a, b) => (b.printedAt ?? '').localeCompare(a.printedAt ?? ''));
-  const printedList = printedAll.filter(match).map((c) => ({ id: c.id, name: c.name, prints: printsSummary(c), where: 'Not hung yet', date: new Date(c.printedAt!).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }), lab: '—', cost: '—', gap: '8px', wall: miniWall(c, 0.12, 190) }));
+  const printedList = printedAll.filter(match).map((c) => ({ id: c.id, name: c.name, prints: printsSummary(c), where: 'Not hung yet', date: new Date(c.printedAt!).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }), lab: '—', cost: '—', preview: <CompositionPreview collection={c} photos={byId} /> }));
   const nPrints = printedAll.reduce((n, c) => n + c.layout.prints.length, 0), nFrames = printedAll.reduce((n, c) => n + c.layout.prints.filter((p) => p.frame).length, 0);
   const s0 = (sug.data ?? [])[si % Math.max(1, sug.data?.length ?? 1)];
 

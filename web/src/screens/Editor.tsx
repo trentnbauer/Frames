@@ -5,6 +5,7 @@ import type { Collection, PhotoLite } from '../data';
 import { arrange, dims, FRAMES, type Print } from '../layout';
 import { Header } from '../components/Shell';
 import ProtoEditor from '../proto/ProtoEditor';
+import { RoomBackground } from '../components/RoomBackground';
 
 type Ranking = { weight: number; guests: number; items: { id: number; mine: number | null; mineN: number; guest: number | null; guestN: number; score: number }[] };
 type Link = { id: number; token: string; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string; expiresAt: string | null; status: string };
@@ -101,6 +102,8 @@ export function Editor() {
     <div className="page-shell">
       <Header />
       <ProtoEditor
+        roomControl={<RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} />}
+        roomImage={c.background ? { url: `/api/collections/${c.id}/background?v=${c.background.v}`, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}
         onPrints={(ds: DPrint[]) => saveLayout(fromDesign(ds, layoutPrints, origin.current!))}
         photoMeta={(pid: number) => [title(pid), '', rk.get(pid)?.score ?? 0]} photoDims={(pid: number) => { const p = byId.get(pid); return [p?.w ?? 6000, p?.h ?? 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview')} photoThumb={(pid: number) => imgUrl(pid, 'thumb')}

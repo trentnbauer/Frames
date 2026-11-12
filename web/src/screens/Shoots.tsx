@@ -9,6 +9,7 @@ import { useUi } from '../ui';
 import ProtoShoots from '../proto/ProtoShoots';
 import { reviewUrl } from '../reviewScope';
 import { SharePanel } from '../components/SharePanel';
+import { ShootDate } from '../components/ShootDate';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
@@ -87,7 +88,7 @@ export function Shoots() {
   const ph = shootPhotos.data?.photos ?? [];
   const inComp = new Set((colls.data ?? []).flatMap((c) => c.photoIds));
   const view = sh ? {
-    id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates,
+    id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates, dateControl: <ShootDate key={sh.id} shoot={sh} onSaved={reloadAll} />,
     placeVal: sh.place,
     placePin: { name: sh.place, address: ph.find((p) => p.place === sh.place)?.placeAddress ?? '', kind: ph.find((p) => p.place === sh.place)?.placeKind ?? '', suburb: '', city: '', lat: ph.find((p) => p.lat !== null)?.lat ?? null, lng: ph.find((p) => p.lat !== null)?.lon ?? null, precision: ph.find((p) => p.place === sh.place)?.placePrecision ?? 'exact' },
     camVal: sh.gear?.camera || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
@@ -95,7 +96,7 @@ export function Shoots() {
     kit: [sh.gear?.camera, sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · ') || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
   } : null;
   const askAll = (what: string, v: string) => !v || window.confirm(`Set the ${what} to “${v}” on all ${ph.length} photos in this shoot?`);
-  const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.capturedAt) }));
+  const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.dateEdit ?? p.capturedAt) }));
 
   const place = async (r: ScanResult, o: { mode: string; name: string; existingId: number | null; split: boolean }) => {
     if (!r.shootId || r.imported === 0) return;

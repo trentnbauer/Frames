@@ -109,6 +109,8 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if ('photoDate' in b && (typeof b.photoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.photoDate) || !Number.isFinite(Date.parse(b.photoDate)) || new Date(b.photoDate).toISOString().slice(0, 10) !== b.photoDate)) return rep.code(400).send({ error: 'Choose a valid photoshoot date.' });
+
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
     const everyPhoto = b.overwrite === true; // the person chose to change every photograph in the shoot, even ones with their own value
@@ -148,6 +150,11 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if (typeof b.description === 'string') db.prepare('UPDATE shoots SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if ('dateFrom' in b) db.prepare('UPDATE shoots SET date_from = ? WHERE id = ?').run(validDate(b.dateFrom), id);
     if ('dateTo' in b) db.prepare('UPDATE shoots SET date_to = ? WHERE id = ?').run(validDate(b.dateTo), id);
+    if ('photoDate' in b) db.transaction(() => {
+      db.prepare('UPDATE shoots SET date_from = ?, date_to = ? WHERE id = ?').run(b.photoDate, b.photoDate, id);
+      db.prepare('UPDATE photos SET date_edit = ? WHERE shoot_id = ?').run(b.photoDate, id);
+    })();
+
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
   });
   app.post('/api/shoots/:id/move', async (req, rep) => {
