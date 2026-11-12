@@ -88,7 +88,7 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
     };
   }, [wallRef]);
   return <div data-wall-control="" role="group" aria-label="Wall zoom" onPointerDown={(e) => e.stopPropagation()}
-    style={{ position: 'absolute', bottom: 14, left: 14, zIndex: 6, display: 'flex', gap: 8 }}>
+    style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
     <WallButton aria-label="Zoom out" title="Zoom out" disabled={view.zoom <= MIN_ZOOM} onClick={() => onView(zoomAt(view, view.zoom / 1.25))}>
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 6h8" /></svg>
     </WallButton>
