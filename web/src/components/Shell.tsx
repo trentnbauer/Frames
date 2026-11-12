@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { getTheme, setTheme } from '../theme';
 import { Modal, Spinner } from './Modal';
+import { clearSiteData } from '../clearSiteData';
 
 export function Mark({ w = 24 }: { w?: number }) {
   const s = w / 24;
@@ -107,6 +108,15 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
   const health = useApi<{ version: string }>(open ? '/health' : null);
   const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
   const [theme, setT] = useState(getTheme());
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const reset = async () => {
+    if (resetBusy) return;
+    setResetBusy(true); setResetError('');
+    try { await clearSiteData(); window.location.reload(); }
+    catch (e) { setResetError((e as Error).message); setResetBusy(false); }
+  };
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
   const close = () => setOpen(false);
   const go = (to: string) => () => { close(); nav(to); };
@@ -142,10 +152,16 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Welcome tour', go('/welcome'))}
             {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
             {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
-            {me?.user && <><div className="msep" />{item('Sign out', signOut)}</>}
+            <div className="msep" />
+            {item('Clear site data', () => { close(); setResetError(''); setResetOpen(true); })}
+            {me?.user && item('Sign out', signOut)}
           </div>
         </>
       )}
+      {resetOpen && <Modal title="Clear site data?" sub="Clears cached files and saved site preferences in this browser. You may need to sign in again. Your photos, reviews and server settings stay saved." onClose={() => !resetBusy && setResetOpen(false)}
+        foot={<><span className="grow" /><button className="btn" disabled={resetBusy} onClick={() => setResetOpen(false)}>Cancel</button><button className="btn primary" disabled={resetBusy} onClick={() => void reset()}>{resetBusy ? 'Clearing…' : 'Clear and reload'}</button></>}>
+        {resetError && <p className="reason" role="alert">{resetError}</p>}
+      </Modal>}
     </>
   );
 }

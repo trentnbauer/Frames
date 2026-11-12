@@ -315,6 +315,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     endSession(db, req);
     if (who?.provider === EMERGENCY_PROVIDER) removeEmergency(x, who.id); // signing out of the emergency login deletes it
     rep.header('Set-Cookie', sessionCookie(null, auth.isSecure(req)));
+    if ((req.query as Row).clearSiteData === '1') {
+      rep.header('Clear-Site-Data', '"cache", "cookies", "storage"');
+      rep.header('Cache-Control', 'no-store');
+    }
     return { ok: true };
   });
 
