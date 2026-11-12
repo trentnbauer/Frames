@@ -1,3 +1,4 @@
+import { discoverPhotoGear } from './gearDiscoveries.js';
 import { policyOf, runtime } from './policy.js';
 import { addDays, intervalDays } from './schedule.js';
 import { loadSettings, previewSpec } from './settings.js';
@@ -245,6 +246,7 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
   applyExternal(db, id, { title: arr(x.ObjectName)[0], description: arr(x.Caption)[0] ?? arr(x['Caption-Abstract'])[0], keywords: arr(x.Keywords), place: [arr(x.City)[0], arr(x.Country)[0]].filter(Boolean).join(', ') }, 'iptc');
   importSidecar(db, id, file);
   applyGear(db, id, true); // blanks take the photoshoot's defaults, then the person's own
+  discoverPhotoGear(db, id);
 }
 
 /** Imports every new file into one photoshoot named for today's date, then notices files that changed. Originals are only ever read. */

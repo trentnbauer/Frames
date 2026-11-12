@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { arrange, dims, FRAMES, type Print } from '../layout';
-import { Header } from '../components/Shell';
 import ProtoEditor from '../proto/ProtoEditor';
 import { SharePanel } from '../components/SharePanel';
 import { EditableCompositionName } from '../components/EditableCompositionName';
@@ -56,7 +55,7 @@ export function Editor() {
   const reviews = useApi<Reviews>(link ? `/shares/${link.id}/reviews` : null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   const c = coll.data;
-  if (!c || !lib.data) return <div className="page-shell"><Header />{coll.error && <p role="alert" className="muted">Something went wrong: {coll.error}</p>}</div>;
+  if (!c || !lib.data) return <div className="page-shell">{coll.error && <p role="alert" className="muted">Something went wrong: {coll.error}</p>}</div>;
 
   const readOnly = c.stage === 'done';
   const layoutPrints = c.layout.mode === 'free' ? c.layout.prints : arrange(c.layout.prints, c.layout.mode);
@@ -113,7 +112,7 @@ export function Editor() {
 
   return (
     <div className="page-shell">
-      <Header />
+
       {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => { setSharing(false); links.reload(); }} />}
       <ProtoEditor
         readOnly={readOnly} showExport={readOnly}

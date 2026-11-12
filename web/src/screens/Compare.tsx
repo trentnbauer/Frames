@@ -1,7 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { RATINGS, fmtDate, type PhotoFull, type PhotoLite } from '../data';
-import { Header } from '../components/Shell';
 import ProtoMore from '../proto/ProtoMore';
 
 type Group = { suggestedParentId: number; photos: PhotoLite[] };
@@ -12,7 +11,7 @@ export function Compare() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
   const r = useApi<{ a: PhotoFull; b: PhotoFull; similarity: number }>(`/compare?a=${sp.get('a')}&b=${sp.get('b')}`);
-  if (!r.data) return <div className="page-shell"><Header />{r.error && <p role="alert" className="muted">Something went wrong: {r.error}</p>}</div>;
+  if (!r.data) return <div className="page-shell">{r.error && <p role="alert" className="muted">Something went wrong: {r.error}</p>}</div>;
   const { a, b, similarity } = r.data;
   const rows: [string, (p: PhotoFull) => string][] = [
     ['Average rating', (p) => (p.reviewCount ? `${p.avgRating.toFixed(1)} ${RATINGS[Math.round(p.avgRating) - 1].emoji} (${p.reviewCount})` : 'Not reviewed')],
@@ -30,7 +29,7 @@ export function Compare() {
     sides: [a, b].map((p) => ({ src: imgUrl(p.id, 'preview'), ring: 'none', title: p.title || p.file, pal: (p.palette ?? []).slice(0, 5).map((c) => c.hex), btn: 'Prefer this one', btnBg: 'transparent', btnFg: 'var(--text)', pick: () => { if (window.confirm(`Prefer “${p.title || p.file}”? The other is left out of review. It stays in your library.`)) void prefer(p); } })),
     cmpRows: rows.map(([k, f], i) => { const x = f(a), y = f(b); return { k, a: x, b: y, border: i < rows.length - 1 ? '1px solid var(--hair)' : 'none', aFg: x !== y ? 'var(--text)' : 'var(--text2)', bFg: x !== y ? 'var(--text)' : 'var(--text2)' }; }),
   };
-  return <div className="page-shell"><Header /><ProtoMore page="compare" v={v} /></div>;
+  return <div className="page-shell"><ProtoMore page="compare" v={v} /></div>;
 }
 
 /** Near-duplicates (design: Proto More, page "dupes"). Nothing is deleted: link edits and crops as variants, or say they are different. */
@@ -51,7 +50,7 @@ export function Duplicates() {
   };
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoMore page="dupes" v={v} />
       {d.data?.length === 0 && <div className="empty">No near-duplicates found.</div>}
     </div>

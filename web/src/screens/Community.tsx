@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
-import { Header } from '../components/Shell';
 import ProtoCommunity from '../proto/ProtoCommunity';
 
 type Next = { photo: { token: string; ar: number } | null; meta?: { anon: string; details: string }; written?: boolean; left: number; others?: { n: number; avg: number | null } };
@@ -26,7 +25,7 @@ export function Community() {
   const photo = cur?.photo;
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoCommunity
         loading={loading}
         cur={photo ? { src: `/api/community/image/${photo.token}`, who: `Photographer ${cur?.meta?.anon ?? ''}`, kit: cur?.meta?.details ?? '', where: '' } : null}

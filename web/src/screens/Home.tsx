@@ -4,7 +4,6 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { miniWall, printsSummary } from './walls';
 import { useStore } from '../store';
-import { Header } from '../components/Shell';
 import { useShortcuts } from '../components/shortcuts';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { Today, greetingFor } from '../pages/Today';
@@ -125,7 +124,7 @@ export function Home() {
   if (s && s.total === 0) return <Today />;
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoHome v={v} cloudOn={v.cloudOn} />
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); shoots.reload(); pending.reload(); batches.reload(); }} />}
     </div>

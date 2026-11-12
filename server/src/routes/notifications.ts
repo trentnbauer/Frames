@@ -1,3 +1,4 @@
+import { discoveryForNotification, resolveGearDiscovery, syncGearDiscoveries } from '../gearDiscoveries.js';
 import { policyOf } from '../policy.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting } from '../db.js';
@@ -17,12 +18,30 @@ export function releaseItems(body: string): string[] {
 
 export function registerNotifications(app: FastifyInstance, x: Ctx) {
   const { db, all, num } = x;
-  const dto = (r: Row) => ({ id: r.id, kind: r.kind, text: r.text, createdAt: r.created_at, read: !!r.read, target: { screen: r.screen, anchor: r.anchor || undefined } });
+  const dto = (r: Row) => ({ id: r.id, kind: r.kind, text: r.text, createdAt: r.created_at, read: !!r.read, target: { screen: r.screen, anchor: r.anchor || undefined }, ...(r.kind === 'gear-found' ? { gear: discoveryForNotification(db, String(r.ref)) } : {}) });
 
   app.get('/api/notifications', async () => {
+    syncGearDiscoveries(db);
     prune(db);
-    const items = all('SELECT * FROM notifications ORDER BY created_at DESC, id DESC LIMIT 50').map(dto);
+    const items = all('SELECT * FROM notifications WHERE cleared_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 50').map(dto);
     return { items, unread: items.filter((i) => !i.read).length };
+  });
+  app.delete('/api/notifications', async () => {
+    const result = db.prepare('UPDATE notifications SET read = 1, cleared_at = ? WHERE cleared_at IS NULL').run(new Date().toISOString());
+    return { ok: true, cleared: result.changes };
+  });
+  app.delete('/api/notifications/:id', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    if (!x.one('SELECT 1 x FROM notifications WHERE id = ?', id)) return x.notFound(rep);
+    db.prepare('UPDATE notifications SET read = 1, cleared_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+    return { ok: true };
+  });
+  app.post('/api/notifications/:id/gear', async (req, rep) => {
+    const action = ((req.body ?? {}) as Row).action;
+    if (action !== 'add' && action !== 'blacklist') return rep.code(400).send({ error: 'Choose Add to gear or Blacklist.' });
+    const notification = x.one("SELECT ref FROM notifications WHERE id = ? AND kind = 'gear-found'", num((req.params as Row).id));
+    if (!notification || !resolveGearDiscovery(db, num(notification.ref), action)) return x.notFound(rep);
+    return { ok: true };
   });
   app.post('/api/notifications/read', async (req, rep) => {
     const b = (req.body ?? {}) as Row;

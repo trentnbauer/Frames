@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
-import { Header } from '../components/Shell';
+import { GearBlacklist } from '../components/GearBlacklist';
 import ProtoGear from '../proto/ProtoGear';
 
 type Item = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; serial: string; year: number | null; why: string; link: string; price: number | null; rank: number; used?: number };
-type Data = { own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; currency?: string } };
+type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; currency?: string } };
 
 const TO_DESIGN: Record<string, string> = { camera: 'Body', lens: 'Lens', film: 'Film', light: 'Light', app: 'App', other: 'Other' };
 const TO_API: Record<string, string> = { Body: 'camera', Lens: 'lens', Film: 'film', Light: 'light', App: 'app', Other: 'other' };
@@ -12,6 +12,7 @@ const TO_API: Record<string, string> = { Body: 'camera', Lens: 'lens', Film: 'fi
 /** Gear & wishlist (design: Proto Gear). It follows the portfolio's Gear page. Text edits are saved a moment after you stop typing. */
 export function Gear() {
   const g = useApi<Data>('/gear/items');
+  useEffect(() => { const changed = () => g.reload(); window.addEventListener('frames:gear-changed', changed); return () => window.removeEventListener('frames:gear-changed', changed); }, [g.reload]);
   const [edits, setEdits] = useState<Record<number, Partial<Item>>>({});
   const timers = useRef<Record<string, number>>({});
   const d = g.data;
@@ -41,8 +42,9 @@ export function Gear() {
 
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoGear
+        blacklistControl={<GearBlacklist items={d?.blacklisted ?? []} onChanged={() => window.dispatchEvent(new Event('frames:gear-changed'))} />}
         currency={d?.prefs.currency ?? '$'} arrange={d?.prefs.arrange === 'era' ? 'year' : d?.prefs.arrange ?? 'system'} showWish={!!d?.prefs.showWant}
         intro={intro ?? d?.prefs.intro ?? ''} onIntro={(v: string) => { setIntro(v); window.clearTimeout(introTimer.current); introTimer.current = window.setTimeout(async () => { await api('/gear/prefs', { method: 'PUT', body: { intro: v } }); setIntro(null); g.reload(); }, 700); }}
         syncLabel="Synced to your portfolio"

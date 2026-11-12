@@ -57,3 +57,38 @@ describe('notifications', () => {
     expect(releaseItems('Just a line')).toEqual(['Just a line']);
   });
 });
+
+it('clears read and unread notifications beyond the first page without repeating the same event', async () => {
+  const e = makeEnv();
+  try {
+    for (let i = 0; i < 55; i++) notify(e.db, 'idea', `Idea ${i}`, { screen: '/' }, `clear-test-${i}`);
+    e.db.prepare('UPDATE notifications SET read = 1 WHERE id = (SELECT MIN(id) FROM notifications)').run();
+    const request = (method: 'GET' | 'DELETE') => e.app.inject({ method, url: '/api/notifications' });
+    expect((await request('GET')).json().items).toHaveLength(50);
+    expect((await request('DELETE')).json()).toEqual({ ok: true, cleared: 55 });
+    expect((await request('GET')).json()).toEqual({ items: [], unread: 0 });
+    expect((await request('DELETE')).json()).toEqual({ ok: true, cleared: 0 });
+    expect(notify(e.db, 'idea', 'Repeated event', { screen: '/' }, 'clear-test-0')).toBe(0);
+    notify(e.db, 'idea', 'A new event', { screen: '/' }, 'clear-test-new');
+    expect((await request('GET')).json()).toMatchObject({ items: [{ text: 'A new event' }], unread: 1 });
+  } finally { await e.app.close(); cleanup(e); }
+});
+
+it('clears only the signed-in person’s notifications', async () => {
+  const { createSession, loadAuth, saveAuth } = await import('./auth.js');
+  const { invite, resolveUser } = await import('./users.js');
+  const e = makeEnv();
+  try {
+    const { sys, tenants } = (e.app as any).frames;
+    saveAuth(sys, { ...loadAuth(sys), enabled: true, providers: [{ id: 'example', type: 'google', name: 'Example', clientId: 'browser' }] });
+    invite(sys, 'member@example.test');
+    const person = resolveUser(sys, { provider: 'example', sub: 'member', email: 'member@example.test', emailVerified: true, name: 'Member' }, true)!;
+    notify(e.db, 'idea', 'Owner event', { screen: '/' });
+    notify(tenants.get(person.id).db, 'idea', 'Member event', { screen: '/' });
+    const owner = { cookie: `frames_session=${createSession(sys, 1)}` }, member = { cookie: `frames_session=${createSession(sys, person.id)}` };
+    expect((await e.app.inject({ method: 'DELETE', url: '/api/notifications', headers: member })).json().cleared).toBe(1);
+    expect((await e.app.inject({ url: '/api/notifications', headers: member })).json().items).toEqual([]);
+    expect((await e.app.inject({ url: '/api/notifications', headers: owner })).json().items[0].text).toBe('Owner event');
+    expect((await e.app.inject({ method: 'DELETE', url: '/api/notifications' })).statusCode).toBe(401);
+  } finally { await e.app.close(); cleanup(e); }
+});

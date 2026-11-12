@@ -316,6 +316,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     addColumn(db, 'collections', 'stage', "TEXT NOT NULL DEFAULT 'progress' CHECK(stage IN ('progress', 'review', 'done'))");
     db.exec("UPDATE collections SET stage = 'done' WHERE printed_at IS NOT NULL");
   },
+  // Clear the bell without losing event references used to suppress duplicate notifications.
+  (db) => { addColumn(db, 'notifications', 'cleared_at', 'TEXT'); },
+  // Remember discovered gear even after its notification is dismissed or pruned.
+  (db) => { db.exec("CREATE TABLE IF NOT EXISTS gear_discoveries (id INTEGER PRIMARY KEY, type TEXT NOT NULL CHECK(type IN ('camera','lens')), name TEXT NOT NULL, key TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'new' CHECK(state IN ('new','added','blacklisted')), UNIQUE(type, key))"); },
 ];
 
 export function migrate(db: DB) {

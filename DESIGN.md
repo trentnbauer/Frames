@@ -27,7 +27,13 @@ Use the same visual sequence for workflow stages: **circle → diamond → squar
 
 Keep the shapes and stages in that order. Pair shapes with text labels; do not rely on shape or colour alone. In a segmented control, expose the selected stage with `aria-pressed` and use the existing selected fill. Decorative shapes accompanying a text label should be hidden from screen readers.
 
-The composition editor keeps the workflow control in the original header action area. In Done it is replaced by **Edit** beside **Export**; Edit reopens the work in Review and restores the three-stage control (Progress if artwork is no longer complete). Keep this action area the same width so **Guests** and **Share** do not shift between states. Do not add a separate toolbar row for the stages.
+The composition editor keeps the circle → diamond → square workflow visible in the header in every stage, including Done. Choose Progress or Review to reopen a Done composition. Export belongs in the **Done · Read-only** side panel, where frame editing normally appears; it is not a header action. Keep Guests and Share in place when the stage changes.
+
+The shared app header uses the Home screen's inset and stays in the same position across navigation. Keep the theme switch beside the user dropdown and notifications. Put the app-wide full-width preference in the user dropdown, and apply it consistently to page containers rather than giving individual screens independent width controls. The editor wall and overlaid controls use theme tokens too; keep control surfaces opaque enough to stay readable over a room photo.
+
+## Notifications and gear suggestions
+
+Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Blacklisted gear uses editable tags under What I own, and blacklisting must immediately remove a matching Found in your photos suggestion.
 
 ## Validation
 

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
-import { Header } from '../components/Shell';
 import { ppiOf, sizeName } from '../layout';
 import { useUi } from '../ui';
 import { chosenCount, printsSummary, slotsOf } from './walls';
@@ -74,7 +73,7 @@ export function Compositions() {
 
   return (
     <div className="page-shell">
-      <Header />
+
       <ProtoCompositions key={initialTab} initialTab={initialTab}
         prog={prog} review={review} ready={ready}
         sortLabel={() => byName ? 'Name' : 'Last edited'} onToggleSort={() => setByName(!byName)}

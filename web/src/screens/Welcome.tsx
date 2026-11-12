@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
-import { Header } from '../components/Shell';
 import type { PhotoLite } from '../data';
 import ProtoMore from '../proto/ProtoMore';
 
@@ -30,5 +29,5 @@ export function Welcome() {
     wFirst: i === 0, wHasBack: i > 0, wBack: () => setI(i - 1), wSkip: finish, wNext: () => (last ? finish() : setI(i + 1)), wNextLabel: last ? 'Start using Frames' : 'Next',
     wDots: STEPS.map((_, k) => ({ bg: k === i ? 'var(--text)' : 'var(--outline)', go: () => setI(k) })),
   };
-  return <div className="page-shell"><Header /><ProtoMore page="welcome" v={v} /></div>;
+  return <div className="page-shell"><ProtoMore page="welcome" v={v} /></div>;
 }

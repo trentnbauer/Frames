@@ -1,3 +1,4 @@
+import { blacklistGear, blacklistedGear, foundGear, syncGearDiscoveries, unblacklistGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -70,10 +71,18 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     // Use counts from EXIF: how many photographs name this camera or lens.
     const used = new Map<string, number>();
     for (const col of ['camera', 'lens']) for (const r of all(`SELECT ${col} n, COUNT(*) c FROM photos WHERE ${col} != '' AND missing = 0 GROUP BY ${col}`)) used.set(norm(String(r.n)), (used.get(norm(String(r.n))) ?? 0) + (r.c as number));
-    const have = new Set(own.map((g) => norm(String(g.name))));
-    const found = [...[['camera', 'camera'], ['lens', 'lens']].flatMap(([col, type]) => all(`SELECT ${col} n, COUNT(*) c FROM photos WHERE ${col} != '' AND missing = 0 GROUP BY ${col} ORDER BY c DESC LIMIT 20`).map((r) => ({ name: String(r.n), type, count: r.c as number })))]
-      .filter((f) => !have.has(norm(f.name)) && ![...have].some((h) => norm(f.name).includes(h) || h.includes(norm(f.name))));
-    return { own: own.map((g) => ({ ...g, used: used.get(norm(String(g.name))) ?? 0 })), want, found, prefs: prefs(), movedFromSettings: moved, totals: { want: want.reduce((a, g) => a + (g.price ?? 0), 0), next: want[0]?.price ?? null } };
+    syncGearDiscoveries(db);
+    const found = foundGear(db).slice(0, 40);
+    return { own: own.map((g) => ({ ...g, used: used.get(norm(String(g.name))) ?? 0 })), want, found, blacklisted: blacklistedGear(db), prefs: prefs(), movedFromSettings: moved, totals: { want: want.reduce((a, g) => a + (g.price ?? 0), 0), next: want[0]?.price ?? null } };
+  });
+  app.post('/api/gear/blacklist', async (req, rep) => {
+    const name = clean(((req.body ?? {}) as Row).name, 120);
+    if (!blacklistGear(db, name)) return rep.code(400).send({ error: 'Enter a camera or lens name.' });
+    return { items: blacklistedGear(db) };
+  });
+  app.delete('/api/gear/blacklist/:id', async (req, rep) => {
+    if (!unblacklistGear(db, num((req.params as Row).id))) return notFound(rep);
+    return { items: blacklistedGear(db) };
   });
   app.post('/api/gear/items', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
@@ -85,6 +94,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (price !== null && !(price >= 0 && price < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' });
     if (b.link && !/^https?:\/\//i.test(String(b.link))) return rep.code(400).send({ error: 'A link starts with https://' });
     const id = add(kind, name, type, { system: typeof b.system === 'string' && b.system.trim() ? b.system.trim().slice(0, 60) : undefined, year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true });
+    syncGearDiscoveries(db);
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.patch('/api/gear/items/:id', async (req, rep) => {

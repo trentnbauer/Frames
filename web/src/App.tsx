@@ -1,7 +1,8 @@
+import { LayoutPreferencesProvider } from './layoutPreferences';
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useKey } from './components/bits';
-import { BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
+import { Header, BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
 import { Search } from './components/Search';
 import { ShortcutHelp } from './components/shortcuts';
 import { NewComposition } from './components/NewComposition';
@@ -74,7 +75,8 @@ function Shell() {
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
-      <Routes>
+      {!inReview && <div className="app-header"><Header /></div>}
+      <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
@@ -93,7 +95,7 @@ function Shell() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Home />} />
-      </Routes>
+      </Routes></div>
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />
@@ -115,5 +117,5 @@ export function App() {
   if (AUTH_PATHS.test(loc.pathname)) return <AuthApp />;
   if (loc.pathname.startsWith('/s/')) return <Routes><Route path="/s/:token" element={<SharePage />} /><Route path="*" element={<SharePage />} /></Routes>;
   if (me?.role === 'guest') return <GuestHome />; // a guest has no library, so none of the app
-  return <Shell />;
+  return <LayoutPreferencesProvider><Shell /></LayoutPreferencesProvider>;
 }
