@@ -246,7 +246,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const portrait = (pid: number) => { const p = one('SELECT w, h FROM photos WHERE id = ?', pid); return p && p.w && p.h ? p.h > p.w : null; };
     const layout = stored ?? deriveLayout(c.target ? JSON.parse(c.target) : null, oldChosen, portrait);
     return {
-      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', updatedAt: c.updated_at ?? '',
+      id: c.id, name: c.name, description: c.description, theme: c.theme ?? '', stage: c.stage ?? 'progress', updatedAt: c.updated_at ?? '',
       target: stored ? targetOf(stored) : c.target ? JSON.parse(c.target) : null,
       layout, layoutSaved: !!stored, background: backgroundOf(db, c.id),
       photoIds: rows.map((r) => r.photo_id), chosenIds: stored ? chosenOf(stored) : oldChosen, printedAt: c.printed_at ?? null,
@@ -429,6 +429,23 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     return s;
   });
 
+  // Done compositions can be reopened, but content cannot be changed in the same request.
+  app.addHook('preHandler', async (req, rep) => {
+    if (!['PATCH', 'PUT', 'POST', 'DELETE'].includes(req.method)) return;
+    const route = req.routeOptions.url ?? '';
+    if (!/^\/api\/collections\/:id(?:\/|$)/.test(route)) return;
+    const c = one('SELECT stage FROM collections WHERE id = ?', num((req.params as Row).id));
+    if (c?.stage !== 'done') return;
+    const b = (req.body ?? {}) as Row;
+    const reopen = req.method === 'PATCH' && route === '/api/collections/:id'
+      && Object.keys(b).length === 1 && (['progress', 'review', 'done'].includes(b.stage) || b.printed === false);
+    if (!reopen) return rep.code(409).send({ error: 'This composition is Done and read-only. Move it to Progress or Review before editing.' });
+  });
+  const fullComposition = (c: Row) => {
+    const ps = collectionDto(c).layout.prints;
+    return ps.length > 0 && ps.every((p) => p.photoId !== null && (!p.stack || p.photoId2 !== null));
+  };
+
   // ---------- collections ----------
   app.get('/api/collections', async () => {
     const portfolioId = loadPortfolio(db).collectionId;
@@ -474,11 +491,18 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM collections WHERE id = ?', id)) return notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if ('stage' in b || 'printed' in b) {
+      if (Object.keys(b).length !== 1) return rep.code(400).send({ error: 'Change the composition stage separately from its content.' });
+      const stage = 'stage' in b ? b.stage : b.printed === true ? 'done' : b.printed === false ? 'progress' : null;
+      if (!['progress', 'review', 'done'].includes(stage)) return rep.code(400).send({ error: 'Choose Progress, Review or Done.' });
+      const c = one('SELECT * FROM collections WHERE id = ?', id)!;
+      if (stage !== 'progress' && !fullComposition(c)) return rep.code(409).send({ error: 'Fill every artwork slot before moving to Review or Done.' });
+      db.prepare('UPDATE collections SET stage = ?, printed_at = ? WHERE id = ?').run(stage, b.printed === true ? new Date().toISOString() : stage === 'done' ? c.printed_at : null, id);
+      return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
+    }
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     if (typeof b.description === 'string') db.prepare('UPDATE collections SET description = ? WHERE id = ?').run(b.description.slice(0, 1000), id);
     if (typeof b.theme === 'string') db.prepare('UPDATE collections SET theme = ? WHERE id = ?').run(b.theme.slice(0, 120), id);
-    // Printed: done and archived. Reopening clears it.
-    if (typeof b.printed === 'boolean') db.prepare('UPDATE collections SET printed_at = ? WHERE id = ?').run(b.printed ? new Date().toISOString() : null, id);
     const memberSet = () => new Set((db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ?').all(id) as Row[]).map((r) => r.photo_id as number));
     if ('layout' in b) {
       const l = parseLayout(b.layout, memberSet());
@@ -508,6 +532,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
         for (const pid of b.chosenIds) db.prepare('UPDATE collection_photos SET chosen = 1 WHERE collection_id = ? AND photo_id = ?').run(id, num(pid));
       }
     }
+    const updated = one('SELECT * FROM collections WHERE id = ?', id)!;
+    if (updated.stage === 'review' && !fullComposition(updated)) db.prepare("UPDATE collections SET stage = 'progress' WHERE id = ?").run(id);
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', id)!);
   });
   app.delete('/api/collections/:id', async (req) => { const id = num((req.params as Row).id); db.prepare("DELETE FROM shares WHERE kind = 'collection' AND target_id = ?").run(id); db.prepare('DELETE FROM collections WHERE id = ?').run(id); removeBackground(db, cfg.dataDir, id); return { ok: true }; });
@@ -526,6 +552,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const row = one('SELECT * FROM collections WHERE id = ?', num(id))!;
     const cur = storedLayout(row, new Set((db.prepare('SELECT photo_id FROM collection_photos WHERE collection_id = ?').all(num(id)) as Row[]).map((r) => r.photo_id as number).concat(num(photoId))));
     if (cur && cur.prints.some((p) => p.photoId === num(photoId) || p.photoId2 === num(photoId))) saveLayout(num(id), { ...cur, prints: cur.prints.map((p) => ({ ...p, photoId: p.photoId === num(photoId) ? null : p.photoId, photoId2: p.photoId2 === num(photoId) ? null : p.photoId2 })) });
+    const updated = one('SELECT * FROM collections WHERE id = ?', num(id))!;
+    if (updated.stage === 'review' && !fullComposition(updated)) db.prepare("UPDATE collections SET stage = 'progress' WHERE id = ?").run(num(id));
     return collectionDto(one('SELECT * FROM collections WHERE id = ?', num(id))!);
   });
 

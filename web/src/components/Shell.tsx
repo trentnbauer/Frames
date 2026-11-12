@@ -211,7 +211,7 @@ export function TabBar() {
       <nav className="tabbar" aria-label="Workflow">
         <NavLink to="/shoots" className={step === 1 ? 'on' : ''}>Upload</NavLink>
         <NavLink to="/collections" className={step === 2 ? 'on' : ''}>Compose</NavLink>
-        <NavLink to="/collections?filter=ready">Export</NavLink>
+        <NavLink to="/collections?filter=done">Export</NavLink>
         <button onClick={() => setMore(true)}>More</button>
       </nav>
       {more && (

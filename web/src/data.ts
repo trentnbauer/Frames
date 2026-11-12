@@ -26,7 +26,7 @@ export type Shoot = {
   /** Camera details the shoot gives to photographs that have none. */
   gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
 };
-export type Collection = { id: number; name: string; updatedAt?: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean; /** A picture of a room behind the wall (size in pixels), if one is set. */ background?: { w: number; h: number; v: number } | null };
+export type Collection = { stage: 'progress' | 'review' | 'done'; id: number; name: string; updatedAt?: string; description: string; theme: string; target: Target | null; photoIds: number[]; chosenIds: number[]; printedAt: string | null; layout: import('./layout').Layout; layoutSaved: boolean; /** A picture of a room behind the wall (size in pixels), if one is set. */ background?: { w: number; h: number; v: number } | null };
 
 export const RATINGS = [
   { value: 1, emoji: '😐', label: 'meh' },

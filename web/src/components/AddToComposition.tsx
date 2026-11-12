@@ -18,7 +18,7 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const open = useMemo(() => (colls.data ?? []).filter((c) => !c.printedAt), [colls.data]);
+  const open = useMemo(() => (colls.data ?? []).filter((c) => c.stage !== 'done' && !c.printedAt), [colls.data]);
   // Which compositions hold every one of these photographs already (the start state of the ticks).
   const has = (c: Collection) => ids.length > 0 && ids.every((id) => c.photoIds.includes(id));
   const [ticks, setTicks] = useState<Record<number, boolean> | null>(null);

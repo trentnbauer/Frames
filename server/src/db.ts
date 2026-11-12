@@ -311,6 +311,11 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'photos', 'preview_spec', "TEXT NOT NULL DEFAULT ''"); },
   // the original pixel size of an uploaded photograph that was kept as a smaller copy, so print sizes use the original's
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS shrunk_uploads (file TEXT PRIMARY KEY, orig_w INTEGER NOT NULL DEFAULT 0, orig_h INTEGER NOT NULL DEFAULT 0)'); },
+  // Explicit composition lifecycle. Previously printed compositions remain complete and read-only.
+  (db) => {
+    addColumn(db, 'collections', 'stage', "TEXT NOT NULL DEFAULT 'progress' CHECK(stage IN ('progress', 'review', 'done'))");
+    db.exec("UPDATE collections SET stage = 'done' WHERE printed_at IS NOT NULL");
+  },
 ];
 
 export function migrate(db: DB) {

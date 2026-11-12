@@ -1,6 +1,6 @@
 import { imgUrl } from '../api';
 import type { Collection } from '../data';
-import { FRAMES, MATS, or, isFull, chosenIn } from '../layout';
+import { FRAMES, MATS, or, chosenIn } from '../layout';
 
 /** The miniature wall the design draws for a composition: its prints at one scale (px per mm, held back so the row fits in `maxW`), with frames, mats and photographs. */
 export function miniWall(c: Collection, k = 0.2, maxW = 340) {
@@ -26,5 +26,5 @@ export const printsSummary = (c: Collection) => {
 };
 
 export const slotsOf = (c: Collection) => c.layout.prints.reduce((n, p) => n + (p.stack ? 2 : 1), 0);
-export const isReady = (c: Collection) => !c.printedAt && isFull(c.layout.prints);
+export const isReady = (c: Collection) => c.stage === 'done';
 export const chosenCount = (c: Collection) => chosenIn(c.layout.prints).length;

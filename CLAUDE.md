@@ -37,6 +37,10 @@ All of these, not a subset:
 4. Run the real app and try the change in a browser (Playwright is fine). Several real bugs here only showed up in a browser.
 5. A change to the Dockerfile must build. CI builds and starts the image (amd64 and arm64) only when the Dockerfile, .dockerignore or a package.json or lock file changes, and on every push to main and release; other pull requests skip it, so it is up to you to build it when you change something the image depends on.
 
+## UI design
+
+Read [DESIGN.md](DESIGN.md) before changing the UI. It documents the theme and typography, **✦ before AI-derived data**, and **circle → diamond → square** for workflow stages. Reuse the shared CSS tokens and components, and verify both themes.
+
 ## Conventions
 
 - Node 22. `better-sqlite3` stays on 11 (later majors ship no prebuilt binaries for the slim image). Native modules must have prebuilds for the Node major in the Dockerfile.

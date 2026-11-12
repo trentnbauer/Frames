@@ -351,6 +351,10 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM photos WHERE id = ?', id)) return notFound(rep);
     const b = (req.body ?? {}) as Row;
+    const config = loadPortfolio(db);
+    if ((typeof b.on === 'boolean' || b.favourite === true) && config.collectionId && one("SELECT 1 x FROM collections WHERE id = ? AND stage = 'done'", config.collectionId)) {
+      return rep.code(409).send({ error: 'The portfolio composition is Done. Reopen it before changing its candidates.' });
+    }
     const before = stateOf(id);
     const mark = (col: 'favourite' | 'out', v: number) => { db.prepare('INSERT OR IGNORE INTO portfolio_marks(photo_id) VALUES(?)').run(id); db.prepare(`UPDATE portfolio_marks SET ${col} = ? WHERE photo_id = ?`).run(v, id); };
     const add = () => { const col = handCollection(); mark('out', 0); db.prepare('INSERT OR IGNORE INTO collection_photos(collection_id, photo_id, pos) VALUES(?, ?, (SELECT COALESCE(MAX(pos), -1) + 1 FROM collection_photos WHERE collection_id = ?))').run(col, id, col); };
