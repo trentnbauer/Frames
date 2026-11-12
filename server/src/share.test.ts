@@ -63,7 +63,7 @@ describe('what a guest sees', () => {
     const j = r.json();
     expect(j).toMatchObject({ kind: 'collection', name: 'For the client', description: 'Pick your favourites', allowDownload: true, allowReview: true });
     expect(j.photos.map((p: any) => p.id)).toEqual(insideIds);
-    expect(j.photos[0]).toEqual({ id: insideIds[0], title: expect.any(String), ar: expect.any(Number), n: 1 });
+    expect(j.photos[0]).toEqual({ id: insideIds[0], title: expect.any(String), w: 600, h: 400, ar: 1.5, n: 1 });
     // No location, place, description, paths, camera, shoot ids.
     const body = r.body;
     for (const secret of ['Secret cove', 'private note', 'lat', 'lon', tmp, 'camera', 'path', '33.85', 'shootId']) expect(body, secret).not.toContain(secret);

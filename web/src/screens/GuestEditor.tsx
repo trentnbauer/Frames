@@ -4,7 +4,7 @@ import { arrange, type Layout, type Print } from '../layout';
 import ProtoEditor from '../proto/ProtoEditor';
 import { centreOf, fromDesign, toDesign, type DPrint } from './Editor';
 
-type G = { id: number; title: string; ar: number; n: number };
+type G = { id: number; title: string; w: number; h: number; ar: number; n: number };
 
 /** What a guest sees of a shared composition (design: Proto Editor, guest view). Changes are tried here and only sent when they press send. */
 export function GuestEditor({ token, name, owner, layout, chosenIds, photos, askName }: { token: string; name: string; owner?: string; layout: Layout; chosenIds: number[]; photos: G[]; askName: (then: (n: string) => void) => void }) {
@@ -42,7 +42,7 @@ export function GuestEditor({ token, name, owner, layout, chosenIds, photos, ask
     <ProtoEditor
       guest name={name} owner={owner} printsKey={JSON.stringify(base)} prints={baseD} basePrints={baseD}
       onPrints={(ds: DPrint[]) => setDraft(ds)}
-      photoMeta={(pid: number) => [byId.get(pid)?.title || `Photo ${pid}`, '', 0]} photoDims={(pid: number) => { const ar = byId.get(pid)?.ar ?? 1.5; return [Math.round(ar * 4000), 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview', token)}
+      photoMeta={(pid: number) => [byId.get(pid)?.title || `Photo ${pid}`, '', 0]} photoDims={(pid: number) => { const p = byId.get(pid); return p?.w && p?.h ? [p.w, p.h] : [Math.round((p?.ar ?? 1.5) * 4000), 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview', token)}
       order={others.length ? others : chosenIds} unrated={[]}
       onSend={send}
     />
