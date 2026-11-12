@@ -5,6 +5,7 @@ import type { Collection } from '../data';
 import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
 import ProtoReview from '../proto/ProtoReview';
+import { reviewRequest } from '../reviewScope';
 
 type Session = { shootName?: string; runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
 
@@ -20,9 +21,7 @@ export function Review() {
   const [pickFor, setPickFor] = useState<number | null>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    const photoIds = q.get('ids')?.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0);
-    api<Session>('/review/start', { method: 'POST', body: photoIds?.length ? { photoIds } : { early: q.has('early') } }).then(setS).catch((e: Error) => setError(e.message));
+    api<Session>('/review/start', { method: 'POST', body: reviewRequest(window.location.search) }).then(setS).catch((e: Error) => setError(e.message));
   }, []);
   useEffect(() => { if (!offer) return; const t = setTimeout(() => setOffer(null), 6000); return () => clearTimeout(t); }, [offer]);
 

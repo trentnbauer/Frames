@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
-import { sessionUser, cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
+import { sessionIdOf, sessionUser, cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
 import type { Ctx, Row } from '../ctx.js';
 import { clientOf, cloudOnlyOriginals, storesOriginalQuality } from '../cloud.js';
 import { getSetting } from '../db.js';
@@ -65,6 +65,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   const seenCookie = (req: any) => /(?:^|;\s*)frames_seen=([A-Za-z0-9_-]{16,40})/.exec(String(req.headers.cookie ?? ''))?.[1];
   const withDevice = (req: any, user: User, session: string): string[] => {
     const cookies = [session];
+    const token = /frames_session=([^;]+)/.exec(session)?.[1];
+    if (token) db.prepare('UPDATE sign_in_events SET ip = ?, user_agent = ? WHERE session_id = ? AND user_id = ?').run(req.ip, String(req.headers['user-agent'] ?? '').slice(0, 500), crypto.createHash('sha256').update(token).digest('hex'), user.id);
     let dev = seenCookie(req);
     if (!dev) { dev = crypto.randomBytes(16).toString('base64url'); cookies.push(`frames_seen=${dev}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${365 * 86400}${auth.isSecure(req) ? '; Secure' : ''}`); }
     try {
@@ -77,8 +79,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
         if (t) {
           const ua = String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a new device';
           const base = (loadAuth(db).publicUrl || auth.baseUrl(req)).replace(/\/+$/, '');
-          notify(t.db, 'sign-in', 'Someone signed in to your account from a new device', { screen: '/settings?section=profile' }, `si:${dev}`);
-          queueMail(x, t, 'sign-in', { type: 'signin', baseUrl: base, params: { subject: 'New sign-in to Frames', preheader: 'A new device signed in', eyebrow: 'Security', title: 'New sign-in', body: `Your account was just signed in on ${ua}. If that was you, there is nothing to do. If not, open Settings and sign out everywhere.`, button_label: 'Review your account', button_url: `${base}/settings?section=profile`, fine_print: 'You get this when a device you have not used before signs in.', image_url: '', image_alt: '', note: '', note_from: '' } });
+          notify(t.db, 'sign-in', 'Someone signed in to your account from a new device', { screen: '/settings?section=security' }, `si:${dev}`);
+          queueMail(x, t, 'sign-in', { type: 'signin', baseUrl: base, params: { subject: 'New sign-in to Frames', preheader: 'A new device signed in', eyebrow: 'Security', title: 'New sign-in', body: `Your account was just signed in on ${ua}. If that was you, there is nothing to do. If not, open Settings and sign out everywhere.`, button_label: 'Review your account', button_url: `${base}/settings?section=security`, fine_print: 'You get this when a device you have not used before signs in.', image_url: '', image_alt: '', note: '', note_from: '' } });
         }
       }
     } catch { /* never stop a sign-in over a notice */ }
@@ -93,7 +95,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const allowed = listed || !!flow.guest;
     if (flow.linkUser) {
       // Someone signed in is adding this account to themselves. The flow was started by their own session, so it is theirs to finish.
-      return rep.redirect(`/settings?section=profile&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
+      return rep.redirect(`/settings?section=security&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
     }
     if (!allowed) {
       console.warn(`sign-in refused: ${who.provider}:${who.sub} ${who.email || '(no email)'}`);
@@ -235,6 +237,29 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
     return { ok: true, returnTo: safeReturn(b.returnTo) };
   });
+  app.get('/api/me/security', async (req, rep) => {
+    const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
+    rep.header('Cache-Control', 'no-store');
+    const current = sessionIdOf(req), now = new Date().toISOString();
+    const query = `SELECT e.id, e.created, e.ip, e.user_agent, s.expires, s.last_seen,
+      CASE WHEN s.id = ? THEN 1 ELSE 0 END current
+      FROM sign_in_events e LEFT JOIN sessions s ON s.id = e.session_id AND s.expires > ?
+      WHERE e.user_id = ?`;
+    const rows = db.prepare(query + ' ORDER BY e.created DESC, e.rowid DESC LIMIT 100').all(current, now, u.id) as Row[];
+    const active = db.prepare(query + ' AND s.id IS NOT NULL ORDER BY e.created DESC, e.rowid DESC').all(current, now, u.id) as Row[];
+    return { history: rows.map((r) => ({ id: r.id, created: r.created, ip: r.ip, userAgent: r.user_agent, active: !!r.expires, current: !!r.current })),
+      sessions: active.map((r) => ({ id: r.id, created: r.created, ip: r.ip, userAgent: r.user_agent, expires: r.expires, lastSeen: r.last_seen, current: !!r.current })) };
+  });
+  app.delete('/api/me/sessions/:id', async (req, rep) => {
+    const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
+    const event = db.prepare('SELECT session_id FROM sign_in_events WHERE id = ? AND user_id = ?').get(String((req.params as Row).id), u.id) as Row | undefined;
+    if (!event) return rep.code(404).send({ error: 'Session not found.' });
+    db.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').run(event.session_id, u.id);
+    const current = event.session_id === sessionIdOf(req);
+    if (current) rep.header('Set-Cookie', sessionCookie(null, auth.isSecure(req)));
+    return { ok: true, current };
+  });
+
   app.get('/api/me/passkeys', async (req, rep) => { const u = sessionUserOf(req); return u ? { passkeys: listPasskeys(db, u.id) } : rep.code(401).send({ error: 'Sign in first.' }); });
   app.post('/api/me/passkeys/options', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return registrationOptions(db, where(req), u); });
   app.post('/api/me/passkeys/verify', async (req, rep) => {

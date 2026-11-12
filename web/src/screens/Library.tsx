@@ -2,12 +2,13 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
-import { Header } from '../components/Shell';
+import { BrowsePage } from '../components/BrowsePage';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { BulkEdit } from '../components/BulkEdit';
 import { useUi } from '../ui';
 import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
+import { reviewUrl } from '../reviewScope';
 
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const RATING_OPTS = [['4+', '4 or better on average'], ['3+', '3 or better on average'], ['under', 'Under 3 on average']];
@@ -159,8 +160,7 @@ export function Library() {
   const v = useMemo(() => ({}), []);
   void v;
   return (
-    <div className="page-shell">
-      <Header />
+    <BrowsePage>
       <ProtoLibrary
         groupsFor={(by: 'shoot' | 'uploaded' | 'taken') => (flat ? flatGroups() : groupsFor(by))}
         photoOf={(id: number) => { const p = byId.get(id); const n = inComps.get(id) ?? 0; return { src: imgUrl(id, 'thumb'), ar: p?.ar ?? 1, badge: n ? `In ${n}` : '' }; }}
@@ -174,7 +174,7 @@ export function Library() {
         fromLabel={(ids: number[]) => [...new Set(ids.map((id) => shootById.get(byId.get(id)?.shootId ?? -1)?.name).filter(Boolean))].join(', ')}
         onOpenPhoto={(id: number) => nav(`/photo/${id}`)}
         onEditDetails={(ids: number[]) => setEditIds(ids)}
-        onReview={async (ids: number[]) => { await api('/review/start', { body: { photoIds: ids } }); nav('/review'); }}
+        onReview={(ids: number[]) => nav(reviewUrl(ids))}
         onPortfolio={async (ids: number[]) => { for (const id of ids) await api(`/portfolio/photos/${id}`, { body: { on: true } }); }}
         onMove={async (ids: number[], m: { mode: string; name: string; shootId: number | null }) => {
           let dest = '';
@@ -188,6 +188,6 @@ export function Library() {
       {list.data && count === 0 && <div className="empty">{chips.length ? 'No photographs match.' : 'No photographs yet. Add some on the Photoshoots page.'}</div>}
       {editIds && <BulkEdit ids={editIds} onClose={() => setEditIds(null)} onDone={reload} />}
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
-    </div>
+    </BrowsePage>
   );
 }

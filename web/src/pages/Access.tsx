@@ -157,10 +157,10 @@ export function Access({ focus }: { focus?: string } = {}) {
 
       <Eyebrow>Sign-in methods · test before turning on</Eyebrow>
       <SCard>
-        <SRow lead={<Badge>PK</Badge>} title="Passkey" hint="Face ID, Touch ID or a security key. Built in.">
-          <Link to="/settings?section=profile" className="ghost plain">Configure</Link><span className="ghost" aria-label="Passkey: built in">✓ Built in</span>
-        </SRow>
-        {METHODS.flatMap((k) => {
+        {!focus && <SRow lead={<Badge>PK</Badge>} title="Passkey" hint="Face ID, Touch ID or a security key. Built in.">
+          <Link to="/settings?section=security" className="ghost plain">Configure</Link><span className="ghost" aria-label="Passkey: built in">✓ Built in</span>
+        </SRow>}
+        {METHODS.filter((k) => !focus || k.type === focus).flatMap((k) => {
           const mine = providers.map((p, i) => ({ p, i })).filter(({ p }) => p.type === k.type);
           const rows = mine.length ? mine : [{ p: null as Provider | null, i: -1 }];
           return rows.map(({ p, i }) => {
@@ -215,6 +215,7 @@ export function Access({ focus }: { focus?: string } = {}) {
         })}
       </SCard>
 
+      {!focus && <>
       <Eyebrow>Sessions</Eyebrow>
       <SCard>
         <SRow title="Require sign-in" hint={c.enabled ? 'Only people on the allowed list can use Frames. Share links still work for the people they were sent to.' : c.testedBy ? `Off. Tested with ${c.testedBy.email || c.testedBy.name} (${c.testedBy.provider}): you can turn it on.` : 'Off: anyone who can reach Frames can use it. Set up a method and test it first.'}>
@@ -285,6 +286,7 @@ export function Access({ focus }: { focus?: string } = {}) {
         </SRow>
         <SRow title="If you get locked out" hint={<>Set <span className="mono">AUTH_DISABLE=true</span> on the Frames container and restart it. All sign-in is then switched off until you remove it.{c.passwordOption && ' The shared password also keeps working alongside sign-in.'}</>} />
       </SCard>
+      </>}
     </>
   );
 }

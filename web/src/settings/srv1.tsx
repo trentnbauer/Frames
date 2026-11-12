@@ -44,15 +44,15 @@ export function useSignin(ctx: Ctx): Section {
   const reload = () => { a.reload(); inst.reload(); ts.reload(); };
   const put = async (body: object) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body })); inst.reload(); };
   const i = inst.data;
-  const configure = (type?: string) => ctx.modal(<Modal title="Sign-in methods" sub="Set up, test and remove each method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access focus={type} /></Modal>);
+  const configure = (type?: string) => ctx.modal(<Modal title={METHODS.find((m) => m[4] === type)?.[2] ?? "Sign-in methods"} sub="Set up and test this sign-in method." width={760} onClose={() => { ctx.modal(null); reload(); }}><Access focus={type} /></Modal>);
   const rows: R[] = METHODS.map(([k, icon, label, hint, type, fail]) => {
     const p = a.data?.providers.find((x) => x.type === type);
     const on = k === 'passkey' ? true : !!p && !p.off;
     const tested = !!p && a.data?.testedBy?.provider === p.id;
     return {
-      id: `m_${k}`, t: 'method', icon, label, hint, value: on, togDisabled: k === 'passkey' ? 'Built in: people add passkeys under Settings, Profile' : undefined,
+      id: `m_${k}`, t: 'method', icon, label, hint, value: on, togDisabled: k === 'passkey' ? 'Built in: people add passkeys under Settings, Password & security' : undefined,
       method: {
-        on, configured: !!p, builtIn: k === 'passkey', test: tested || on ? 'pass' : 'none', failWith: fail, configure: () => (k === 'passkey' ? ctx.goto('lib', 'profile') : configure(type)),
+        on, configured: !!p, builtIn: k === 'passkey', test: tested || on ? 'pass' : 'none', failWith: fail, configure: () => (k === 'passkey' ? ctx.goto('lib', 'security') : configure(type)),
         setOn: async (v) => { if (!p) { ctx.toast(`Set up ${label} first: press Configure`); return; } await act(ctx, () => api(`/auth/methods/${p.id}`, { method: 'PUT', body: { on: v } })); a.reload(); },
         runTest: () => { if (!p) { ctx.toast(`${fail} · press Configure`); return; } window.location.assign(`/auth/login/${p.id}?test=1`); },
       },

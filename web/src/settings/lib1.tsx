@@ -53,15 +53,12 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
 
 export function useProfile(ctx: Ctx): Section {
   const p = useApi<P>('/profile');
-  const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user ? '/me/identities' : null);
   const prefs = usePrefs('user');
   const { refreshMe } = useStore();
   const [theme, setThemeNow] = useState(getTheme());
   const save = async (body: object) => { try { await api('/profile', { method: 'PUT', body }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } p.reload(); refreshMe(); };
   const d = p.data;
   const countries = d?.country && !COUNTRIES.includes(d.country) ? [d.country, ...COUNTRIES] : COUNTRIES;
-  const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user ? '/me/sign-in-methods' : null);
-  const n = ids.data?.identities.length ?? 0;
   const details = () => ctx.modal(<Modal title="Your details" sub="Picture, name, country, seasons and time zone." width={620} onClose={close(ctx)}><Profile /></Modal>);
   return {
     key: 'profile', name: 'Profile', hint: 'How you appear to guests and on your portfolio.',
@@ -72,15 +69,6 @@ export function useProfile(ctx: Ctx): Section {
         { id: 'country', t: 'select', label: 'Country', hint: 'Sets your hemisphere, so photo seasons are right. Shown on your portfolio.', opts: countries, value: d?.country || 'Australia', set: (v) => void save({ country: v }) },
         { id: 'email', t: 'text', label: 'Email', hint: 'For sign-in and guest replies.', value: ctx.me?.user?.email ?? '', disabled: true },
       ] },
-      { title: 'Sign-in methods · the ones your admin turned on', rows: (methods.data?.methods ?? []).map((m): R => {
-        if (m.kind === 'email') return { id: 'sm_email', t: 'link', label: m.label, hint: 'Always on. A code is emailed to you when you sign in.' };
-        if (m.kind === 'passkey') return { id: 'sm_passkey', t: 'button', label: m.label, hint: m.count ? `${m.count} ${m.count === 1 ? 'device' : 'devices'}` : 'Sign in with a fingerprint, face or device PIN', meta: 'Manage', act: () => ctx.modal(<Passkeys ctx={ctx} onChange={() => methods.reload()} />) };
-        if (m.kind === 'access') return { id: 'sm_access', t: 'link', label: m.label, hint: 'Automatic. Cloudflare signs you in.' };
-        const idn = ids.data?.identities.find((i) => i.provider === m.id);
-        return m.state === 'linked'
-          ? { id: `sm_${m.id}`, t: 'button', label: m.label, hint: idn?.email ? `Linked · ${idn.email}` : 'Linked', meta: m.canUnlink ? 'Unlink' : 'In use', act: async () => { if (!m.canUnlink || !idn) return; if (!window.confirm(`Stop signing in with ${m.label}?`)) return; await api(`/me/identities/${idn.id}`, { method: 'DELETE' }); methods.reload(); ids.reload(); ctx.toast('Unlinked'); } }
-          : { id: `sm_${m.id}`, t: 'button', label: m.label, hint: 'Not linked', meta: 'Link', act: () => window.location.assign(`/auth/link/${m.id}`) };
-      }) },
       { title: 'Preferences', rows: [
         { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); setThemeNow(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
         { id: 'start', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },
@@ -257,4 +245,30 @@ function XmpMore({ s, save, ctx }: { s: NonNullable<ReturnType<typeof useStore>[
       </div>
     </div>
   );
+}
+
+export function useSecurity(ctx: Ctx): Section {
+  const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user ? '/me/identities' : null);
+  const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user ? '/me/sign-in-methods' : null);
+  const activity = useApi<{ sessions: { id: string; created: string; ip: string; userAgent: string; current: boolean }[]; history: { id: string; created: string; ip: string; userAgent: string; active: boolean }[] }>(ctx.me?.user ? '/me/security' : null);
+  const revoke = async (id: string, current: boolean) => {
+    if (!window.confirm(current ? 'Sign out of this browser?' : 'Sign out this session?')) return;
+    try { await api(`/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (current) window.location.assign('/signin'); else { activity.reload(); ctx.toast('Session signed out'); } }
+    catch (e) { ctx.toast(msg(e)); }
+  };
+  const linked = new URLSearchParams(window.location.search).get('linked');
+  const linkNotice: Record<string, string> = { ok: 'Sign-in method linked.', same: 'That account is already linked to you.', taken: 'That account belongs to someone else.', notallowed: 'That account is not allowed to sign in here.' };
+  return { key: 'security', name: 'Password & security', hint: 'Your sign-in methods, active sessions and recent sign-ins.', notice: linked ? linkNotice[linked] : undefined, groups: [
+      { title: 'Sign-in methods · the ones your admin turned on', rows: (methods.data?.methods ?? []).map((m): R => {
+        if (m.kind === 'email') return { id: 'sm_email', t: 'link', label: m.label, hint: 'Always on. A code is emailed to you when you sign in.' };
+        if (m.kind === 'passkey') return { id: 'sm_passkey', t: 'button', label: m.label, hint: m.count ? `${m.count} ${m.count === 1 ? 'device' : 'devices'}` : 'Sign in with a fingerprint, face or device PIN', meta: 'Manage', act: () => ctx.modal(<Passkeys ctx={ctx} onChange={() => methods.reload()} />) };
+        if (m.kind === 'access') return { id: 'sm_access', t: 'link', label: m.label, hint: 'Automatic. Cloudflare signs you in.' };
+        const idn = ids.data?.identities.find((i) => i.provider === m.id);
+        return m.state === 'linked'
+          ? { id: `sm_${m.id}`, t: 'button', label: m.label, hint: idn?.email ? `Linked · ${idn.email}` : 'Linked', meta: m.canUnlink ? 'Unlink' : 'In use', act: async () => { if (!m.canUnlink || !idn) return; if (!window.confirm(`Stop signing in with ${m.label}?`)) return; await api(`/me/identities/${idn.id}`, { method: 'DELETE' }); methods.reload(); ids.reload(); ctx.toast('Unlinked'); } }
+          : { id: `sm_${m.id}`, t: 'button', label: m.label, hint: 'Not linked', meta: 'Link', act: () => window.location.assign(`/auth/link/${m.id}`) };
+      }) },
+      { title: 'Active sessions', rows: !ctx.me?.user ? [{ id: 'sessionRequired', t: 'link', label: 'Sign in with a personal account to manage sessions', hint: 'Shared-password and automatic access do not create personal sessions.' }] : activity.error ? [{ id: 'sessionError', t: 'button', label: activity.error, meta: 'Retry', act: activity.reload }] : !activity.data ? [{ id: 'sessionLoading', t: 'link', label: 'Loading sessions…' }] : activity.data.sessions.length ? activity.data.sessions.map((s): R => ({ id: `session_${s.id}`, t: 'button', label: `${s.current ? 'This browser · ' : ''}${s.ip || 'IP not recorded'}`, hint: `${s.userAgent || 'Device not recorded'} · Signed in ${new Date(s.created).toLocaleString()}`, meta: 'Sign out', act: () => void revoke(s.id, s.current) })) : [{ id: 'noSessions', t: 'link', label: 'No recorded active sessions' }] },
+      { title: 'Recent sign-ins', meta: 'Latest 100', rows: (activity.data?.history ?? []).map((s): R => ({ id: `history_${s.id}`, t: 'link', label: `${new Date(s.created).toLocaleString()} · ${s.ip || 'IP not recorded'}`, hint: `${s.userAgent || 'Device not recorded'} · ${s.active ? 'Active' : 'Signed out or expired'}` })) },
+    ] };
 }

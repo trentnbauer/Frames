@@ -615,3 +615,18 @@ main.auth.terms { width: 640px; }
 
 /* The map pictures are light; in the dark theme they are inverted to match. */
 html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.95) grayscale(.2); }
+
+/* Browse pages keep account controls above their own sticky toolbars. */
+.browse-page { --browse-head-height: 64px; }
+.browse-page.browse-wide { max-width: none; }
+.browse-page.browse-wide > .dc-root { max-width: none !important; }
+.browse-page > .shell-head { position: sticky; top: 0; z-index: 40; height: var(--browse-head-height); margin-bottom: 24px; background: var(--page); }
+.browse-page .pin-head { top: var(--browse-head-height) !important; background: var(--page) !important; }
+.browse-page .pin-head::before { background: var(--page); }
+@media (max-width: 767px) {
+  .browse-page { --browse-head-height: 56px; }
+  .browse-page > .shell-head { margin-bottom: 20px; }
+  .browse-width { font-size: 12px; padding: 6px 10px; }
+}
+
+.browse-page .pin-head { position: sticky; z-index: 20; padding-top: 8px; padding-bottom: 12px; }
