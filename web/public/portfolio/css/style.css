@@ -83,6 +83,7 @@ html[data-theme=light] .lightbox { background: rgba(5,5,5,.92); }
 /* theme wipe (see applyTheme in js/app.js) */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
-#owner-edit { margin-right: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+#owner-edit { margin-right: auto; display: flex; gap: 18px; flex-wrap: wrap; }
 #owner-edit[hidden] { display: none; }
-#owner-edit a { border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
+#owner-edit a { font-size: 12px; padding: 7px 0; }
+#owner-edit a:hover { text-decoration: underline; }

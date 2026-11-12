@@ -7,6 +7,8 @@ import { Header } from '../components/Shell';
 import ProtoEditor from '../proto/ProtoEditor';
 import { SharePanel } from '../components/SharePanel';
 import { EditableCompositionName } from '../components/EditableCompositionName';
+import { CompositionStage } from '../components/CompositionStage';
+import { isFull } from '../layout';
 import { RoomBackground } from '../components/RoomBackground';
 
 type Ranking = { weight: number; guests: number; items: { id: number; mine: number | null; mineN: number; guest: number | null; guestN: number; score: number }[] };
@@ -38,6 +40,7 @@ export const centreOf = (ps: Print[]) => { if (!ps.length) return { x: 0, y: 0 }
 
 /** The composition editor (design: Proto Editor, host). Prints are saved as you place them. */
 export function Editor() {
+  const [saving, setSaving] = useState(0);
   const [sharing, setSharing] = useState(false);
   const { id } = useParams();
   const nav = useNavigate();
@@ -55,6 +58,7 @@ export function Editor() {
   const c = coll.data;
   if (!c || !lib.data) return <div className="page-shell"><Header />{coll.error && <p role="alert" className="muted">Something went wrong: {coll.error}</p>}</div>;
 
+  const readOnly = c.stage === 'done';
   const layoutPrints = c.layout.mode === 'free' ? c.layout.prints : arrange(c.layout.prints, c.layout.mode);
   if (!origin.current) origin.current = centreOf(layoutPrints);
   const byId = new Map(lib.data.photos.map((p) => [p.id, p]));
@@ -63,7 +67,13 @@ export function Editor() {
   const unrated = order.filter((pid) => !rk.get(pid)?.mineN);
   const ppi = c.layout.ppi;
   const reload = () => { coll.reload(); ranking.reload(); sugg.reload(); fsugg.reload(); lsugg.reload(); links.reload(); };
-  const saveLayout = async (ps: Print[]) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: 'free', prints: ps, ppi, ...(c.layout.bg ? { bg: c.layout.bg } : {}) } } })); ranking.reload(); };
+  const saveLayout = async (ps: Print[]) => {
+    if (readOnly) return;
+    setSaving((n) => n + 1);
+    try { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { mode: 'free', prints: ps, ppi, ...(c.layout.bg ? { bg: c.layout.bg } : {}) } } })); ranking.reload(); }
+    catch (e) { coll.reload(); throw e; }
+    finally { setSaving((n) => n - 1); }
+  };
   const wallOf = (ps: Print[]) => ps.map((p, i) => ({ img: p.photoId ? `url(${imgUrl(p.photoId, 'thumb')}) center/cover` : 'rgba(0,0,0,.18)', frame: p.frame ? FRAMES[p.frame.color] ?? '#151514' : '#e9e7e1', ring: 'none', label: `Print ${i + 1}`, labelFg: 'var(--faint)' }));
   const mark = (w: ReturnType<typeof wallOf>, i: number) => w.map((x, k) => (k === i ? { ...x, ring: '0 0 0 2px var(--surface),0 0 0 4px var(--text)', label: `${x.label} · changed`, labelFg: 'var(--text)' } : x));
   const title = (pid: number) => byId.get(pid)?.title || byId.get(pid)?.file || 'a photo';
@@ -106,8 +116,10 @@ export function Editor() {
       <Header />
       {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => { setSharing(false); links.reload(); }} />}
       <ProtoEditor
+        readOnly={readOnly} showExport={readOnly}
+        stageControl={<CompositionStage value={c.stage} full={isFull(c.layout.prints)} disabled={saving > 0} onChange={async (stage) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { stage } })); }} />}
         onOpenShare={() => setSharing(true)}
-        nameControl={<EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
+        nameControl={readOnly ? <span title={c.name} style={{ font: "400 40px/1 'Instrument Serif',Georgia,serif", whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span> : <EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
         roomControl={<RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} />}
         roomImage={c.background ? { url: `/api/collections/${c.id}/background?v=${c.background.v}`, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}
@@ -121,7 +133,7 @@ export function Editor() {
         onSharePatch={patchShare} onShareExpiry={(l: string) => { const n = EXPIRY.find((e) => e[0] === l)?.[1]; return patchShare({ expiresAt: n == null ? null : inDays(n) }); }}
         onInvite={async (email: string) => { if (link) { await api(`/shares/${link.id}/invites`, { body: { emails: [email] } }); inv.reload(); } }}
         onRemoveInvite={async (email: string) => { if (link) { await api(`/shares/${link.id}/invites?email=${encodeURIComponent(email)}`, { method: 'DELETE' }); inv.reload(); } }}
-        guests={{ changes, people }}
+        guests={{ changes: readOnly ? [] : changes, people }}
         onDelete={async () => { await api(`/collections/${c.id}`, { method: 'DELETE' }); nav('/collections'); }}
         onExport={async () => { const ids = layoutPrints.flatMap((p) => [p.photoId, p.stack ? p.photoId2 : null]).filter((x): x is number => x != null); const pad = String(ids.length).length; for (let i = 0; i < ids.length; i++) { const a = document.createElement('a'); a.href = `/api/photos/${ids[i]}/original?n=${i + 1}&pad=${pad}`; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); await new Promise((r) => setTimeout(r, 450)); } }}
       />

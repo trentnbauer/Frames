@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { Header } from '../components/Shell';
 import { ppiOf, sizeName } from '../layout';
 import { useUi } from '../ui';
-import { chosenCount, isReady, printsSummary, slotsOf } from './walls';
+import { chosenCount, printsSummary, slotsOf } from './walls';
 import ProtoCompositions from '../proto/ProtoCompositions';
 import { CompositionPreview } from '../components/CompositionPreview';
 
@@ -28,9 +28,12 @@ async function downloadOriginals(ids: number[]) {
   }
 }
 
-/** Compositions: In progress, Ready to export and Printed, from the design. */
+/** Compositions: Progress, Review and Done, from the design. */
 export function Compositions() {
   const nav = useNavigate();
+  const location = useLocation();
+  const filter = new URLSearchParams(location.search).get('filter');
+  const initialTab = filter === 'review' ? 'review' : ['done', 'ready', 'printed'].includes(filter ?? '') ? 'done' : 'progress';
   const { openNew } = useUi();
   const colls = useApi<Collection[]>('/collections');
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
@@ -48,8 +51,8 @@ export function Compositions() {
     const slots = slotsOf(c), chosen = chosenCount(c);
     return { id: c.id, name: c.name, prints: printsSummary(c), status: chosen === 0 ? 'Not started' : `${chosen} of ${slots} chosen`, pct: `${slots ? Math.round((chosen / slots) * 100) : 0}%`, preview: <CompositionPreview collection={c} photos={byId} /> };
   };
-  const prog = all.filter((c) => !c.printedAt && !isReady(c) && match(c)).sort(order).map(card);
-  const ready = all.filter((c) => isReady(c) && match(c)).sort(order).map((c) => {
+  const prog = all.filter((c) => c.stage === 'progress' && match(c)).sort(order).map(card);
+  const ready = all.filter((c) => c.stage === 'done' && match(c)).sort(order).map((c) => {
     const ps = c.layout.prints;
     const photos = ps.flatMap((p) => [p.photoId, p.stack ? p.photoId2 : null]).filter((x): x is number => x != null).map((id) => byId.get(id)).filter((p): p is PhotoLite => !!p);
     const sizes = new Map<string, number>(); ps.forEach((p) => { const k = `${sizeName(p.size)} · ${p.orientation}`; sizes.set(k, (sizes.get(k) ?? 0) + 1); });
@@ -57,7 +60,7 @@ export function Compositions() {
     const low = ps.filter((p) => { const ph = p.photoId ? byId.get(p.photoId) : undefined; const v = ppiOf(ph, p); return v != null && v < (c.layout.ppi ?? 300); }).length;
     const mb = photos.reduce((n, p) => n + (p.sizeMb || 0), 0);
     return {
-      id: c.id, name: c.name, when: `Finished ${ago(c.updatedAt)}`, preview: <CompositionPreview collection={c} photos={byId} />,
+      id: c.id, name: c.name, when: c.printedAt ? `Printed ${ago(c.printedAt)}` : c.updatedAt ? `Done ${ago(c.updatedAt)}` : 'Done', preview: <CompositionPreview collection={c} photos={byId} />,
       rows: [
         { k: 'Prints', v: [...sizes].map(([k, n]) => `${n} × ${k}`).join(', '), ok: '' },
         { k: 'Frames', v: frames.size ? [...frames].map(([k, n]) => `${n} × ${k}`).join(', ') : 'None, posters', ok: '' },
@@ -66,24 +69,19 @@ export function Compositions() {
       ],
     };
   });
-  const printedAll = all.filter((c) => !!c.printedAt).sort((a, b) => (b.printedAt ?? '').localeCompare(a.printedAt ?? ''));
-  const printedList = printedAll.filter(match).map((c) => ({ id: c.id, name: c.name, prints: printsSummary(c), where: 'Not hung yet', date: new Date(c.printedAt!).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }), lab: '—', cost: '—', preview: <CompositionPreview collection={c} photos={byId} /> }));
-  const nPrints = printedAll.reduce((n, c) => n + c.layout.prints.length, 0), nFrames = printedAll.reduce((n, c) => n + c.layout.prints.filter((p) => p.frame).length, 0);
+  const review = all.filter((c) => c.stage === 'review' && match(c)).sort(order).map(card);
   const s0 = (sug.data ?? [])[si % Math.max(1, sug.data?.length ?? 1)];
 
   return (
     <div className="page-shell">
       <Header />
-      <ProtoCompositions
-        prog={prog} ready={ready} printedList={printedList}
-        pStats={[[String(printedAll.length), 'compositions printed'], [String(nPrints), 'prints'], [String(nFrames), 'frames'], ['—', 'labs used']].map(([v, l]) => ({ v, l }))}
-        printedMore={`Showing ${printedList.length} of ${printedAll.length}`}
-        sortLabel={(tab: string) => (tab === 'printed' ? 'Newest printed' : byName ? 'Name' : 'Last edited')} onToggleSort={() => setByName(!byName)}
+      <ProtoCompositions key={initialTab} initialTab={initialTab}
+        prog={prog} review={review} ready={ready}
+        sortLabel={() => byName ? 'Name' : 'Last edited'} onToggleSort={() => setByName(!byName)}
         q={q} onQ={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
         onOpen={(id: number) => nav(`/collections/${id}`)} onNew={() => openNew()}
         onExport={async (id: number) => { const c = all.find((x) => x.id === id)!; const ids = c.layout.prints.flatMap((p) => [p.photoId, p.stack ? p.photoId2 : null]).filter((x): x is number => x != null); await downloadOriginals(ids); }}
         onSheet={(id: number) => { window.location.assign(`/api/collections/${id}/print-sheet`); }}
-        onPrinted={async (id: number) => { await api(`/collections/${id}`, { method: 'PATCH', body: { printed: true } }); colls.reload(); }}
         sugg={s0 && !needle ? {
           name: s0.name, why: s0.reason, thumbs: s0.photos.slice(0, 3).map((p) => imgUrl(p.id, 'thumb')), pos: `${(si % (sug.data?.length ?? 1)) + 1} of ${sug.data?.length ?? 1}`,
           next: () => setSi(si + 1),

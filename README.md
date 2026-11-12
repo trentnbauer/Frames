@@ -63,7 +63,15 @@ Docker installs system packages before copying application files or applying the
 
 ## Photo and composition tools
 
-The composition Share dialog uses the current composition name, including after a rename. Type directly into the composition title to rename it: Enter or leaving the field saves, Escape cancels, and a blank name restores the saved title. Save failures appear below the title.
+The visual conventions are documented in [DESIGN.md](DESIGN.md), including **✦** before AI-derived data and **circle → diamond → square** for workflow stages.
+
+Compositions have explicit **Progress**, **Review**, and **Done** stages. Filling every artwork slot does not change the stage automatically; Review and Done require every slot to hold a photo, including both halves of stacked prints. Emptying a slot while reviewing returns the composition to Progress. In Done the composition is read-only: its name, layout, crops, frames, candidates and room photo cannot be edited or deleted until it is reopened. The three-stage control becomes **Edit** beside **Export**, keeping Guests and Share in place. Edit reopens into Review and restores the workflow control; if an artwork has become unavailable, it reopens into Progress. Zoom, fullscreen, sharing and original downloads remain available in Done. The composition list uses the same three stages, with export actions under Done, and candidate pickers leave out Done compositions.
+
+Previously printed compositions migrate to Done; other compositions start in Progress. Original photographs are unchanged. Legacy printed/reopen requests map to Done/Progress. Library-level changes to a photo can still affect what a saved composition displays; Done protects the composition's own controls and write endpoints. If a Done composition is also the portfolio's backing list, reopen it before changing that list's candidates.
+
+Portfolio owner edit links are plain text. The owner-only visibility and destinations are unchanged.
+
+The composition Share dialog uses the current composition name, including after a rename. While editing, type directly into the composition title to rename it: Enter or leaving the field saves, Escape cancels, and a blank name restores the saved title. Save failures appear below the title.
 
 Photoshoot and composition sharing use the same dialog. Choose permissions, expiry, name and optional PIN before **Create link**; existing links can be copied, previewed, updated, regenerated or stopped. Photoshoots offer ratings and downloads; compositions also offer suggestions and wall-only viewing.
 

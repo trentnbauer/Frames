@@ -11,7 +11,7 @@ import ProtoCompPicker from '../proto/ProtoCompPicker';
 export function CompPicker({ ids, onClose, onDone, from }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void; from?: string }) {
   const colls = useApi<Collection[]>('/collections');
   const { openNew } = useUi();
-  const open = useMemo(() => (colls.data ?? []).filter((c) => !c.printedAt).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id), [colls.data]);
+  const open = useMemo(() => (colls.data ?? []).filter((c) => c.stage !== 'done' && !c.printedAt).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id), [colls.data]);
   const has = (c: Collection) => ids.length > 0 && ids.every((id) => c.photoIds.includes(id));
   const comps = open.map((c) => ({ name: c.name, meta: `${c.layout.prints.length} print${c.layout.prints.length === 1 ? '' : 's'} · ${c.photoIds.length} candidates` }));
   const already = open.filter(has).map((c) => c.name);
