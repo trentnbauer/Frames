@@ -159,7 +159,6 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
               {me?.role === 'admin' && <span className="eyebrow pillish">Admin</span>}
             </div>
             {item('Settings', go('/settings'), '⌘ ,')}
-            {item('App settings', go('/settings?section=app-settings'))}
             {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
             <div className="msep" />

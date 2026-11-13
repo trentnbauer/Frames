@@ -13,6 +13,16 @@ const TO_API: Record<string, string> = { Body: 'camera', Lens: 'lens', Film: 'fi
 export function Gear() {
   const g = useApi<Data>('/gear/items');
   useEffect(() => { const changed = () => g.reload(); window.addEventListener('frames:gear-changed', changed); return () => window.removeEventListener('frames:gear-changed', changed); }, [g.reload]);
+  const [blocklisting, setBlocklisting] = useState<string | null>(null);
+  const [blocklistError, setBlocklistError] = useState('');
+  const blocklistBusy = useRef(false);
+  const blocklistFound = async (name: string) => {
+    if (blocklistBusy.current) return;
+    blocklistBusy.current = true; setBlocklisting(name); setBlocklistError('');
+    try { await api('/gear/blacklist', { body: { name } }); window.dispatchEvent(new Event('frames:gear-changed')); }
+    catch (e) { setBlocklistError((e as Error).message); }
+    finally { blocklistBusy.current = false; setBlocklisting(null); }
+  };
   const [edits, setEdits] = useState<Record<number, Partial<Item>>>({});
   const timers = useRef<Record<string, number>>({});
   const d = g.data;
@@ -43,7 +53,9 @@ export function Gear() {
   return (
     <div className="page-shell">
 
+      {blocklistError && <p role="alert" style={{ color: 'var(--danger)' }}>{blocklistError}</p>}
       <ProtoGear
+        onBlocklistFound={blocklistFound} blocklistingFound={blocklisting}
         blacklistControl={<GearBlacklist items={d?.blacklisted ?? []} onChanged={() => window.dispatchEvent(new Event('frames:gear-changed'))} />}
         currency={d?.prefs.currency ?? '$'} arrange={d?.prefs.arrange === 'era' ? 'year' : d?.prefs.arrange ?? 'system'} showWish={!!d?.prefs.showWant}
         intro={intro ?? d?.prefs.intro ?? ''} onIntro={(v: string) => { setIntro(v); window.clearTimeout(introTimer.current); introTimer.current = window.setTimeout(async () => { await api('/gear/prefs', { method: 'PUT', body: { intro: v } }); setIntro(null); g.reload(); }, 700); }}

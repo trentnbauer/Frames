@@ -37,15 +37,15 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
     } catch (e) { const m = (e as Error).message; setErr(/cancel|abort|NotAllowed/i.test(m) ? 'Cancelled. Nothing was added.' : m); } finally { setBusy(false); }
   };
   return (
-    <Modal title="Passkeys" sub="Devices that can sign in as you, with a fingerprint, face or device PIN." width={560} onClose={close(ctx)} foot={<><span className="grow" style={{ fontSize: 12.5, color: '#e79a82' }}>{err}</span><button className="btn" onClick={close(ctx)}>Done</button><button className="btn primary" disabled={busy} onClick={add}>{busy ? 'Waiting for your device…' : 'Add this device'}</button></>}>
+    <Modal title="Passkeys" sub="Devices that can sign in as you, with a fingerprint, face or device PIN." width={560} onClose={close(ctx)} foot={<><span className="grow" style={{ fontSize: 12.5, color: 'var(--err)' }}>{err}</span><button className="btn" onClick={close(ctx)}>Done</button><button className="btn primary" disabled={busy} onClick={add}>{busy ? 'Waiting for your device…' : 'Add this device'}</button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', marginTop: 12 }}>
-        {(list.data?.passkeys ?? []).length === 0 && <span style={{ fontSize: 13.5, color: '#8f8c86' }}>No passkeys yet.</span>}
+        {(list.data?.passkeys ?? []).length === 0 && <span style={{ fontSize: 13.5, color: 'var(--muted)' }}>No passkeys yet.</span>}
         {(list.data?.passkeys ?? []).map((k) => (
-          <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.08)', fontSize: 14 }}>
-            <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: '#8f8c86' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
+          <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--hair)', fontSize: 14 }}>
+            <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: 'var(--muted)' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
             <span style={{ display: 'flex', gap: 16 }}>
-              <button style={{ color: '#a8a59f', fontSize: 13 }} onClick={async () => { const name = window.prompt('Name this passkey', k.name)?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
-            <button style={{ color: 'oklch(0.75 0.14 28)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); }}>Remove</button>
+              <button style={{ color: 'var(--text2)', fontSize: 13 }} onClick={async () => { const name = window.prompt('Name this passkey', k.name)?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
+            <button style={{ color: 'var(--danger)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); }}>Remove</button>
             </span>
           </div>
         ))}
@@ -239,11 +239,11 @@ export function useXmp(ctx: Ctx): Section {
 function XmpMore({ s, save, ctx }: { s: NonNullable<ReturnType<typeof useStore>['settings']>; save: (p: object) => Promise<void>; ctx: Ctx }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <span style={{ font: "500 11px 'IBM Plex Mono',monospace", letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' }}>Export and differences</span>
-      <div style={{ background: '#161615', borderRadius: 12, padding: '4px 24px' }}>
+      <span style={{ font: "500 11px 'IBM Plex Mono',monospace", letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)' }}>Export and differences</span>
+      <div style={{ background: 'var(--surface)', borderRadius: 12, padding: '4px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, padding: '14px 0' }}>
-          <div><div style={{ fontSize: 14.5 }}>Export approved metadata</div><div style={{ fontSize: 12.5, color: '#8f8c86' }}>Titles, descriptions, accepted tags and average ratings, as XMP sidecars.</div></div>
-          <span role="button" tabIndex={0} className="sbtn" onClick={() => ctx.modal(<Modal title="Export and differences" width={680} onClose={() => ctx.modal(null)}><Metadata s={s} save={async (p) => save(p)} /></Modal>)} style={{ height: 32, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)', fontSize: 13.5, cursor: 'pointer' }}>Open…</span>
+          <div><div style={{ fontSize: 14.5 }}>Export approved metadata</div><div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Titles, descriptions, accepted tags and average ratings, as XMP sidecars.</div></div>
+          <span role="button" tabIndex={0} className="sbtn" onClick={() => ctx.modal(<Modal title="Export and differences" width={680} onClose={() => ctx.modal(null)}><Metadata s={s} save={async (p) => save(p)} /></Modal>)} style={{ height: 32, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13.5, cursor: 'pointer' }}>Open…</span>
         </div>
       </div>
     </div>

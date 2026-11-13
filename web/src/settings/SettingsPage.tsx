@@ -61,36 +61,36 @@ export function SettingsPage() {
   const hits = needle ? ROWS.filter((r) => (isAdmin || r.tab === 'lib') && `${r.label} ${r.hint} ${NAMES.get(`${r.tab}:${r.sec}`)} ${r.g}`.toLowerCase().includes(needle)) : [];
   const hitSecs = needle ? [...LIB, ...(isAdmin ? SRV : [])].filter((d) => hits.some((h) => h.tab === d.tab && h.sec === d.key)) : [];
 
-  if (!settings) return <div className="page"><Loading /></div>;
+  if (!settings) return <div className="page settings-page"><Loading /></div>;
   return (
-    <div className="page" style={{ paddingBottom: 140 }}>
+    <div className="page settings-page" style={{ paddingBottom: 140 }}>
 
       <div className="settings-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12, maxWidth: 1028, marginInline: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
           <h1 className="serif" style={{ fontSize: 48, lineHeight: 1, margin: 0 }}>Settings</h1>
-          <span role="status" aria-live="polite" style={{ fontSize: 13, color: '#a8a59f', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>
+          <span role="status" aria-live="polite" style={{ fontSize: 13, color: 'var(--text2)', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>
         </div>
         {isAdmin && (
-          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: '#161615', fontSize: 13.5 }}>
-            {([['lib', <>Your library</>], ['srv', <>Server <span style={{ color: '#6f6c67' }}>· admin</span></>]] as [Tab, ReactNode][]).map(([k, label]) => (
+          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', fontSize: 13.5 }}>
+            {([['lib', <>Your library</>], ['srv', <>Server <span style={{ color: 'var(--muted)' }}>· admin</span></>]] as [Tab, ReactNode][]).map(([k, label]) => (
               <span key={k} role="tab" aria-selected={shownTab === k} tabIndex={0} onClick={() => { setQ(''); setTab(k); }} onKeyDown={(e) => { if (e.key === 'Enter') { setQ(''); setTab(k); } }}
-                style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'rgba(255,255,255,.1)' : 'transparent', color: shownTab === k ? '#efede8' : '#a8a59f' }}>{label}</span>
+                style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'var(--chip)' : 'transparent', color: shownTab === k ? 'var(--text)' : 'var(--text2)' }}>{label}</span>
             ))}
           </div>
         )}
       </div>
       <div className="settings-wrap" style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 48, maxWidth: 1028, marginInline: 'auto' }}>
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14, color: '#a8a59f', alignSelf: 'start' }}>
-          <div style={{ height: 36, borderRadius: 999, background: '#161615', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', marginBottom: 12 }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: '#efede8', font: "400 13px 'IBM Plex Sans',sans-serif", boxShadow: 'none', padding: 0, borderRadius: 0 }} />
-            {q && <span role="button" tabIndex={0} aria-label="Clear" onClick={() => setQ('')} style={{ color: '#6f6c67', cursor: 'pointer' }}>✕</span>}
+        <aside style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14, color: 'var(--text2)', alignSelf: 'start' }}>
+          <div style={{ height: 36, borderRadius: 999, background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', marginBottom: 12 }}>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--text)', font: "400 13px 'IBM Plex Sans',sans-serif", boxShadow: 'none', padding: 0, borderRadius: 0 }} />
+            {q && <span role="button" tabIndex={0} aria-label="Clear" onClick={() => setQ('')} style={{ color: 'var(--muted)', cursor: 'pointer' }}>✕</span>}
           </div>
           {defs.map((d) => {
             const on = !needle && d.key === cur.key;
             return (
               <span key={d.key} role="button" tabIndex={0} aria-current={on ? 'page' : undefined} onClick={() => goto(shownTab, d.key)} onKeyDown={(e) => { if (e.key === 'Enter') goto(shownTab, d.key); }} className="snavi"
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: on ? 'rgba(255,255,255,.08)' : 'transparent', color: on ? '#efede8' : '#a8a59f' }}>
-                {d.name}<span style={{ font: `400 11px ${mono}`, color: '#6f6c67' }}>{d.badge ?? ''}</span>
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: on ? 'var(--hair)' : 'transparent', color: on ? 'var(--text)' : 'var(--text2)' }}>
+                {d.name}<span style={{ font: `400 11px ${mono}`, color: 'var(--muted)' }}>{d.badge ?? ''}</span>
               </span>
             );
           })}
@@ -98,8 +98,8 @@ export function SettingsPage() {
         <main style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 760, minWidth: 0 }}>
           {needle ? (
             <>
-              <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>Results for “{q.trim()}”</h2><p style={{ margin: 0, fontSize: 13.5, color: '#8f8c86' }}>{hits.length} {hits.length === 1 ? 'setting' : 'settings'} across both tabs</p></div>
-              {hits.length === 0 && <div style={{ padding: 24, borderRadius: 12, background: '#161615', color: '#8f8c86', fontSize: 13.5 }}>No settings match. Try “review”, “XMP” or “backup”.</div>}
+              <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>Results for “{q.trim()}”</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{hits.length} {hits.length === 1 ? 'setting' : 'settings'} across both tabs</p></div>
+              {hits.length === 0 && <div style={{ padding: 24, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 13.5 }}>No settings match. Try “review”, “XMP” or “backup”.</div>}
               {hitSecs.map((d) => <SectionView key={`${d.tab}:${d.key}`} def={d} ctx={ctx} filter={needle} onJump={() => goto(d.tab, d.key)} />)}
             </>
           ) : <SectionView key={`${cur.tab}:${cur.key}`} def={cur} ctx={ctx} />}
@@ -126,11 +126,11 @@ function SectionView({ def, ctx, filter, onJump }: { def: SectionDef; ctx: Ctx; 
     <>
       {open && <div onClick={() => setOpen(null)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
-        <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: '#8f8c86' }}>{s.hint}</p></div>
-        {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
+        <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{s.hint}</p></div>
+        {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: 'var(--text)', color: 'var(--bg)', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
       </div>
-      {def.tab === 'srv' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12)', fontSize: 13, color: '#a8a59f' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#efede8' }} />Changes here apply to everyone on this server.</div>}
-      {s.notice && <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: 'rgba(231,140,120,.1)', fontSize: 13, color: '#e79a82' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e79a82', flex: 'none', marginTop: 6 }} /><span>{s.notice}</span></div>}
+      {def.tab === 'srv' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--chip)', fontSize: 13, color: 'var(--text2)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text)' }} />Changes here apply to everyone on this server.</div>}
+      {s.notice && <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: 'var(--err-bg)', fontSize: 13, color: 'var(--err)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--err)', flex: 'none', marginTop: 6 }} /><span>{s.notice}</span></div>}
       {s.groups.map((g, i) => <GroupView key={i} g={g} vis={vis} open={open} setOpen={setOpen} />)}
       {s.after}
     </>
