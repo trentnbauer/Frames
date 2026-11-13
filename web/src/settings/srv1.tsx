@@ -37,7 +37,7 @@ const SESSION: [string, number][] = [['1 day', 1], ['1 week', 7], ['30 days', 30
 const EXPIRY: [string, number][] = [['1 week', 7], ['3 weeks', 21], ['3 months', 90], ['Never', 0]];
 
 export function useSignin(ctx: Ctx): Section {
-  const a = useApi<{ enabled: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string; disabledByEnv?: boolean }>('/auth/config');
+  const a = useApi<{ enabled: boolean; password?: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string; disabledByEnv?: boolean }>('/auth/config');
   const inst = useApi<Inst>('/admin/instance');
   const mfa = useApi<{ policy: 'off' | 'admins' | 'members' }>('/auth/mfa');
   const ts = useApi<{ enabled: boolean; siteKey: string; signin: boolean; shares: boolean; hasSecret: boolean; disabledByEnv: boolean; startsInSec?: number }>('/admin/turnstile');
@@ -64,6 +64,7 @@ export function useSignin(ctx: Ctx): Section {
     key: 'signin', name: 'Sign-in & access', hint: 'How people get in.',
     groups: [
       { title: 'Sign-in methods · test before turning on', rows },
+      { title: 'Password sign-in', rows: [{ id: 'passwordSignin', t: 'toggle', label: 'Allow password sign-in', hint: 'People set their own password in Password & security. Turn this off to hide the option and refuse all password sign-in attempts. Does not affect the temporary emergency administrator or the separate AUTH_PASSWORD shared password.', value: !!a.data?.password, set: async (v: boolean) => { await act(ctx, () => api('/auth/config', { method: 'PUT', body: { password: v } })); a.reload(); } }] },
       { title: 'Two-factor authentication', rows: [{ id: 'mfaPolicy', t: 'select', label: 'Require two-factor authentication', hint: 'Passkey with device verification or an authenticator app. Guests are exempt. Verify your own factor before enforcing this.', opts: ['Not enforced', 'Enforced for Admins', 'Enforced for All Members'], value: ({ off: 'Not enforced', admins: 'Enforced for Admins', members: 'Enforced for All Members' })[mfa.data?.policy ?? 'off'], set: async (value) => { await act(ctx, () => api('/auth/mfa', { method: 'PUT', body: { policy: ({ 'Not enforced': 'off', 'Enforced for Admins': 'admins', 'Enforced for All Members': 'members' } as Record<string, string>)[value] } })); mfa.reload(); } }] },
       { title: 'Sessions', rows: [
         { id: 'signup', t: 'toggle', label: 'Allow anyone to sign up', hint: 'Off: invite only.', value: !!i?.signups, togDisabled: i?.signupsLocked ? 'Set by ALLOW_SIGNUPS on this server' : undefined, env: i?.signupsLocked ? 'ALLOW_SIGNUPS' : undefined, set: (v) => void put({ signups: v }) },

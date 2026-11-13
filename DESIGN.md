@@ -37,7 +37,7 @@ Each notification has a dismiss × at its top right. Keep dismissal and action b
 
 ## Account security
 
-Two-factor enrolment and verification use shared theme tokens, normal buttons and labelled inputs. Generate the authenticator QR code locally, with a white quiet zone in both themes. Show setup keys and recovery codes only in the enrolment flow, and explain that recovery codes are shown once. Keep the emergency administrator exempt and its credentials out of the in-app logs.
+Personal password sign-in uses labelled email/password fields and a real submit button, with password-manager autocomplete and shared theme tokens. Keep the personal password server switch separate from the legacy shared password and emergency access. Two-factor enrolment and verification use shared theme tokens, normal buttons and labelled inputs. Generate the authenticator QR code locally, with a white quiet zone in both themes. Show setup keys and recovery codes only in the enrolment flow, and explain that recovery codes are shown once. Keep the emergency administrator exempt and its credentials out of the in-app logs.
 
 ## Validation
 

@@ -207,4 +207,4 @@ export function updateUser(sys: DB, id: number, patch: Partial<Pick<User, 'role'
   if (patch.disabled !== undefined) { sys.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(patch.disabled ? 1 : 0, id); if (patch.disabled) sys.prepare('DELETE FROM sessions WHERE user_id = ?').run(id); }
   if (patch.name !== undefined) sys.prepare('UPDATE users SET name = ? WHERE id = ?').run(patch.name, id);
 }
-export const deleteUserRow = (sys: DB, id: number) => { sys.prepare('DELETE FROM settings WHERE key = ?').run(`secret:totp:${id}`); sys.prepare('DELETE FROM users WHERE id = ?').run(id); };
+export const deleteUserRow = (sys: DB, id: number) => { sys.prepare('DELETE FROM settings WHERE key = ?').run(`secret:totp:${id}`); sys.prepare('DELETE FROM settings WHERE key = ?').run(`secret:password:${id}`); sys.prepare('DELETE FROM users WHERE id = ?').run(id); };

@@ -39,13 +39,15 @@ export type AuthConfig = { enabled: boolean; providers: Provider[]; allow: strin
   /** Anyone who signs in with a provider is let in (and gets their own library), whatever the allowed list says. The list is kept. */
   open?: boolean;
   /** Sign in with an emailed code. Offered on the sign-in page only while SMTP is configured and passing its health check. */
-  email?: boolean };
+  email?: boolean;
+  /** Personal email-and-password sign-in, enabled by an administrator. */
+  password?: boolean };
 
 const EMPTY: AuthConfig = { enabled: false, providers: [], allow: [], publicUrl: '', testedBy: null };
 export const loadAuth = (db: DB): AuthConfig => ({ ...EMPTY, ...getSetting<Partial<AuthConfig>>(db, 'auth', {}) });
 export const saveAuth = (db: DB, c: AuthConfig) => setSetting(db, 'auth', c);
 /** Is OAuth sign-in switched on, with at least one provider? */
-export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && (a.providers.some((p) => !p.off) || !!a.email); };
+export const oauthEnabled = (db: DB) => { const a = loadAuth(db); return a.enabled && (a.providers.some((p) => !p.off) || !!a.email || !!a.password); };
 
 export const PRESETS: Record<'github' | 'dropbox', Required<Pick<Provider, 'authUrl' | 'tokenUrl' | 'userUrl' | 'emailsUrl'>>> = {
   dropbox: { authUrl: 'https://www.dropbox.com/oauth2/authorize', tokenUrl: 'https://api.dropboxapi.com/oauth2/token', userUrl: 'https://api.dropboxapi.com/2/users/get_current_account', emailsUrl: '' },

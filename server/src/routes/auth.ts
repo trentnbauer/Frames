@@ -1,3 +1,4 @@
+import { checkPassword as checkAccountPassword, hasPassword, passwordError, passwordHash, savePasswordHash } from '../passwords.js';
 import { factorVerified, hasFactor, hasTotp, markFactor, mfaPolicy, mfaStatus, mfaRequired, policyApplies, verifiedPasskeys } from '../mfa.js';
 import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
@@ -160,7 +161,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const t = turnstileOn(db, 'signin');
     return {
       providers: conf.providers.filter((p) => !p.off).map((p) => ({ id: p.id, name: p.name, type: p.type })),
-      email: emailOn(), password: !!cfg.authPassword && mfaPolicy(db) === 'off' && !hasTotp(db, 1), passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
+      email: emailOn(), accountPassword: !!conf.password, password: !!cfg.authPassword && mfaPolicy(db) === 'off' && !hasTotp(db, 1), passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
       signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
       signedIn: !!sessionUser(db, req),
     };
@@ -211,6 +212,70 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (!user || user.disabled) return rep.code(403).send({ error: 'This address is not allowed to use this Frames. Ask the owner to add it.' });
     rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
     return { ok: true, returnTo: safeReturn(b.returnTo) };
+  });
+
+  // Passwords authenticate existing accounts; creating an account still uses the existing verified sign-in flows.
+  app.post('/api/public/auth/password', async (req, rep) => {
+    rep.header('Cache-Control', 'no-store');
+    if (!loadAuth(db).password) return rep.code(404).send({ error: 'Password sign-in is disabled on this server.' });
+    const b = (req.body ?? {}) as Row, email = okEmail(b.email);
+    if (sendLimited(`pw-ip:${req.ip}`, 20, 600_000) || sendLimited(`pw-email:${email}`, 10, 600_000)) return rep.code(429).header('Retry-After', '600').send({ error: 'Too many sign-in attempts. Wait ten minutes and try again.' });
+    if (turnstileOn(db, 'signin') && !isHuman(db, req)) {
+      const result = await verifyToken(db, b.turnstile, req.ip, cfg.turnstileUrl);
+      if (result === 'bad') return rep.code(400).send({ error: 'Please complete the check to show you are a person.' });
+      if (result === 'ok') rep.header('Set-Cookie', humanCookie(db, auth.isSecure(req)));
+    }
+    const user = email ? findByEmail(db, email) : null;
+    const valid = await checkAccountPassword(db, user?.id ?? null, b.password);
+    if (!valid || !user || getUser(db, user.id)?.disabled !== false || user.disabled || user.invited || user.provider === EMERGENCY_PROVIDER || user.role === 'guest') return rep.code(401).send({ error: 'That email or password is not right.' });
+    // Reload the setting after the slow hash, so switching the method off takes effect immediately.
+    if (!loadAuth(db).password) return rep.code(404).send({ error: 'Password sign-in is disabled on this server.' });
+    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
+    return { ok: true, returnTo: safeReturn(b.returnTo) };
+  });
+
+  const passwordUser = (req: any): User | null => {
+    const signedIn = sessionUser(db, req);
+    const user = signedIn ?? req.authUser as User | null;
+    return user && user.role !== 'guest' && user.provider !== EMERGENCY_PROVIDER && (!!signedIn || (user.id === 1 && user.provider === 'local' && (req.authVia === 'open' || req.authVia === 'password'))) ? user : null;
+  };
+  app.get('/api/me/password', async (req, rep) => {
+    const user = passwordUser(req); if (!user) return rep.code(401).send({ error: 'Sign in with a personal account first.' });
+    return rep.header('Cache-Control', 'no-store').send({ enabled: !!loadAuth(db).password, hasPassword: hasPassword(db, user.id), email: user.email, bootstrap: user.provider === 'local' });
+  });
+  app.put('/api/me/password', async (req, rep) => {
+    const user = passwordUser(req); if (!user) return rep.code(401).send({ error: 'Sign in with a personal account first.' });
+    if (!loadAuth(db).password) return rep.code(403).send({ error: 'Password sign-in is disabled on this server.' });
+    if (sendLimited(`pw-set:${user.id}`, 10, 600_000)) return rep.code(429).send({ error: 'Too many attempts. Wait ten minutes.' });
+    const b = (req.body ?? {}) as Row, error = passwordError(b.password);
+    if (error) return rep.code(400).send({ error });
+    const email = okEmail(user.provider === 'local' ? b.email : user.email);
+    if (!email) return rep.code(400).send({ error: 'Your account needs an email address before setting a password.' });
+    const other = db.prepare(`SELECT 1 FROM users WHERE lower(email) = ? AND id != ? UNION ALL SELECT 1 FROM identities WHERE lower(email) = ? AND user_id != ? LIMIT 1`).get(email, user.id, email, user.id);
+    if (other) return rep.code(400).send({ error: 'That email address is already used by another account.' });
+    const sid = sessionIdOf(req);
+    const session = sid ? db.prepare('SELECT created FROM sessions WHERE id = ? AND user_id = ?').get(sid, user.id) as { created: string } | undefined : undefined;
+    const recent = session && Date.now() - new Date(session.created).getTime() < 900_000;
+    if (user.provider !== 'local' && !recent && !(await checkAccountPassword(db, user.id, b.currentPassword))) return rep.code(403).send({ error: 'Enter your current password, or sign out and sign in again before changing it.' });
+    const previousHash = getSecret(db, `password:${user.id}`);
+    const hash = await passwordHash(b.password);
+    if (!loadAuth(db).password) return rep.code(403).send({ error: 'Password sign-in is disabled on this server.' });
+    if (getSecret(db, `password:${user.id}`) !== previousHash) return rep.code(409).send({ error: 'Your password changed during this request. Try again.' });
+    if (getUser(db, user.id)?.disabled !== false || (session && !db.prepare('SELECT 1 FROM sessions WHERE id = ? AND user_id = ?').get(sid, user.id)) || (user.provider === 'local' && getUser(db, user.id)?.provider !== 'local')) return rep.code(403).send({ error: 'Your account or session changed. Sign in again.' });
+    const saved = db.transaction(() => {
+      if (user.provider === 'local') {
+        // Initial setup runs with the same owner access as other server configuration. It creates no public signup route.
+        if (!bindOwner(db, { provider: 'password', sub: email, email, emailVerified: true, name: user.name || email })) return false;
+        const conf = loadAuth(db);
+        saveAuth(db, { ...conf, allow: conf.allow.length ? conf.allow : [email], testedBy: { provider: 'password', sub: email, email, emailVerified: true, name: user.name || email } });
+      }
+      savePasswordHash(db, user.id, hash);
+      db.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').run(user.id, sid ?? '');
+      return true;
+    })();
+    if (!saved) return rep.code(409).send({ error: 'Owner account changed during setup. Try again.' });
+    if (user.provider === 'local') rep.header('Set-Cookie', withDevice(req, getUser(db, user.id)!, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
+    return rep.header('Cache-Control', 'no-store').send({ ok: true });
   });
 
   // ---------- the emergency login: made at start-up, see emergency.ts ----------
@@ -303,6 +368,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const conf = loadAuth(db);
     const linked = new Set(identitiesOf(db, u.id).map((i) => i.provider));
     const methods: { id: string; label: string; kind: string; state: 'on' | 'auto' | 'linked' | 'unlinked'; count?: number; canUnlink?: boolean }[] = [];
+    if (conf.password) methods.push({ id: 'password', label: 'Password', kind: 'password', state: hasPassword(db, u.id) ? 'linked' : 'unlinked' });
     if (conf.email && smtpHealthy(db)) methods.push({ id: 'email', label: 'Email code', kind: 'email', state: 'on' });
     methods.push({ id: 'passkey', label: 'Passkeys', kind: 'passkey', state: 'on', count: listPasskeys(db, u.id).length });
     for (const p of conf.providers.filter((q) => !q.off)) {
@@ -365,7 +431,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const p = conf.providers.find((v) => v.id === (req.params as Row).id);
     if (!p) return rep.code(404).send({ error: 'That method is not set up yet. Use Configure first.' });
     const next = conf.providers.map((v) => (v.id === p.id ? { ...v, off: on ? undefined : true } : v));
-    if (!on && conf.enabled && !next.some((v) => !v.off) && !conf.email) return rep.code(400).send({ error: 'That is the only way in while sign-in is required. Turn on another method first, or turn sign-in off.' });
+    if (!on && conf.enabled && !next.some((v) => !v.off) && !conf.email && !(conf.password && hasPassword(db, 1))) return rep.code(400).send({ error: 'That is the only way in while sign-in is required. Turn on another method first, or turn sign-in off.' });
     if (!on && conf.enabled && conf.testedBy?.provider === p.id && !next.some((v) => !v.off && v.id !== p.id)) return rep.code(400).send({ error: 'The account that tested sign-in used this method. Test another method first.' });
     saveAuth(db, { ...conf, providers: next as typeof conf.providers });
     return { ok: true };
@@ -389,7 +455,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   const dto = (req: any, c: AuthConfig) => ({
-    enabled: c.enabled, allow: c.allow, open: !!c.open, email: !!c.email, emailHealthy: smtpHealthy(db), publicUrl: c.publicUrl,
+    enabled: c.enabled, allow: c.allow, open: !!c.open, email: !!c.email, password: !!c.password, emailHealthy: smtpHealthy(db), publicUrl: c.publicUrl,
     testedBy: c.testedBy ? { email: c.testedBy.email, name: c.testedBy.name, provider: c.testedBy.provider } : null,
     providers: c.providers.map((p) => ({ ...p, hasSecret: !!getSecret(db, `oauth:${p.id}`), redirectUrl: `${auth.baseUrl(req)}/auth/callback/${p.id}` })),
     passwordOption: !!cfg.authPassword, disabledByEnv: !!cfg.authDisabled, callbackBase: auth.baseUrl(req),
@@ -442,6 +508,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     if (typeof b.enabled === 'boolean') next.enabled = b.enabled;
     if (typeof b.open === 'boolean') next.open = b.open;
+    if (b.password !== undefined) {
+      if (typeof b.password !== 'boolean') return bad('Choose whether password sign-in is on or off.');
+      next.password = b.password;
+    }
     if (typeof b.email === 'boolean') {
       if (b.email && !smtpHealthy(db)) return bad('Set up Email first (Settings, Email) and pass its check.');
       next.email = b.email;
@@ -456,11 +526,18 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     }
     const au = (req as any).authUser as User | null;
     const me = au && (req as any).authVia === 'session' ? { provider: au.provider, sub: au.sub, email: au.email, emailVerified: true } : null;
+    // An enrolled owner password remains usable independently of a removed provider or email-code method.
+    if (next.password && hasPassword(db, 1) && (!next.testedBy || (!next.providers.some((p) => !p.off && p.id === next.testedBy!.provider) && !(next.email && next.testedBy.provider === 'email')))) {
+      const owner = getUser(db, 1)!;
+      const who = { provider: 'password', sub: owner.email, email: owner.email, emailVerified: true, name: owner.name };
+      if (next.open || isAllowed(who, next.allow)) next.testedBy = who;
+    }
     if (next.enabled) {
-      if (!next.providers.length && !next.email) return bad('Add a provider first, or turn on email codes.');
+      if (!next.providers.some((p) => !p.off) && !next.email && next.password && !hasPassword(db, 1)) return bad('Set your password in Password & security before requiring sign-in.');
+      if (!next.providers.some((p) => !p.off) && !next.email && !next.password) return bad('Add a provider first, or turn on email codes or password sign-in.');
       if (!next.open && !next.allow.length) return bad('Add at least one email, domain or account to the list of people allowed in, or choose “Anyone who signs in”.');
       if (!next.testedBy) return bad('Use “Test sign-in” with a provider first, so you know you can get back in.');
-      if (!next.providers.some((p) => p.id === next.testedBy!.provider) && !(next.email && next.testedBy.provider === 'email')) return bad('The account that tested sign-in uses a provider that is no longer set up. Test again.');
+      if (!next.providers.some((p) => p.id === next.testedBy!.provider) && !(next.email && next.testedBy.provider === 'email') && !(next.password && next.testedBy.provider === 'password')) return bad('The account that tested sign-in uses a provider that is no longer set up. Test again.');
       if (cur.enabled && me && !next.open && !isAllowed(me, next.allow)) return bad('That list would lock you out: your own account is not on it.');
       if (!next.open && !isAllowed(next.testedBy, next.allow)) return bad('The account you tested with is not on the allowed list, so you would be locked out. Add it, or test with an allowed account.');
     }
