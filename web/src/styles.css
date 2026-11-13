@@ -699,3 +699,5 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .gear-found-item > button { padding: 5px 12px; }
 .gear-found-item > button:hover { background: var(--hover); }
 .gear-found-item .gear-found-blocklist { border-left: 1px solid var(--outline); color: var(--text2); }
+
+.compositions-list-header { position: sticky; top: var(--app-header-height, 0px); z-index: 20; padding-bottom: 28px; background: var(--page); }
