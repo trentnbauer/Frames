@@ -1,3 +1,4 @@
+import { AuthenticatorQr } from './AuthenticatorQr';
 import { useState } from 'react';
 import { startAuthentication, startRegistration, type PublicKeyCredentialCreationOptionsJSON, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api, useApi } from '../api';
@@ -50,7 +51,7 @@ export function TwoFactor({ gate = false }: { gate?: boolean }) {
     </> : <>
       <p>{s.required ? 'Two-factor authentication is required for your account.' : 'Add an authenticator app to require a second factor when you sign in.'} Passkeys use your fingerprint, face or device PIN.</p>
       {s.verified && <p role="status">This session has verified a security factor.</p>}
-      {setup && <div className="mfa-controls"><p>In your authenticator app, add an account using this setup key (time-based, six digits, 30 seconds), then enter its code below.</p><code className="mfa-secret">{setup.secret}</code><a className="btn outline" href={setup.uri}>Open authenticator app</a></div>}
+      {setup && <div className="mfa-controls"><p>Scan this QR code with your authenticator app, then enter its six-digit code below. If you cannot scan it, add the setup key manually (time-based, 30 seconds).</p><AuthenticatorQr uri={setup.uri} /><code className="mfa-secret">{setup.secret}</code><a className="btn outline" href={setup.uri}>Open authenticator app</a></div>}
       {input && <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mfa-controls">
         <label>{setup ? 'Authenticator code' : 'Authenticator or recovery code'}<input autoComplete="one-time-code" aria-label={setup ? 'Authenticator code' : 'Authenticator or recovery code'} value={code} onChange={(e) => setCode(e.target.value)} maxLength={16} disabled={busy} /></label>
         <button type="submit" className="btn primary" disabled={busy || !code.trim()}>{removing ? 'Remove authenticator' : setup ? 'Confirm authenticator' : 'Verify code'}</button>
