@@ -1,9 +1,11 @@
+import { purgeBlacklistedGear } from './gear.js';
+import { gearKey } from './gearBlacklist.js';
+export { gearKey } from './gearBlacklist.js';
 import { getSetting, type DB } from './db.js';
 import { notify } from './notifications.js';
 
 type GearType = 'camera' | 'lens';
 type Found = { name: string; type: GearType; count: number };
-export const gearKey = (name: string) => name.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 const clean = (name: string) => name.trim().slice(0, 120);
 const ownedKeys = (db: DB) => {
   const keys = new Set((db.prepare("SELECT name, type FROM gear_items WHERE kind = 'own' AND type IN ('camera', 'lens')").all() as { name: string; type: string }[]).map((g) => `${g.type}:${gearKey(g.name)}`));
@@ -73,6 +75,7 @@ export function resolveGearDiscovery(db: DB, id: number, action: 'add' | 'blackl
       if (action === 'add' && !isOwned(ownedKeys(db), gear.type, gear.key)) db.prepare("INSERT INTO gear_items(kind, name, type, created_at) VALUES('own', ?, ?, ?)").run(gear.name, gear.type, new Date().toISOString());
       db.prepare('UPDATE gear_discoveries SET state = ? WHERE id = ?').run(action === 'add' ? 'added' : 'blacklisted', id);
     }
+    if (action === 'blacklist') purgeBlacklistedGear(db);
     clearDiscovery(db, id);
     return true;
   })();
@@ -90,6 +93,7 @@ export function blacklistGear(db: DB, raw: string) {
       const row = db.prepare('SELECT id FROM gear_discoveries WHERE type = ? AND key = ?').get(type, key) as { id: number };
       clearDiscovery(db, row.id);
     }
+    purgeBlacklistedGear(db);
   })();
   return true;
 }

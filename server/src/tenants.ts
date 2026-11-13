@@ -1,3 +1,4 @@
+import { purgeBlacklistedGear } from './gear.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -60,6 +61,7 @@ export function createTenants(sys: DB, base: AppCfg, ownerDb: DB) {
     if (!user || user.disabled || user.invited) return null;
     const cfg = cfgFor(user);
     const db = id === OWNER_ID ? ownerDb : linkSys(openDb(userDir(base, id), base.dataDir), sys);
+    purgeBlacklistedGear(db); // also repair libraries that already had blacklist tags before metadata filtering
     const t: Tenant = { user, db, cfg, ai: createAiWorker(db, cfg), scan: { running: false, done: 0, total: 0, startedAt: null, finishedAt: null, result: null, error: null }, bag: new Map() };
     open.set(id, t);
     return t;

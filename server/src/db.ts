@@ -5,6 +5,16 @@ import { isSealed, keyFor, seal, unseal } from './crypt.js';
 
 export type DB = Database.Database;
 
+/** Remove only shoots with no photo records, including their polymorphic share links. */
+export function pruneEmptyShoots(db: DB, id?: number): number {
+  const empty = `SELECT s.id FROM shoots s WHERE NOT EXISTS (SELECT 1 FROM photos p WHERE p.shoot_id = s.id)${id === undefined ? '' : ' AND s.id = ?'}`;
+  const args = id === undefined ? [] : [id];
+  return db.transaction(() => {
+    db.prepare(`DELETE FROM shares WHERE kind = 'shoot' AND target_id IN (${empty})`).run(...args);
+    return db.prepare(`DELETE FROM shoots WHERE id IN (${empty})`).run(...args).changes;
+  })();
+}
+
 // Version 1: the original schema. Existing databases already have it.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS shoots (
@@ -320,6 +330,24 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'notifications', 'cleared_at', 'TEXT'); },
   // Remember discovered gear even after its notification is dismissed or pruned.
   (db) => { db.exec("CREATE TABLE IF NOT EXISTS gear_discoveries (id INTEGER PRIMARY KEY, type TEXT NOT NULL CHECK(type IN ('camera','lens')), name TEXT NOT NULL, key TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'new' CHECK(state IN ('new','added','blacklisted')), UNIQUE(type, key))"); },
+  // Clean existing empty shoots and keep photo removals/moves atomic with shoot and share cleanup.
+  (db) => {
+    pruneEmptyShoots(db);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS prune_shoot_after_photo_delete AFTER DELETE ON photos
+      WHEN NOT EXISTS (SELECT 1 FROM photos WHERE shoot_id = OLD.shoot_id)
+      BEGIN
+        DELETE FROM shares WHERE kind = 'shoot' AND target_id = OLD.shoot_id;
+        DELETE FROM shoots WHERE id = OLD.shoot_id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS prune_shoot_after_photo_move AFTER UPDATE OF shoot_id ON photos
+      WHEN OLD.shoot_id != NEW.shoot_id AND NOT EXISTS (SELECT 1 FROM photos WHERE shoot_id = OLD.shoot_id)
+      BEGIN
+        DELETE FROM shares WHERE kind = 'shoot' AND target_id = OLD.shoot_id;
+        DELETE FROM shoots WHERE id = OLD.shoot_id;
+      END;
+    `);
+  },
 ];
 
 export function migrate(db: DB) {
