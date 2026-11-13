@@ -8,7 +8,7 @@ import { chosenCount, printsSummary, slotsOf } from './walls';
 import ProtoCompositions from '../proto/ProtoCompositions';
 import { CompositionPreview } from '../components/CompositionPreview';
 
-type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
+type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
 const ago = (iso: string | null | undefined) => {
   if (!iso) return '';
@@ -82,7 +82,7 @@ export function Compositions() {
         onExport={async (id: number) => { const c = all.find((x) => x.id === id)!; const ids = c.layout.prints.flatMap((p) => [p.photoId, p.stack ? p.photoId2 : null]).filter((x): x is number => x != null); await downloadOriginals(ids); }}
         onSheet={(id: number) => { window.location.assign(`/api/collections/${id}/print-sheet`); }}
         sugg={s0 && !needle ? {
-          name: s0.name, why: s0.reason, thumbs: s0.photos.slice(0, 3).map((p) => imgUrl(p.id, 'thumb')), pos: `${(si % (sug.data?.length ?? 1)) + 1} of ${sug.data?.length ?? 1}`,
+          aiAssisted: !!s0.aiAssisted, name: s0.name, why: s0.reason, thumbs: s0.photos.slice(0, 3).map((p) => imgUrl(p.id, 'thumb')), pos: `${(si % (sug.data?.length ?? 1)) + 1} of ${sug.data?.length ?? 1}`,
           next: () => setSi(si + 1),
           start: async () => { const c = await api<Collection>('/collections', { body: { name: s0.name, photoIds: s0.photoIds } }); await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s0.photoIds, verdict: 'accept' } }); nav(`/collections/${c.id}`); },
         } : null}

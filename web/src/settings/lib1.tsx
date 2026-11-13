@@ -1,3 +1,4 @@
+import { TwoFactor } from '../components/TwoFactor';
 import { useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from '../components/Modal';
@@ -45,7 +46,7 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
             <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: 'var(--muted)' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
             <span style={{ display: 'flex', gap: 16 }}>
               <button style={{ color: 'var(--text2)', fontSize: 13 }} onClick={async () => { const name = window.prompt('Name this passkey', k.name)?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
-            <button style={{ color: 'var(--danger)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); }}>Remove</button>
+            <button style={{ color: 'var(--danger)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); } catch (e) { setErr(msg(e)); } }}>Remove</button>
             </span>
           </div>
         ))}
@@ -251,17 +252,19 @@ function XmpMore({ s, save, ctx }: { s: NonNullable<ReturnType<typeof useStore>[
 }
 
 export function useSecurity(ctx: Ctx): Section {
-  const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user ? '/me/identities' : null);
-  const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user ? '/me/sign-in-methods' : null);
+  const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user && ctx.me.user.provider !== 'emergency' ? '/me/identities' : null);
+  const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user && ctx.me.user.provider !== 'emergency' ? '/me/sign-in-methods' : null);
   const activity = useApi<{ sessions: { id: string; created: string; ip: string; userAgent: string; current: boolean }[]; history: { id: string; created: string; ip: string; userAgent: string; active: boolean }[] }>(ctx.me?.user ? '/me/security' : null);
   const revoke = async (id: string, current: boolean) => {
     if (!window.confirm(current ? 'Sign out of this browser?' : 'Sign out this session?')) return;
     try { await api(`/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (current) window.location.assign('/signin'); else { activity.reload(); ctx.toast('Session signed out'); } }
     catch (e) { ctx.toast(msg(e)); }
   };
+  const mfaAccount = !!ctx.me?.user && ctx.me.user.provider !== 'emergency';
   const linked = new URLSearchParams(window.location.search).get('linked');
   const linkNotice: Record<string, string> = { ok: 'Sign-in method linked.', same: 'That account is already linked to you.', taken: 'That account belongs to someone else.', notallowed: 'That account is not allowed to sign in here.' };
   return { key: 'security', name: 'Password & security', hint: 'Your sign-in methods, active sessions and recent sign-ins.', notice: linked ? linkNotice[linked] : undefined, groups: [
+      { title: 'Two-factor authentication', rows: [{ id: 'twoFactor', t: mfaAccount ? 'button' : 'link', label: 'Authenticator app and verification', hint: ctx.me?.user?.provider === 'emergency' ? 'Temporary emergency administrators are exempt from two-factor authentication.' : ctx.me?.user ? 'Use an authenticator code, recovery code or verified passkey.' : 'Sign in with a personal account to set up two-factor authentication.', meta: mfaAccount ? 'Manage' : undefined, act: () => ctx.modal(<Modal title="Two-factor authentication" onClose={close(ctx)}><TwoFactor /></Modal>) }] },
       { title: 'Sign-in methods · the ones your admin turned on', rows: (methods.data?.methods ?? []).map((m): R => {
         if (m.kind === 'email') return { id: 'sm_email', t: 'link', label: m.label, hint: 'Always on. A code is emailed to you when you sign in.' };
         if (m.kind === 'passkey') return { id: 'sm_passkey', t: 'button', label: m.label, hint: m.count ? `${m.count} ${m.count === 1 ? 'device' : 'devices'}` : 'Sign in with a fingerprint, face or device PIN', meta: 'Manage', act: () => ctx.modal(<Passkeys ctx={ctx} onChange={() => methods.reload()} />) };

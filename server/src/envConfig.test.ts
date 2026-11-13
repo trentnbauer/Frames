@@ -41,6 +41,7 @@ describe('which settings travel', () => {
     expect(isConfigKey('legacyMigrated')).toBe(false);
     expect(isConfigKey('tunnelEnvState')).toBe(false);
     expect(isConfigKey('../etc')).toBe(false);
+    expect(isConfigKey('secret:totp:1')).toBe(false);
     expect(isConfigKey('secret:cloud:tok:ab12')).toBe(true);
   });
 });

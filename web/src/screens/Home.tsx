@@ -9,7 +9,7 @@ import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { Today, greetingFor } from '../pages/Today';
 import ProtoHome from '../proto/ProtoHome';
 
-type SuggestedSet = { name: string; reason: string; photoIds: number[]; photos: (PhotoLite & { ar: number })[]; tags?: string[]; colours?: { name: string; hex: string }[] };
+type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: (PhotoLite & { ar: number })[]; tags?: string[]; colours?: { name: string; hex: string }[] };
 type Batch = { id: number; name: string; count: number; days: number; importedAt: string; covers: number[]; done: boolean };
 
 const thumb = (id: number) => imgUrl(id, 'thumb');
@@ -97,7 +97,7 @@ export function Home() {
       };
     }),
     compCount: comps.data?.length ?? 0,
-    sug: { title: idea?.name ?? 'No ideas yet', photos: (idea?.photos ?? []).slice(0, 4).map((p) => ({ img: `url(${thumb(p.id)}) center/cover`, flex: `${p.ar || 1} 1 0` })), tags: idea?.tags ?? [], colours: idea?.colours ?? [], why: idea?.reason ?? (recs.loading ? 'Looking for sets…' : 'Rate a few more photographs and Frames will suggest sets.') },
+    sug: { aiAssisted: !!idea?.aiAssisted, title: idea?.name ?? 'No ideas yet', photos: (idea?.photos ?? []).slice(0, 4).map((p) => ({ img: `url(${thumb(p.id)}) center/cover`, flex: `${p.ar || 1} 1 0` })), tags: idea?.tags ?? [], colours: idea?.colours ?? [], why: idea?.reason ?? (recs.loading ? 'Looking for sets…' : 'Add shared tags, colours or locations to at least three photographs, or rate more photographs, to find sets.') },
     sFade: ci.fade, sDots: ideas.map((_, k) => ({ bg: k === ci.i ? 'var(--text)' : 'var(--outline)', go: () => ci.go(k) })), sPrev: () => ci.go(ci.i - 1), sNext: () => ci.go(ci.i + 1),
     startIdea: async () => {
       if (!idea) return;

@@ -39,6 +39,7 @@ const EXPIRY: [string, number][] = [['1 week', 7], ['3 weeks', 21], ['3 months',
 export function useSignin(ctx: Ctx): Section {
   const a = useApi<{ enabled: boolean; providers: Prov[]; testedBy: { provider: string } | null; publicUrl: string; disabledByEnv?: boolean }>('/auth/config');
   const inst = useApi<Inst>('/admin/instance');
+  const mfa = useApi<{ policy: 'off' | 'admins' | 'members' }>('/auth/mfa');
   const ts = useApi<{ enabled: boolean; siteKey: string; signin: boolean; shares: boolean; hasSecret: boolean; disabledByEnv: boolean; startsInSec?: number }>('/admin/turnstile');
   const saveTs = async (body: object, ok: string) => { await act(ctx, () => api('/admin/turnstile', { method: 'PUT', body }), ok); ts.reload(); };
   const reload = () => { a.reload(); inst.reload(); ts.reload(); };
@@ -63,6 +64,7 @@ export function useSignin(ctx: Ctx): Section {
     key: 'signin', name: 'Sign-in & access', hint: 'How people get in.',
     groups: [
       { title: 'Sign-in methods · test before turning on', rows },
+      { title: 'Two-factor authentication', rows: [{ id: 'mfaPolicy', t: 'select', label: 'Require two-factor authentication', hint: 'Passkey with device verification or an authenticator app. Guests are exempt. Verify your own factor before enforcing this.', opts: ['Not enforced', 'Enforced for Admins', 'Enforced for All Members'], value: ({ off: 'Not enforced', admins: 'Enforced for Admins', members: 'Enforced for All Members' })[mfa.data?.policy ?? 'off'], set: async (value) => { await act(ctx, () => api('/auth/mfa', { method: 'PUT', body: { policy: ({ 'Not enforced': 'off', 'Enforced for Admins': 'admins', 'Enforced for All Members': 'members' } as Record<string, string>)[value] } })); mfa.reload(); } }] },
       { title: 'Sessions', rows: [
         { id: 'signup', t: 'toggle', label: 'Allow anyone to sign up', hint: 'Off: invite only.', value: !!i?.signups, togDisabled: i?.signupsLocked ? 'Set by ALLOW_SIGNUPS on this server' : undefined, env: i?.signupsLocked ? 'ALLOW_SIGNUPS' : undefined, set: (v) => void put({ signups: v }) },
         { id: 'newRole', t: 'select', label: 'New people join as', opts: ROLES, value: ROLE[i?.defaultRole ?? 'member'], set: (v) => void put({ defaultRole: roleKey(v) }) },
@@ -119,7 +121,7 @@ export function useMembers(ctx: Ctx): Section {
   const total = users.reduce((n, u) => n + u.bytes, 0);
   const disk = sys.data?.dataDisk;
   const first = (u: U) => (u.name || u.email).split(' ')[0];
-  const manage = () => ctx.modal(<Modal title="Manage people" sub="Folders, switching someone off, deleting their data, the privacy page and reports." width={760} onClose={() => { ctx.modal(null); d.reload(); }}><People /></Modal>);
+  const manage = () => ctx.modal(<Modal title="Manage people" sub="Folders, security recovery, switching someone off, deleting their data, the privacy page and reports." width={760} onClose={() => { ctx.modal(null); d.reload(); }}><People /></Modal>);
   return {
     key: 'people', name: 'Members', hint: 'Who can sign in to this Frames.',
     action: { label: '+ Invite', act: () => ctx.modal(<Invite ctx={ctx} reload={d.reload} />) },
@@ -134,7 +136,7 @@ export function useMembers(ctx: Ctx): Section {
       ] },
       { title: 'Defaults', rows: [
         { id: 'shareLib', t: 'toggle', label: 'Members can see each other’s shoots', value: !!inst.data?.membersSeeShoots, set: async (v: boolean) => { await act(ctx, () => api('/admin/instance', { method: 'PUT', body: { membersSeeShoots: v } })); inst.reload(); } },
-        { id: 'manage', t: 'link', label: 'Folders, switching off, deleting data, privacy page', hint: 'Per-person tools and the page everyone can read about their data.', meta: 'Manage people', act: manage },
+        { id: 'manage', t: 'link', label: 'Folders, security recovery, switching off, deleting data, privacy page', hint: 'Per-person tools and the page everyone can read about their data.', meta: 'Manage people', act: manage },
       ] },
     ],
   };

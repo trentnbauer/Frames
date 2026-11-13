@@ -35,6 +35,10 @@ The shared app header uses the Home screen's inset and stays in the same positio
 
 Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Keep Found in your photos, including its photo-count labels, above the owned gear blocks. Blacklisted gear uses editable tags at the bottom, below the owned gear blocks, and blacklisting must immediately remove a matching Found in your photos suggestion.
 
+## Account security
+
+Two-factor enrolment and verification use shared theme tokens, normal buttons and labelled inputs. Show authenticator setup keys and recovery codes only in the enrolment flow, and explain that recovery codes are shown once. Keep the emergency administrator exempt and its credentials out of the in-app logs.
+
 ## Validation
 
 Check visible changes in the real app in dark and light themes, including long titles and narrow layouts. Check that new controls do not overlap text or move neighbouring actions unexpectedly. Follow the repository's checks and PR requirements in [CLAUDE.md](CLAUDE.md).

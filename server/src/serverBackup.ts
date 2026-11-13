@@ -1,3 +1,4 @@
+import { MFA_SCHEMA } from './mfa.js';
 import { madeWithin } from './policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -164,7 +165,16 @@ function keepSettings(restored: string, old: string) {
   const c = new Database(restored);
   try {
     c.exec(`ATTACH DATABASE '${old.replace(/'/g, "''")}' AS old`);
-    c.exec('DELETE FROM settings; INSERT INTO settings SELECT key, value FROM old.settings; DELETE FROM sessions;');
+    c.exec("DELETE FROM settings; INSERT INTO settings SELECT key, value FROM old.settings WHERE key NOT LIKE 'secret:totp:%'; DELETE FROM sessions;");
+    c.exec(MFA_SCHEMA);
+    c.exec('DELETE FROM mfa_sessions; DELETE FROM mfa_recovery; DELETE FROM mfa_totp;');
+    // Personal factors belong to a live identity, never just a reused numeric user ID in an old backup.
+    if (c.prepare("SELECT 1 FROM old.sqlite_master WHERE type = 'table' AND name = 'mfa_totp'").get()) {
+      c.exec(`INSERT INTO mfa_totp SELECT m.* FROM old.mfa_totp m JOIN old.users o ON o.id = m.user_id
+        JOIN users u ON u.id = o.id AND u.provider = o.provider AND u.sub = o.sub AND u.email = o.email WHERE m.enabled = 1;
+        INSERT INTO mfa_recovery SELECT r.* FROM old.mfa_recovery r JOIN mfa_totp m ON m.user_id = r.user_id;
+        INSERT INTO settings SELECT s.* FROM old.settings s JOIN mfa_totp m ON s.key = 'secret:totp:' || m.user_id;`);
+    }
   } finally { c.close(); }
 }
 

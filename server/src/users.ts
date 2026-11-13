@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS portfolio_hosts (host TEXT PRIMARY KEY, user_id INTEG
 CREATE TABLE IF NOT EXISTS portfolio_handles (handle TEXT PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE);
 `;
 
+import { MFA_SCHEMA } from './mfa.js';
 import { PASSKEY_SCHEMA } from './passkeys.js';
 export function openSystemDb(dataDir: string): DB {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -74,6 +75,7 @@ export function openSystemDb(dataDir: string): DB {
   db.pragma('foreign_keys = ON');
   db.exec(SYSTEM_SCHEMA);
   db.exec(PASSKEY_SCHEMA);
+  db.exec(MFA_SCHEMA);
   // Preserve pre-upgrade active sessions; historical client details were never recorded.
   db.exec(`INSERT OR IGNORE INTO sign_in_events(id, session_id, user_id, created)
     SELECT lower(hex(randomblob(18))), id, user_id, created FROM sessions`);
@@ -205,4 +207,4 @@ export function updateUser(sys: DB, id: number, patch: Partial<Pick<User, 'role'
   if (patch.disabled !== undefined) { sys.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(patch.disabled ? 1 : 0, id); if (patch.disabled) sys.prepare('DELETE FROM sessions WHERE user_id = ?').run(id); }
   if (patch.name !== undefined) sys.prepare('UPDATE users SET name = ? WHERE id = ?').run(patch.name, id);
 }
-export const deleteUserRow = (sys: DB, id: number) => { sys.prepare('DELETE FROM users WHERE id = ?').run(id); };
+export const deleteUserRow = (sys: DB, id: number) => { sys.prepare('DELETE FROM settings WHERE key = ?').run(`secret:totp:${id}`); sys.prepare('DELETE FROM users WHERE id = ?').run(id); };

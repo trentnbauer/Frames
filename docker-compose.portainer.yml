@@ -10,6 +10,7 @@ services:
       - path: stack.env
         required: false
     environment:
+      # AUTH_DISABLE also bypasses 2FA; emergency recovery credentials stay in Docker/server console logs.
       AUTH_DISABLE: ${AUTH_DISABLE:-true} ##Single User - authenticate with your CF Proxy
       EMERGENCY_LOGIN: ${EMERGENCY_LOGIN:-true}
       ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}

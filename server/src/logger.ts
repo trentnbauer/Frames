@@ -11,6 +11,12 @@ const RANK = { errors: 0, warnings: 1, info: 2, debug: 3 } as const;
 export type LogLevel = keyof typeof RANK;
 const MAX = 5 * 1024 * 1024;
 
+const terminalLog = console.log.bind(console);
+/** Recovery credentials go to the container terminal, never to the app's retained log. */
+export const serverOnlyLog = (message: string) => terminalLog(message);
+/** Also protects historical and rotated files written before recovery messages were terminal-only. */
+export const redactEmergencyCredentials = (text: string) => text.replace(/(EMERGENCY LOGIN[^\r\n]*?)\busername\s+\S+\s+password\s+\S+/gi, '$1[credentials hidden; use Docker logs]');
+
 let level: LogLevel = 'info';
 let file = '';
 let started = false;
@@ -20,7 +26,7 @@ export const logFile = () => file;
 function write(tag: string, args: unknown[]) {
   if (!file) return;
   try {
-    const line = `${new Date().toISOString()} ${tag} ${util.format(...args).replace(/\n/g, '\n    ')}\n`;
+    const line = `${new Date().toISOString()} ${tag} ${redactEmergencyCredentials(util.format(...args)).replace(/\n/g, '\n    ')}\n`;
     try { if (fs.statSync(file).size > MAX) { fs.rmSync(file + '.1', { force: true }); fs.renameSync(file, file + '.1'); } } catch { /* no file yet */ }
     fs.appendFileSync(file, line);
   } catch { /* the log must never stop the server */ }
@@ -53,6 +59,6 @@ export function readLog(days = 7): { text: string; bytes: number } {
   let keep = false;
   const out: string[] = [];
   for (const l of text.split('\n')) { const m = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z) /.exec(l); if (m) keep = Date.parse(m[1]) >= cut; if (keep) out.push(l); }
-  const body = out.join('\n');
+  const body = redactEmergencyCredentials(out.join('\n'));
   return { text: body, bytes: Buffer.byteLength(body) };
 }

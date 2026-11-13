@@ -41,7 +41,7 @@ export async function registrationOptions(sys: DB, w: Where, user: { id: number;
   const existing = sys.prepare('SELECT id, transports FROM passkeys WHERE user_id = ?').all(user.id) as { id: string; transports: string }[];
   const options = await generateRegistrationOptions({
     rpName: 'Frames', rpID: w.rpID, userName: user.email || user.name || `user-${user.id}`, userDisplayName: user.name || user.email || 'You', userID: new TextEncoder().encode(String(user.id)),
-    attestationType: 'none', authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+    attestationType: 'none', authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
     excludeCredentials: existing.map((e) => ({ id: e.id, transports: trans(e.transports) })),
   });
   return { options, cid: keep(options.challenge, user.id) };
@@ -51,33 +51,35 @@ export async function verifyRegistration(sys: DB, w: Where, userId: number, cid:
   const c = take(cid);
   if (!c || c.userId !== userId) return { ok: false as const, error: 'That took too long. Try adding the passkey again.' };
   try {
-    const v = await verifyRegistrationResponse({ response, expectedChallenge: c.challenge, expectedOrigin: w.origin, expectedRPID: w.rpID, requireUserVerification: false });
+    const v = await verifyRegistrationResponse({ response, expectedChallenge: c.challenge, expectedOrigin: w.origin, expectedRPID: w.rpID, requireUserVerification: true });
     if (!v.verified || !v.registrationInfo) return { ok: false as const, error: 'The passkey could not be checked.' };
     const { credential } = v.registrationInfo;
     sys.prepare('INSERT INTO passkeys(id, user_id, public_key, counter, transports, name, created) VALUES(?, ?, ?, ?, ?, ?, ?)')
       .run(credential.id, userId, Buffer.from(credential.publicKey), credential.counter, (credential.transports ?? []).join(','), name.trim().slice(0, 60) || 'This device', new Date().toISOString());
+    sys.prepare('INSERT OR IGNORE INTO mfa_passkeys(passkey_id) VALUES(?)').run(credential.id);
     return { ok: true as const };
   } catch (e) { return { ok: false as const, error: `The passkey could not be added (${(e as Error).message}).` }; }
 }
 
-export async function authenticationOptions(w: Where) {
-  const options = await generateAuthenticationOptions({ rpID: w.rpID, userVerification: 'preferred' });
-  return { options, cid: keep(options.challenge, null) };
+export async function authenticationOptions(w: Where, userId: number | null = null, sys?: DB) {
+  const options = await generateAuthenticationOptions({ rpID: w.rpID, userVerification: userId !== null ? 'required' : 'preferred', ...(userId !== null && sys ? { allowCredentials: listPasskeys(sys, userId).map((key) => ({ id: key.id })) } : {}) });
+  return { options, cid: keep(options.challenge, userId) };
 }
 
 /** The person whose passkey this is, or null. */
-export async function verifyAuthentication(sys: DB, w: Where, cid: unknown, response: AuthenticationResponseJSON): Promise<number | null> {
+export async function verifyAuthentication(sys: DB, w: Where, cid: unknown, response: AuthenticationResponseJSON, expectedUserId?: number): Promise<{ userId: number; userVerified: boolean } | null> {
   const c = take(cid);
-  if (!c) return null;
+  if (!c || c.userId !== (expectedUserId ?? null) || typeof response?.id !== 'string' || response.id.length > 1024) return null;
   const row = sys.prepare('SELECT id, user_id, public_key, counter, transports FROM passkeys WHERE id = ?').get(response?.id) as { id: string; user_id: number; public_key: Buffer; counter: number; transports: string } | undefined;
-  if (!row) return null;
+  if (!row || (expectedUserId !== undefined && row.user_id !== expectedUserId)) return null;
   try {
     const v = await verifyAuthenticationResponse({
-      response, expectedChallenge: c.challenge, expectedOrigin: w.origin, expectedRPID: w.rpID, requireUserVerification: false,
+      response, expectedChallenge: c.challenge, expectedOrigin: w.origin, expectedRPID: w.rpID, requireUserVerification: expectedUserId !== undefined,
       credential: { id: row.id, publicKey: new Uint8Array(row.public_key), counter: row.counter, transports: trans(row.transports) },
     });
     if (!v.verified) return null;
     sys.prepare('UPDATE passkeys SET counter = ?, last_used = ? WHERE id = ?').run(v.authenticationInfo.newCounter, new Date().toISOString(), row.id);
-    return row.user_id;
+    if (v.authenticationInfo.userVerified) sys.prepare('INSERT OR IGNORE INTO mfa_passkeys(passkey_id) VALUES(?)').run(row.id);
+    return { userId: row.user_id, userVerified: v.authenticationInfo.userVerified };
   } catch { return null; }
 }
