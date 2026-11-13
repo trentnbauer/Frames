@@ -4,11 +4,12 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api, useApi } from '../api';
 import ProtoAuth from '../proto/ProtoAuth';
+import { PasswordSignIn } from '../components/AccountPassword';
 
 /** Pages that work before anyone is signed in: sign in, sign up, the emailed code, terms, signed out. */
 export const AUTH_PATHS = /^\/(signin|signup|signed-out|terms)\/?$/;
 
-type Options = { providers: { id: string; name: string; type: string }[]; email: boolean; password: boolean; turnstile: { siteKey: string } | null; signups: boolean; serverName: string; signedIn: boolean };
+type Options = { providers: { id: string; name: string; type: string }[]; email: boolean; password: boolean; accountPassword?: boolean; turnstile: { siteKey: string } | null; signups: boolean; serverName: string; signedIn: boolean };
 
 /** The owner's terms, plain text: bullets and bold marks the editor allows are shown as simply as the screen can. */
 const plain = (p: string) => p.replace(/\*\*/g, '').replace(/^- /gm, '• ');
@@ -26,6 +27,7 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
   if (!o.data && view !== 'lock' && view !== 'out' && view !== 'terms') return <div className="auth-shell" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>{o.error ? 'Could not load the sign-in options.' : 'Loading…'}</div>;
   const options = { ...(o.data ?? { providers: [], email: false, password: false, turnstile: null, signups: false, serverName: 'Frames', signedIn: false }), passkey: true } as Options & { passkey: boolean };
   const rt = returnTo(qs);
+  if (view === 'signin' && qs.get('method') === 'password' && options.accountPassword) return <div className="auth-shell"><PasswordSignIn serverName={options.serverName} siteKey={options.turnstile?.siteKey} returnTo={rt} onBack={() => { const next = new URLSearchParams(qs); next.delete('method'); nav(`/signin?${next}`); }} /></div>;
   return (
     <div className="auth-shell">
       <ProtoAuth
@@ -38,6 +40,7 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
           const response = await startAuthentication({ optionsJSON: opts });
           return (await api<{ returnTo: string }>('/public/auth/passkey/verify', { method: 'POST', body: { cid, response, returnTo: rt } })).returnTo;
         }}
+        personalPassword={options.accountPassword ? <button type="button" className="btn outline" style={{ width: '100%', marginBottom: 10 }} onClick={() => { const next = new URLSearchParams(qs); next.set('method', 'password'); nav(`/signin?${next}`); }}>Sign in with a password</button> : null}
         goPassword={() => window.location.assign('/auth/password')}
         lockEyebrow={lockProps?.eyebrow} lockOwner={lockProps?.owner} lockedMsg={lockProps?.lockedMsg} pin={lockProps?.pin}
         onTermsBack={(from: string) => { if (window.history.length > 1) nav(-1); else nav(from === 'signup' ? '/signup' : '/signin'); }}

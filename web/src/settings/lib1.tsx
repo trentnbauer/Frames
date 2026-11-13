@@ -1,3 +1,4 @@
+import { AccountPassword } from '../components/AccountPassword';
 import { TwoFactor } from '../components/TwoFactor';
 import { useState } from 'react';
 import { api, useApi } from '../api';
@@ -252,6 +253,7 @@ function XmpMore({ s, save, ctx }: { s: NonNullable<ReturnType<typeof useStore>[
 }
 
 export function useSecurity(ctx: Ctx): Section {
+  const password = useApi<{ enabled: boolean; hasPassword: boolean; bootstrap: boolean }>(ctx.me?.user?.provider !== 'emergency' ? '/me/password' : null);
   const ids = useApi<{ identities: { id: number; provider: string; email: string }[] }>(ctx.me?.user && ctx.me.user.provider !== 'emergency' ? '/me/identities' : null);
   const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user && ctx.me.user.provider !== 'emergency' ? '/me/sign-in-methods' : null);
   const activity = useApi<{ sessions: { id: string; created: string; ip: string; userAgent: string; current: boolean }[]; history: { id: string; created: string; ip: string; userAgent: string; active: boolean }[] }>(ctx.me?.user ? '/me/security' : null);
@@ -264,8 +266,10 @@ export function useSecurity(ctx: Ctx): Section {
   const linked = new URLSearchParams(window.location.search).get('linked');
   const linkNotice: Record<string, string> = { ok: 'Sign-in method linked.', same: 'That account is already linked to you.', taken: 'That account belongs to someone else.', notallowed: 'That account is not allowed to sign in here.' };
   return { key: 'security', name: 'Password & security', hint: 'Your sign-in methods, active sessions and recent sign-ins.', notice: linked ? linkNotice[linked] : undefined, groups: [
+      { title: 'Password', rows: [{ id: 'accountPassword', t: password.data?.enabled ? 'button' : 'link', label: password.data?.hasPassword ? 'Change password' : 'Set password', hint: password.data?.enabled ? 'Sign in with your email address and a password.' : 'Password sign-in is disabled. An administrator can enable it in Server → Sign-in & access.', meta: password.data?.enabled ? 'Manage' : undefined, act: () => ctx.modal(<Modal title={password.data?.hasPassword ? 'Change password' : 'Set password'} onClose={close(ctx)}><AccountPassword onSaved={() => { password.reload(); methods.reload(); ctx.modal(null); ctx.toast('Password saved · other sessions signed out'); }} /></Modal>) }] },
       { title: 'Two-factor authentication', rows: [{ id: 'twoFactor', t: mfaAccount ? 'button' : 'link', label: 'Authenticator app and verification', hint: ctx.me?.user?.provider === 'emergency' ? 'Temporary emergency administrators are exempt from two-factor authentication.' : ctx.me?.user ? 'Use an authenticator code, recovery code or verified passkey.' : 'Sign in with a personal account to set up two-factor authentication.', meta: mfaAccount ? 'Manage' : undefined, act: () => ctx.modal(<Modal title="Two-factor authentication" onClose={close(ctx)}><TwoFactor /></Modal>) }] },
       { title: 'Sign-in methods · the ones your admin turned on', rows: (methods.data?.methods ?? []).map((m): R => {
+        if (m.kind === 'password') return { id: 'sm_password', t: 'link', label: m.label, hint: m.state === 'linked' ? 'Password set · manage it above' : 'Set a password above to use this method' };
         if (m.kind === 'email') return { id: 'sm_email', t: 'link', label: m.label, hint: 'Always on. A code is emailed to you when you sign in.' };
         if (m.kind === 'passkey') return { id: 'sm_passkey', t: 'button', label: m.label, hint: m.count ? `${m.count} ${m.count === 1 ? 'device' : 'devices'}` : 'Sign in with a fingerprint, face or device PIN', meta: 'Manage', act: () => ctx.modal(<Passkeys ctx={ctx} onChange={() => methods.reload()} />) };
         if (m.kind === 'access') return { id: 'sm_access', t: 'link', label: m.label, hint: 'Automatic. Cloudflare signs you in.' };

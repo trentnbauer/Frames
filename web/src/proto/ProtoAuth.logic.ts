@@ -36,7 +36,7 @@ export class Logic extends DCLogic {
       siEmail: S.email, onSiEmail: (e) => this.setState({ email: e.target.value, err: '' }), siKey: (e) => { if (e.key === 'Enter') siGo(); }, siGo, siGoOp: S.busy ? 0.6 : 1,
       providers: providers.map((p) => ({ name: p.name, op: 1, go: () => provider(p.id) })),
       passkeyShow: !!o.passkey && typeof window !== 'undefined' && !!window.PublicKeyCredential, passkeyGo: () => run(async () => { const to = await P.passkey(); window.location.assign(to || '/'); }, 'err'),
-      siShowPw: !!o.password || (o.signups && (emailOn || providers.length > 0)), goPw: () => P.goPassword(), goSignup: () => this.go('signup'), siBackShow: false, siBackLabel: '', goSignin: () => this.go('signin'),
+      siSharedPw: !!o.password, siSignup: o.signups && (emailOn || providers.length > 0), siShowPw: !!o.password || (o.signups && (emailOn || providers.length > 0)), goPw: () => P.goPassword(), goSignup: () => this.go('signup'), siBackShow: false, siBackLabel: '', goSignin: () => this.go('signin'),
       goTerms: () => this.go('terms', { termsFrom: 'signin' }),
       suSub: emailOn ? 'No password. We email you a code to finish, and each time you sign in.' : 'Email sign-in isn’t set up on this Frames, so use one of these accounts.', suHasErr: !!S.suErr || o.signups === false, suErr: o.signups === false ? 'New accounts are turned off here. Ask the owner to add you.' : S.suErr,
       agreeBg: S.agree ? 'var(--text)' : 'transparent', agreeTick: S.agree ? '✓' : '', toggleAgree: () => this.setState({ agree: !S.agree, suErr: '' }), goTermsFromSu: (e) => { e.stopPropagation(); this.go('terms', { termsFrom: 'signup' }); },
