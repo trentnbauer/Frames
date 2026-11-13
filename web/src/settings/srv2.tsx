@@ -16,7 +16,7 @@ const act = async (ctx: Ctx, fn: () => Promise<unknown>, ok = 'Saved') => { try 
 const gb = (n: number) => (n >= 1e12 ? `${(n / 1e12).toFixed(1)} TB` : n >= 1e9 ? `${Math.round(n / 1e9)} GB` : n >= 1e6 ? `${Math.max(1, Math.round(n / 1e6))} MB` : `${Math.round(n / 1e3)} KB`);
 type Inst = Record<string, any>;
 const mono = "'IBM Plex Mono',monospace";
-const eyebrow = { font: `500 10.5px ${mono}`, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6f6c67' } as const;
+const eyebrow = { font: `500 10.5px ${mono}`, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)' } as const;
 
 /* ------------------------------------------------------------ Shared AI */
 type Src = { id: string; type: string; name: string; model: string; endpoint: string };
@@ -56,14 +56,14 @@ export function useNetwork(ctx: Ctx): Section {
   const save = async (body: object) => { await act(ctx, () => api('/tunnel', { method: 'PUT', body })); d.reload(); };
   const state = t?.status.state ?? 'stopped';
   const hint = state === 'connected' ? 'Connected — Frames can be reached through Cloudflare.' : state === 'error' ? `Problem: ${t?.status.error ?? ''}` : state === 'starting' ? 'Connecting…' : 'Stopped';
-  const help = () => ctx.modal(<Modal title="Account ID and API token" width={620} onClose={close(ctx)}><div style={{ fontSize: 13.5, color: '#a8a59f', lineHeight: 1.6, marginTop: 10 }}><ol style={{ margin: 0, paddingLeft: 20 }}><li><a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noreferrer" style={{ color: '#efede8', textDecoration: 'underline' }}>Create an API token</a> (Custom token) with the permissions below, then copy it.</li><li>Your <b style={{ color: '#efede8', fontWeight: 500 }}>account ID</b> is on the right of the dashboard’s home page for your domain, and in its address after <span style={{ fontFamily: mono }}>dash.cloudflare.com/</span>.</li></ol><TokenSheet /></div></Modal>);
+  const help = () => ctx.modal(<Modal title="Account ID and API token" width={620} onClose={close(ctx)}><div style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.6, marginTop: 10 }}><ol style={{ margin: 0, paddingLeft: 20 }}><li><a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noreferrer" style={{ color: 'var(--text)', textDecoration: 'underline' }}>Create an API token</a> (Custom token) with the permissions below, then copy it.</li><li>Your <b style={{ color: 'var(--text)', fontWeight: 500 }}>account ID</b> is on the right of the dashboard’s home page for your domain, and in its address after <span style={{ fontFamily: mono }}>dash.cloudflare.com/</span>.</li></ol><TokenSheet /></div></Modal>);
   const status = () => ctx.modal(
-    <Modal title="What Frames set up in Cloudflare" sub={t?.error ?? (t?.appliedAt ? `Matches your addresses · ${new Date(t.appliedAt).toLocaleString()}` : 'Not applied yet')} width={720} onClose={close(ctx)} foot={<><a href="https://one.dash.cloudflare.com/" target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13.5, color: '#a8a59f' }}>Open Cloudflare Zero Trust ↗</a><button className="btn primary" onClick={close(ctx)}>Done</button></>}>
+    <Modal title="What Frames set up in Cloudflare" sub={t?.error ?? (t?.appliedAt ? `Matches your addresses · ${new Date(t.appliedAt).toLocaleString()}` : 'Not applied yet')} width={720} onClose={close(ctx)} foot={<><a href="https://one.dash.cloudflare.com/" target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)' }}>Open Cloudflare Zero Trust ↗</a><button className="btn primary" onClick={close(ctx)}>Done</button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
         <span style={eyebrow}>Addresses</span>
-        {(t?.hostnames ?? []).map((h) => <div key={h.hostname} style={{ background: '#0d0d0d', borderRadius: 10, padding: '9px 14px' }}><div style={{ font: `400 13px ${mono}`, userSelect: 'all' }}>{h.hostname}</div><div style={{ fontSize: 12, color: '#8f8c86' }}>{h.kind === 'app' ? `→ ${t?.service ?? ''}` : `→ portfolio${h.who ? `: ${h.who}` : ''}`}</div></div>)}
+        {(t?.hostnames ?? []).map((h) => <div key={h.hostname} style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 14px' }}><div style={{ font: `400 13px ${mono}`, userSelect: 'all' }}>{h.hostname}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{h.kind === 'app' ? `→ ${t?.service ?? ''}` : `→ portfolio${h.who ? `: ${h.who}` : ''}`}</div></div>)}
         <span style={{ ...eyebrow, marginTop: 8 }}>Access applications</span>
-        {(t?.accessApps ?? []).map((a) => <div key={a.name} style={{ background: '#0d0d0d', borderRadius: 10, padding: '9px 14px' }}><div style={{ fontSize: 13 }}>{a.name} <span style={{ color: '#8f8c86' }}>· {a.decision === 'allow' ? 'login required' : 'public, no login'}</span></div><div style={{ font: `400 12px ${mono}`, color: '#8f8c86', wordBreak: 'break-all' }}>{a.addresses.join('  ')}</div></div>)}
+        {(t?.accessApps ?? []).map((a) => <div key={a.name} style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 14px' }}><div style={{ fontSize: 13 }}>{a.name} <span style={{ color: 'var(--muted)' }}>· {a.decision === 'allow' ? 'login required' : 'public, no login'}</span></div><div style={{ font: `400 12px ${mono}`, color: 'var(--muted)', wordBreak: 'break-all' }}>{a.addresses.join('  ')}</div></div>)}
       </div>
     </Modal>);
   const log = () => { logs.reload(); ctx.modal(<Modal title="Tunnel log" sub="What cloudflared reported, newest last." width={760} onClose={close(ctx)} foot={<><span className="grow" /><button className="btn primary" onClick={close(ctx)}>Close</button></>}><TunnelLog /></Modal>); };
@@ -102,15 +102,15 @@ function LogModal({ ctx }: { ctx: Ctx }) {
   const bytes = l.data?.bytes ?? 0;
   const size = bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
   const tag = (x: string) => (x === 'WARN' ? 'WRN' : x === 'ERROR' ? 'ERR' : x === 'DEBUG' ? 'DBG' : 'INF');
-  const colour = (x: string) => (x === 'WARN' ? 'oklch(0.8 0.13 80)' : x === 'ERROR' ? '#e79a82' : '#a8a59f');
+  const colour = (x: string) => (x === 'WARN' ? 'var(--warn)' : x === 'ERROR' ? 'var(--err)' : 'var(--text2)');
   const text = lines.map((x) => `${x.time} ${tag(x.level)} ${x.message}`).join('\n');
   return (
     <Modal title="Logs" sub={`Log level: ${cap1(l.data?.level ?? 'info')} · the newest lines, last 7 days`} width={820} onClose={close(ctx)}
       foot={<><span className="grow" /><a className="btn outline" href="/api/admin/logs/download" download>Download all · {size}</a><button className="btn" onClick={() => { void navigator.clipboard?.writeText(text).then(() => ctx.toast('Copied')); }}>Copy</button><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
-      <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '12px 14px', maxHeight: 380, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, whiteSpace: 'pre-wrap', marginTop: 12 }}>
-        {l.loading && <span style={{ color: '#8f8c86' }}>Loading…</span>}
-        {!l.loading && lines.length === 0 && <span style={{ color: '#8f8c86' }}>Nothing logged yet.</span>}
-        {lines.map((x, i) => <div key={i} style={{ color: colour(x.level) }}><span style={{ color: '#6f6c67' }}>{x.time.slice(11, 19)}</span> {tag(x.level)} {x.message}</div>)}
+      <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '12px 14px', maxHeight: 380, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+        {l.loading && <span style={{ color: 'var(--muted)' }}>Loading…</span>}
+        {!l.loading && lines.length === 0 && <span style={{ color: 'var(--muted)' }}>Nothing logged yet.</span>}
+        {lines.map((x, i) => <div key={i} style={{ color: colour(x.level) }}><span style={{ color: 'var(--muted)' }}>{x.time.slice(11, 19)}</span> {tag(x.level)} {x.message}</div>)}
       </div>
     </Modal>
   );
@@ -118,7 +118,7 @@ function LogModal({ ctx }: { ctx: Ctx }) {
 const cap1 = (s: string) => s[0].toUpperCase() + s.slice(1);
 function TunnelLog() {
   const l = useApi<{ lines: string[] }>('/tunnel/logs');
-  return <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '12px 14px', maxHeight: 340, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, color: '#a8a59f', whiteSpace: 'pre-wrap', marginTop: 12 }}>{l.data?.lines.length ? l.data.lines.join('\n') : 'Nothing logged yet.'}</div>;
+  return <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '12px 14px', maxHeight: 340, overflow: 'auto', font: `400 11.5px/1.6 ${mono}`, color: 'var(--text2)', whiteSpace: 'pre-wrap', marginTop: 12 }}>{l.data?.lines.length ? l.data.lines.join('\n') : 'Nothing logged yet.'}</div>;
 }
 
 /* ------------------------------------------------------------ Email */
@@ -132,20 +132,20 @@ function MailLog({ ctx }: { ctx: Ctx }) {
   const failed = rows.filter((r) => r.status === 'failed').length;
   return (
     <Modal title="Email log" sub={`Last 30 days · ${rows.length - failed} sent · ${failed} failed`} width={800} onClose={close(ctx)}
-      foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: '#a8a59f', cursor: 'pointer', opacity: failed ? 1 : 0.4 }} onClick={async () => { if (failed) { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); ctx.toast(`${r.sent} resent`); l.reload(); } }}>Retry failed</span><a className="btn outline" href="/api/admin/email/log.csv" download>Download CSV</a><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
+      foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer', opacity: failed ? 1 : 0.4 }} onClick={async () => { if (failed) { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); ctx.toast(`${r.sent} resent`); l.reload(); } }}>Retry failed</span><a className="btn outline" href="/api/admin/email/log.csv" download>Download CSV</a><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
       <div className="seg" role="tablist" style={{ alignSelf: 'flex-start', margin: '12px 0' }}>{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
-      <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '2px 14px', maxHeight: 380, overflow: 'auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.08)', ...eyebrow }}><span>When</span><span>To</span><span>Subject</span><span>Type</span><span style={{ textAlign: 'right' }}>Status</span></div>
+      <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '2px 14px', maxHeight: 380, overflow: 'auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--hair)', ...eyebrow }}><span>When</span><span>To</span><span>Subject</span><span>Type</span><span style={{ textAlign: 'right' }}>Status</span></div>
         {rows.slice(0, 80).map((r) => (
-          <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, alignItems: 'center', padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,.05)', fontSize: 13 }}>
-            <span style={{ color: '#8f8c86', fontSize: 12.5 }}>{fmtDate(r.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.to}</span>
-            <span title={r.error} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#a8a59f' }}>{r.subject}</span><span style={{ fontSize: 12, color: '#8f8c86' }}>{r.type}</span>
-            <span style={{ textAlign: 'right', fontSize: 12.5, color: r.status === 'failed' ? 'oklch(0.75 0.14 28)' : 'oklch(0.78 0.12 150)' }}>{r.status === 'failed' ? 'Failed' : 'Delivered'}</span>
+          <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--hover)', fontSize: 13 }}>
+            <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{fmtDate(r.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.to}</span>
+            <span title={r.error} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text2)' }}>{r.subject}</span><span style={{ fontSize: 12, color: 'var(--muted)' }}>{r.type}</span>
+            <span style={{ textAlign: 'right', fontSize: 12.5, color: r.status === 'failed' ? 'var(--danger)' : 'var(--ok)' }}>{r.status === 'failed' ? 'Failed' : 'Delivered'}</span>
           </div>
         ))}
-        {rows.length === 0 && <div style={{ padding: '24px 0', color: '#8f8c86', textAlign: 'center' }}>Nothing here.</div>}
+        {rows.length === 0 && <div style={{ padding: '24px 0', color: 'var(--muted)', textAlign: 'center' }}>Nothing here.</div>}
       </div>
-      <div style={{ fontSize: 12.5, color: '#8f8c86', marginTop: 12 }}>Kept for 30 days. Email bodies aren’t stored — only who, what and whether it was delivered.</div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 12 }}>Kept for 30 days. Email bodies aren’t stored — only who, what and whether it was delivered.</div>
     </Modal>
   );
 }
@@ -213,7 +213,7 @@ export function useProcessing(ctx: Ctx): Section {
 }
 function QueueBody() {
   const q = useApi<{ thumbnails: number; ai: number; running: boolean }>('/library/queue');
-  const row = (a: string, b: string | number) => <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,.08)' }}><span>{a}</span><span style={{ color: '#a8a59f' }}>{b}</span></div>;
+  const row = (a: string, b: string | number) => <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid var(--hair)' }}><span>{a}</span><span style={{ color: 'var(--text2)' }}>{b}</span></div>;
   return <div style={{ marginTop: 10 }}>{row('Thumbnails to make', q.data?.thumbnails ?? '…')}{row('Photos for the AI to describe', q.data?.ai ?? '…')}{row('Working now', q.data?.running ? 'Yes' : 'No')}</div>;
 }
 
@@ -226,14 +226,14 @@ function Diff({ ctx, secrets }: { ctx: Ctx; secrets: boolean }) {
   const restart = async () => { if (!window.confirm('Restart Frames now so it loads the file’s values?')) return; await act(ctx, () => api('/admin/restart', { method: 'POST' }), 'Restarting…'); };
   return (
     <Modal title={rows.length ? `${rows.length} ${rows.length === 1 ? 'setting differs' : 'settings differ'}` : 'The app and the file agree'} sub="Frames is using the app’s values. A restart would load the file’s values instead." width={720} onClose={close(ctx)}
-      foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: '#a8a59f', cursor: 'pointer' }} onClick={() => ctx.toast('The file is /config/frames.env on the server')}>Open the file</span><button className="btn outline" onClick={() => void restart()}>Use the file’s values</button><a className="btn primary" href={`/api/admin/env/export${secrets ? '?secrets=1' : ''}`} download>Export app values to .env</a></>}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', borderRadius: 10, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)', fontSize: 13, marginTop: 12, maxHeight: 380, overflowY: 'auto' }}>
-        {['Setting', 'In the app', 'In frames.env'].map((h) => <span key={h} style={{ padding: '10px 14px', background: '#161615', ...eyebrow }}>{h}</span>)}
+      foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer' }} onClick={() => ctx.toast('The file is /config/frames.env on the server')}>Open the file</span><button className="btn outline" onClick={() => void restart()}>Use the file’s values</button><a className="btn primary" href={`/api/admin/env/export${secrets ? '?secrets=1' : ''}`} download>Export app values to .env</a></>}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', borderRadius: 10, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--chip)', fontSize: 13, marginTop: 12, maxHeight: 380, overflowY: 'auto' }}>
+        {['Setting', 'In the app', 'In frames.env'].map((h) => <span key={h} style={{ padding: '10px 14px', background: 'var(--surface)', ...eyebrow }}>{h}</span>)}
         {rows.map((r) => (
           <div key={r.name} style={{ display: 'contents' }}>
-            <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,.08)', font: `400 11.5px ${mono}`, color: '#a8a59f', wordBreak: 'break-all' }}>{r.name}</div>
-            <span style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,.08)', font: `400 12.5px ${mono}`, color: 'oklch(0.8 0.12 150)', wordBreak: 'break-all' }}>{r.secret ? (r.status === 'env only' ? '–' : '•••• set') : r.status === 'env only' ? '–' : (r.app ?? r.env ?? '')}</span>
-            <span style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,.08)', font: `400 12.5px ${mono}`, color: 'oklch(0.78 0.12 28)', wordBreak: 'break-all' }}>{r.secret ? (r.status === 'app only' ? '–' : '•••• set') : r.status === 'app only' ? 'not set' : (r.env ?? '')}</span>
+            <div style={{ padding: '12px 14px', borderTop: '1px solid var(--hair)', font: `400 11.5px ${mono}`, color: 'var(--text2)', wordBreak: 'break-all' }}>{r.name}</div>
+            <span style={{ padding: '12px 14px', borderTop: '1px solid var(--hair)', font: `400 12.5px ${mono}`, color: 'var(--ok)', wordBreak: 'break-all' }}>{r.secret ? (r.status === 'env only' ? '–' : '•••• set') : r.status === 'env only' ? '–' : (r.app ?? r.env ?? '')}</span>
+            <span style={{ padding: '12px 14px', borderTop: '1px solid var(--hair)', font: `400 12.5px ${mono}`, color: 'var(--warn)', wordBreak: 'break-all' }}>{r.secret ? (r.status === 'app only' ? '–' : '•••• set') : r.status === 'app only' ? 'not set' : (r.env ?? '')}</span>
           </div>
         ))}
       </div>
@@ -251,10 +251,10 @@ function Import({ ctx }: { ctx: Ctx }) {
   return (
     <Modal title="Import a .env file" sub="Shows what will change before applying." width={720} onClose={close(ctx)} foot={<><span className="grow" /><button className="btn outline" onClick={() => file.current?.click()}>Choose a file…</button><button className="btn primary" disabled={!r || changing.length === 0} onClick={() => void apply()}>Apply {changing.length || ''}</button></>}>
       <input ref={file} type="file" accept=".env,text/plain" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) await look(await f.text()); }} />
-      {err && <div role="alert" style={{ color: 'oklch(0.75 0.14 28)', fontSize: 13, marginTop: 10 }}>{err}</div>}
-      {!r && <p style={{ color: '#8f8c86', fontSize: 13.5 }}>Choose a frames.env file. Nothing changes until you press Apply.</p>}
-      {r && <div style={{ marginTop: 12, fontSize: 13 }}><div style={{ color: '#a8a59f', marginBottom: 8 }}>{r.counts.new} new · {r.counts.changes} would change · {r.counts.same} the same{r.problems.length ? ` · ${r.problems.join(' ')}` : ''}</div>
-        <div style={{ background: '#0d0d0d', borderRadius: 10, padding: '2px 14px', maxHeight: 340, overflow: 'auto' }}>{changing.map((x) => <div key={x.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.05)', font: `400 12px ${mono}` }}><span style={{ wordBreak: 'break-all' }}>{x.name}</span><span style={{ color: x.status === 'new' ? 'oklch(0.8 0.12 150)' : 'oklch(0.78 0.12 28)', flex: 'none', marginLeft: 12 }}>{x.status === 'new' ? 'new' : 'changes'}{x.secret ? ' · secret' : ''}</span></div>)}</div></div>}
+      {err && <div role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
+      {!r && <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>Choose a frames.env file. Nothing changes until you press Apply.</p>}
+      {r && <div style={{ marginTop: 12, fontSize: 13 }}><div style={{ color: 'var(--text2)', marginBottom: 8 }}>{r.counts.new} new · {r.counts.changes} would change · {r.counts.same} the same{r.problems.length ? ` · ${r.problems.join(' ')}` : ''}</div>
+        <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '2px 14px', maxHeight: 340, overflow: 'auto' }}>{changing.map((x) => <div key={x.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--hover)', font: `400 12px ${mono}` }}><span style={{ wordBreak: 'break-all' }}>{x.name}</span><span style={{ color: x.status === 'new' ? 'var(--ok)' : 'var(--warn)', flex: 'none', marginLeft: 12 }}>{x.status === 'new' ? 'new' : 'changes'}{x.secret ? ' · secret' : ''}</span></div>)}</div></div>}
     </Modal>
   );
 }

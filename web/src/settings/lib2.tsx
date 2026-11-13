@@ -56,9 +56,9 @@ export function AddAi({ ctx, shared, reload }: { ctx: Ctx; shared: boolean; relo
       {!b && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
           {BRANDS.map(([k, icon, name, note]) => (
-            <div key={k} role="button" tabIndex={0} onClick={() => { setBrand(k); setTest(null); }} onKeyDown={(e) => { if (e.key === 'Enter') setBrand(k); }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)' }}>
-              <span style={{ width: 36, height: 36, borderRadius: 8, display: 'grid', placeItems: 'center', font: "500 12px 'IBM Plex Mono',monospace", background: 'rgba(255,255,255,.08)' }}>{icon}</span>
-              <span><div style={{ fontSize: 14.5 }}>{name}</div><div style={{ fontSize: 12.5, color: '#8f8c86' }}>{note}</div></span>
+            <div key={k} role="button" tabIndex={0} onClick={() => { setBrand(k); setTest(null); }} onKeyDown={(e) => { if (e.key === 'Enter') setBrand(k); }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px var(--chip)' }}>
+              <span style={{ width: 36, height: 36, borderRadius: 8, display: 'grid', placeItems: 'center', font: "500 12px 'IBM Plex Mono',monospace", background: 'var(--hair)' }}>{icon}</span>
+              <span><div style={{ fontSize: 14.5 }}>{name}</div><div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{note}</div></span>
             </div>
           ))}
         </div>
@@ -66,10 +66,10 @@ export function AddAi({ ctx, shared, reload }: { ctx: Ctx; shared: boolean; relo
       {b && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
           {needAddr && <label className="fld">Address<input className="field-in" value={f.addr} placeholder={b[0] === 'ollama' ? 'http://192.168.1.20:11434' : 'https://openrouter.ai/api/v1'} onChange={(e) => { setF({ ...f, addr: e.target.value }); setTest(null); }} /></label>}
-          {needKey && <label className="fld">Key<input className="field-in" type="password" autoComplete="off" value={f.key} placeholder="Paste your key" onChange={(e) => { setF({ ...f, key: e.target.value }); setTest(null); }} /><span style={{ fontSize: 12, color: '#8f8c86' }}>{shared ? 'Stored on this server, never shown again.' : 'Stored on this server, only you can use it, never shown again.'}</span></label>}
+          {needKey && <label className="fld">Key<input className="field-in" type="password" autoComplete="off" value={f.key} placeholder="Paste your key" onChange={(e) => { setF({ ...f, key: e.target.value }); setTest(null); }} /><span style={{ fontSize: 12, color: 'var(--muted)' }}>{shared ? 'Stored on this server, never shown again.' : 'Stored on this server, only you can use it, never shown again.'}</span></label>}
           <label className="fld">Model<input className="field-in" value={f.model} placeholder={b[5] || 'model name'} onChange={(e) => setF({ ...f, model: e.target.value })} /></label>
-          {ext && <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: '#a8a59f' }}><input type="checkbox" checked={f.ack} onChange={(e) => setF({ ...f, ack: e.target.checked })} /><span>I understand previews (up to 1024 px) of photographs are sent to this provider, which may store or use them under its terms.</span></label>}
-          {test && test !== 'busy' && <div role="status" style={{ fontSize: 13, color: test.ok ? 'oklch(0.78 0.12 150)' : 'oklch(0.75 0.14 28)' }}>{test.text}</div>}
+          {ext && <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: 'var(--text2)' }}><input type="checkbox" checked={f.ack} onChange={(e) => setF({ ...f, ack: e.target.checked })} /><span>I understand previews (up to 1024 px) of photographs are sent to this provider, which may store or use them under its terms.</span></label>}
+          {test && test !== 'busy' && <div role="status" style={{ fontSize: 13, color: test.ok ? 'var(--ok)' : 'var(--danger)' }}>{test.text}</div>}
         </div>
       )}
     </Modal>
@@ -87,11 +87,11 @@ function OrderModal({ ctx, job, title, jobs, src, put }: { ctx: Ctx; job: string
         {cfg.order.map((id, i) => {
           const skipped = cfg.skip.includes(id);
           return (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: i ? '1px solid rgba(255,255,255,.08)' : 0, opacity: skipped ? 0.5 : 1 }}>
-              <b style={{ font: "500 11px 'IBM Plex Mono',monospace", width: 18, color: '#8f8c86' }}>{skipped ? '–' : on.indexOf(id) + 1}</b>
+            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: i ? '1px solid var(--hair)' : 0, opacity: skipped ? 0.5 : 1 }}>
+              <b style={{ font: "500 11px 'IBM Plex Mono',monospace", width: 18, color: 'var(--muted)' }}>{skipped ? '–' : on.indexOf(id) + 1}</b>
               <span style={{ flex: 1, textDecoration: skipped ? 'line-through' : 'none' }}>{name(id)}</span>
-              <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} style={{ color: i === 0 ? '#3a3936' : '#a8a59f' }}>▲</button>
-              <button aria-label="Move down" disabled={i === cfg.order.length - 1} onClick={() => move(i, 1)} style={{ color: i === cfg.order.length - 1 ? '#3a3936' : '#a8a59f' }}>▼</button>
+              <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} style={{ color: i === 0 ? 'var(--disabled)' : 'var(--text2)' }}>▲</button>
+              <button aria-label="Move down" disabled={i === cfg.order.length - 1} onClick={() => move(i, 1)} style={{ color: i === cfg.order.length - 1 ? 'var(--disabled)' : 'var(--text2)' }}>▼</button>
               <button className="btn outline" style={{ height: 30, fontSize: 12.5 }} onClick={() => { if (!skipped && on.length <= 1) { ctx.toast('Keep at least one provider, or switch the job off'); return; } put(job, { skip: skipped ? cfg.skip.filter((x) => x !== id) : [...cfg.skip, id] }); }}>{skipped ? 'Use' : 'Skip'}</button>
             </div>
           );

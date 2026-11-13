@@ -102,9 +102,9 @@ function Invite({ ctx, reload }: { ctx: Ctx; reload: () => void }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
         <input className="field-in" autoFocus value={email} placeholder="name@example.com" aria-label="Email address" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ok) void send(); }} />
         <div className="seg" role="group" aria-label="Role" style={{ alignSelf: 'flex-start' }}>{ROLES.map((r) => <button key={r} className={role === r ? 'on' : ''} aria-pressed={role === r} onClick={() => setRole(r)}>{r}</button>)}</div>
-        <div style={{ fontSize: 12.5, color: '#8f8c86' }}>{{ Admin: 'Everything, including these server settings.', Member: 'Their own library, shoots and compositions.', 'Guest only': 'Only sees compositions shared with them. Can rate and suggest.' }[role]}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{{ Admin: 'Everything, including these server settings.', Member: 'Their own library, shoots and compositions.', 'Guest only': 'Only sees compositions shared with them. Can rate and suggest.' }[role]}</div>
         <textarea className="field-in" rows={3} value={note} placeholder="Add a note…" aria-label="A note" onChange={(e) => setNote(e.target.value)} />
-        {err && <div role="alert" style={{ fontSize: 13, color: 'oklch(0.75 0.14 28)' }}>{err}</div>}
+        {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
       </div>
     </Modal>
   );
