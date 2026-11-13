@@ -1,3 +1,4 @@
+import { TwoFactorGate } from './components/TwoFactor';
 import { LayoutPreferencesProvider } from './layoutPreferences';
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -116,6 +117,7 @@ export function App() {
   const { me } = useStore();
   if (AUTH_PATHS.test(loc.pathname)) return <AuthApp />;
   if (loc.pathname.startsWith('/s/')) return <Routes><Route path="/s/:token" element={<SharePage />} /><Route path="*" element={<SharePage />} /></Routes>;
+  if (me?.mfa?.required && !me.mfa.verified) return <TwoFactorGate />;
   if (me?.role === 'guest') return <GuestHome />; // a guest has no library, so none of the app
   return <LayoutPreferencesProvider><Shell /></LayoutPreferencesProvider>;
 }

@@ -1,3 +1,4 @@
+import { markFactor, mfaPolicy, hasTotp } from './mfa.js';
 import { clientOf } from './cloud.js';
 import crypto from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -99,7 +100,7 @@ export function validateProvider(p: Partial<Provider>): string | null {
 
 // ---------- sessions ----------
 /** A sign-in session belongs to one person. Only a hash of the token is stored (in the system database). */
-export function createSession(sys: DB, userId: number): string {
+export function createSession(sys: DB, userId: number, verified = false): string {
   const token = rand(32);
   const now = new Date();
   sys.prepare('DELETE FROM sessions WHERE expires < ?').run(now.toISOString());
@@ -107,10 +108,11 @@ export function createSession(sys: DB, userId: number): string {
     .run(hash(token), userId, now.toISOString(), new Date(now.getTime() + SESSION_DAYS * 86_400_000).toISOString(), now.toISOString());
   sys.prepare('INSERT INTO sign_in_events(id, session_id, user_id, created) VALUES(?, ?, ?, ?)').run(rand(18), hash(token), userId, now.toISOString());
   sys.prepare('DELETE FROM sign_in_events WHERE user_id = ? AND session_id NOT IN (SELECT id FROM sessions) AND id NOT IN (SELECT id FROM sign_in_events WHERE user_id = ? ORDER BY created DESC, rowid DESC LIMIT 1000)').run(userId, userId);
+  if (verified) markFactor(sys, hash(token));
   return token;
 }
 const cookieOf = (req: FastifyRequest, name: string) => {
-  for (const part of String(req.headers.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim()); }
+  for (const part of String(req.headers.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } } }
   return '';
 };
 export const SESSION_COOKIE = 'frames_session';
@@ -306,14 +308,16 @@ export function createAuth(db: DB, cfg: AppCfg) {
   };
   const oauthOn = () => oauthEnabled(db);
   /** Is anything protecting this instance right now? */
-  const protectedNow = () => !cfg.authDisabled && (oauthOn() || !!cfg.authPassword);
+  const protectedNow = () => !cfg.authDisabled && (oauthOn() || !!cfg.authPassword || mfaPolicy(db) !== 'off' || hasTotp(db, OWNER_ID));
 
   /** Who is asking: the owner when nothing protects the instance or the shared password was used, otherwise the person whose session it is. */
   type Verdict = { ok: true; user: User; via: 'open' | 'session' | 'password' } | { ok: false; limited?: boolean };
   const owner = () => getUser(db, OWNER_ID)!;
   function verify(req: FastifyRequest): Verdict {
+    const signedIn = sessionUser(db, req);
+    if (!cfg.authDisabled && signedIn?.provider === 'emergency') return { ok: true, user: signedIn, via: 'session' };
     if (!protectedNow()) return { ok: true, user: owner(), via: 'open' };
-    if (oauthOn()) { const u = sessionUser(db, req); if (u) return { ok: true, user: u, via: 'session' }; }
+    if ((oauthOn() || mfaPolicy(db) !== 'off' || hasTotp(db, OWNER_ID)) && signedIn) return { ok: true, user: signedIn, via: 'session' };
     const pw = checkPassword(req);
     if (pw === 'ok') return { ok: true, user: owner(), via: 'password' };
     return pw === 'limited' ? { ok: false, limited: true } : { ok: false };
@@ -359,5 +363,5 @@ export function createAuth(db: DB, cfg: AppCfg) {
 export type Auth = ReturnType<typeof createAuth>;
 
 /** Addresses served without signing in: the sign-in pages themselves. */
-export const isAuthPath = (url: string) => /^\/auth\/(login\/[a-z0-9-]{1,30}|callback\/[a-z0-9-]{1,30}|signin|password|logout)(\?.*)?$/.test(url);
+export const isAuthPath = (url: string) => /^\/auth\/(login\/[a-z0-9-]{1,30}|callback\/[a-z0-9-]{1,30}|signin|password|logout|emergency)(\?.*)?$/.test(url);
 export { getSecret, setSecret };

@@ -1,3 +1,4 @@
+import { serverOnlyLog } from './logger.js';
 import crypto from 'node:crypto';
 import type { Ctx } from './ctx.js';
 import { eraseUserData } from './routes/admin.js';
@@ -31,7 +32,7 @@ export function removeEmergency(x: Ctx, userId?: number) {
   if (live && (userId === undefined || live.userId === userId)) { clearTimeout(live.timer); live = null; }
 }
 
-export function startEmergency(x: Ctx, log: (line: string) => void = console.log) {
+export function startEmergency(x: Ctx, log: (line: string) => void = serverOnlyLog) {
   removeEmergency(x);
   const username = `emergency-${word(4)}`;
   const password = `${word(5)}-${word(5)}-${word(5)}-${word(5)}`;

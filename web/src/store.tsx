@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { MfaStatus } from './components/TwoFactor';
 import { api } from './api';
 
 export type Settings = {
@@ -9,7 +10,7 @@ export type Settings = {
 };
 export type Summary = { due: number; resumable: boolean; early: number; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
 
-export type Me = { mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member' | 'guest'; canSignOut: boolean; displayName?: string; hasAvatar?: boolean; cloudOnly?: boolean; storeOriginalQuality?: boolean; signups: boolean; envConfig: boolean };
+export type Me = { mfa?: MfaStatus; mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member' | 'guest'; canSignOut: boolean; displayName?: string; hasAvatar?: boolean; cloudOnly?: boolean; storeOriginalQuality?: boolean; signups: boolean; envConfig: boolean };
 
 type Ctx = {
   me: Me | null;
@@ -38,6 +39,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     api<{ settings: Settings }>('/settings').then((r) => setS(r.settings)).catch(() => {});
     refreshSummary();
   }, [refreshSummary]);
+  useEffect(() => { const refresh = () => refreshMe(); window.addEventListener('frames:mfa-required', refresh); return () => window.removeEventListener('frames:mfa-required', refresh); }, [refreshMe]);
   const setSettings = async (p: Partial<Settings>) => {
     setS(await api<Settings>('/settings', { method: 'PUT', body: p }));
     refreshSummary();

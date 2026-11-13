@@ -32,7 +32,7 @@ export function envConfigLoaded(env: Record<string, string | undefined> = proces
 /** Settings that are about what is happening now, not about how Frames is set up. */
 const VOLATILE = /^(lastScan(:.*)?|reviewSession|legacyMigrated|tunnelEnvState|accessState|releasesCache|smtpHealth|mailSent|welcomed|gettingStarted|gearMigrated|batchesDone|aiUsage|shareKey|backupCloudStatus|background:\d+)$/;
 const KEY = /^[\w:.-]{1,200}$/;
-export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k);
+export const isConfigKey = (k: string) => KEY.test(k) && !VOLATILE.test(k) && !k.startsWith('secret:totp:');
 
 /**
  * Some settings hold what someone chose next to what Frames recorded about it (when the tunnel was last set up, the last problem, when a

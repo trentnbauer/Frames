@@ -8,7 +8,9 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { aiConfig, getSecret } from './ai.js';
 import { serveDerivative } from './imageServe.js';
-import { createAuth, isAuthPath, sessionUser } from './auth.js';
+import { mfaRequired, factorVerified } from './mfa.js';
+import { registerMfa } from './routes/mfa.js';
+import { createAuth, isAuthPath, sessionUser, sessionIdOf } from './auth.js';
 import { active as turnstileOn, anyActive, isHuman } from './turnstile.js';
 import { applyEnvConfig } from './envConfig.js';
 import { createTenants, migrateLegacy, tenantProxy, type Tenant } from './tenants.js';
@@ -119,6 +121,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       // A guest has no library to work in: they sign in to open what was shared with them, and nothing else.
       if (v.user.role === 'guest' && req.url.startsWith('/api/') && !GUEST_OK.test(req.url.split('?')[0])) return rep.code(403).send({ error: 'A guest account can only open what has been shared with it' });
       if (ADMIN_ONLY.test(req.url) && v.user.role !== 'admin') return rep.code(403).send({ error: 'Only an administrator can do that' });
+      if (!baseCfg.authDisabled && mfaRequired(sys, v.user) && (v.via !== 'session' || !factorVerified(sys, sessionIdOf(req)))) {
+        const path = req.url.split('?')[0];
+        const setup = /^\/api\/me\/mfa(?:\/|$)/.test(path) || path === '/api/me' || /^\/api\/me\/passkeys(?:\/(options|verify))?$/.test(path);
+        if ((req.url.startsWith('/api/') && !setup) || path.startsWith('/auth/link/')) return rep.code(403).send({ error: 'Verify two-factor authentication to continue.', mfaRequired: true });
+        if (setup && v.via !== 'session') return rep.code(401).send({ error: 'Sign in with a personal account.', signIn: '/signin' });
+      }
       r.tenant = tenants.get(v.user.id);
       if (!r.tenant) return rep.code(403).send({ error: 'This account has no library' });
     } else if (isPortfolioPath(req.url)) {
@@ -595,6 +603,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerShare(app, ctx);
   registerPortfolio(app, ctx, (req) => { const v = auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
   registerAuth(app, ctx, auth);
+  registerMfa(app, ctx, auth);
   registerProfile(app, ctx);
   registerNotifications(app, ctx);
   registerHome(app, ctx);

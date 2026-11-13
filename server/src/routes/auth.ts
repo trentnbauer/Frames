@@ -1,3 +1,4 @@
+import { factorVerified, hasFactor, hasTotp, markFactor, mfaPolicy, mfaStatus, mfaRequired, policyApplies, verifiedPasskeys } from '../mfa.js';
 import type { FastifyInstance } from 'fastify';
 import { envConfigLoaded } from '../envConfig.js';
 import { sessionIdOf, sessionUser, cleanAllow, createSession, endAllSessions, endSession, getSecret, isAllowed, loadAuth, saveAuth, sessionCookie, setSecret, validateProvider, type Auth, type AuthConfig, type Provider, handOver } from '../auth.js';
@@ -159,7 +160,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const t = turnstileOn(db, 'signin');
     return {
       providers: conf.providers.filter((p) => !p.off).map((p) => ({ id: p.id, name: p.name, type: p.type })),
-      email: emailOn(), password: !!cfg.authPassword, passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
+      email: emailOn(), password: !!cfg.authPassword && mfaPolicy(db) === 'off' && !hasTotp(db, 1), passkey: true, turnstile: t ? { siteKey: t.siteKey } : null,
       signups: signupsOn(db, cfg.allowSignups !== false), serverName: (() => { try { return new URL(auth.baseUrl(req)).host; } catch { return 'Frames'; } })(),
       signedIn: !!sessionUser(db, req),
     };
@@ -215,8 +216,20 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   // ---------- the emergency login: made at start-up, see emergency.ts ----------
   app.get('/auth/emergency', async (_req, rep) => {
     if (!emergencyActive()) return rep.code(404).type('text/html').send(auth.messagePage('No emergency login', 'There is none right now. One is made, and written to the server log, each time the server starts, and lasts five minutes.'));
-    return rep.type('text/html').header('Cache-Control', 'no-store').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Emergency sign-in · Frames</title><style>body{margin:0;background:#0d0d0d;color:#d8d5cf;font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}main{width:360px;max-width:90vw}h1{font:400 36px/1.1 Georgia,serif;color:#efede8;margin:0 0 8px}input,button{width:100%;box-sizing:border-box;height:46px;border-radius:999px;border:0;padding:0 18px;font:inherit;margin-bottom:10px}input{background:#161615;color:#efede8;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}button{background:#efede8;color:#0d0d0d;font-weight:500;cursor:pointer}p{color:#8f8c86;font-size:14px}#e{color:#f0877f}</style></head><body><main><h1>Emergency sign-in</h1><p>The username and password are in the server log. They work once, for five minutes.</p><form id="f"><input name="u" placeholder="Username" autocomplete="off" autofocus required><input name="p" type="password" placeholder="Password" autocomplete="off" required><p id="e" role="alert"></p><button>Sign in</button></form></main><script>f.onsubmit=async function(ev){ev.preventDefault();var r=await fetch('/api/public/auth/emergency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:f.u.value,password:f.p.value})});var j=await r.json().catch(function(){return{}});if(r.ok)location.assign('/');else e.textContent=j.error||'That did not work.'}</script></body></html>`);
+    return rep.type('text/html').header('Cache-Control', 'no-store').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Emergency sign-in · Frames</title><style>body{margin:0;background:#0d0d0d;color:#d8d5cf;font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}main{width:360px;max-width:90vw}h1{font:400 36px/1.1 Georgia,serif;color:#efede8;margin:0 0 8px}input,button{width:100%;box-sizing:border-box;height:46px;border-radius:999px;border:0;padding:0 18px;font:inherit;margin-bottom:10px}input{background:#161615;color:#efede8;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}button{background:#efede8;color:#0d0d0d;font-weight:500;cursor:pointer}p{color:#8f8c86;font-size:14px}#e{color:#f0877f}</style></head><body><main><h1>Emergency sign-in</h1><p>The username and password are in the server log. They work once, for five minutes.</p><form id="f" method="post" action="/api/public/auth/emergency"><input name="u" placeholder="Username" autocomplete="off" autofocus required><input name="p" type="password" placeholder="Password" autocomplete="off" required><p id="e" role="alert"></p><button>Sign in</button></form></main><script src="/api/public/auth/emergency/script" defer></script></body></html>`);
   });
+  // A same-origin script works with the app CSP; inline JavaScript would be blocked on the recovery page.
+  app.get('/api/public/auth/emergency/script', async (_req, rep) => rep.type('application/javascript').header('Cache-Control', 'no-store').send(`
+    const form = document.getElementById('f');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault(); const error = document.getElementById('e');
+      try {
+        const response = await fetch('/api/public/auth/emergency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: form.elements.namedItem('u').value, password: form.elements.namedItem('p').value }) });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok) location.assign('/'); else error.textContent = result.error || 'That did not work.';
+      } catch { error.textContent = 'Could not reach the server. Please try again.'; }
+    });
+  `));
   app.post('/api/public/auth/emergency', async (req, rep) => {
     if (sendLimited(`em:${req.ip}`, 10, 600_000)) return rep.code(429).send({ error: 'Too many tries. Wait a few minutes.' });
     const b = (req.body ?? {}) as Row;
@@ -237,10 +250,10 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   app.post('/api/public/auth/passkey/verify', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     if (sendLimited(`pkv:${req.ip}`, 30, 600_000)) return rep.code(429).send({ error: 'Too many tries. Wait a few minutes.' });
-    const uid = await verifyAuthentication(db, where(req), b.cid, b.response);
-    const user = uid ? getUser(db, uid) : null;
+    const verified = await verifyAuthentication(db, where(req), b.cid, b.response);
+    const user = verified ? getUser(db, verified.userId) : null;
     if (!user || user.disabled) return rep.code(400).send({ error: 'That passkey did not work. Try another way to sign in.' });
-    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id), auth.isSecure(req))));
+    rep.header('Set-Cookie', withDevice(req, user, sessionCookie(createSession(db, user.id, verified!.userVerified), auth.isSecure(req))));
     return { ok: true, returnTo: safeReturn(b.returnTo) };
   });
   app.get('/api/me/security', async (req, rep) => {
@@ -267,11 +280,14 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
   });
 
   app.get('/api/me/passkeys', async (req, rep) => { const u = sessionUserOf(req); return u ? { passkeys: listPasskeys(db, u.id) } : rep.code(401).send({ error: 'Sign in first.' }); });
-  app.post('/api/me/passkeys/options', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return registrationOptions(db, where(req), u); });
+  app.post('/api/me/passkeys/options', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); if (u.provider === EMERGENCY_PROVIDER) return rep.code(403).send({ error: 'Temporary emergency accounts do not enrol security factors.' }); if (mfaRequired(db, u) && hasFactor(db, u.id) && !factorVerified(db, sessionIdOf(req))) return rep.code(403).send({ error: 'Verify your existing factor first.' }); return registrationOptions(db, where(req), u); });
   app.post('/api/me/passkeys/verify', async (req, rep) => {
     const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' });
     const b = (req.body ?? {}) as Row;
+    if (u.provider === EMERGENCY_PROVIDER) return rep.code(403).send({ error: 'Temporary emergency accounts do not enrol security factors.' });
+    if (mfaRequired(db, u) && hasFactor(db, u.id) && !factorVerified(db, sessionIdOf(req))) return rep.code(403).send({ error: 'Verify your existing factor first.' });
     const r = await verifyRegistration(db, where(req), u.id, b.cid, b.response, String(b.name ?? ''));
+    if (r.ok) markFactor(db, sessionIdOf(req)!);
     return r.ok ? { ok: true, passkeys: listPasskeys(db, u.id) } : rep.code(400).send({ error: r.error });
   });
   app.patch('/api/me/passkeys/:id', async (req, rep) => {
@@ -279,7 +295,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (!renamePasskey(db, u.id, String((req.params as Row).id), String(((req.body ?? {}) as Row).name ?? ''))) return rep.code(400).send({ error: 'Give the passkey a name.' });
     return { ok: true, passkeys: listPasskeys(db, u.id) };
   });
-  app.delete('/api/me/passkeys/:id', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); return { removed: removePasskey(db, u.id, String((req.params as Row).id)) }; });
+  app.delete('/api/me/passkeys/:id', async (req, rep) => { const u = sessionUserOf(req); if (!u) return rep.code(401).send({ error: 'Sign in first.' }); if (!factorVerified(db, sessionIdOf(req))) return rep.code(403).send({ error: 'Verify a factor before removing passkeys.' }); if (policyApplies(db, u) && verifiedPasskeys(db, u.id) <= 1 && !hasTotp(db, u.id) && db.prepare('SELECT 1 FROM mfa_passkeys WHERE passkey_id = ?').get(String((req.params as Row).id))) return rep.code(403).send({ error: 'Add another factor before removing your last passkey.' }); return { removed: removePasskey(db, u.id, String((req.params as Row).id)) }; });
 
   // Every way this person can sign in, the ones the administrator turned on: for Settings, Profile.
   app.get('/api/me/sign-in-methods', async (req, rep) => {
@@ -361,6 +377,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const u = (req as any).authUser as User | null;
     const signedIn = (req as any).authVia === 'session';
     return {
+      mfa: u ? { ...mfaStatus(db, u, sessionIdOf(req)), required: !cfg.authDisabled && mfaRequired(db, u) } : null,
       mode: !auth.protectedNow() ? 'none' : auth.oauthOn() ? 'oauth' : 'password',
       user: u && signedIn ? { name: u.name, email: u.email, provider: u.provider, folder: u.folder } : null,
       displayName: displayNameOf(x.db), hasAvatar: fs.existsSync(avatarPath(x.cfg.dataDir)),
@@ -427,6 +444,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       if (b.email && !smtpHealthy(db)) return bad('Set up Email first (Settings, Email) and pass its check.');
       next.email = b.email;
     }
+
+    if (!next.enabled && (mfaPolicy(db) !== 'off' || hasTotp(db, 1))) return bad('Turn off two-factor enforcement and the owner authenticator before disabling personal sign-in.');
 
     // --- the lock-out protections ---
     if (changedProviders && !(cur.enabled && onlyAdded)) { // adding one while sign-in is on is allowed: nothing that already works is touched

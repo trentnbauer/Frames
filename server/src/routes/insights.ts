@@ -96,27 +96,60 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   };
   app.get('/api/recommendations', async () => recommendations());
 
-  /** Groups of well-liked photographs from at least two photoshoots that belong together by look and subject. */
+  /** Ideas use explicit subject, tag, colour and location groups as well as visual similarity. */
   function togetherSets(photos: Row[], f: ReturnType<typeof loadFeatures>, feats: Map<number, string[]>, prof: Map<string, number>, rv: Map<number, Rv[]>, dto: (p: Row) => Record<string, any>) {
-    const pool = photos.filter((p) => f.has(p.id) && (!rv.get(p.id) || avgOf(rv.get(p.id)!.map((r) => r.rating)) >= 3.5)).sort((a, b) => scoreOf(prof, feats.get(b.id)) - scoreOf(prof, feats.get(a.id))).slice(0, 400);
+    const rejected = new Set(all("SELECT photo_id FROM feedback WHERE kind = 'together' AND verdict = 'reject'").map((r) => r.photo_id as number));
+    const pool = photos.filter((p) => f.has(p.id) && !rejected.has(p.id) && (!rv.get(p.id) || avgOf(rv.get(p.id)!.map((r) => r.rating)) >= 3.5))
+      .sort((a, b) => scoreOf(prof, feats.get(b.id)) - scoreOf(prof, feats.get(a.id)) || a.id - b.id).slice(0, 400);
+    type Idea = { kind: string; label: string; reason: string; members: Row[] };
+    const grouped = new Map<string, Idea>();
+    const add = (kind: string, label: string, reason: string, photo: Row) => {
+      const key = `${kind}:${label.trim().toLowerCase()}`;
+      const group = grouped.get(key) ?? { kind, label, reason, members: [] };
+      if (!group.members.some((p) => p.id === photo.id)) group.members.push(photo);
+      grouped.set(key, group);
+    };
+    for (const p of pool) {
+      for (const feature of new Set(feats.get(p.id) ?? [])) {
+        const split = feature.indexOf(':'), kind = feature.slice(0, split), label = feature.slice(split + 1).trim();
+        if (label && ['tag', 'subject', 'colour'].includes(kind)) add(kind, label, kind === 'colour' ? `Shared colour: ${label}.` : `Shared ${kind}: ${label}.`, p);
+      }
+      const place = typeof p.place === 'string' ? p.place.trim() : '';
+      if (place) add('location', place, `Photographed at ${place}.`, p);
+      else if (typeof p.lat === 'number' && typeof p.lon === 'number' && Number.isFinite(p.lat) && Number.isFinite(p.lon)) {
+        // A small geographic neighbourhood, including photos without a named place (roughly 2 km cells).
+        const lat = Math.round(p.lat * 50) / 50, lon = Math.round(p.lon * 50) / 50;
+        add('location', `${lat.toFixed(2)}, ${lon.toFixed(2)}`, 'Photographed in the same area (roughly 2 km).', p);
+      }
+    }
     const parent = new Map(pool.map((p) => [p.id as number, p.id as number]));
     const find = (a: number): number => { let r = a; while (parent.get(r) !== r) r = parent.get(r)!; return r; };
     for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) {
       if (similarity(f.get(pool[i].id)!, f.get(pool[j].id)!) >= 0.78) parent.set(find(pool[i].id), find(pool[j].id));
     }
-    const groups = new Map<number, Row[]>();
-    for (const p of pool) { const r = find(p.id); groups.set(r, [...(groups.get(r) ?? []), p]); }
-    const rejected = new Set(all("SELECT photo_id FROM feedback WHERE kind = 'together' AND verdict = 'reject'").map((r) => r.photo_id as number));
-    return [...groups.values()].filter((g) => g.length >= 3 && new Set(g.map((p) => p.shoot_id)).size >= 2 && !g.some((p) => rejected.has(p.id))).slice(0, 6).map((g) => {
-      const counts = new Map<string, number>();
-      for (const p of g) for (const t of feats.get(p.id) ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
-      const shared = [...counts].filter(([, n]) => n >= Math.ceil(g.length / 2)).sort((a, b) => b[1] - a[1]).map(([t]) => t.split(':')[1]);
-      const ai = g.some((p) => f.get(p.id)?.embedding);
-      return {
-        name: shared.length ? shared.slice(0, 2).map((s) => s[0].toUpperCase() + s.slice(1)).join(' and ') : 'Untitled set',
-        reason: `${shared.length ? `Shared: ${shared.slice(0, 3).join(', ')}. ` : ''}From ${new Set(g.map((p) => p.shoot_id)).size} photoshoots.`,
-        aiAssisted: ai, photoIds: g.slice(0, 12).map((p) => p.id as number), photos: g.slice(0, 6).map(dto),
-      };
+    const visual = new Map<number, Row[]>();
+    for (const p of pool) { const root = find(p.id); visual.set(root, [...(visual.get(root) ?? []), p]); }
+    for (const members of visual.values()) grouped.set(`visual:${members[0].id}`, { kind: 'visual', label: 'A similar look', reason: 'Similar colours, light and composition.', members });
+    // Rotate through the reasons so a heavily tagged library still gets colour and location ideas.
+    const queues = ['subject', 'location', 'colour', 'tag', 'visual'].map((kind) => [...grouped.values()].filter((g) => g.kind === kind && g.members.length >= 3).sort((a, b) => b.members.length - a.members.length));
+    const chosen: Idea[] = [];
+    while (chosen.length < 6 && queues.some((q) => q.length)) for (const queue of queues) {
+      const idea = queue.shift(); if (!idea || chosen.length >= 6) continue;
+      const ids = new Set(idea.members.slice(0, 12).map((p) => p.id));
+      if (chosen.some((old) => { const other = new Set(old.members.slice(0, 12).map((p) => p.id)); const common = [...ids].filter((id) => other.has(id)).length; return common / (ids.size + other.size - common) >= .8; })) continue;
+      chosen.push(idea);
+    }
+    const aiTags = new Set(all("SELECT photo_id, kind, name FROM tags WHERE accepted = 1 AND source = 'ai'").map((tag) => `${tag.photo_id}:${tag.kind}:${String(tag.name).toLowerCase()}`));
+    const names = new Map<string, number>();
+    return chosen.map((g) => {
+      const shoots = new Set(g.members.map((p) => p.shoot_id)).size;
+      const label = g.label[0].toUpperCase() + g.label.slice(1);
+      const baseName = g.kind === 'colour' ? `${label} tones` : label;
+      const number = (names.get(baseName) ?? 0) + 1; names.set(baseName, number);
+      return { name: number === 1 ? baseName : `${baseName} ${number}`,
+        reason: `${g.reason} From ${shoots} ${shoots === 1 ? 'photoshoot' : 'photoshoots'}.`,
+        aiAssisted: (g.kind === 'visual' && g.members.some((p) => f.get(p.id)?.embedding)) || (['tag', 'subject'].includes(g.kind) && g.members.some((p) => aiTags.has(`${p.id}:${g.kind}:${g.label.toLowerCase()}`))),
+        photoIds: g.members.slice(0, 12).map((p) => p.id as number), photos: g.members.slice(0, 6).map(dto) };
     });
   }
   // Collection suggestions share the engine: sets of photographs that belong together.

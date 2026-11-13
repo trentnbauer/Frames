@@ -19,6 +19,7 @@ services:
     environment:
       BACKUP_DIR: /backups
       TURNSTILE_DISABLE: ${TURNSTILE_DISABLE:-}
+    # AUTH_DISABLE in the env file also bypasses 2FA for operator recovery.
     # Present once you have exported your settings; absent on the first run. It wins over what the app has saved.
     env_file:
       - path: frames.env

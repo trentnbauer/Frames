@@ -37,6 +37,9 @@ export function scrubCopy(file: string, system = false) {
   try {
     c.prepare("DELETE FROM settings WHERE key LIKE 'secret:%'").run();
     c.prepare('DELETE FROM sessions').run();
+    if (system) for (const table of ['mfa_sessions', 'mfa_recovery', 'mfa_totp']) {
+      if (c.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)) c.exec(`DELETE FROM ${table}`);
+    }
     // The server's own settings (sign-in providers, the tunnel, shared AIs, the privacy page) are env data, not user data: they are not in a backup.
     if (system) c.prepare('DELETE FROM settings').run();
     c.exec('VACUUM');

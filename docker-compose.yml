@@ -16,6 +16,7 @@ services:
       # Public host name(s), only needed behind a reverse proxy that rewrites Host.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       # true switches ALL sign-in inside Frames off: for one person behind something else that protects it, or to get back in (see README, Security).
+      # AUTH_DISABLE also bypasses 2FA; emergency recovery credentials stay in Docker/server console logs.
       AUTH_DISABLE: ${AUTH_DISABLE:-false}
       # A temporary one-use administrator written to the log at each start, for when nobody can sign in (see README, Security).
       EMERGENCY_LOGIN: ${EMERGENCY_LOGIN:-true}

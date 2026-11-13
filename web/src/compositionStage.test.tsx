@@ -56,3 +56,10 @@ it('keeps the list title, actions and workflow controls in one sticky header', (
   expect(html).toContain('class="compositions-list-header"');
   for (const label of ['Compositions', 'New composition', 'Progress', 'Review', 'Done', 'Find a composition']) expect(html).toContain(label);
 });
+
+it('marks composition ideas only when their data is AI-assisted', () => {
+  for (const aiAssisted of [false, true]) {
+    const html = renderToStaticMarkup(<ProtoCompositions prog={[]} review={[]} ready={[]} sortLabel={() => 'Last edited'} sugg={{ name: 'Blue tones', why: 'Shared colour: blue.', thumbs: [], aiAssisted }} />);
+    expect(html.includes('aria-label="AI-assisted idea"')).toBe(aiAssisted);
+  }
+});

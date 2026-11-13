@@ -5,7 +5,10 @@ import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setSetting } from './db.js';
 import { applyPendingRestore, archivesIn, readTar, stageRestore, writeServerArchive } from './serverBackup.js';
-import { openSystemDb } from './users.js';
+import { createSession } from './auth.js';
+import { getSecret } from './ai.js';
+import { beginTotp, confirmTotp, hasTotp, setMfaPolicy, totpCode, verifyTotp } from './mfa.js';
+import { getUser, openSystemDb } from './users.js';
 import { cleanup, makeEnv, type Env } from './testutil.js';
 
 /** The whole-server backup leaves out the server's settings, and a restore is checked, put aside, and applied at the next start. */
@@ -100,4 +103,23 @@ describe('restore in Settings', () => {
     await call('DELETE', '/api/admin/restore');
     expect((await call('GET', '/api/admin/restore')).body.pending).toBeNull();
   });
+});
+
+it('preserves only live factors for the same identity and never resurrects sessions or used recovery codes', () => {
+  const data = path.join(scratch, 'factor-restore');
+  let sys = openSystemDb(data);
+  createSession(sys, 1); const user = getUser(sys, 1)!;
+  const sessionId = (sys.prepare('SELECT id FROM sessions').get() as { id: string }).id;
+  const setup = beginTotp(sys, user, sessionId);
+  const codes = confirmTotp(sys, 1, sessionId, totpCode(setup.secret))!;
+  expect(verifyTotp(sys, 1, codes[0])).toBe(true); setMfaPolicy(sys, 'admins'); sys.close();
+  stageRestore(archive, data); expect(applyPendingRestore(data)).not.toBeNull();
+  sys = openSystemDb(data);
+  expect(hasTotp(sys, 1)).toBe(true); expect(getSecret(sys, 'totp:1')).toBe(setup.secret);
+  expect((sys.prepare('SELECT COUNT(*) n FROM mfa_recovery').get() as { n: number }).n).toBe(7);
+  expect(verifyTotp(sys, 1, codes[0])).toBe(false);
+  expect((sys.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n).toBe(0);
+  sys.prepare("UPDATE users SET provider = 'different', sub = 'different' WHERE id = 1").run(); sys.close();
+  stageRestore(archive, data); expect(applyPendingRestore(data)).not.toBeNull();
+  sys = openSystemDb(data); expect(hasTotp(sys, 1)).toBe(false); expect(getSecret(sys, 'totp:1')).toBe(''); sys.close();
 });
