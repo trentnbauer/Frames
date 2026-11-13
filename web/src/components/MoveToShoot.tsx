@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, useApi } from '../api';
 import type { Shoot } from '../data';
 
-/** Move these photographs into a photoshoot that exists, or into a new one made on the spot. Nothing is deleted: only which shoot they belong to changes. */
+/** Move these photographs into a photoshoot that exists, or into a new one made on the spot. Photographs are kept; a source shoot emptied by the move is removed automatically. */
 export function MoveToShoot({ ids, except, onDone, up = false }: { ids: number[]; except?: number; onDone: (msg: string) => void; up?: boolean }) {
   const shoots = useApi<Shoot[]>('/shoots');
   const [open, setOpen] = useState(false);

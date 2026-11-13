@@ -72,7 +72,9 @@ describe('moving photographs between shoots, and syncing again', () => {
     await A.post(`/api/shoots/${shoot}/move`, { photoIds: [c] });
     expect(placeOf(c)).toBe('Rottnest');
     expect(tagsOf(c).map((t) => t.name)).toEqual(['coast', 'harbour', 'sea wall']);
-    await A.post(`/api/shoots/${other}/move`, { photoIds: [c] });
+    expect((await A.get(`/api/shoots/${other}`)).status).toBe(404); // moving its last photo removed the old shoot
+    other = (await A.post('/api/shoots', { name: 'Elsewhere again' })).body.id;
+    expect((await A.post(`/api/shoots/${other}/move`, { photoIds: [c] })).status).toBe(200);
     expect(placeOf(c)).toBe('');
     expect(tagsOf(c)).toEqual([]);
   });

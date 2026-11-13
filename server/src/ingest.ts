@@ -9,7 +9,7 @@ import { applyGear } from './gear.js';
 import exifr from 'exifr';
 import sharp from 'sharp';
 import { analyseLocal, dHash } from './analysis.js';
-import type { DB } from './db.js';
+import { pruneEmptyShoots, type DB } from './db.js';
 import { rawInfo, rawToJpeg, type RawInfo } from './raw.js';
 import { findSidecar, readSidecar, type XmpData } from './xmp.js';
 
@@ -289,6 +289,8 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
         }
         const ext = path.extname(f).toLowerCase();
         const st = fs.statSync(f);
+        // The user may have moved/deleted every earlier import while metadata was being read.
+        if (!db.prepare('SELECT 1 FROM shoots WHERE id = ?').get(result.shootId)) result.shootId = Number(db.prepare('INSERT INTO shoots(name, source, imported_at) VALUES(?, ?, ?)').run(name, sourceLabel, now.toISOString()).lastInsertRowid);
         const id = Number(insert.run({
           shoot_id: result.shootId, path: f, file: path.basename(f), hash, title: titleFromFile(f),
           file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(), next_review_at: addDays(now, intervalDays(loadSettings(db).intervals[0])).toISOString(),
@@ -332,6 +334,8 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
       tick();
     }
   }
+  // A scan with only duplicates, removed files or failed reads must not leave an empty grouping.
+  if (result.shootId !== null && pruneEmptyShoots(db, result.shootId)) { result.shootId = null; result.shootName = null; }
   return result;
 }
 

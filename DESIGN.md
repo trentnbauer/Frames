@@ -33,7 +33,7 @@ The shared app header uses the Home screen's inset and stays in the same positio
 
 ## Notifications and gear suggestions
 
-Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Keep Found in your photos, including its photo-count labels, above the owned gear blocks. Blacklisted gear uses editable tags at the bottom, below the owned gear blocks, and blacklisting must immediately remove a matching Found in your photos suggestion.
+Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Keep Found in your photos, including its photo-count labels, above the owned gear blocks. Blacklisted gear uses editable tags at the bottom, below the owned gear blocks, and blacklisting must immediately remove a matching Found in your photos suggestion and clear its camera/lens values and automatic gear tags from existing photos. Future imports and metadata edits must respect the blacklist. Original files remain unchanged.
 
 ## Account security
 

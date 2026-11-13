@@ -1,3 +1,4 @@
+import { clearBlacklistedPhotoGear } from './gearBlacklist.js';
 import { getSetting, type DB } from './db.js';
 
 /**
@@ -63,6 +64,7 @@ export const lensKind = (mm: number | null | undefined): string => (!mm || mm <=
  * unless its detail changes. Run whenever the details can have changed.
  */
 export function syncGearTags(db: DB, photoId: number) {
+  clearBlacklistedPhotoGear(db, photoId);
   const p = db.prepare('SELECT camera, lens, medium, film, focal_mm, focal35, gear_sig FROM photos WHERE id = ?').get(photoId) as { camera: string; lens: string; medium: string; film: string; focal_mm: number | null; focal35: number | null; gear_sig: string } | undefined;
   if (!p) return;
   const tag = (s: string) => s.trim().toLowerCase().slice(0, 60);
@@ -73,5 +75,14 @@ export function syncGearTags(db: DB, photoId: number) {
     for (const old of was.filter((n) => !want.includes(n))) db.prepare("DELETE FROM tags WHERE photo_id = ? AND name = ? AND source = 'gear'").run(photoId, old);
     for (const n of want.filter((n) => !was.includes(n))) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'gear', 1, 'tag')").run(photoId, n);
     db.prepare('UPDATE photos SET gear_sig = ? WHERE id = ?').run(JSON.stringify(want), photoId);
+  })();
+}
+
+/** Apply new or pre-existing blacklist entries to the entire library, including archived and missing files. */
+export function purgeBlacklistedGear(db: DB) {
+  return db.transaction(() => {
+    const ids = clearBlacklistedPhotoGear(db);
+    for (const id of ids) syncGearTags(db, id);
+    return ids.length;
   })();
 }

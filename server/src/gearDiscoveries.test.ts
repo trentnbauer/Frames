@@ -1,7 +1,10 @@
+import { buildApp } from './app.js';
+import { openDb } from './db.js';
+import { gearKey } from './gearDiscoveries.js';
 import fs from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
-import { readInto } from './ingest.js';
+import { readInto, reindex } from './ingest.js';
 import { notify } from './notifications.js';
 
 let env: Env, a: ReturnType<typeof api>, photo: number, file: string;
@@ -24,7 +27,7 @@ describe('gear discovery notifications', () => {
     metadata('ATLAS BODY-1', 'ATLAS 50 MM');
     expect((await found()).map((n: any) => n.id).sort()).toEqual(first.map((n: any) => n.id).sort());
   });
-  it('adds only the chosen piece and blacklists the other, preserving photo metadata and the original', async () => {
+  it('adds only the chosen piece and blacklists the other, clearing its photo metadata and preserving the original', async () => {
     const original = fs.readFileSync(file); metadata();
     const rows = await found(), camera = rows.find((n: any) => n.gear.type === 'camera'), lens = rows.find((n: any) => n.gear.type === 'lens');
     expect((await a.post(`/api/notifications/${camera.id}/gear`, { action: 'add' })).status).toBe(200);
@@ -35,7 +38,7 @@ describe('gear discovery notifications', () => {
     expect(gear.found).toEqual([]); expect(gear.blacklisted).toMatchObject([{ name: 'Atlas 50mm' }]);
     expect(await found()).toEqual([]);
     metadata(); expect(await found()).toEqual([]);
-    expect((await a.get(`/api/photos/${photo}`)).body.lens).toBe('Atlas 50mm');
+    expect((await a.get(`/api/photos/${photo}`)).body.lens).toBe('');
     expect(fs.readFileSync(file).equals(original)).toBe(true);
   });
   it('dismisses individual notifications of any kind without repeating discoveries', async () => {
@@ -57,11 +60,14 @@ describe('gear discovery notifications', () => {
     expect((await a.get('/api/gear/items')).body.blacklisted).toHaveLength(1);
     expect((await a.get('/api/gear/items')).body.found.map((g: any) => g.name)).toEqual(['Atlas 50mm']);
     expect((await a.del(`/api/gear/blacklist/${added.body.items[0].id}`)).status).toBe(200);
-    expect((await a.get('/api/gear/items')).body.found).toHaveLength(2);
+    expect((await a.get('/api/gear/items')).body.found).toHaveLength(1); // unblocking does not restore metadata
+    metadata(); expect((await a.get('/api/gear/items')).body.found).toHaveLength(2);
     const scanner = (await a.post('/api/gear/blacklist', { name: 'Scanner 42' })).body.items[0];
     await a.del('/api/notifications'); metadata('Scanner 42', '');
     expect((await a.get('/api/gear/items')).body.found).toEqual([]); expect(await found()).toEqual([]);
     await a.del(`/api/gear/blacklist/${scanner.id}`);
+    expect((await a.get('/api/gear/items')).body.found).toEqual([]);
+    metadata('Scanner 42', '');
     expect((await a.get('/api/gear/items')).body.found).toMatchObject([{ name: 'Scanner 42', type: 'camera' }]);
     for (const name of ['', '   ', null, {}, '---']) expect((await a.post('/api/gear/blacklist', { name })).status).toBe(400);
   });
@@ -85,4 +91,34 @@ describe('gear discovery notifications', () => {
     expect((await a.post(`/api/notifications/${ordinary}/gear`, { action: 'add' })).status).toBe(404);
     expect((await a.post('/api/notifications/99999/gear', { action: 'add' })).status).toBe(404);
   });
+});
+
+it('clears NORITSU scanner metadata and automatic gear tags from existing photos while keeping other metadata and owned gear', async () => {
+  metadata('NORITSU KOKI EZ Controller', 'Real lens');
+  await a.post('/api/gear/items',{kind:'own',type:'camera',name:'NORITSU KOKI EZ Controller'});
+  env.db.prepare('UPDATE photos SET archived=1,missing=1,iso=400 WHERE id=?').run(photo);
+  await a.post('/api/gear/blacklist',{name:'noritsu-koki EZ controller'});
+  expect(env.db.prepare('SELECT camera,lens,iso FROM photos WHERE id=?').get(photo)).toEqual({camera:'',lens:'Real lens',iso:400});
+  expect(env.db.prepare("SELECT 1 FROM tags WHERE photo_id=? AND source='gear' AND name=?").get(photo,'noritsu koki ez controller')).toBeUndefined();
+  expect((await a.get('/api/gear/items')).body.own).toMatchObject([{name:'NORITSU KOKI EZ Controller'}]);
+});
+it('filters real EXIF on future imports, reindexing, manual edits and shoot defaults without changing originals',async()=>{
+  const original=await jpg(svg(350,200,'#716355','#aecabc',[.2,.7]),{exif:{IFD0:{Make:'NORITSU KOKI',Model:'EZ Controller'}}});
+  const next=env.lib+'/new-scan.jpg';fs.writeFileSync(next,original);
+  await a.post('/api/gear/blacklist',{name:'NORITSU KOKI EZ Controller'});
+  await a.scan();const imported=(await a.get('/api/photos')).body.photos.find((p:any)=>p.file==='new-scan.jpg');expect(imported).toBeDefined();
+  expect((await a.get(`/api/photos/${imported.id}`)).body.camera).toBe('');
+  expect((await a.patch(`/api/photos/${imported.id}`,{camera:'noritsu-koki ez controller'})).body.camera).toBe('');
+  expect((await a.patch(`/api/shoots/${imported.shootId}`,{gear:{camera:'NORITSU KOKI EZ Controller'},overwrite:true})).status).toBe(200);
+  expect((await a.get(`/api/photos/${imported.id}`)).body.camera).toBe('');
+  env.db.prepare("UPDATE photos SET user_fields='' WHERE id=?").run(imported.id);
+  await reindex(env.db);
+  expect((await a.get(`/api/photos/${imported.id}`)).body.camera).toBe('');
+  expect(fs.readFileSync(next).equals(original)).toBe(true);
+});
+it('applies pre-existing blacklist tags on library open after a restart',async()=>{
+  metadata('NORITSU KOKI EZ Controller','Real lens');
+  env.db.prepare("INSERT INTO gear_discoveries(type,name,key,state) VALUES('camera',?,?,'blacklisted') ON CONFLICT(type,key) DO UPDATE SET state='blacklisted'").run('NORITSU KOKI EZ Controller',gearKey('NORITSU KOKI EZ Controller'));
+  await env.app.close();env.db=openDb(env.data);env.app=buildApp(env.db,env.cfg);a=api(env);
+  expect((await a.get(`/api/photos/${photo}`)).body).toMatchObject({camera:'',lens:'Real lens'});
 });

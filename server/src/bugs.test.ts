@@ -116,12 +116,12 @@ describe('background sync', () => {
 });
 
 describe('database migrations', () => {
-  it('upgrade a version-1 database in place and keep its data', () => {
+  it('upgrades a version-1 database in place and removes obsolete empty shoots', () => {
     const old = new Database(path.join(tmp, 'old.db'));
     old.exec(`CREATE TABLE shoots (id INTEGER PRIMARY KEY, name TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', place TEXT NOT NULL DEFAULT '', imported_at TEXT NOT NULL);
       INSERT INTO shoots(name, imported_at) VALUES ('Kept', '2026-01-01T00:00:00Z');`);
     migrate(old);
-    expect(old.prepare('SELECT name FROM shoots').get()).toEqual({ name: 'Kept' });
+    expect(old.prepare('SELECT name FROM shoots').get()).toBeUndefined(); // empty shoots are pruned on upgrade
     expect((old.pragma('table_info(photos)') as { name: string }[]).map((c) => c.name)).toContain('dhash');
     expect(Number(old.pragma('user_version', { simple: true }))).toBeGreaterThanOrEqual(2);
     migrate(old); // running again changes nothing
