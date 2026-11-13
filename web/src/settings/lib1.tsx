@@ -132,7 +132,7 @@ export function useNotifications(ctx: Ctx): Section {
 
 /* ------------------------------------------------------------------ Reviews */
 const SPACING = ['1 day', '3 days', '1 week', '2 weeks', '1 month', '3 months', '6 months', '1 year'];
-const TODO: [string, string][] = [['Camera', 'camera'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
+const TODO: [string, string][] = [['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
 const SHARE: [string, string][] = [['Portfolio photos only', 'portfolio'], ['Photos rated 4 or more', 'rated4'], ['Any photo', 'any']];
 export function useReviews(ctx: Ctx): Section {
   const { settings: s, setSettings } = useStore();
