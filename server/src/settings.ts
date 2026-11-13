@@ -7,7 +7,7 @@ import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources
 export { BadSetting };
 
 /** Reasons a photograph can appear in the To do list. The first four are on until switched off; the rest are opt-in so the list does not fill up. */
-export const TODO_REASONS = ['camera', 'location', 'time', 'subjects', 'tags', 'description', 'composition', 'light', 'mood'] as const;
+export const TODO_REASONS = ['camera', 'lens', 'location', 'time', 'subjects', 'tags', 'description', 'composition', 'light', 'mood'] as const;
 const TODO_DEFAULT = ['location', 'subjects', 'tags', 'description'];
 
 export type Settings = {

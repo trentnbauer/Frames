@@ -8,10 +8,10 @@ import { AddToComposition } from '../components/AddToComposition';
 import ProtoMapPicker from '../proto/ProtoMapPicker';
 
 type Todo = { total: number; items: { key: string; count: number; ids?: number[] }[] };
-type Walk = { photos: { id: number }[]; things: number };
+type Walk = { photos: { id: number; need: { camera: boolean; lens: boolean } }[]; things: number };
 type MapHit = { name: string; address: string; kind?: string; suburb?: string; city?: string; lat?: number; lon?: number };
-const REASONS: [string, string, string][] = [['all', 'Everything', ''], ['camera', 'Camera specs', 'camera'], ['location', 'Location', 'place'], ['subjects', 'Subjects', 'subjects'], ['tags', 'Tags', 'tags'], ['composition', 'Not in a composition', 'composition']];
-const WHAT: Record<string, string> = { all: 'details', camera: 'camera specs', location: 'a location', subjects: 'subjects', tags: 'tags', composition: 'a composition' };
+const REASONS: [string, string, string][] = [['all', 'Everything', ''], ['camera', 'Camera', 'camera'], ['lens', 'Lens', 'lens'], ['location', 'Location', 'place'], ['subjects', 'Subjects', 'subjects'], ['tags', 'Tags', 'tags'], ['composition', 'Not in a composition', 'composition']];
+const WHAT: Record<string, string> = { all: 'details', camera: 'a camera', lens: 'a lens', location: 'a location', subjects: 'subjects', tags: 'tags', composition: 'a composition' };
 
 /** To do (design: Proto More, page "todo"): one photograph at a time, with what it still needs. */
 export function TodoPage() {
@@ -50,7 +50,9 @@ export function TodoPage() {
   const counts: Record<string, number> = { all: walk.data.photos.length };
   for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
   // Tags can be added on any to-do photo, whichever list it came from.
-  const show = (k: string) => k === 'tags' || reason === k || (reason === 'all' && ['location', 'subjects', 'desc'].includes(k));
+  const currentNeed = walk.data.photos.find((item) => item.id === id)?.need;
+  const cameraNeeded = !!(currentNeed?.camera || currentNeed?.lens);
+  const show = (k: string) => k === 'tags' || reason === k || (reason === 'all' && (['location', 'subjects', 'desc'].includes(k) || (k === 'camera' && cameraNeeded)));
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
   const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
@@ -71,7 +73,7 @@ export function TodoPage() {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     todoCount: ids.length.toLocaleString(), todoDone: done, todoWhat: WHAT[reason],
     reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
-    tShowCamera: show('camera'), tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: !!p,
+    tShowCamera: show('camera') || reason === 'lens', tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: !!p,
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',

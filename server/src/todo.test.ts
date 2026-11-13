@@ -104,7 +104,7 @@ describe('the one-at-a-time list', () => {
     const id = (await A.get('/api/photos')).body.photos.find((p: any) => p.place === 'Fremantle').id as number;
     env.db.prepare("UPDATE photos SET ai_status = 'done', ai_json = ? WHERE id = ?").run(JSON.stringify({ description: 'Boats at dawn' }), id);
     const got = ((await A.get('/api/todo/walk')).body.photos as any[]).find((p) => p.id === id);
-    expect(got.need).toEqual({ tags: false, place: false, desc: true });
+    expect(got.need).toEqual({ tags: false, place: false, desc: true, camera: false, lens: false });
   });
 
   it('the getting-started list keeps a finished step, ticked, for three loads and then drops it', async () => {
@@ -143,7 +143,7 @@ describe('the one-at-a-time list', () => {
     expect(k).toContain('camera');
     expect(k).not.toContain('subjects');
     expect(k).not.toContain('place');
-    expect(((await A.get('/api/todo/walk')).body.photos as any[]).length).toBe(0);
+    expect(((await A.get('/api/todo/walk')).body.photos as any[]).map((p) => p.id).sort()).toEqual(photos.filter((p) => !p.camera.trim()).map((p) => p.id).sort());
     // A photograph averaging under the default line of 2 after every session is listed for deleting.
     const id = photos[0].id as number;
     const { sessions } = (await A.get('/api/settings')).body.settings;

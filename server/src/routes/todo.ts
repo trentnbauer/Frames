@@ -13,20 +13,20 @@ const SAMPLE = 24;
 
 /**
  * Everything that is waiting on the person: photographs with no subject or tag, AI suggestions to approve,
- * colours not read yet, and a cloud account that needs reconnecting. Nothing here changes anything.
+ * missing camera details, colours not read yet, and a cloud account that needs reconnecting. Nothing here changes anything.
  */
 export function registerTodo(app: FastifyInstance, x: Ctx) {
   const { db, all, one, num } = x;
 
   /**
    * What each photograph still needs, for the one-at-a-time view: its subjects and tags (a suggestion to approve, or none yet), its place,
-   * and its description (an AI one to approve; a missing one is only asked for on a photograph that is on the list for something else, so
+   * its camera when that reason is enabled, and its description (an AI one to approve; a missing one is only asked for on a photograph that is on the list for something else, so
    * a library full of undescribed photographs does not become a to-do list of thousands). Newest first.
    */
-  type Need = { tags: boolean; place: boolean; desc: boolean };
+  type Need = { tags: boolean; place: boolean; desc: boolean; camera: boolean; lens: boolean };
   const needs = (): { id: number; need: Need }[] => {
     const on = new Set(loadSettings(db).todoReasons);
-    const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status,
+    const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status, p.camera, p.lens,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.source = 'ai' AND t.accepted = 0) AS pend,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) AS hasSubject,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear') AS hasTag
@@ -34,11 +34,13 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const out: { id: number; need: Need }[] = [];
     for (const r of rows) {
       const tags = (!!r.pend && (on.has('subjects') || on.has('tags'))) || (on.has('subjects') && !r.hasSubject) || (on.has('tags') && !r.hasTag);
+      const lens = on.has('lens') && !String(r.lens ?? '').trim();
+      const camera = on.has('camera') && !String(r.camera ?? '').trim();
       const place = on.has('location') && !String(r.place ?? '').trim();
       let aiDesc = false;
       if (r.description === '' && r.ai_status === 'done' && r.ai_json) { try { const a = JSON.parse(r.ai_json as string); aiDesc = !!a.description && !a.descriptionRejected; } catch { /* unreadable */ } }
-      const desc = on.has('description') && (aiDesc || ((tags || place) && r.description === ''));
-      if (tags || place || desc) out.push({ id: r.id as number, need: { tags, place, desc } });
+      const desc = on.has('description') && (aiDesc || ((tags || place || camera || lens) && r.description === ''));
+      if (tags || place || desc || camera || lens) out.push({ id: r.id as number, need: { tags, place, desc, camera, lens } });
     }
     return out;
   };
@@ -72,6 +74,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
 
     // Opt-in reasons (Settings, To do).
     if (on.has('camera')) add('camera', 'Add the camera', 'No camera is recorded for these.', ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.camera) = '' ORDER BY p.id DESC"));
+    if (on.has('lens')) add('lens', 'Add the lens', 'No lens is recorded for these.', ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.lens) = '' ORDER BY p.id DESC"));
     if (on.has('time')) add('time', 'Add the date and time', 'No capture time is recorded for these.', ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND p.captured_at IS NULL ORDER BY p.id DESC'));
     if (on.has('composition')) add('composition', 'Not in a composition yet', 'These are not part of any composition.', ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM collection_photos c WHERE c.photo_id = p.id) ORDER BY p.id DESC'));
     for (const [k, field, title] of [['light', 'lighting', 'Describe the light'], ['mood', 'mood', 'Describe the mood']] as const) {
@@ -133,7 +136,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
   app.get('/api/todo', async () => {
     const items = todo();
     // "Things" are counted per photograph (its tags, its place, its description each once), the way the one-at-a-time view counts them, plus accounts to reconnect.
-    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0) + (items.find((i) => i.key === 'delete')?.count ?? 0);
+    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0) + (p.need.camera ? 1 : 0) + (p.need.lens ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0) + (items.find((i) => i.key === 'delete')?.count ?? 0);
     return { total: things, kinds: items.length, items };
   });
 
@@ -142,7 +145,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const list = needs().slice(0, 2000);
     const info = (id: number) => one('SELECT p.id, p.title, p.w, p.h, sh.name AS shoot, sh.place AS shootPlace FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id = ?', id) as Row;
     const photos = list.map((n) => { const p = info(n.id); return { id: n.id, title: p.title as string, ar: p.w && p.h ? (p.w as number) / (p.h as number) : 1.5, shoot: p.shoot as string, shootPlace: p.shootPlace as string, need: n.need }; });
-    return { photos, things: photos.reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0), 0) };
+    return { photos, things: photos.reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0) + (p.need.camera ? 1 : 0) + (p.need.lens ? 1 : 0), 0) };
   });
 
   // "Re-check with AI": look at this photograph now and say what is new.
