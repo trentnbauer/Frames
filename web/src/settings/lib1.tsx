@@ -6,6 +6,9 @@ import { useTheme, setTheme } from '../theme';
 import { Profile } from '../pages/Profile';
 import { SignInMethods } from '../pages/SignInMethods';
 import { usePrefs } from './hooks';
+import { ClearSiteDataModal } from '../components/ClearSiteDataModal';
+import { useNavigate } from 'react-router-dom';
+import { useLayoutPreferences } from '../layoutPreferences';
 import { DeleteSuggestions, Vocabulary, Metadata } from './old';
 import type { Ctx } from './sections';
 import type { R, Section } from './ui';
@@ -53,9 +56,7 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
 
 export function useProfile(ctx: Ctx): Section {
   const p = useApi<P>('/profile');
-  const prefs = usePrefs('user');
   const { refreshMe } = useStore();
-  const theme = useTheme();
   const save = async (body: object) => { try { await api('/profile', { method: 'PUT', body }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } p.reload(); refreshMe(); };
   const d = p.data;
   const countries = d?.country && !COUNTRIES.includes(d.country) ? [d.country, ...COUNTRIES] : COUNTRIES;
@@ -69,14 +70,27 @@ export function useProfile(ctx: Ctx): Section {
         { id: 'country', t: 'select', label: 'Country', hint: 'Sets your hemisphere, so photo seasons are right. Shown on your portfolio.', opts: countries, value: d?.country || 'Australia', set: (v) => void save({ country: v }) },
         { id: 'email', t: 'text', label: 'Email', hint: 'For sign-in and guest replies.', value: ctx.me?.user?.email ?? '', disabled: true },
       ] },
-      { title: 'Preferences', rows: [
-        { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
-        { id: 'start', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },
-        { id: 'units', t: 'seg', label: 'Print sizes in', opts: ['cm', 'inches'], value: prefs.get('units', 'cm'), set: (v) => { prefs.set('units', v); ctx.toast('Saved'); } },
-        { id: 'dateFmt', t: 'select', label: 'Dates', opts: ['9 Nov 2026', '09/11/2026', '2026-11-09', 'Nov 9, 2026'], value: prefs.get('dateFmt', '9 Nov 2026'), set: (v) => { prefs.set('dateFmt', v); ctx.toast('Saved'); } },
-      ] },
     ],
   };
+}
+
+export function useAppSettings(ctx: Ctx): Section {
+  const prefs = usePrefs('user');
+  const theme = useTheme();
+  const { fullWidth, setFullWidth } = useLayoutPreferences();
+  const navigate = useNavigate();
+  const clear = () => ctx.modal(<ClearSiteDataModal onClose={close(ctx)} />);
+  return { key: 'app', name: 'App settings', hint: 'Appearance and everyday preferences for your library.', groups: [
+      { title: 'Display', rows: [
+        { id: 'fullWidth', t: 'toggle', label: 'Full width', hint: 'Use the available width across the app.', value: fullWidth, set: (v) => { setFullWidth(v); ctx.toast('Saved'); } },
+        { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
+        { id: 'start', hint: 'Saved preference; not applied throughout the app yet.', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },
+        { id: 'units', hint: 'Saved preference; not applied throughout the app yet.', t: 'seg', label: 'Print sizes in', opts: ['cm', 'inches'], value: prefs.get('units', 'cm'), set: (v) => { prefs.set('units', v); ctx.toast('Saved'); } },
+        { id: 'dateFmt', hint: 'Saved preference; not applied throughout the app yet.', t: 'select', label: 'Dates', opts: ['9 Nov 2026', '09/11/2026', '2026-11-09', 'Nov 9, 2026'], value: prefs.get('dateFmt', '9 Nov 2026'), set: (v) => { prefs.set('dateFmt', v); ctx.toast('Saved'); } },
+      ] },
+    { title: 'Help', rows: [{ id: 'welcomeTour', t: 'link', label: 'Welcome tour', hint: 'Take another look around Frames.', meta: 'Open', act: () => navigate('/welcome') }] },
+    { title: 'Troubleshooting', rows: [{ id: 'clearSiteData', t: 'link', label: 'Clear site data', hint: 'Clear cached files and browser preferences, then reload.', meta: 'Clear…', act: clear }] },
+  ] };
 }
 
 /* ------------------------------------------------------------ Notifications */

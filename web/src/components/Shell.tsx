@@ -3,10 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api, openPortfolio, useApi } from '../api';
 import { useStore } from '../store';
 import { useUi } from '../ui';
-import { useTheme, setTheme } from '../theme';
 import { Modal, Spinner } from './Modal';
-import { useLayoutPreferences } from '../layoutPreferences';
-import { clearSiteData } from '../clearSiteData';
+import { ClearSiteDataModal } from './ClearSiteDataModal';
 
 export function Mark({ w = 24 }: { w?: number }) {
   const s = w / 24;
@@ -139,16 +137,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
   const nav = useNavigate();
   const health = useApi<{ version: string }>(open ? '/health' : null);
   const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
-  const { fullWidth, setFullWidth } = useLayoutPreferences();
   const [resetOpen, setResetOpen] = useState(false);
-  const [resetBusy, setResetBusy] = useState(false);
-  const [resetError, setResetError] = useState('');
-  const reset = async () => {
-    if (resetBusy) return;
-    setResetBusy(true); setResetError('');
-    try { await clearSiteData(); window.location.reload(); }
-    catch (e) { setResetError((e as Error).message); setResetBusy(false); }
-  };
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
   const close = () => setOpen(false);
   const go = (to: string) => () => { close(); nav(to); };
@@ -170,9 +159,9 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
               {me?.role === 'admin' && <span className="eyebrow pillish">Admin</span>}
             </div>
             {item('Settings', go('/settings'), '⌘ ,')}
+            {item('App settings', go('/settings?section=app-settings'))}
             {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
-            <button className="mi" role="menuitemcheckbox" aria-checked={fullWidth} onClick={() => { setFullWidth(!fullWidth); close(); }}><span>Full width</span><span className="meta">{fullWidth ? 'On' : 'Off'}</span></button>
             <div className="msep" />
             {item('Your stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
             {item('To do', go('/todo'), todo ? todo.toLocaleString() : '')}
@@ -180,26 +169,21 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Near-duplicates', go('/duplicates'))}
             <div className="msep" />
             {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); }, ver)}
-            {item('Welcome tour', go('/welcome'))}
             {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
             {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
             <div className="msep" />
-            {item('Clear site data', () => { close(); setResetError(''); setResetOpen(true); })}
+            {item('Clear site data', () => { close(); setResetOpen(true); })}
             {me?.user && item('Sign out', signOut)}
           </div>
         </>
       )}
-      {resetOpen && <Modal title="Clear site data?" sub="Clears cached files and saved site preferences in this browser. You may need to sign in again. Your photos, reviews and server settings stay saved." onClose={() => !resetBusy && setResetOpen(false)}
-        foot={<><span className="grow" /><button className="btn" disabled={resetBusy} onClick={() => setResetOpen(false)}>Cancel</button><button className="btn primary" disabled={resetBusy} onClick={() => void reset()}>{resetBusy ? 'Clearing…' : 'Clear and reload'}</button></>}>
-        {resetError && <p className="reason" role="alert">{resetError}</p>}
-      </Modal>}
+      {resetOpen && <ClearSiteDataModal onClose={() => setResetOpen(false)} />}
     </>
   );
 }
 
 export function Header({ right }: { right?: ReactNode }) {
   const loc = useLocation();
-  const theme = useTheme();
   const [menu, setMenu] = useState<'user' | 'bell' | null>(null);
   useEffect(() => setMenu(null), [loc.pathname]);
   return (
@@ -208,7 +192,6 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
-        <button type="button" className="btn theme-toggle" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={(e) => setTheme(theme === 'dark' ? 'light' : 'dark', { x: e.clientX, y: e.clientY })}>{theme === 'dark' ? '☼ Light mode' : '☾ Dark mode'}</button>
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
       </div>

@@ -6,7 +6,7 @@ Keep new screens and changes consistent with the existing app. The live colour, 
 
 - Use the warm neutral palette in both dark and light themes. Use the CSS tokens (`--page`, `--surface`, `--text`, `--muted`, `--outline`, `--btn-bg`, etc.) rather than inventing screen-specific colours. Check both themes, including hover, focus and disabled states.
 - Use Instrument Serif for prominent titles, IBM Plex Sans for UI text, and IBM Plex Mono for small technical labels and measurements. Reuse the existing font tokens and nearby text sizes.
-- Keep photographs unchanged by theme switching. Use subdued surfaces and thin outlines so the photographs remain the focus.
+- Home review banners use theme-aware text and a subdued background-image tint; the light theme must not put dark text over a darkened photo. Keep photographs unchanged by theme switching. Use subdued surfaces and thin outlines so the photographs remain the focus.
 - Match existing button, pill, modal and toolbar styles. Use a filled treatment for the selected segmented choice. Text links should remain text links; portfolio **Edit Portfolio** and **Edit Gear** are plain text, not outlined pills.
 
 ## AI provenance
@@ -27,13 +27,13 @@ Use the same visual sequence for workflow stages: **circle → diamond → squar
 
 Keep the shapes and stages in that order. Pair shapes with text labels; do not rely on shape or colour alone. In a segmented control, expose the selected stage with `aria-pressed` and use the existing selected fill. Decorative shapes accompanying a text label should be hidden from screen readers.
 
-The composition editor keeps the circle → diamond → square workflow visible in the header in every stage, including Done. Choose Progress or Review to reopen a Done composition. Export belongs in the **Done · Read-only** side panel, where frame editing normally appears; it is not a header action. Keep Guests and Share in place when the stage changes.
+The composition editor keeps the circle → diamond → square workflow visible in the header in every stage, including Done. Choose Progress or Review to reopen a Done composition. Export belongs in the **Done · Read-only** side panel, where frame editing normally appears; it is not a header action. Keep Guests and Share in place when the stage changes. The composition title/action bar sticks directly below the shared app header while scrolling, using the page background in both themes.
 
-The shared app header uses the Home screen's inset and stays in the same position across navigation. Keep the theme switch beside the user dropdown and notifications. Put the app-wide full-width preference in the user dropdown, and apply it consistently to page containers rather than giving individual screens independent width controls. The editor wall and overlaid controls use theme tokens too; keep control surfaces opaque enough to stay readable over a room photo.
+The shared app header uses the Home screen's inset and stays in the same position across navigation. Keep theme and app-wide full-width controls in Your library → App settings, alongside other display preferences, and apply it consistently to page containers rather than giving individual screens independent width controls. The editor wall and overlaid controls use theme tokens too; keep control surfaces opaque enough to stay readable over a room photo.
 
 ## Notifications and gear suggestions
 
-Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Blacklisted gear uses editable tags under What I own, and blacklisting must immediately remove a matching Found in your photos suggestion.
+Each notification has a dismiss × at its top right. Keep dismissal and action buttons separate from the main navigation button. New-gear notifications offer Add to gear and Blacklist for one camera body or lens at a time. Metadata discovery is not AI provenance, so it does not receive an AI marker. Keep Found in your photos, including its photo-count labels, above the owned gear blocks. Blacklisted gear uses editable tags at the bottom, below the owned gear blocks, and blacklisting must immediately remove a matching Found in your photos suggestion.
 
 ## Validation
 

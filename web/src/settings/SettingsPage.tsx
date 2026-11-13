@@ -14,7 +14,7 @@ const mono = "'IBM Plex Mono',monospace";
 
 /** The addresses the old Settings pages used, so a link or a bookmark still lands in the right place. */
 const OLD: Record<string, [Tab, string]> = {
-  profile: ['lib', 'profile'], notifications: ['lib', 'notifications'], reviews: ['lib', 'reviews'], 'tags-subjects': ['lib', 'tags'], 'metadata-xmp': ['lib', 'xmp'], ai: ['lib', 'ai'], 'cloud-sync': ['lib', 'cloud'], portfolio: ['lib', 'portfolio'], 'your-data': ['lib', 'data'], 'sign-in-methods': ['lib', 'security'], 'password-security': ['lib', 'security'],
+  'app-settings': ['lib', 'app'], app: ['lib', 'app'], profile: ['lib', 'profile'], notifications: ['lib', 'notifications'], reviews: ['lib', 'reviews'], 'tags-subjects': ['lib', 'tags'], 'metadata-xmp': ['lib', 'xmp'], ai: ['lib', 'ai'], 'cloud-sync': ['lib', 'cloud'], portfolio: ['lib', 'portfolio'], 'your-data': ['lib', 'data'], 'sign-in-methods': ['lib', 'security'], 'password-security': ['lib', 'security'],
   access: ['srv', 'signin'], 'sign-in-access': ['srv', 'signin'], people: ['srv', 'people'], members: ['srv', 'people'], 'libraries-storage': ['srv', 'folders'], 'photos-storage': ['srv', 'folders'], 'cloud-services': ['srv', 'folders'], backup: ['srv', 'backup'], 'shared-ai': ['srv', 'srvai'],
   'cloudflare-tunnel': ['srv', 'network'], email: ['srv', 'email'], 'env-file': ['srv', 'server'], 'storage-processing': ['srv', 'processing'], 'updates-system': ['srv', 'server'], about: ['srv', 'server'],
 };

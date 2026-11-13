@@ -28,6 +28,7 @@ describe('composition lifecycle controls', () => {
     for (const text of ['Done · Read-only', 'Progress', 'Review', 'Done', 'Export', 'Share', 'Guests', 'Fullscreen']) expect(done).toContain(text);
     expect(done.indexOf('>Export')).toBeGreaterThan(done.indexOf('<aside'));
     expect(done).toContain('background-color:var(--wall-bg)');
+    expect(done).toContain('class="composition-header"');
     for (const text of ['+ Print', 'Line up', '+ Add photos', 'Help me decide', 'Nothing selected']) expect(done).not.toContain(text);
     expect(renderToStaticMarkup(<ProtoEditor {...props} />)).not.toMatch(/>Export(?: |<)/);
   });
