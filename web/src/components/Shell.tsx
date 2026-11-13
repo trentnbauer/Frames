@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { Modal, Spinner } from './Modal';
 import { ClearSiteDataModal } from './ClearSiteDataModal';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Mark({ w = 24 }: { w?: number }) {
   const s = w / 24;
@@ -191,6 +192,7 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
+        <ThemeToggle />
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
       </div>
