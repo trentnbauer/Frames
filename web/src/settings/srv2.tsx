@@ -282,7 +282,6 @@ export function useServer(ctx: Ctx): Section {
     groups: [
       { title: 'Updates', rows: [
         { id: 'version', t: 'button', label: 'Version', hint: `${sys.data ? (sys.data.version === 'dev' ? 'development build' : `v${sys.data.version.replace(/^v/, '')}`) : '…'} · ${sys.data?.image ?? ''}`, meta: 'Check now', act: async () => { rel.reload(); setChecked(true); ctx.toast(newer ? `${newer.name} is available · update by pulling a new image` : rel.data?.source === 'none' ? 'Could not reach GitHub' : 'You’re on the latest version · update by pulling a new image'); void checked; } },
-        { id: 'channel', t: 'seg', label: 'Update channel', opts: ['Stable', 'Beta'], value: inst.data?.updateChannel === 'beta' ? 'Beta' : 'Stable', set: (v: string) => void put({ updateChannel: v.toLowerCase() }) },
         { id: 'updPopup', t: 'toggle', label: 'Show admins what’s new after an update', hint: 'From GitHub releases, once per version.', value: inst.data?.showWhatsNew !== false, set: (v) => void put({ showWhatsNew: v }) },
       ] },
       { title: 'Logs & health', rows: [

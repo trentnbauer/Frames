@@ -290,7 +290,6 @@ export function UpdatesSystem() {
         <SRow title="Version" hint={`${sys.data ? (sys.data.version === 'dev' ? 'development build' : `v${sys.data.version.replace(/^v/, '')}`) : '…'} · ${sys.data?.image ?? ''}${checked ? (newer ? ` · latest release: ${newer.name}` : rel.data?.source === 'none' ? ' · could not reach GitHub' : ' · up to date') : ''}`}>
           <button className="ghost" onClick={() => { rel.reload(); setChecked(true); }}>Check now</button>
         </SRow>
-        <SRow title="Update channel" hint="Beta also offers pre-releases."><PSeg label="Update channel" value={inst.data?.updateChannel ?? 'stable'} options={[['stable', 'Stable'], ['beta', 'Beta']]} set={(v) => put({ updateChannel: v })} /></SRow>
         <SRow title="What’s new" hint="Release notes from GitHub, shown to admins after an update."><Link to="/settings?section=about" className="ghost plain">About Frames →</Link></SRow>
       </SCard>
 
