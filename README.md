@@ -107,7 +107,7 @@ On opening or reloading the app, a changed deployed version automatically clears
 
 Full width applies across the signed-in app, including Home, Photoshoots, Library, Compositions, the editor, Gear, Stats and Settings. It preserves the existing saved width preference; turn it off to restore the comfortable centred layout. Dialogs and individual form fields retain their own sizing.
 
-The Home review banner uses theme-aware text, buttons and a subdued photo tint, including the “Nothing is waiting” state. The shared header uses Home’s position across navigation, with the account menu and notification bell. The header and browse toolbars remain visible while scrolling, and the editor wall and controls follow the selected theme. Public portfolios and guest share pages retain their independent layouts.
+The Home review banner uses theme-aware text, buttons and a subdued photo tint, including the “Nothing is waiting” state. The shared header uses Home’s position across navigation, with the account menu and notification bell. The header and browse toolbars remain visible while scrolling, including the Compositions list title, New composition action, workflow tabs, search and sort controls, and the editor wall and controls follow the selected theme. Public portfolios and guest share pages retain their independent layouts.
 
 The notifications panel has **Clear** beside **Mark all read**. Clear removes both read and unread notifications from your panel, including older entries beyond the first page, and clears the unread indicator. It affects only your own library. Previously cleared events stay suppressed under the existing retention rules; new events can still arrive. Empty panels disable Clear, and a failed clear keeps the entries visible with an error.
 

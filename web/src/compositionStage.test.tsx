@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { CompositionStage } from './components/CompositionStage';
+import ProtoCompositions from './proto/ProtoCompositions';
 import ProtoEditor from './proto/ProtoEditor';
 import { Logic } from './proto/ProtoEditor.logic';
 import { Logic as ListLogic } from './proto/ProtoCompositions.logic';
@@ -48,4 +49,10 @@ describe('composition lifecycle controls', () => {
     logic.state.tab = 'done'; expect(logic.renderVals().isReady).toBe(true); expect(logic.renderVals().isProg).toBe(false);
     logic.state.tab = ''; logic.props.initialTab = 'done'; expect(logic.renderVals().isReady).toBe(true);
   });
+});
+
+it('keeps the list title, actions and workflow controls in one sticky header', () => {
+  const html = renderToStaticMarkup(<ProtoCompositions prog={[]} review={[]} ready={[]} sortLabel={() => 'Last edited'} />);
+  expect(html).toContain('class="compositions-list-header"');
+  for (const label of ['Compositions', 'New composition', 'Progress', 'Review', 'Done', 'Find a composition']) expect(html).toContain(label);
 });
