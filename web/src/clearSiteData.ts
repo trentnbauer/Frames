@@ -1,4 +1,4 @@
-/** Ask the browser to discard its HTTP cache/cookies/storage, then clear accessible storage as a fallback. */
+/** Ask the browser to discard this origin’s cache/storage and end only the Frames session, then clear accessible storage as a fallback. */
 export async function clearSiteData(): Promise<void> {
   const response = await fetch('/auth/logout?clearSiteData=1', { method: 'POST', cache: 'no-store' });
   if (!response.ok) throw new Error('Could not clear site data. Please try again.');

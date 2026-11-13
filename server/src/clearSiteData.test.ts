@@ -14,7 +14,9 @@ describe('clearing this browser’s site data', () => {
     const collection = (await A.post('/api/collections', { name: 'Keep my library' })).body;
     const r = await A.raw('POST', '/auth/logout?clearSiteData=1', {}, { cookie: `frames_session=${current}` });
     expect(r.status).toBe(200);
-    expect(r.headers['clear-site-data']).toBe('"cache", "cookies", "storage"');
+    expect(r.headers['clear-site-data']).toBe('"cache", "storage"');
+    expect(r.headers['clear-site-data']).not.toContain('cookies');
+    expect(r.headers['set-cookie']).not.toMatch(/Domain=/i);
     expect(r.headers['cache-control']).toBe('no-store');
     expect(r.headers['set-cookie']).toContain('Max-Age=0');
     expect(sys.prepare('SELECT COUNT(*) n FROM sessions').get()).toEqual({ n: 1 });

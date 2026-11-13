@@ -27,7 +27,7 @@ Use the same visual sequence for workflow stages: **circle → diamond → squar
 
 Keep the shapes and stages in that order. Pair shapes with text labels; do not rely on shape or colour alone. In a segmented control, expose the selected stage with `aria-pressed` and use the existing selected fill. Decorative shapes accompanying a text label should be hidden from screen readers.
 
-The composition editor keeps the circle → diamond → square workflow visible in the header in every stage, including Done. Choose Progress or Review to reopen a Done composition. Export belongs in the **Done · Read-only** side panel, where frame editing normally appears; it is not a header action. Keep Guests and Share in place when the stage changes. The composition title/action bar sticks directly below the shared app header while scrolling, using the page background in both themes.
+The composition editor keeps the circle → diamond → square workflow visible in the header in every stage, including Done. Choose Progress or Review to reopen a Done composition. Export belongs in the **Done · Read-only** side panel, where frame editing normally appears; it is not a header action. Keep Guests and Share in place when the stage changes. The composition editor title/action bar scrolls with the page; only the Compositions list header stays sticky below the shared app header. Keep pan and zoom geometry immediate so frames track the background without position or size transitions.
 
 The shared app header uses the Home screen's inset and stays in the same position across navigation. Keep theme and app-wide full-width controls in Your library → App settings, alongside other display preferences, and apply it consistently to page containers rather than giving individual screens independent width controls. The editor wall and overlaid controls use theme tokens too; keep control surfaces opaque enough to stay readable over a room photo.
 
@@ -37,7 +37,7 @@ Each notification has a dismiss × at its top right. Keep dismissal and action b
 
 ## Account security
 
-Two-factor enrolment and verification use shared theme tokens, normal buttons and labelled inputs. Show authenticator setup keys and recovery codes only in the enrolment flow, and explain that recovery codes are shown once. Keep the emergency administrator exempt and its credentials out of the in-app logs.
+Two-factor enrolment and verification use shared theme tokens, normal buttons and labelled inputs. Generate the authenticator QR code locally, with a white quiet zone in both themes. Show setup keys and recovery codes only in the enrolment flow, and explain that recovery codes are shown once. Keep the emergency administrator exempt and its credentials out of the in-app logs.
 
 ## Validation
 

@@ -338,7 +338,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     if (who?.provider === EMERGENCY_PROVIDER) removeEmergency(x, who.id); // signing out of the emergency login deletes it
     rep.header('Set-Cookie', sessionCookie(null, auth.isSecure(req)));
     if ((req.query as Row).clearSiteData === '1') {
-      rep.header('Clear-Site-Data', '"cache", "cookies", "storage"');
+      // Clear-Site-Data's cookies directive spans the registrable domain and would sign out sibling apps.
+      // The host-only Frames session cookie above is expired explicitly instead.
+      rep.header('Clear-Site-Data', '"cache", "storage"');
       rep.header('Cache-Control', 'no-store');
     }
     return { ok: true };

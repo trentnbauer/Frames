@@ -681,7 +681,7 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
   .app-header .head-right > .userbtn, .app-header .head-right > .iconbtn { position: relative; z-index: 42; }
 }
 
-.composition-header { position: sticky; top: var(--app-header-height, 0px); z-index: 30; padding-bottom: 24px; background: var(--page); box-shadow: 0 1px 0 var(--hair); }
+.composition-header { margin-bottom: 24px; }
 
 .home-review-card { position: relative; border-radius: 12px; overflow: hidden; background: var(--surface); color: var(--text); margin-bottom: 16px; }
 .home-review-backdrop { position: absolute; inset: 0; background-position: center; background-size: cover; filter: var(--home-review-image-filter); opacity: var(--home-review-image-opacity); transform: scale(1.2); }
@@ -708,3 +708,5 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .mfa-controls input { padding: 10px 14px; color: var(--text); background: var(--bg); border: 1px solid var(--outline); border-radius: 8px; font: inherit; }
 .mfa-secret { overflow-wrap: anywhere; padding: 12px; background: var(--surface); border-radius: 8px; }
 .mfa-recovery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
+
+.authenticator-qr { display: block; width: 256px; max-width: 100%; height: auto; padding: 8px; border-radius: 8px; background: #fff; image-rendering: pixelated; align-self: center; }
