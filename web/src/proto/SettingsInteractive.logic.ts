@@ -14,7 +14,7 @@ export class Logic extends DCLogic {
       '# Cloudflare tunnel (Frames sets it up through the API)', 'CLOUDFLARE_API_TOKEN=' + (get('cfApiToken') || ''), 'CLOUDFLARE_ACCOUNT_ID=' + get('cfAccount'), 'TUNNEL_NAME=Frames', 'APP_HOSTNAME=' + String(get('appUrl')).replace(/^https?:\/\//, ''), 'ACCESS_EMAILS=' + (get('cfWho') === 'Members' ? 'trent@example.com,mia@example.com,sam@example.com' : ''), 'PORTFOLIO_HOSTNAME=photography.trent.au', '',
       '# Storage', 'FRAMES_LIBRARY=' + get('libPath'), 'FRAMES_CACHE=' + get('cachePath'), 'FRAMES_CACHE_LIMIT=' + String(get('cacheMax')).replace(' ', ''), 'FRAMES_WORKERS=' + get('workers'), 'FRAMES_RAW_PREVIEW=' + (get('rawMode') === 'Full decode' ? 'full' : 'embedded'), '',
       '# Email', 'SMTP_ENABLED=' + yes(get('mailOn')), 'SMTP_HOST=' + get('smtpHost'), 'SMTP_PORT=' + String(get('smtpPort')).split(' ')[0], 'SMTP_USER=' + get('smtpUser'), 'SMTP_PASS=' + get('smtpPass'), 'SMTP_FROM=' + get('mailFrom'), '',
-      '# System', 'FRAMES_UPDATE_CHANNEL=' + String(get('channel')).toLowerCase(), 'FRAMES_LOG_LEVEL=' + String(get('logLevel')).toLowerCase()].join('\n');
+      '# System', 'FRAMES_LOG_LEVEL=' + String(get('logLevel')).toLowerCase()].join('\n');
     this.setState({ env: { text: txt, orig: txt, saved: false, restarting: false } });
   }
   defs() {
@@ -292,7 +292,6 @@ export class Logic extends DCLogic {
         { key: 'server', name: 'Updates & system', hint: 'Version, logs and maintenance.', groups: [
           { title: 'Updates', rows: [
             { id: 'version', t: 'button', label: 'Version', hint: 'v1.17.0 · ghcr.io/trentnbauer/frames:latest', meta: 'Check now', toast: 'You’re on the latest version · update by pulling a new image' },
-            { id: 'channel', t: 'seg', label: 'Update channel', opts: ['Stable', 'Beta'], def: 'Stable' },
             { id: 'updPopup', t: 'toggle', label: 'Show admins what’s new after an update', hint: 'From GitHub releases, once per version.', def: true } ] },
           { title: 'Logs & health', rows: [
             { id: 'health', t: 'button', label: 'Health', hint: 'All good · database, library folder, cache, tunnel, email', meta: 'Run checks', toast: 'All 5 checks passed' },
@@ -458,7 +457,7 @@ export class Logic extends DCLogic {
               envSaveOp: (changed || E.saved) && !bad.length && !E.restarting ? 1 : 0.4, envSaveLabel: E.saved ? 'Restart now' : 'Save',
               envSave: () => { if (bad.length || E.restarting) return; if (E.saved) { setE({ restarting: true }); clearTimeout(this.envT); this.envT = setTimeout(() => { this.setState({ env: null }); this.flash('Frames restarted · new settings applied'); }, 1800); return; } if (!changed) return; setE({ saved: true, orig: E.text }); } }; })(),
           ...(() => { if (!S.ordFor || !byId[S.ordFor]) return { ordOpen: false }; const row = mk(byId[S.ordFor], 0, 1); return { ordOpen: true, ordTitle: byId[S.ordFor].label, ordList: row.ord || [], closeOrd: () => this.setState({ ordFor: null }) }; })(),
-          ...(() => { const rows = S.diffDone ? [] : [['Mail server', 'SMTP_HOST', 'smtp.fastmail.com', 'smtp.gmail.com'], ['Processing workers', 'FRAMES_WORKERS', '6', '4'], ['Update channel', 'FRAMES_UPDATE_CHANNEL', 'beta', 'stable']];
+          ...(() => { const rows = S.diffDone ? [] : [['Mail server', 'SMTP_HOST', 'smtp.fastmail.com', 'smtp.gmail.com'], ['Processing workers', 'FRAMES_WORKERS', '6', '4']];
             return { diffOpen: !!S.diff, closeDiff: () => this.setState({ diff: false }), diffTitle: rows.length ? rows.length + ' settings differ' : 'In sync',
               diffRows: rows.map(([label, key, app, file]) => ({ label, key, app, file })), diffHasMsg: !!S.diffDone, diffMsg: S.diffDone, diffBtnOp: rows.length ? 1 : 0.4,
               diffExport: () => rows.length && this.setState({ diffDone: '✓ Wrote the app’s values to /config/frames.env. The app and file now match.' }),
