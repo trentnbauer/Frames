@@ -1,3 +1,4 @@
+import { HomeReviewBanner } from '../components/HomeReviewBanner';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -169,22 +170,11 @@ export function Today() {
         <span className="muted" style={{ fontSize: 13 }}>{(s?.total ?? 0).toLocaleString()} photographs · {total} shoots · {comps.data?.length ?? 0} compositions</span>
       </div>
 
-      {s && (s.due > 0 || s.resumable || s.early > 0) && (
-        <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: 'var(--surface)', marginBottom: 16 }}>
-          {s.nextId && <div style={{ position: 'absolute', inset: 0, background: `url(${cover(s.nextId)}) center/cover`, filter: 'blur(28px) brightness(.45)', transform: 'scale(1.2)' }} />}
-          <div className="review-banner" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 32, padding: '28px 28px 28px 32px', color: s.nextId ? '#efede8' : 'var(--text)' }}>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span className="mono" style={{ fontSize: 12, letterSpacing: '.04em', opacity: .8 }}>REVIEW · {s.due > 0 ? 'DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}</span>
-              <h2 className="serif" style={{ fontSize: 36, lineHeight: 1.05 }}>{s.due > 0 ? `${s.due} ${s.due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is waiting to be seen again'}</h2>
-              <p style={{ margin: 0, fontSize: 13.5, opacity: .8 }}>{dueText}</p>
-            </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flex: 'none' }}>
-              <button className="btn lg" style={{ background: '#efede8', color: '#0d0d0d', fontWeight: 500 }} onClick={begin}>{s.resumable ? 'Resume review' : s.due === 0 ? 'Review anyway' : 'Begin review'}</button>
-              <span className="mono" style={{ fontSize: 12, opacity: .7, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.3)', borderRadius: 4, padding: '2px 6px' }}>R</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {s && (s.due > 0 || s.resumable || s.early > 0) && <HomeReviewBanner
+        cover={s.nextId ? cover(s.nextId) : undefined} tag={s.due > 0 ? 'DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}
+        title={s.due > 0 ? `${s.due} ${s.due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is waiting to be seen again'}
+        description={dueText} buttonLabel={s.resumable ? 'Resume review' : s.due === 0 ? 'Review anyway' : 'Begin review'} onBegin={begin}
+      />}
 
       <div className="home-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,2fr)', gap: 16, marginBottom: 16 }}>
         <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 260 }}>
