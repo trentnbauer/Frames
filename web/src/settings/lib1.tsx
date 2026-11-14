@@ -1,3 +1,4 @@
+import { RemovalReview } from '../components/RemovalReview';
 import { AccountPassword } from '../components/AccountPassword';
 import { TwoFactor } from '../components/TwoFactor';
 import { useState } from 'react';
@@ -11,7 +12,7 @@ import { usePrefs } from './hooks';
 import { ClearSiteDataModal } from '../components/ClearSiteDataModal';
 import { useNavigate } from 'react-router-dom';
 import { useLayoutPreferences } from '../layoutPreferences';
-import { DeleteSuggestions, Vocabulary, Metadata } from './old';
+import { Vocabulary, Metadata } from './old';
 import type { Ctx } from './sections';
 import type { R, Section } from './ui';
 import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
@@ -135,12 +136,12 @@ const SPACING = ['1 day', '3 days', '1 week', '2 weeks', '1 month', '3 months', 
 const TODO: [string, string][] = [['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
 const SHARE: [string, string][] = [['Portfolio photos only', 'portfolio'], ['Photos rated 4 or more', 'rated4'], ['Any photo', 'any']];
 export function useReviews(ctx: Ctx): Section {
-  const { settings: s, setSettings } = useStore();
+  const { settings: s, setSettings, refreshSummary } = useStore();
   const w = useApi<{ weight: number }>('/collections/guest-weight');
   const c = useApi<{ optIn: boolean; share: string; written: boolean; showOnHome: boolean }>('/community/prefs');
   const prefs = usePrefs('user');
-  const sug = useApi<{ photos: unknown[] }>(s ? `/photos/delete-suggestions?b=${s.deleteBelow}&sessions=${s.sessions}&enabled=${s.archiveSuggest}` : null);
-  const save = async (patch: object) => { try { await setSettings(patch as never); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } };
+  const sug = useApi<{ photos: unknown[] }>(s ? `/photos/delete-suggestions?b=${s.deleteBelow}&sessions=${s.sessions}&enabled=${s.archiveSuggest}&auto=${s.autoRemove}:${s.autoRemoveBelow}:${s.autoRemoveAfter}` : null);
+  const save = async (patch: object) => { try { await setSettings(patch as never); refreshSummary(); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } };
   const cp = async (body: object) => { try { await api('/community/prefs', { method: 'PUT', body }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } c.reload(); };
   const n = s?.sessions ?? 4;
   const seq = Array.from({ length: n }, (_, i) => s?.intervals[Math.min(i, (s?.intervals.length ?? 1) - 1)] ?? '1 week');
@@ -172,8 +173,10 @@ export function useReviews(ctx: Ctx): Section {
         { id: 'suggestRemove', t: 'toggle', label: 'Suggest removing low-rated photos', hint: `After all ${n} review sessions. Nothing is removed without asking.`, value: !!s?.archiveSuggest, set: (v) => void save({ archiveSuggest: v, ...(v && !s?.deleteBelow ? { deleteBelow: 2 } : {}) }) },
         { id: 'removeBelow', t: 'select', label: 'Averaging below', dep: 'suggestRemove', opts: ['1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5'], value: below, set: (v) => void save({ deleteBelow: Number(v) }) },
         { id: 'removeVotes', t: 'link', label: 'Ratings used', hint: `Your own average after all ${n} sessions. Guest and community ratings are separate.` },
-        { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: `${sug.data?.photos.length ?? 0} photos`, act: () => s && ctx.modal(<Modal title="Suggested for removal" sub="Photos whose average is below your line. Nothing is removed until you tick and confirm." width={720} onClose={close(ctx)}><DeleteSuggestions s={s} save={async (p) => save(p)} inline onChanged={() => sug.reload()} /></Modal>) },
-        { id: 'leaveOut', t: 'toggle', label: 'Suggest leaving low-rated photos out of review', hint: 'They stay in your library and compositions.', value: prefs.get('leaveOut', false), set: (v) => { prefs.set('leaveOut', v); ctx.toast('Saved'); } },
+        { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: `${sug.data?.photos.length ?? 0} photos`, act: () => s && ctx.modal(<Modal title="Suggested for removal" sub="Review one photo at a time. Keep it, or confirm its removal." width={1200} onClose={close(ctx)}><RemovalReview onChanged={() => sug.reload()} /></Modal>) },
+        { id: 'autoRemove', t: 'toggle', label: 'Automatically remove low-rated photos', hint: 'Off by default. When enabled, qualifying photos are removed from Frames without confirmation, including existing photos. Original files are kept.', value: !!s?.autoRemove, set: (value) => void save({ autoRemove: value }) },
+        { id: 'autoRemoveBelow', t: 'select', label: 'Automatically remove when averaging below', dep: 'autoRemove', opts: ['1.0','1.5','2.0','2.5','3.0','3.5','4.0','4.5'], value: (s?.autoRemoveBelow ?? 2).toFixed(1), set: (value) => void save({ autoRemoveBelow: Number(value) }) },
+        { id: 'autoRemoveAfter', t: 'stepper', label: 'After at least this many reviews', hint: 'Your own ratings only. Independent of the suggestion settings.', dep: 'autoRemove', min: 1, max: 12, value: s?.autoRemoveAfter ?? 4, set: (value) => void save({ autoRemoveAfter: value }) },
       ] },
       { title: 'To do list counts photos missing', rows: [
         { id: 'todo', t: 'chips', label: 'Missing', opts: TODO.map((t) => t[0]), value: reasons, set: (v: string[]) => void save({ todoReasons: v.map((x) => TODO.find((t) => t[0] === x)![1]) }) },
@@ -214,9 +217,9 @@ export function useTags(ctx: Ctx): Section {
 
 /* --------------------------------------------------------------- Camera & XMP */
 export function useXmp(ctx: Ctx): Section {
-  const { settings: s, setSettings } = useStore();
+  const { settings: s, setSettings, refreshSummary } = useStore();
   const prefs = usePrefs('user');
-  const save = async (patch: object) => { try { await setSettings(patch as never); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } };
+  const save = async (patch: object) => { try { await setSettings(patch as never); refreshSummary(); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } };
   const g = s?.gear;
   return {
     key: 'xmp', name: 'Camera & XMP', hint: 'What Frames writes back to your files.',

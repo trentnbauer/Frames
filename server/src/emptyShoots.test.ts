@@ -36,7 +36,7 @@ it('does not delete a shoot on a no-op move and rolls back shoot/link cleanup wi
 it('migrates legacy empty shoots and shares without touching populated shoots or composition shares',()=>{
  const empty=shoot('Legacy empty'),full=shoot('Populated');photo(full,1);share(empty);share(full);
  const c=Number(env.db.prepare("INSERT INTO collections(name) VALUES('Composition')").run().lastInsertRowid);share(c,'collection');
- const version=Number(env.db.pragma('user_version',{simple:true}));env.db.pragma(`user_version=${version-1}`);migrate(env.db);
+ const version=Number(env.db.pragma('user_version',{simple:true}));env.db.pragma(`user_version=${version-2}`);migrate(env.db);
  expect(exists(empty)).toBe(false);expect(exists(full)).toBe(true);expect(env.db.prepare("SELECT 1 FROM shares WHERE kind='collection' AND target_id=?").get(c)).toBeDefined();expect(env.db.prepare("SELECT 1 FROM shares WHERE kind='shoot' AND target_id=?").get(empty)).toBeUndefined();
  migrate(env.db);expect(exists(full)).toBe(true);
 });

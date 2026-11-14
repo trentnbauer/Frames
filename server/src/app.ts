@@ -1,3 +1,4 @@
+import { autoRemoveLowRated } from './remove.js';
 import { DUE_REVIEW_SQL } from './reviewEligibility.js';
 import { noteUse } from './activity.js';
 import { ensureDeriv } from './cache.js';
@@ -296,6 +297,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   }));
   app.put('/api/settings', async (req) => {
     const s = saveSettings(db, (req.body ?? {}) as any);
+    autoRemoveLowRated(db, cfg);
     kickAi();
     return s;
   });
@@ -414,6 +416,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const photoId = num(b.photoId), rating = Math.round(num(b.rating));
     const s = getSession();
     if (!s || rating < 1 || rating > 5 || !s.queue.some((q) => q.id === photoId)) return rep.code(400).send({ error: 'bad rating' });
+    if (!one('SELECT 1 FROM photos WHERE id = ?', photoId)) return rep.code(404).send({ error: 'This photo has been removed.' });
     const settings = loadSettings(db);
     const now = new Date();
     const prior = one('SELECT id FROM reviews WHERE photo_id = ? AND run_id = ?', photoId, s.runId);
@@ -429,6 +432,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (typeof b.note === 'string') s.notes[photoId] = b.note;
     if (b.advance !== false) s.index = Math.max(s.index, s.queue.findIndex((q) => q.id === photoId) + 1);
     setSetting(db, 'reviewSession', s);
+    autoRemoveLowRated(db, cfg, photoId);
     return s;
   });
   app.post('/api/review/note', async (req, rep) => {
@@ -640,6 +644,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // Left-over environment variables that fail (a revoked API token) must not keep it down: if they do work, they take over and restart it.
   startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); ctx.tunnelRefresh?.(); }, 1500));
   startup.push(setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000)); // and so does AI analysis, where it left off
+  const cleanLowRatings = () => {
+    try { for (const tenant of tenants.all()) { try { tenants.run(tenant, () => autoRemoveLowRated(tenant.db, tenant.cfg)); } catch (error) { console.error('Automatic photo cleanup failed', error instanceof Error ? error.message : 'Unknown error'); } } } catch (error) { console.error('Automatic photo cleanup could not load libraries', error instanceof Error ? error.message : 'Unknown error'); }
+  };
+  startup.push(setTimeout(cleanLowRatings, 2000));
+  const cleanupTimer = setInterval(cleanLowRatings, 60_000); cleanupTimer.unref();
+  app.addHook('onClose', async () => clearInterval(cleanupTimer));
   for (const t of startup) t.unref();
   app.decorate('frames', { sys, tenants });
   app.addHook('onClose', async () => { for (const t of startup) clearTimeout(t); for (const t of tenants.all()) tenants.forget(t.user.id); sys.close(); });
