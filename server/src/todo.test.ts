@@ -144,6 +144,7 @@ describe('the one-at-a-time list', () => {
     expect(k).not.toContain('subjects');
     expect(k).not.toContain('place');
     expect(((await A.get('/api/todo/walk')).body.photos as any[]).map((p) => p.id).sort()).toEqual(photos.filter((p) => !p.camera.trim()).map((p) => p.id).sort());
+    await A.put('/api/settings', { archiveSuggest: true });
     // A photograph averaging under the default line of 2 after every session is listed for deleting.
     const id = photos[0].id as number;
     const { sessions } = (await A.get('/api/settings')).body.settings;

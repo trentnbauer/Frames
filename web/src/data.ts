@@ -20,7 +20,7 @@ export type PhotoFull = PhotoLite & {
 };
 export type Shoot = {
   id: number; name: string; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
-  dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; sessions: number;
+  dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; dueCount: number; waitingCount: number; duePhotoIds: number[]; sessions: number;
   /** Subjects and tags the shoot gives to every photograph in it. */
   subjects: string[]; tags: string[];
   /** Camera details the shoot gives to photographs that have none. */

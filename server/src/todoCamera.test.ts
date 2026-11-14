@@ -43,7 +43,7 @@ it('honours the Lens switch and adds a task when blacklisting clears an existing
  await a.put('/api/settings',{todoReasons:[]});expect((await a.get('/api/todo')).body.total).toBe(0);expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);
 });
 it('counts one photograph once when camera, description and removal tasks overlap',async()=>{
- await a.patch(`/api/photos/${id}`,{description:''});await a.put('/api/settings',{sessions:1,deleteBelow:2});
+ await a.patch(`/api/photos/${id}`,{description:''});await a.put('/api/settings',{sessions:1,deleteBelow:2,archiveSuggest:true});
  env.db.prepare("INSERT INTO reviews(photo_id,session,run_id,date,rating) VALUES(?,1,'count-test',?,1)").run(id,new Date().toISOString());
  expect((await a.get('/api/todo')).body.total).toBe(1);
 });

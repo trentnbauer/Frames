@@ -69,7 +69,7 @@ describe('suggesting what to delete by its review score', () => {
     const list = ((await A.get('/api/photos')).body.photos as any[]).map((p) => p.id as number).slice(0, 3);
     env.db.prepare('DELETE FROM reviews').run();
     const rate = (id: number, ratings: number[]) => ratings.forEach((r, i) => env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z', ?)").run(id, i + 1, `r${id}${i}`, r));
-    await A.put('/api/settings', { sessions: 4 });
+    await A.put('/api/settings', { sessions: 4, archiveSuggest: true });
     rate(list[0], [1, 1, 2, 1]);       // average 1.25, all sessions done
     rate(list[1], [2, 2, 2, 3]);       // average 2.25
     rate(list[2], [1, 1]);             // very low, but only two of four sessions: not yet

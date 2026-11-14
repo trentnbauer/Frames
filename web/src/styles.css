@@ -710,3 +710,5 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .mfa-recovery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
 
 .authenticator-qr { display: block; width: 256px; max-width: 100%; height: auto; padding: 8px; border-radius: 8px; background: #fff; image-rendering: pixelated; align-self: center; }
+
+.shoot-review-action[aria-disabled=true] { opacity: .5; cursor: default !important; }

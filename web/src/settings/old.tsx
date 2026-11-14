@@ -7,25 +7,26 @@ import { GearDefaults } from '../components/GearDefaults';
 import type { Settings } from '../store';
 
 /** Suggest taking out photographs whose average rating, after every session, is below a line you choose. Nothing is removed until you tick and confirm. */
-export function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const list = useApi<{ below: number; sessions: number; photos: { id: number; title: string; avg: number; reviews: number }[] }>(`/photos/delete-suggestions?b=${s.deleteBelow}`);
+export function DeleteSuggestions({ s, save, inline = false, onChanged }: { s: Settings; save: (p: Partial<Settings>) => Promise<void>; inline?: boolean; onChanged?: () => void }) {
+  const [open, setOpen] = useState(inline);
+  const list = useApi<{ below: number; sessions: number; photos: { id: number; title: string; avg: number; reviews: number }[] }>(`/photos/delete-suggestions?b=${s.deleteBelow}&sessions=${s.sessions}&enabled=${s.archiveSuggest}`);
   const [picked, setPicked] = useState<number[]>([]);
   const [msg, setMsg] = useState('');
   const n = list.data?.photos.length ?? 0;
+  const validPicked = picked.filter((id) => list.data?.photos.some((photo) => photo.id === id));
   const take = async () => {
-    if (!picked.length || !window.confirm(`Take ${picked.length} ${picked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+    if (!validPicked.length || !window.confirm(`Take ${validPicked.length} ${validPicked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
     try {
-      const r = await api<{ removed: number; filesDeleted: number }>('/photos/remove', { body: { ids: picked } });
+      const r = await api<{ removed: number; filesDeleted: number }>('/photos/remove', { body: { ids: validPicked } });
       setMsg(`Took ${r.removed} out of Frames${r.filesDeleted ? ` and deleted ${r.filesDeleted} of Frames’ own copies` : ''}.`);
-      setPicked([]); list.reload();
+      setPicked([]); list.reload(); onChanged?.();
     } catch (e) { setMsg((e as Error).message); }
   };
   return (
     <div className="field">
-      <h3>Suggest taking out low-rated photos</h3>
-      <p>After a photograph has had all {s.sessions} of its sessions, suggest taking it out of Frames if its average is below a score you choose (2 unless you change it). Suggestions also appear on your To do list. Nothing is removed without you confirming.</p>
-      <div className="form">
+      <h3>Suggested for removal</h3>
+      <p>After all {s.sessions} review sessions, a photograph qualifies when the average of your own ratings is below {s.deleteBelow.toFixed(1)}. Guest and community ratings are separate. Nothing is removed without your confirmation.</p>
+      {!inline && <div className="form">
         <label>Suggest when the average is below{' '}
           <select aria-label="Suggest taking out below" value={s.deleteBelow} onChange={(e) => { setOpen(false); save({ deleteBelow: Number(e.target.value) }); }}>
             <option value={0}>Never</option>
@@ -33,13 +34,14 @@ export function DeleteSuggestions({ s, save }: { s: Settings; save: (p: Partial<
           </select>
         </label>
         {s.deleteBelow > 0 && <button className="pill" disabled={n === 0} onClick={() => { setOpen(!open); setMsg(''); }}>{n === 0 ? 'Nothing suggested' : open ? 'Hide the suggestions' : `See ${n} suggested`}</button>}
-      </div>
+      </div>}
+      {list.error && <p role="alert" className="reason">{list.error}</p>}
       {msg && <p role="status" className="muted" style={{ fontSize: 13 }}>{msg}</p>}
       {open && n > 0 && (
         <div style={{ marginTop: 12, maxWidth: 720 }}>
           <div className="row" style={{ gap: 12 }}>
             <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" aria-label="Tick all suggestions" checked={picked.length === n} onChange={(e) => setPicked(e.target.checked ? list.data!.photos.map((p) => p.id) : [])} /> Tick all</label>
-            <button className="pill primary" disabled={!picked.length} onClick={take}>Take {picked.length || ''} out of Frames</button>
+            <button className="pill primary" disabled={!validPicked.length} onClick={take}>Take {validPicked.length || ''} out of Frames</button>
           </div>
           {list.data!.photos.map((p) => (
             <label className="row" key={p.id} style={{ gap: 12, alignItems: 'center' }}>
