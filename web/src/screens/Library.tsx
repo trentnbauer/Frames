@@ -10,6 +10,7 @@ import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
 import { reviewUrl } from '../reviewScope';
 
+const REVIEW_OPTIONS = [['', 'All review states'], ['due', 'Due now'], ['unrated', 'Unrated'], ['waiting', 'Waiting for next review'], ['complete', 'Review complete'], ['excluded', 'Left out of review']];
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
 const RATING_OPTS = [['4+', '4 or better on average'], ['3+', '3 or better on average'], ['under', 'Under 3 on average']];
 const multi = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -95,7 +96,7 @@ export function Library() {
   for (const k of ['shape', 'light', 'contrast'] as const) if (sp.get(k)) chips.push({ label: `${k[0].toUpperCase()}${k.slice(1)}: ${sp.get(k)}`, remove: () => set(k, null) });
   if (sp.get('exclude')) chips.push({ label: `Without: ${sp.get('exclude')}`, remove: () => set('exclude', null) });
   if (sp.get('time')) chips.push({ label: `Time: ${sp.get('time')}`, remove: () => set('time', null) });
-  if (sp.get('review') === 'excluded') chips.push({ label: 'Left out of review', remove: () => set('review', null) });
+  if (sp.get('review')) chips.push({ label: `Review: ${REVIEW_OPTIONS.find(([key]) => key === sp.get('review'))?.[1] ?? sp.get('review')}`, remove: () => set('review', null) });
   if (sp.get('similarTo')) chips.push({ label: `Similar to photo ${sp.get('similarTo')}`, remove: () => set('similarTo', null) });
 
   const years = [...new Set((list.data?.photos ?? []).map((p) => (p.capturedAt ?? '').slice(0, 4)).filter(Boolean))].sort().reverse();
@@ -128,6 +129,7 @@ export function Library() {
           {(tags.data ?? []).map((t) => <Item key={t.name} on={multi(sp.get('tag')).includes(t.name)} onClick={() => toggle('tag', t.name)}>{t.name} <span className="faint">{t.n}</span></Item>)}
         </Menu>
         <Menu id="rating" label="Score">{RATING_OPTS.map(([v, l]) => <Item key={v} on={sp.get('rating') === v} onClick={() => { set('rating', v); setOpen(null); }}>{l}</Item>)}</Menu>
+        <Menu id="review" label="Review">{REVIEW_OPTIONS.map(([key, label]) => <Item key={key} on={(sp.get('review') ?? '') === key} onClick={() => { set('review', key || null); setOpen(null); }}>{label}</Item>)}</Menu>
         <Menu id="colour" label="Colour"><div className="colour-grid">{COLOURS.map((c) => <button key={c} aria-label={c} title={c} aria-pressed={multi(sp.get('colour')).includes(c)} className={'cdot c-' + c + (multi(sp.get('colour')).includes(c) ? ' on' : '')} onClick={() => toggle('colour', c)} />)}</div></Menu>
         <Menu id="look" label="Shape & light">
           {([['shape', 'portrait'], ['shape', 'landscape'], ['shape', 'square'], ['light', 'dark'], ['light', 'mid'], ['light', 'bright'], ['contrast', 'low'], ['contrast', 'medium'], ['contrast', 'high']] as const).map(([k, v]) => (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
 import { useStore } from '../store';
@@ -12,10 +12,13 @@ type Session = { shootName?: string; runId: string; queue: { id: number; ar: num
 /** Review: one photograph at a time, rate with 1 to 5. Previous ratings are never shown: the review is blind by design. */
 export function Review() {
   const nav = useNavigate();
+  const location = useLocation();
   const { refreshSummary } = useStore();
   const [s, setS] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState('');
+  const [removals, setRemovals] = useState(0);
+  const checkRemovals = () => api<{ photos: unknown[] }>('/photos/delete-suggestions').then((result) => setRemovals(result.photos.length)).catch(() => undefined);
   const colls = useApi<Collection[]>('/collections');
   const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
   const [pickFor, setPickFor] = useState<number | null>(null);
@@ -26,8 +29,9 @@ export function Review() {
   useEffect(() => { if (!offer) return; const t = setTimeout(() => setOffer(null), 6000); return () => clearTimeout(t); }, [offer]);
 
   const done = !!s && s.index >= s.queue.length;
+  useEffect(() => { if (done) void checkRemovals(); }, [done]);
   const cur = s && !done ? s.queue[s.index] : null;
-  const leave = () => { refreshSummary(); nav('/'); };
+  const leave = () => { refreshSummary(); if (location.key !== 'default') nav(-1); else nav('/'); };
   const move = async (index: number) => { if (s) setS(await api<Session>('/review/session', { method: 'PUT', body: { index } })); };
   const bestFit = (photoId: number) => [...(colls.data ?? [])].filter((c) => !c.printedAt && !c.photoIds.includes(photoId)).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id)[0] ?? null;
   // Moves on at once and saves in the background, so quick key presses never land on the same photo. If a rating can't be saved, you are put back on it.
@@ -38,7 +42,7 @@ export function Review() {
     setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
     const fit = n >= 4 ? bestFit(cur.id) : null;
     setOffer(fit ? { id: cur.id, comp: fit } : null);
-    api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } }).then(() => refreshSummary()).catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
+    api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } }).then(() => { refreshSummary(); void checkRemovals(); }).catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
   };
 
   if (error) return <div className="page-shell"><p role="alert" className="muted">Something went wrong: {error}</p></div>;
@@ -51,7 +55,8 @@ export function Review() {
         <div>
           <h1 style={{ font: "400 64px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>{s.queue.length === 0 ? 'Nothing to review.' : 'Session complete.'}</h1>
           <p style={{ margin: '16px 0 28px', color: 'var(--text2)' }}>{s.queue.length === 0 ? 'Photographs come back here when they are due.' : `${rated.length} rated · ${s.queue.length - rated.length} skipped${rated.length ? ` · average ${mean.toFixed(1)}` : ''}`}</p>
-          <button className="btn primary lg" onClick={() => api('/review/session', { method: 'DELETE' }).then(leave)}>{s.queue.length === 0 ? 'Back to Home' : 'Done'}</button>
+          {removals > 0 && <p><button className="btn outline" onClick={() => nav('/todo')}>Review {removals} suggested {removals === 1 ? 'removal' : 'removals'}</button><br /><span className="muted" style={{ fontSize: 13 }}>Low averages after completed review sessions. Nothing is removed automatically.</span></p>}
+          <button className="btn primary lg" onClick={() => api('/review/session', { method: 'DELETE' }).then(leave)}>Back</button>
         </div>
       </div>
     );

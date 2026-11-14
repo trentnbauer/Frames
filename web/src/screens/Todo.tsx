@@ -1,3 +1,4 @@
+import { DeleteSuggestions } from '../settings/old';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +18,7 @@ const WHAT: Record<string, string> = { all: 'details', camera: 'a camera', lens:
 /** To do (design: Proto More, page "todo"): one photograph at a time, with what it still needs. */
 export function TodoPage() {
   const nav = useNavigate();
-  const { settings, refreshSummary } = useStore();
+  const { settings, setSettings, refreshSummary } = useStore();
   const ai = !!settings && settings.ai !== 'off';
   const todo = useApi<Todo>('/todo');
   const walk = useApi<Walk>('/todo/walk');
@@ -49,6 +50,7 @@ export function TodoPage() {
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!todo.data || !walk.data) return <div className="page-shell"></div>;
+  const removalCount = todo.data.items.find((item) => item.key === 'delete')?.count ?? 0;
   const counts: Record<string, number> = { all: walk.data.photos.length };
   for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
   // Tags can be added on any to-do photo, whichever list it came from.
@@ -91,6 +93,11 @@ export function TodoPage() {
   };
   return (
     <div className="page-shell">
+      {removalCount > 0 && settings && <section style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, marginBottom: 24 }}>
+        {!id && <h1 className="serif" style={{ fontSize: 48, marginTop: 0 }}>To do</h1>}
+        <DeleteSuggestions s={settings} save={async (patch) => { await setSettings(patch); }} inline onChanged={() => { todo.reload(); walk.reload(); lib.reload(); refreshSummary(); }} />
+      </section>}
+
 
       {mapOpen && p && (
         <ProtoMapPicker
@@ -101,7 +108,7 @@ export function TodoPage() {
           onRemovePlace={async () => { await api(`/photos/${p.id}`, { method: 'PATCH', body: { place: '', placeAddress: '', placeKind: '', lat: null, lon: null } }); photo.reload(); todo.reload(); walk.reload(); refreshSummary(); }}
           onClose={() => setMapOpen(false)} />
       )}
-      {id ? <ProtoMore page="todo" v={v} /> : (
+      {id ? <ProtoMore page="todo" v={v} /> : removalCount > 0 ? null : (
         <div style={{ padding: '64px 0' }}><h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>All caught up</h1><p className="muted">Nothing is waiting for {WHAT[reason]}. <button style={{ textDecoration: 'underline' }} onClick={() => nav('/')}>Back to Home</button></p></div>
       )}
     </div>

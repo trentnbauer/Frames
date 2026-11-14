@@ -72,11 +72,11 @@ export function Shoots() {
   const shootOf = new Map((lib.data?.photos ?? []).map((p) => [p.id, p.shootId]));
   const compsPerShoot = new Map<number, Set<number>>();
   for (const c of colls.data ?? []) for (const pid of c.photoIds) { const s = shootOf.get(pid); if (s != null) (compsPerShoot.get(s) ?? compsPerShoot.set(s, new Set()).get(s)!).add(c.id); }
-  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.reviewPct < 100 ? { tag: 'Needs review', tagColor: 'var(--text)' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: 'var(--text2)' } : { tag: 'Not composed', tagColor: 'var(--text)' }; };
+  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.dueCount > 0 ? { tag: 'Needs review', tagColor: 'var(--text)' } : s.waitingCount > 0 ? { tag: 'Waiting for next review', tagColor: 'var(--muted)' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: 'var(--text2)' } : { tag: 'Not composed', tagColor: 'var(--text)' }; };
   const all = [...(shoots.data ?? [])].sort((a, b) => (a.dateFrom ?? a.importedAt).localeCompare(b.dateFrom ?? b.importedAt) * (newest ? -1 : 1));
   const needle = q.trim().toLowerCase();
-  const shown = all.filter((s) => (!needle || [s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle)) && (filter === '' || (filter === 'uncomposed' ? !(compsPerShoot.get(s.id)?.size) : s.reviewPct < 100)));
-  const nUncomposed = all.filter((s) => !(compsPerShoot.get(s.id)?.size)).length, nReview = all.filter((s) => s.reviewPct < 100).length;
+  const shown = all.filter((s) => (!needle || [s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle)) && (filter === '' || (filter === 'uncomposed' ? !(compsPerShoot.get(s.id)?.size) : s.dueCount > 0)));
+  const nUncomposed = all.filter((s) => !(compsPerShoot.get(s.id)?.size)).length, nReview = all.filter((s) => s.dueCount > 0).length;
   const years = [...new Set(all.map((s) => (s.dateFrom ?? s.importedAt ?? '').slice(0, 4)).filter(Boolean))];
   const totalPhotos = all.reduce((n, s) => n + s.count, 0);
   const s0 = sugg.data?.[0];
@@ -88,7 +88,7 @@ export function Shoots() {
   const ph = shootPhotos.data?.photos ?? [];
   const inComp = new Set((colls.data ?? []).flatMap((c) => c.photoIds));
   const view = sh ? {
-    id: sh.id, name: sh.name, place: sh.place || 'No place', dates: sh.dates, dateControl: <ShootDate key={sh.id} shoot={sh} onSaved={reloadAll} />,
+    id: sh.id, dueCount: sh.dueCount, reviewPct: sh.reviewPct, name: sh.name, place: sh.place || 'No place', dates: sh.dates, dateControl: <ShootDate key={sh.id} shoot={sh} onSaved={reloadAll} />,
     placeVal: sh.place,
     placePin: { name: sh.place, address: ph.find((p) => p.place === sh.place)?.placeAddress ?? '', kind: ph.find((p) => p.place === sh.place)?.placeKind ?? '', suburb: '', city: '', lat: ph.find((p) => p.lat !== null)?.lat ?? null, lng: ph.find((p) => p.lat !== null)?.lon ?? null, precision: ph.find((p) => p.place === sh.place)?.placePrecision ?? 'exact' },
     camVal: sh.gear?.camera || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
@@ -155,7 +155,7 @@ export function Shoots() {
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
         aiOn={!!settings && settings.ai !== 'off'}
         onAnalyse={async () => { try { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; } catch (e) { return (e as Error).message; } }}
-        onStartReview={() => nav(reviewUrl(ph.filter((p) => p.reviewCount === 0).map((p) => p.id)))}
+        onStartReview={() => { if (sh?.dueCount) nav(reviewUrl(sh.duePhotoIds)); }}
         onCompose={() => openNew({ name: sh?.name, photoIds: ph.map((p) => p.id) })}
       />
     </BrowsePage>

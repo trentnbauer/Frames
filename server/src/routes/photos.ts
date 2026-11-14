@@ -1,3 +1,4 @@
+import { DUE_REVIEW_SQL } from '../reviewEligibility.js';
 import { discoverPhotoGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { searchWords } from '../searchWords.js';
@@ -108,6 +109,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     if (contrast === 'low') where.push('p.contrast < 0.15'); else if (contrast === 'medium') where.push('p.contrast BETWEEN 0.15 AND 0.28'); else if (contrast === 'high') where.push('p.contrast > 0.28');
     if (q.variants === 'hide') where.push('p.parent_id IS NULL');
     if (q.review === 'excluded') where.push('p.archived = 1');
+    if (q.review === 'due') { where.push(DUE_REVIEW_SQL); args.push(new Date().toISOString()); }
+    if (q.review === 'unrated') where.push('p.archived = 0 AND p.missing = 0 AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.photo_id = p.id)');
+    if (q.review === 'waiting') { where.push('p.archived = 0 AND p.missing = 0 AND p.next_review_at > ?'); args.push(new Date().toISOString()); }
+    if (q.review === 'complete') { where.push('p.archived = 0 AND p.missing = 0 AND p.next_review_at IS NULL AND (SELECT COUNT(*) FROM reviews r WHERE r.photo_id = p.id) >= ?'); args.push(loadSettings(db).sessions); }
+
 
     const cfgAi = aiConfig(db);
     const semantic = q.semantic === '1' && !!cfgAi && !!q.q;
@@ -241,7 +247,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   // Files in library folders are never touched; only Frames' own copies (uploads, cloud copies) go. A scan does not bring them back.
   app.get('/api/photos/delete-suggestions', async () => {
     const st = loadSettings(db);
-    return { below: st.deleteBelow, sessions: st.sessions, photos: deleteSuggestions(db, st.sessions, st.deleteBelow) };
+    return { below: st.deleteBelow, sessions: st.sessions, enabled: st.archiveSuggest && st.deleteBelow > 0, photos: st.archiveSuggest ? deleteSuggestions(db, st.sessions, st.deleteBelow) : [] };
   });
   app.post('/api/photos/remove', async (req, rep) => {
     const ids = ((req.body ?? {}) as Row).ids;

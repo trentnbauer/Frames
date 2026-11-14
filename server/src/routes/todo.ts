@@ -81,7 +81,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
       if (on.has(k)) add(k, title, `The AI’s analysis has no ${k} note for these.`, ids(`SELECT p.id FROM photos p WHERE p.missing = 0 AND p.ai_status = 'done' AND COALESCE(json_extract(p.ai_json, '$.${field}'), '') = '' ORDER BY p.id DESC`));
     }
     // Poorly reviewed photographs, when the person has a line set (Settings, Reviews).
-    add('delete', 'Take poorly reviewed photographs out of Frames', `Their average, after all ${st.sessions} sessions, is below ${st.deleteBelow}. Nothing is removed until you confirm. Files in your library folders are never touched.`, deleteSuggestions(db, st.sessions, st.deleteBelow, 2000).map((r) => r.id));
+    if (st.archiveSuggest) add('delete', 'Take poorly reviewed photographs out of Frames', `Their average, after all ${st.sessions} sessions, is below ${st.deleteBelow}. Nothing is removed until you confirm. Files in your library folders are never touched.`, deleteSuggestions(db, st.sessions, st.deleteBelow, 2000).map((r) => r.id));
 
     const stuck = loadCloud(db).connections.filter((c) => c.needsReconnect);
     if (stuck.length) items.push({ key: 'cloud', title: 'Reconnect a cloud account', detail: `${stuck.map((c) => c.account || c.provider).join(', ')} stopped syncing and needs to be reconnected.`, count: stuck.length, photoIds: [], link: '/settings?section=cloud' });

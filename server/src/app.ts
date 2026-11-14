@@ -1,3 +1,4 @@
+import { DUE_REVIEW_SQL } from './reviewEligibility.js';
 import { noteUse } from './activity.js';
 import { ensureDeriv } from './cache.js';
 import crypto from 'node:crypto';
@@ -225,13 +226,16 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   };
   const shootDto = (s: Row) => {
     const st = db.prepare('SELECT COUNT(*) n, MIN(captured_at) a, MAX(captured_at) b, MIN(id) first FROM photos WHERE shoot_id = ?').get(s.id) as Row;
+    const reviewNow = new Date().toISOString();
+    const waitingCount = (db.prepare('SELECT COUNT(*) n FROM photos p WHERE p.shoot_id = ? AND p.archived = 0 AND p.missing = 0 AND p.next_review_at > ?').get(s.id, reviewNow) as { n: number }).n;
+    const duePhotoIds = (db.prepare(`SELECT p.id FROM photos p WHERE p.shoot_id = ? AND ${DUE_REVIEW_SQL} ORDER BY p.id`).all(s.id, reviewNow) as { id: number }[]).map((photo) => photo.id);
     const sessions = loadSettings(db).sessions;
     const done = (db.prepare(`SELECT COUNT(*) n FROM (SELECT photo_id, COUNT(*) c FROM reviews WHERE photo_id IN (SELECT id FROM photos WHERE shoot_id = ?) GROUP BY photo_id HAVING c >= ?)`).get(s.id, sessions) as Row).n;
     const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
     // Dates the user typed win; otherwise they come from the photographs' capture times, then the import date.
     const from = s.date_from ?? st.a, to = s.date_to ?? st.b;
     const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
-    return { id: s.id, name: s.name, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
+    return { id: s.id, name: s.name, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: st.first, dueCount: duePhotoIds.length, waitingCount, duePhotoIds: duePhotoIds.slice(0, 500), reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
   /** The layout stored for a composition, or null (older compositions have none until they are edited). */
   const storedLayout = (c: Row, members: Set<number>): Layout | null => { if (!c.layout) return null; try { return parseLayout(JSON.parse(c.layout), members); } catch { return null; } };
@@ -352,7 +356,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // ---------- reviews ----------
   type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
   // Due photographs, the one reviewed longest ago first. One never reviewed counts as reviewed when it was added.
-  const dueIds = () => (db.prepare("SELECT id FROM photos p WHERE archived = 0 AND missing = 0 AND next_review_at IS NOT NULL AND next_review_at <= ? ORDER BY COALESCE((SELECT MAX(date) FROM reviews r WHERE r.photo_id = p.id), p.added_at), p.id").all(new Date().toISOString()) as Row[]).map((r) => r.id as number);
+  const dueIds = () => (db.prepare(`SELECT id FROM photos p WHERE ${DUE_REVIEW_SQL} ORDER BY COALESCE((SELECT MAX(date) FROM reviews r WHERE r.photo_id = p.id), p.added_at), p.id`).all(new Date().toISOString()) as Row[]).map((r) => r.id as number);
   const getSession = () => getSetting<Session | null>(db, 'reviewSession', null);
   // When nothing is due, a person can still begin: the photographs reviewed longest ago (never reviewed counts from when it was added).
   const EARLY = 20;

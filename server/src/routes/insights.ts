@@ -1,3 +1,4 @@
+import { deleteSuggestions } from '../remove.js';
 import type { FastifyInstance } from 'fastify';
 import { dominantHue, hamming, similarity } from '../analysis.js';
 import { getSetting, setSetting } from '../db.js';
@@ -63,7 +64,8 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     const quiet = rated.filter(({ p, rs }) => rs.length >= Math.min(4, settings.sessions) && avgOf(rs.map((r) => r.rating)) >= 4.5 && !inColl.has(p.id) && ok('quiet', p.id)).sort((a, b) => rank(a.p, b.p)).slice(0, 12).map(({ p }) => dto(p));
     const lastSeen = (rs: Rv[]) => new Date(rs[rs.length - 1].date).getTime();
     const forgotten = rated.filter(({ p, rs }) => rs.length > 0 && ok('forgotten', p.id) && ((rs[0].rating >= 4 && lastSeen(rs) < now - 365 * DAY) || (!inColl.has(p.id) && rs.length >= 2 && avgOf(rs.map((r) => r.rating)) >= 4 && lastSeen(rs) < now - 180 * DAY))).sort((a, b) => rank(a.p, b.p)).slice(0, 14).map(({ p }) => dto(p));
-    const archive = settings.archiveSuggest ? rated.filter(({ p, rs }) => rs.length >= 4 && avgOf(rs.map((r) => r.rating)) < 2 && ok('archive', p.id)).slice(0, 12).map(({ p }) => dto(p)) : [];
+    const removalIds = new Set(settings.archiveSuggest ? deleteSuggestions(db, settings.sessions, settings.deleteBelow, 2000).map((p) => p.id) : []);
+    const archive = rated.filter(({ p }) => removalIds.has(p.id) && ok('archive', p.id)).slice(0, 12).map(({ p }) => dto(p));
 
     // Seeds: the photographs rated highest. Everything below is "more like these".
     const seeds = rated.filter(({ rs }) => rs.length > 0 && avgOf(rs.map((r) => r.rating)) >= 4).sort((a, b) => avgOf(b.rs.map((r) => r.rating)) - avgOf(a.rs.map((r) => r.rating))).slice(0, 6).map(({ p }) => p);
