@@ -166,3 +166,5 @@ Photos in any composition (including candidates and Done compositions), and phot
 The environment-drift warning stays above the sticky app header. Header and sticky browse controls are offset by the warning’s measured height, including wrapped mobile layouts; without the warning, the normal header position is preserved.
 
 Removal decisions open in a full-screen review view with Back (or Escape), a large photo, personal score history and Keep/Delete actions. The Removal review navigation tab appears on desktop and mobile only when eligible photos are waiting. To do and Reviews settings also link to this view.
+
+The removal-review photo fits completely inside its preview panel without cropping, in portrait or landscape orientation, on desktop and phones.
