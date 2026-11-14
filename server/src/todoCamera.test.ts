@@ -31,7 +31,7 @@ it('supports lens-only tasks, counts both missing details once each, and clears 
  await a.put('/api/settings',{todoReasons:['camera','lens']});
  expect((await a.get('/api/settings')).body.settings.todoReasons).toEqual(['camera','lens']);
  let todo=(await a.get('/api/todo')).body,walk=(await a.get('/api/todo/walk')).body;
- expect(todo.total).toBe(2);expect(walk.things).toBe(2);expect(walk.photos).toHaveLength(1);expect(walk.photos[0].need).toMatchObject({camera:true,lens:true});expect(todo.items.find((i:any)=>i.key==='lens')).toMatchObject({count:1,ids:[id]});
+ expect(todo.total).toBe(1);expect(walk.things).toBe(2);expect(walk.photos).toHaveLength(1);expect(walk.photos[0].need).toMatchObject({camera:true,lens:true});expect(todo.items.find((i:any)=>i.key==='lens')).toMatchObject({count:1,ids:[id]});
  await a.patch(`/api/photos/${id}`,{camera:'Minolta XD'});
  todo=(await a.get('/api/todo')).body;walk=(await a.get('/api/todo/walk')).body;expect(todo.total).toBe(1);expect(walk.photos[0].need).toMatchObject({camera:false,lens:true});
  await a.patch(`/api/photos/${id}`,{lens:'Rokkor 50mm'});expect((await a.get('/api/todo')).body.total).toBe(0);expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);
@@ -41,4 +41,9 @@ it('honours the Lens switch and adds a task when blacklisting clears an existing
  await a.put('/api/settings',{todoReasons:['lens']});await a.post('/api/gear/blacklist',{name:'Scanner lens'});
  expect((await a.get('/api/todo')).body.total).toBe(1);expect((await a.get('/api/todo/walk')).body.photos[0].need).toMatchObject({camera:false,lens:true});
  await a.put('/api/settings',{todoReasons:[]});expect((await a.get('/api/todo')).body.total).toBe(0);expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);
+});
+it('counts one photograph once when camera, description and removal tasks overlap',async()=>{
+ await a.patch(`/api/photos/${id}`,{description:''});await a.put('/api/settings',{sessions:1,deleteBelow:2});
+ env.db.prepare("INSERT INTO reviews(photo_id,session,run_id,date,rating) VALUES(?,1,'count-test',?,1)").run(id,new Date().toISOString());
+ expect((await a.get('/api/todo')).body.total).toBe(1);
 });

@@ -135,8 +135,10 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
 
   app.get('/api/todo', async () => {
     const items = todo();
-    // "Things" are counted per photograph (its tags, its place, its description each once), the way the one-at-a-time view counts them, plus accounts to reconnect.
-    const things = needs().reduce((n, p) => n + (p.need.tags ? 1 : 0) + (p.need.place ? 1 : 0) + (p.need.desc ? 1 : 0) + (p.need.camera ? 1 : 0) + (p.need.lens ? 1 : 0), 0) + (items.find((i) => i.key === 'cloud')?.count ?? 0) + (items.find((i) => i.key === 'delete')?.count ?? 0);
+    // The navigation badge counts unique photographs, not individual missing details.
+    const photos = new Set(needs().map((photo) => photo.id));
+    for (const id of items.find((item) => item.key === 'delete')?.ids ?? []) photos.add(id);
+    const things = photos.size + (items.find((item) => item.key === 'cloud')?.count ?? 0);
     return { total: things, kinds: items.length, items };
   });
 
