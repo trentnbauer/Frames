@@ -734,3 +734,13 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .removal-actions { display:flex; gap:12px; margin-top:auto; padding-top:12px; }
 .removal-actions button { flex:1; height:46px; font-size:15px; }
 @media (max-width:800px) { .removal-review { grid-template-columns:minmax(0,1fr); padding:16px; gap:24px; } .removal-photo img { max-height:55vh; } }
+
+/* Removal decisions use the full viewport, like regular reviews. */
+.removal-screen { position:fixed; inset:0; z-index:50; background:var(--page); overflow:auto; padding:24px 32px; }
+.removal-exit { position:absolute; top:24px; right:32px; z-index:1; }
+.removal-screen .removal-heading { padding-right:100px; margin:8px 0 24px; }
+.removal-screen .removal-heading h1 { font-size:36px; }
+.removal-screen .removal-review { background:transparent; padding:0; margin:0; min-height:calc(100dvh - 112px); }
+.removal-screen .removal-photo { position:sticky; top:0; align-self:start; height:calc(100dvh - 112px); }
+.removal-screen .removal-photo img { height:100%; max-height:100%; }
+@media(max-width:800px) { .removal-screen { padding:20px 16px; } .removal-exit { top:20px; right:16px; } .removal-screen .removal-photo { position:static; height:50dvh; } }

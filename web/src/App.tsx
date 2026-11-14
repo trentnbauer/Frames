@@ -1,3 +1,4 @@
+import { RemovalReviewScreen } from './screens/RemovalReview';
 import { TwoFactorGate } from './components/TwoFactor';
 import { LayoutPreferencesProvider } from './layoutPreferences';
 import { useEffect, useState } from 'react';
@@ -30,7 +31,7 @@ import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
-  '/': 'Today', '/library': 'Library', '/review': 'Review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
+  '/': 'Today', '/library': 'Library', '/review': 'Review', '/removals': 'Removal review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
   '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
@@ -43,7 +44,7 @@ function Shell() {
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
-  const inReview = loc.pathname === '/review';
+  const inReview = loc.pathname === '/review' || loc.pathname === '/removals';
   useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']} · Frames` : 'Frames'; }, [loc.pathname]);
   // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
   useEffect(() => {
@@ -82,6 +83,7 @@ function Shell() {
         <Route path="/library" element={<Library />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
+        <Route path="/removals" element={<RemovalReviewScreen />} />
         <Route path="/shoots" element={<Shoots />} />
         <Route path="/shoots/:id" element={<Shoots />} />
         <Route path="/compare" element={<Compare />} />
