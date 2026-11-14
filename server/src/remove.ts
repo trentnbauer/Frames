@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DB } from './db.js';
+import { getSetting, setSetting, type DB } from './db.js';
+import { loadSettings } from './settings.js';
 import { internalDir, type Cfg } from './ingest.js';
 
 /**
@@ -74,12 +75,32 @@ export function removeShoot(db: DB, cfg: Cfg, id: number): RemoveResult {
 }
 
 /** Photographs whose average rating, after all their sessions, is below the line the person chose. Lowest first. */
-export function deleteSuggestions(db: DB, sessions: number, below: number, limit = 200) {
+export function deleteSuggestions(db: DB, sessions: number, below: number, limit = 200, onlyId?: number) {
   if (!below) return [];
   return db.prepare(`
     SELECT p.id, p.title, p.file, p.shoot_id shootId, ROUND(AVG(r.rating), 2) avg, COUNT(r.id) reviews
-    FROM photos p JOIN reviews r ON r.photo_id = p.id
+    FROM photos p JOIN reviews r ON r.photo_id = p.id LEFT JOIN removal_kept k ON k.photo_id = p.id
     WHERE p.missing = 0
-    GROUP BY p.id HAVING COUNT(r.id) >= ? AND AVG(r.rating) < ?
-    ORDER BY AVG(r.rating), p.id LIMIT ?`).all(Math.max(1, sessions), below, limit) as { id: number; title: string; file: string; shootId: number; avg: number; reviews: number }[];
+      AND NOT EXISTS (SELECT 1 FROM collection_photos cp WHERE cp.photo_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM shares sh WHERE sh.kind = 'shoot' AND sh.target_id = p.shoot_id AND sh.revoked = 0 AND (sh.expires_at IS NULL OR sh.expires_at > ?))${onlyId === undefined ? '' : ' AND p.id = ?'}
+    GROUP BY p.id HAVING COUNT(r.id) >= ? AND AVG(r.rating) < ? AND (k.photo_id IS NULL OR k.review_count != COUNT(r.id) OR k.rating_sum != SUM(r.rating))
+    ORDER BY AVG(r.rating), p.id LIMIT ?`).all(new Date().toISOString(), ...(onlyId === undefined ? [] : [onlyId]), Math.max(1, sessions), below, limit) as { id: number; title: string; file: string; shootId: number; avg: number; reviews: number }[];
+}
+
+/** Explicitly enabled catalog cleanup. Original files are always kept. */
+export function autoRemoveLowRated(db: DB, cfg: Cfg, onlyId?: number) {
+  const settings = loadSettings(db);
+  if (!settings.autoRemove) return { removed: 0, filesDeleted: 0, kept: 0 };
+  return db.transaction(() => {
+    const ids = deleteSuggestions(db, settings.autoRemoveAfter, settings.autoRemoveBelow, 2000, onlyId).map((photo) => photo.id);
+    const result = removePhotos(db, cfg, ids, 'keep');
+    const removed = new Set(ids);
+    const session = getSetting<{ queue: { id: number }[]; index: number } | null>(db, 'reviewSession', null);
+    if (session && removed.size) {
+      const before = session.queue.slice(0, session.index).filter((photo) => removed.has(photo.id)).length;
+      session.queue = session.queue.filter((photo) => !removed.has(photo.id)); session.index = Math.max(0, session.index - before);
+      setSetting(db, 'reviewSession', session);
+    }
+    return result;
+  })();
 }

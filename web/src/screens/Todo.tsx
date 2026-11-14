@@ -1,4 +1,4 @@
-import { DeleteSuggestions } from '../settings/old';
+import { RemovalReview } from '../components/RemovalReview';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ const WHAT: Record<string, string> = { all: 'details', camera: 'a camera', lens:
 /** To do (design: Proto More, page "todo"): one photograph at a time, with what it still needs. */
 export function TodoPage() {
   const nav = useNavigate();
-  const { settings, setSettings, refreshSummary } = useStore();
+  const { settings, refreshSummary } = useStore();
   const ai = !!settings && settings.ai !== 'off';
   const todo = useApi<Todo>('/todo');
   const walk = useApi<Walk>('/todo/walk');
@@ -93,10 +93,8 @@ export function TodoPage() {
   };
   return (
     <div className="page-shell">
-      {removalCount > 0 && settings && <section style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, marginBottom: 24 }}>
-        {!id && <h1 className="serif" style={{ fontSize: 48, marginTop: 0 }}>To do</h1>}
-        <DeleteSuggestions s={settings} save={async (patch) => { await setSettings(patch); }} inline onChanged={() => { todo.reload(); walk.reload(); lib.reload(); refreshSummary(); }} />
-      </section>}
+      {removalCount > 0 && <RemovalReview onChanged={() => { todo.reload(); walk.reload(); lib.reload(); refreshSummary(); }} />}
+
 
 
       {mapOpen && p && (

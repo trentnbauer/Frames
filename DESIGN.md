@@ -42,3 +42,5 @@ Personal password sign-in uses labelled email/password fields and a real submit 
 ## Validation
 
 Check visible changes in the real app in dark and light themes, including long titles and narrow layouts. Check that new controls do not overlap text or move neighbouring actions unexpectedly. Follow the repository's checks and PR requirements in [CLAUDE.md](CLAUDE.md).
+
+Removal decisions use one large photo beside a prominent personal-rating history, with Keep and Delete actions. Keep dismisses until another personal rating; Delete asks for confirmation. Match the shared theme in both modes and stack the panels on narrow screens. Automatic removal is a separate default-off setting with its own personal-average threshold and minimum-review count; it retains original files.

@@ -75,7 +75,7 @@ export class Logic extends DCLogic {
             { id: 'removeBelow', t: 'select', label: 'Averaging below', dep: 'suggestRemove', opts: ['1.0', '1.5', '2.0', '2.5', '3.0'], def: '2.0' },
             { id: 'removeVotes', t: 'select', label: 'Over at least', hint: 'Ratings from you and guests combined.', dep: 'suggestRemove', opts: ['3 votes', '5 votes', '8 votes', '12 votes', '20 votes'], def: '5 votes' },
             { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: '312 photos', toast: 'Would open the 312 suggestions' },
-            { id: 'leaveOut', t: 'toggle', label: 'Suggest leaving low-rated photos out of review', hint: 'They stay in your library and compositions.', def: false } ] },
+            { id: 'autoRemove', t: 'toggle', label: 'Automatically remove low-rated photos', hint: 'Original files are kept. Shared shoots and compositions are protected.', def: false } ] },
           { title: 'To do list counts photos missing', rows: [
             { id: 'todo', t: 'chips', label: 'Missing', opts: ['Camera', 'Location', 'Time', 'Subjects', 'Tags', 'Description', 'Composition', 'Light', 'Mood'], def: ['Camera', 'Location', 'Subjects', 'Tags', 'Composition'] } ] } ] },
         { key: 'tags', name: 'Tags & subjects', hint: 'How photos get described and found.', groups: [

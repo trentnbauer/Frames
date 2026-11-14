@@ -348,6 +348,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       END;
     `);
   },
+  // Keep a manual removal decision until its personal rating history changes.
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS removal_kept (photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, review_count INTEGER NOT NULL, rating_sum INTEGER NOT NULL)'); },
 ];
 
 export function migrate(db: DB) {

@@ -249,6 +249,23 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const st = loadSettings(db);
     return { below: st.deleteBelow, sessions: st.sessions, enabled: st.archiveSuggest && st.deleteBelow > 0, photos: st.archiveSuggest ? deleteSuggestions(db, st.sessions, st.deleteBelow) : [] };
   });
+  app.post('/api/photos/:id/removal/delete', async (req, rep) => {
+    if (((req.body ?? {}) as Row).confirm !== true) return rep.code(400).send({ error: 'Confirm deletion first.' });
+    const id = num((req.params as Row).id);
+    const result = db.transaction(() => {
+      const settings = loadSettings(db);
+      if (!settings.archiveSuggest || !deleteSuggestions(db, settings.sessions, settings.deleteBelow, 1, id).length) return null;
+      return removePhotos(db, cfg, [id], 'keep');
+    })();
+    if (!result) return rep.code(409).send({ error: 'This photo is no longer eligible for removal. Shared shoots and compositions are protected.' });
+    return result;
+  });
+  app.post('/api/photos/:id/removal/keep', async (req, rep) => {
+    const id = num((req.params as Row).id), settings = loadSettings(db);
+    if (!settings.archiveSuggest || !deleteSuggestions(db, settings.sessions, settings.deleteBelow, 1, id).length) return rep.code(400).send({ error: 'This photo is no longer suggested for removal.' });
+    db.prepare('INSERT OR REPLACE INTO removal_kept(photo_id,review_count,rating_sum) SELECT ?,COUNT(*),SUM(rating) FROM reviews WHERE photo_id=?').run(id,id);
+    return { ok: true };
+  });
   app.post('/api/photos/remove', async (req, rep) => {
     const ids = ((req.body ?? {}) as Row).ids;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every((n) => Number.isInteger(n))) return rep.code(400).send({ error: 'Send up to 500 photograph ids.' });
