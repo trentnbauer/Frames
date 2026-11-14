@@ -30,7 +30,7 @@ export function RemovalReview({ onChanged }: { onChanged: () => void }) {
   const y = (rating: number) => 178 - (rating - 1) * 38;
   const points = history.map((review, index) => `${x(index)},${y(review.rating)}`).join(' ');
   return <section aria-label="Removal review">
-    <div className="removal-heading"><h1 className="serif">To do</h1><span className="muted">Suggested for removal · {decided + 1} of {decided + remaining.length}</span></div>
+    <div className="removal-heading"><h1 className="serif">Removal review</h1><span className="muted">Suggested for removal · {decided + 1} of {decided + remaining.length}</span></div>
     <div className="removal-review">
       <div className="removal-photo"><img src={imgUrl(p.id, 'preview')} alt={p.title || p.file} /></div>
       <div className="removal-details">

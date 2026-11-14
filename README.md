@@ -164,3 +164,5 @@ Removal suggestions use a one-photo-at-a-time view in To do and Reviews settings
 Photos in any composition (including candidates and Done compositions), and photos in shoots with active, unexpired share links, are excluded from both removal suggestions and automatic removal. Confirmed Delete rechecks eligibility on the server so newly shared or composed photos are protected even if the displayed suggestion was loaded earlier. Revoked or expired shoot shares do not block eligibility.
 
 The environment-drift warning stays above the sticky app header. Header and sticky browse controls are offset by the warning’s measured height, including wrapped mobile layouts; without the warning, the normal header position is preserved.
+
+Removal decisions open in a full-screen review view with Back (or Escape), a large photo, personal score history and Keep/Delete actions. The Removal review navigation tab appears on desktop and mobile only when eligible photos are waiting. To do and Reviews settings also link to this view.

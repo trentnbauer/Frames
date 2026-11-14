@@ -1,4 +1,3 @@
-import { RemovalReview } from '../components/RemovalReview';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -93,7 +92,7 @@ export function TodoPage() {
   };
   return (
     <div className="page-shell">
-      {removalCount > 0 && <RemovalReview onChanged={() => { todo.reload(); walk.reload(); lib.reload(); refreshSummary(); }} />}
+      {removalCount > 0 && <div className="removal-heading"><h2 className="serif">Suggested for removal</h2><button className="btn outline" onClick={() => nav('/removals')}>Review {removalCount} photos</button></div>}
 
 
 

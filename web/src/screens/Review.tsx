@@ -55,7 +55,7 @@ export function Review() {
         <div>
           <h1 style={{ font: "400 64px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>{s.queue.length === 0 ? 'Nothing to review.' : 'Session complete.'}</h1>
           <p style={{ margin: '16px 0 28px', color: 'var(--text2)' }}>{s.queue.length === 0 ? 'Photographs come back here when they are due.' : `${rated.length} rated · ${s.queue.length - rated.length} skipped${rated.length ? ` · average ${mean.toFixed(1)}` : ''}`}</p>
-          {removals > 0 && <p><button className="btn outline" onClick={() => nav('/todo')}>Review {removals} suggested {removals === 1 ? 'removal' : 'removals'}</button><br /><span className="muted" style={{ fontSize: 13 }}>Low averages after completed review sessions. Nothing is removed automatically.</span></p>}
+          {removals > 0 && <p><button className="btn outline" onClick={() => nav('/removals')}>Review {removals} suggested {removals === 1 ? 'removal' : 'removals'}</button><br /><span className="muted" style={{ fontSize: 13 }}>Low averages after completed review sessions. Nothing is removed automatically.</span></p>}
           <button className="btn primary lg" onClick={() => api('/review/session', { method: 'DELETE' }).then(leave)}>Back</button>
         </div>
       </div>

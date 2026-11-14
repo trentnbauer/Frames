@@ -210,12 +210,13 @@ export function Header({ right }: { right?: ReactNode }) {
 
 /** The floating bar from the design: Home, Shoots, Library, Compositions, then Search and To do with its count. Desktop and tablet only. */
 export function BottomNav() {
-  const { todo } = useStore();
+  const { todo, removals } = useStore();
   const ui = useUi();
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
       {item('/', 'Home')}{item('/shoots', 'Shoots')}{item('/library', 'Library')}{item('/collections', 'Compositions')}
+      {removals > 0 && item('/removals', `Removal review ${removals}`)}
       <i className="bdiv" />
       <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
       {todo > 0 && <NavLink to="/todo" className="btodo">To do <b className="mono">{todo.toLocaleString()}</b></NavLink>}
@@ -225,6 +226,7 @@ export function BottomNav() {
 
 /** Phone only: the workflow steps live here. */
 export function TabBar() {
+  const { removals } = useStore();
   const loc = useLocation();
   const step = stepOf(loc.pathname);
   const [more, setMore] = useState(false);
@@ -235,6 +237,7 @@ export function TabBar() {
         <NavLink to="/shoots" className={step === 1 ? 'on' : ''}>Upload</NavLink>
         <NavLink to="/collections" className={step === 2 ? 'on' : ''}>Compose</NavLink>
         <NavLink to="/collections?filter=done">Export</NavLink>
+        {removals > 0 && <NavLink to="/removals">Removal review <b>{removals}</b></NavLink>}
         <button onClick={() => setMore(true)}>More</button>
       </nav>
       {more && (

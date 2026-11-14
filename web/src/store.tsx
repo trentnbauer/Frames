@@ -21,6 +21,7 @@ type Ctx = {
   refreshSummary: () => void;
   /** How many things are waiting on the person; 0 hides the To do button. */
   todo: number;
+  removals: number;
 };
 const C = createContext<Ctx>(null!);
 export const useStore = () => useContext(C);
@@ -30,8 +31,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [summary, setSum] = useState<Summary | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [todo, setTodo] = useState(0);
+  const [removals, setRemovals] = useState(0);
   const refreshMe = useCallback(() => { api<Me>('/me').then(setMe).catch(() => {}); }, []);
-  const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); api<{ total: number }>('/todo').then((t) => setTodo(t.total)).catch(() => {}); }, []);
+  const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); api<{ total: number; items: { key: string; count: number }[] }>('/todo').then((t) => { setTodo(t.total); setRemovals(t.items.find((item) => item.key === 'delete')?.count ?? 0); }).catch(() => {}); }, []);
   useEffect(() => {
     // A share link's page has no login, and these calls need one: skip them there, or the browser asks a guest for a password.
     if (window.location.pathname.startsWith('/s/') || /^\/(signin|signup|signed-out|terms)\/?$/.test(window.location.pathname)) return;
@@ -44,5 +46,5 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setS(await api<Settings>('/settings', { method: 'PUT', body: p }));
     refreshSummary();
   };
-  return <C.Provider value={{ me, refreshMe, settings, setSettings, summary, refreshSummary, todo }}>{children}</C.Provider>;
+  return <C.Provider value={{ me, refreshMe, settings, setSettings, summary, refreshSummary, todo, removals }}>{children}</C.Provider>;
 }

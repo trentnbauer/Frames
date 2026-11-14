@@ -1,4 +1,3 @@
-import { RemovalReview } from '../components/RemovalReview';
 import { AccountPassword } from '../components/AccountPassword';
 import { TwoFactor } from '../components/TwoFactor';
 import { useState } from 'react';
@@ -136,6 +135,7 @@ const SPACING = ['1 day', '3 days', '1 week', '2 weeks', '1 month', '3 months', 
 const TODO: [string, string][] = [['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
 const SHARE: [string, string][] = [['Portfolio photos only', 'portfolio'], ['Photos rated 4 or more', 'rated4'], ['Any photo', 'any']];
 export function useReviews(ctx: Ctx): Section {
+  const nav = useNavigate();
   const { settings: s, setSettings, refreshSummary } = useStore();
   const w = useApi<{ weight: number }>('/collections/guest-weight');
   const c = useApi<{ optIn: boolean; share: string; written: boolean; showOnHome: boolean }>('/community/prefs');
@@ -173,7 +173,7 @@ export function useReviews(ctx: Ctx): Section {
         { id: 'suggestRemove', t: 'toggle', label: 'Suggest removing low-rated photos', hint: `After all ${n} review sessions. Nothing is removed without asking.`, value: !!s?.archiveSuggest, set: (v) => void save({ archiveSuggest: v, ...(v && !s?.deleteBelow ? { deleteBelow: 2 } : {}) }) },
         { id: 'removeBelow', t: 'select', label: 'Averaging below', dep: 'suggestRemove', opts: ['1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5'], value: below, set: (v) => void save({ deleteBelow: Number(v) }) },
         { id: 'removeVotes', t: 'link', label: 'Ratings used', hint: `Your own average after all ${n} sessions. Guest and community ratings are separate.` },
-        { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: `${sug.data?.photos.length ?? 0} photos`, act: () => s && ctx.modal(<Modal title="Suggested for removal" sub="Review one photo at a time. Keep it, or confirm its removal." width={1200} onClose={close(ctx)}><RemovalReview onChanged={() => sug.reload()} /></Modal>) },
+        { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: `${sug.data?.photos.length ?? 0} photos`, act: () => nav('/removals') },
         { id: 'autoRemove', t: 'toggle', label: 'Automatically remove low-rated photos', hint: 'Off by default. When enabled, qualifying photos are removed from Frames without confirmation, including existing photos. Original files are kept.', value: !!s?.autoRemove, set: (value) => void save({ autoRemove: value }) },
         { id: 'autoRemoveBelow', t: 'select', label: 'Automatically remove when averaging below', dep: 'autoRemove', opts: ['1.0','1.5','2.0','2.5','3.0','3.5','4.0','4.5'], value: (s?.autoRemoveBelow ?? 2).toFixed(1), set: (value) => void save({ autoRemoveBelow: Number(value) }) },
         { id: 'autoRemoveAfter', t: 'stepper', label: 'After at least this many reviews', hint: 'Your own ratings only. Independent of the suggestion settings.', dep: 'autoRemove', min: 1, max: 12, value: s?.autoRemoveAfter ?? 4, set: (value) => void save({ autoRemoveAfter: value }) },
