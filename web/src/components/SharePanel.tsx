@@ -29,49 +29,70 @@ function Seg({ options, value, onPick, label }: { options: string[]; value: stri
 }
 const Switch = ({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) => <button role="switch" aria-checked={on} aria-label={label} className={'sw' + (on ? ' on' : '')} onClick={onClick} />;
 const Row = ({ title, hint, last, children }: { title: string; hint?: string; last?: boolean; children: React.ReactNode }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderBottom: last ? 0 : '1px solid var(--hair)' }}>
+  <div className="share-setting-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderBottom: last ? 0 : '1px solid var(--hair)' }}>
     <div><div style={{ fontSize: 14 }}>{title}</div>{hint && <div className="muted" style={{ fontSize: 12.5 }}>{hint}</div>}</div>{children}
   </div>
 );
 
-/** Share <name>: the link, what guests can do, who sees what, expiry, a name, a PIN, email, and Stop sharing / Preview as guest / Done. */
+/** Each address has its own permissions, expiry, PIN and invitations. */
 export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | 'shoot'; id: number; name?: string; onClose: () => void }) {
   const links = useApi<ShareLink[]>(`/shares?kind=${kind}&id=${id}`);
+  const [selected, setSelected] = useState<number | 'new' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const link = selected === 'new' ? null : links.data?.find((item) => item.id === selected) ?? links.data?.find((item) => item.status === 'active') ?? links.data?.[0] ?? null;
+  const update = (saved: ShareLink) => {
+    links.set((previous) => [saved, ...(previous ?? []).filter((item) => item.id !== saved.id)].sort((a, b) => b.id - a.id));
+    setSelected(saved.id);
+  };
+  return <Modal title={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} sub="Different links for different people. Each keeps its own settings." width={960} onClose={onClose}
+    foot={<><span className="grow">Only the selected link is changed.</span><button className="btn primary" disabled={busy} onClick={onClose}>Done</button></>}>
+    {!links.data ? <p role={links.error ? 'alert' : undefined} className="muted">{links.error || 'Loading…'}</p> : <div className="share-manager">
+      <nav className="share-links" aria-label="Share links">
+        <span className="eyebrow">Your links · {links.data.length}</span>
+        {links.data.map((item) => <button key={item.id} disabled={busy} className={'share-link-item' + (link?.id === item.id ? ' selected' : '')} aria-pressed={link?.id === item.id} onClick={() => setSelected(item.id)}>
+          <strong>{item.label || `Link ${item.id}`}</strong>
+          <small>{[item.allowReview ? 'Rate' : 'View only', item.allowSuggest && kind === 'collection' ? 'Suggest' : '', item.allowDownload ? 'Download' : '', item.pin ? 'PIN' : ''].filter(Boolean).join(' · ')}</small>
+          <small className="share-status">{item.status === 'active' ? '● Active' : item.status === 'revoked' ? 'Stopped' : 'Expired'}</small>
+        </button>)}
+        <button className="btn outline" disabled={busy} aria-pressed={!link} onClick={() => setSelected('new')}>+ New link</button>
+      </nav>
+      <ShareLinkEditor key={link?.id ?? 'new'} kind={kind} targetId={id} link={link} onSaved={update} onBusy={setBusy} />
+    </div>}
+  </Modal>;
+}
+
+function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'collection' | 'shoot'; targetId: number; link: ShareLink | null; onSaved: (link: ShareLink) => void; onBusy: (busy: boolean) => void }) {
+  const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
   const [fresh, setFresh] = useState(false);
   const [err, setErr] = useState('');
   const [email, setEmail] = useState('');
-  const [draft, setDraft] = useState({ allowReview: true, allowSuggest: true, allowDownload: false, onlyWall: false, askName: true, pin: '', expiresAt: inDays(21) as string | null });
+  const [draft, setDraft] = useState({ label: '', allowReview: true, allowSuggest: true, allowDownload: false, onlyWall: false, askName: true, pin: '', expiresAt: inDays(21) as string | null });
   const [pinEdit, setPinEdit] = useState('');
-  const link = links.data?.find((l) => l.status === 'active') ?? null;
   const inv = useApi<{ invites: Invite[]; canEmail: boolean }>(link ? `/shares/${link.id}/invites` : null);
   useEffect(() => setPinEdit(link?.pin ?? draft.pin), [link?.pin, draft.pin]);
-  const run = async (fn: () => Promise<unknown>) => { setErr(''); try { await fn(); links.reload(); } catch (e) { setErr((e as Error).message); } };
+  const run = async (fn: () => Promise<ShareLink>) => { if (busy) return; setBusy(true); onBusy(true); setErr(''); try { onSaved(await fn()); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); onBusy(false); } };
   const settings = link ?? draft;
-  const start = () => run(() => api('/shares', { body: { kind, id, ...draft, allowSuggest: kind === 'collection' && draft.allowSuggest } }));
+  const start = () => run(() => api<ShareLink>('/shares', { body: { kind, id: targetId, ...draft, allowSuggest: kind === 'collection' && draft.allowSuggest } }));
   const patch = (body: Partial<typeof draft>) => link ? run(() => api(`/shares/${link.id}`, { method: 'PATCH', body })) : setDraft((d) => ({ ...d, ...body }));
   const copy = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); } catch { window.prompt('Copy this', text); } setCopied(key); setTimeout(() => setCopied(''), 1800); };
-  const stop = () => link && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
-  const regen = () => link && run(async () => { await api(`/shares/${link.id}/regenerate`, { body: {} }); setFresh(true); setTimeout(() => setFresh(false), 1500); });
+  const stop = () => link && window.confirm(`Stop sharing through ${link.label || `Link ${link.id}`}? Other links will keep working.`) && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
+  const regen = () => link && window.confirm('Replace this link’s address? Its old address will stop working. Other links are unchanged.') && run(async () => { const saved = await api<ShareLink>(`/shares/${link.id}/regenerate`, { body: {} }); setFresh(true); return saved; });
   const send = async () => {
-    if (!link || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
-    try { await api(`/shares/${link.id}/invites`, { body: { emails: [email.trim()] } }); setEmail(''); inv.reload(); } catch (e) { setErr((e as Error).message); }
+    if (!link || link.status !== 'active' || busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
+    setBusy(true); onBusy(true);
+    try { await api(`/shares/${link.id}/invites`, { body: { emails: [email.trim()] } }); setEmail(''); inv.reload(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); onBusy(false); }
   };
   const perms: [string, string, boolean][] = [['rate', 'Rate photos', settings.allowReview], ['suggest', 'Suggest changes', settings.allowSuggest], ['dl', 'Download files', settings.allowDownload]];
   const setPerm = (k: string, v: boolean) => patch(k === 'rate' ? { allowReview: v } : k === 'suggest' ? { allowSuggest: v } : { allowDownload: v });
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  return (
-    <Modal title={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} sub={kind === 'shoot' ? "Anyone with the link can see the photos in this shoot and rate them if you allow it." : "Anyone with the link can see the wall and its candidates. Nothing changes until you approve it."} width={580} onClose={onClose}
-      foot={<>
-        <button style={{ flex: 1, textAlign: 'left', fontSize: 13.5, color: 'var(--danger)', opacity: link ? 1 : 0.35 }} onClick={stop} disabled={!link}>Stop sharing</button>
-        {link ? <a className="btn outline" href={urlOf(link.token)} target="_blank" rel="noopener noreferrer">Preview as guest</a> : <span className="btn outline disabled">Preview as guest</span>}
-        <button className="btn primary" disabled={!links.data} onClick={link ? onClose : start}>{link ? 'Done' : 'Create link'}</button></>}>
-      {err && <div className="reason" role="alert" style={{ margin: 0 }}>{err}</div>}
-      {!links.data && <p className="muted">{links.error || 'Loading…'}</p>}
-      {links.data && !link && <p className="muted" style={{ margin: 0 }}>Choose what guests can do. The link is made last, at the bottom.</p>}
-      {links.data && (
-        <>
+  return <div className="share-editor">
+    <div className="spread"><h2 className="serif">{link ? link.label || `Link ${link.id}` : 'New link'}</h2><span className="muted">{link ? link.status === 'active' ? '● Active' : link.status === 'revoked' ? 'Stopped' : 'Expired' : 'Not shared yet'}</span></div>
+    {err && <div className="reason" role="alert">{err}</div>}
+    <fieldset disabled={busy} className="share-fields">
+      <label className="share-name">Link name<input className="field-in" aria-label="Link name" maxLength={80} placeholder="e.g. Client review" defaultValue={link?.label ?? draft.label} onChange={(event) => { if (!link) setDraft((value) => ({ ...value, label: event.target.value })); }} onBlur={(event) => { if (link && event.target.value !== link.label) void patch({ label: event.target.value }); }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
+      {link && link.status !== 'active' && <div className="share-inactive"><p className="muted">This link is {link.status === 'revoked' ? 'stopped' : 'expired'}. Its address cannot be opened by guests.{link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? ' Reactivating sets a new expiry in 3 weeks.' : ''}</p><button className="btn outline" onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))}>Reactivate this link</button></div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="eyebrow">Guests can</span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -104,11 +125,11 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
               </div>
               <div className="spread" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
                 <span>{settings.expiresAt ? `Expires ${new Date(settings.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'Never expires'}{settings.pin ? ' · PIN on' : ''}{fresh ? ' · New link made, the old one stops working' : ''}</span>
-                <button style={{ color: 'var(--text2)' }} onClick={regen}>New link</button>
+                <button style={{ color: 'var(--text2)' }} onClick={regen}>Replace address</button>
               </div>
             </div>
           )}
-          {link && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {link?.status === 'active' && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="eyebrow">Send by email</span>
             {inv.data && !inv.data.canEmail ? <p className="muted" style={{ fontSize: 13, margin: 0 }}>This server can’t send email, so copy the link instead.</p> : (
               <>
@@ -120,15 +141,16 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
                   {(inv.data?.invites ?? []).filter((v, i, a) => a.findIndex((x) => x.email === v.email) === i).map((m) => (
                     <span key={m.email} style={{ height: 28, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 6px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 12.5 }}>
                       {m.email} <span className="faint" title={m.error}>{m.status === 'sent' ? 'Sent' : 'Failed'}</span>
-                      <button aria-label={`Remove ${m.email}`} style={{ padding: '0 4px', color: 'var(--muted)' }} onClick={() => api(`/shares/${link.id}/invites?email=${encodeURIComponent(m.email)}`, { method: 'DELETE' }).then(inv.reload)}>✕</button>
+                      <button aria-label={`Remove ${m.email}`} style={{ padding: '0 4px', color: 'var(--muted)' }} onClick={async () => { setBusy(true); onBusy(true); setErr(''); try { await api(`/shares/${link.id}/invites?email=${encodeURIComponent(m.email)}`, { method: 'DELETE' }); inv.reload(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); onBusy(false); } }}>✕</button>
                     </span>
                   ))}
                 </div>
               </>
             )}
           </div>}
-        </>
-      )}
-    </Modal>
-  );
+      <div className="share-editor-actions">
+        {link ? <><button className="share-stop" disabled={link.status !== 'active'} onClick={stop}>Stop this link</button><a className={'btn outline' + (link.status === 'active' ? '' : ' disabled')} aria-disabled={link.status !== 'active'} href={link.status === 'active' ? urlOf(link.token) : undefined} target="_blank" rel="noopener noreferrer">Preview as guest</a></> : <button className="btn primary" onClick={start}>Create link</button>}
+      </div>
+    </fieldset>
+  </div>;
 }
