@@ -1,6 +1,6 @@
 import { HomeWishlist } from '../components/HomeWishlist';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { miniWall, printsSummary } from './walls';
@@ -127,6 +127,7 @@ export function Home() {
     <div className="page-shell">
 
       <ProtoHome v={v} cloudOn={v.cloudOn} />
+      <div className="workflow-shortcuts"><Link to="/imports">Recent imports →</Link></div>
       <HomeWishlist />
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); shoots.reload(); pending.reload(); batches.reload(); }} />}
     </div>

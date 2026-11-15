@@ -1,3 +1,8 @@
+import { Imports } from './screens/Imports';
+import { WishlistHistory } from './screens/WishlistHistory';
+import { ReviewSchedule } from './screens/ReviewSchedule';
+import { Activity } from './screens/Activity';
+import { UndoNotice } from './components/UndoNotice';
 import { RemovalReviewScreen } from './screens/RemovalReview';
 import { TwoFactorGate } from './components/TwoFactor';
 import { LayoutPreferencesProvider } from './layoutPreferences';
@@ -31,6 +36,7 @@ import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
+  '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
   '/': 'Today', '/library': 'Library', '/review': 'Review', '/removals': 'Removal review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
   '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
 };
@@ -81,6 +87,9 @@ function Shell() {
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
+        <Route path="/activity" element={<Activity />} />
+        <Route path="/imports" element={<Imports />} />
+        <Route path="/review-schedule" element={<ReviewSchedule />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
         <Route path="/removals" element={<RemovalReviewScreen />} />
@@ -92,6 +101,7 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
         <Route path="/gear" element={<Gear />} />
+        <Route path="/gear-history" element={<WishlistHistory />} />
         <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/welcome" element={<Welcome />} />
@@ -102,6 +112,7 @@ function Shell() {
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />
+      <UndoNotice />
       {searching && <Search onClose={() => setSearching(false)} />}
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}

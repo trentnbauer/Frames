@@ -9,7 +9,9 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   if (r.status === 401 && (await r.clone().json().catch(() => null))?.signIn) window.location.assign(`/signin?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`); // the session ended: back to the sign-in page
   if (r.status === 403 && (await r.clone().json().catch(() => null))?.mfaRequired) window.dispatchEvent(new Event('frames:mfa-required'));
   if (!r.ok) throw new Error((await r.json().catch(() => ({ error: r.statusText }))).error ?? r.statusText);
-  return r.json() as Promise<T>;
+  const data = await r.json();
+  if ((init?.body !== undefined || init?.method === 'DELETE') && typeof data?.operationId === 'number') window.dispatchEvent(new CustomEvent('frames:undo-available',{detail:{id:data.operationId}}));
+  return data as T;
 }
 
 /** Fetches `path` (null = skip). `reload` refetches; `set` updates local data after a write. */
@@ -25,6 +27,7 @@ export function useApi<T>(path: string | null) {
     return () => { live = false; };
   }, [path, tick]);
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  useEffect(()=>{window.addEventListener('frames:metadata-changed',reload);return()=>window.removeEventListener('frames:metadata-changed',reload);},[reload]);
   return { data, error, loading: data === null && error === null, reload, set: setData };
 }
 

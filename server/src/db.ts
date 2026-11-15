@@ -350,6 +350,48 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // Keep a manual removal decision until its personal rating history changes.
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS removal_kept (photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, review_count INTEGER NOT NULL, rating_sum INTEGER NOT NULL)'); },
+  (db) => {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS photo_recovery(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, file TEXT NOT NULL, removed_at TEXT NOT NULL, snapshot TEXT NOT NULL, thumb BLOB);
+    CREATE TABLE IF NOT EXISTS change_journal(id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL, changes TEXT NOT NULL, created_at TEXT NOT NULL, undone_at TEXT);
+    CREATE TABLE IF NOT EXISTS gear_aliases(id INTEGER PRIMARY KEY AUTOINCREMENT, gear_id INTEGER NOT NULL REFERENCES gear_items(id) ON DELETE CASCADE, type TEXT NOT NULL CHECK(type IN ('camera','lens')), name TEXT NOT NULL, key TEXT NOT NULL, UNIQUE(type,key));
+  `);
+    const fresh = !hasColumn(db, 'photos', 'raw_camera');
+    addColumn(db, 'photos', 'raw_camera', "TEXT NOT NULL DEFAULT ''");
+    addColumn(db, 'photos', 'raw_lens', "TEXT NOT NULL DEFAULT ''");
+    if (fresh) db.exec('UPDATE photos SET raw_camera=camera,raw_lens=lens');
+  },
+
+  (db) => {
+    db.exec(
+      'CREATE TABLE IF NOT EXISTS saved_views(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL COLLATE NOCASE UNIQUE,filters TEXT NOT NULL,created_at TEXT NOT NULL)',
+    );
+  },
+
+  (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS wishlist_history(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,snapshot TEXT NOT NULL,owned_after TEXT,owned_id INTEGER,estimated REAL,paid REAL,currency TEXT NOT NULL,date TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',restored_at TEXT);`,
+    );
+  },
+
+  (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS import_runs(id TEXT PRIMARY KEY,source TEXT NOT NULL,status TEXT NOT NULL,started_at TEXT NOT NULL,finished_at TEXT);CREATE TABLE IF NOT EXISTS import_files(id INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT NOT NULL REFERENCES import_runs(id) ON DELETE CASCADE,path TEXT NOT NULL,file TEXT NOT NULL,status TEXT NOT NULL,photo_id INTEGER REFERENCES photos(id) ON DELETE SET NULL,error TEXT NOT NULL DEFAULT '',UNIQUE(run_id,path));`,
+    );
+  },
+
+  (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS collection_versions(id INTEGER PRIMARY KEY AUTOINCREMENT,collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,name TEXT NOT NULL,snapshot TEXT NOT NULL,background BLOB,created_at TEXT NOT NULL,UNIQUE(collection_id,name));CREATE TABLE IF NOT EXISTS version_photos(version_id INTEGER NOT NULL REFERENCES collection_versions(id) ON DELETE CASCADE,photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,PRIMARY KEY(version_id,photo_id));`,
+    );
+    addColumn(db, 'shares', 'version_id', 'INTEGER REFERENCES collection_versions(id) ON DELETE RESTRICT');
+  },
+
+  (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS metadata_jobs(id TEXT PRIMARY KEY,input TEXT NOT NULL,cursor INTEGER NOT NULL DEFAULT 0,operation_id INTEGER,status TEXT NOT NULL,created_at TEXT NOT NULL);`,
+    );
+  },
 ];
 
 export function migrate(db: DB) {

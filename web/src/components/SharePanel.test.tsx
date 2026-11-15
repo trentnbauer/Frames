@@ -17,6 +17,8 @@ describe('the shared photoshoot and composition dialog', () => {
       for (const label of ['Rate photos', 'Download files', 'Link expires', 'Ask for their name', 'PIN', 'Create link']) expect(html).toContain(label);
       expect(html.includes('Suggest changes')).toBe(kind === 'collection');
       expect(html.includes('Only the wall')).toBe(kind === 'collection');
+      expect(html.includes('Shared arrangement')).toBe(kind === 'collection');
+      expect(html.includes('Live editor')).toBe(kind === 'collection');
       expect(html).not.toContain('Share Kitchen');
     }
   });

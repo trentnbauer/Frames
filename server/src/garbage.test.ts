@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { setSetting } from './db.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
@@ -19,6 +19,9 @@ beforeAll(async () => {
   await A.post('/api/ai/sources', { type: 'openai', endpoint: 'https://api.example.test', model: 'm' });
   await A.post('/api/collections', { name: 'c' });
 });
+// Give injected requests a full event-loop turn to release their raw streams between routes.
+// Large fuzz bodies otherwise remain queued until the entire suite finishes.
+afterEach(async () => { await new Promise<void>(resolve => setImmediate(resolve)); });
 afterAll(() => { env.app.close(); cleanup(env); });
 
 const BIG = 'x'.repeat(200_000);

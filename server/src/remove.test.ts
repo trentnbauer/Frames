@@ -35,7 +35,7 @@ describe('taking a photograph out of Frames', () => {
     await A.post('/api/library/scan?wait=1');
     expect(await idOf('gone.jpg')).toBeDefined();
   });
-  it('deletes the copy Frames holds itself (an upload), but only that', async () => {
+  it('preserves an uploaded original for recoverable removal', async () => {
     const up = path.join(env.data, 'originals', 'uploaded.jpg');
     fs.mkdirSync(path.dirname(up), { recursive: true });
     fs.writeFileSync(up, await jpg(svg(900, 600, '#112233', '#eeeeee', [0.3, 0.3])));
@@ -43,8 +43,8 @@ describe('taking a photograph out of Frames', () => {
     await A.post('/api/library/scan?wait=1');
     const id = await idOf('uploaded.jpg');
     expect(id).toBeDefined();
-    expect((await A.del(`/api/photos/${id}`)).body).toMatchObject({ removed: 1, filesDeleted: 1 });
-    expect(fs.existsSync(up)).toBe(false);
+    expect((await A.del(`/api/photos/${id}`)).body).toMatchObject({ removed: 1, filesDeleted: 0, kept: 1 });
+    expect(fs.existsSync(up)).toBe(true);
   });
   it('removes a whole photoshoot with its photographs and share links, and refuses nonsense', async () => {
     const shoot = (await A.get('/api/photos')).body.photos[0].shootId;

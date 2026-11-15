@@ -236,3 +236,34 @@ describe('server rules for members', () => {
     expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(201);
   });
 });
+
+describe('private workflow records', () => {
+  it('keeps views, recovery, undo, aliases, imports, versions and wishlist decisions in the current library', async () => {
+    const view=(await call('POST','/api/views',a,{name:'Alice private view',filters:'camera=Minolta'})).body;
+    expect((await call('GET','/api/views',b)).body).toEqual([]);
+    expect((await call('PATCH',`/api/views/${view.id}`,b,{name:'Not mine'})).status).toBe(404);
+    const col=(await call('GET','/api/collections',a)).body[0];
+    const version=(await call('POST',`/api/collections/${col.id}/versions`,a,{name:'Private wall'})).body;
+    expect((await call('GET',`/api/collections/${col.id}/versions/${version.id}/background`,b)).status).toBe(404);
+    expect((await call('GET',`/api/collections/${col.id}/versions/${version.id}/print-sheet`,b)).status).toBe(404);
+    const run=(await call('GET','/api/imports',a)).body[0];
+    expect((await call('GET',`/api/imports/${run.id}`,b)).status).toBe(404);
+    const owned=(await call('POST','/api/gear/items',a,{name:'Alice camera',type:'camera'})).body;
+    await call('POST','/api/gear/aliases',a,{gearId:owned.id,name:'Alice regional camera'});
+    expect((await call('GET','/api/gear/aliases',a)).body.aliases.length).toBeGreaterThan(0);
+    expect((await call('GET','/api/gear/aliases',b)).body.aliases).toEqual([]);
+    const wish=(await call('POST','/api/gear/items',a,{name:'Alice wish',kind:'want'})).body;
+    await call('DELETE',`/api/gear/items/${wish.id}?kind=want`,a);
+    expect((await call('GET','/api/gear/history?kind=declined',a)).body.entries.length).toBeGreaterThan(0);
+    expect((await call('GET','/api/gear/history?kind=declined',b)).body.entries).toEqual([]);
+    const photo=(await call('GET','/api/photos',a)).body.photos[0];
+    const edit=(await call('PATCH',`/api/photos/${photo.id}`,a,{description:'Private change'})).body;
+    expect((await call('POST',`/api/changes/${edit.operationId}/undo`,b,{})).status).toBe(410);
+    await call('DELETE',`/api/photos/${photo.id}`,a);
+    const recovery=(await call('GET','/api/recovery',a)).body[0];
+    expect((await call('GET','/api/recovery',b)).body).toEqual([]);
+    expect((await call('POST',`/api/recovery/${recovery.id}/restore`,b,{})).status).toBe(410);
+    for(const endpoint of ['/api/views','/api/recovery','/api/changes','/api/gear/aliases','/api/imports','/api/review/schedule','/api/gear/history'])expect((await call('GET',endpoint)).status).toBe(401);
+    await call('POST',`/api/recovery/${recovery.id}/restore`,a,{});
+  });
+});

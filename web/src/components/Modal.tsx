@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 /**
@@ -22,7 +23,7 @@ export function Modal({ title, sub, onClose, children, foot, width = 560, eyebro
     window.addEventListener('keydown', f);
     return () => { window.removeEventListener('keydown', f); before?.focus?.(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
+  const dialog = (
     <div className="mscrim" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex={-1} style={{ width }}>
         <div className="mbody">
@@ -40,6 +41,7 @@ export function Modal({ title, sub, onClose, children, foot, width = 560, eyebro
       </div>
     </div>
   );
+  return typeof document !== 'undefined' && document.body ? createPortal(dialog, document.body) : dialog;
 }
 
 export const Spinner = ({ size = 14 }: { size?: number }) => <span className="spin" style={{ width: size, height: size }} aria-hidden />;

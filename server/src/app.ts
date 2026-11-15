@@ -1,3 +1,9 @@
+import { registerVersions } from './routes/versions.js';
+import { registerImports } from './routes/imports.js';
+import { registerWishHistory } from './routes/wishHistory.js';
+import { registerOrganize } from './routes/organize.js';
+import { registerWorkflow } from './routes/workflow.js';
+import { pruneRecovery } from './workflowCore.js';
 import { autoRemoveLowRated } from './remove.js';
 import { DUE_REVIEW_SQL } from './reviewEligibility.js';
 import { noteUse } from './activity.js';
@@ -206,7 +212,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       lat: p.lat, lon: p.lon, place: p.place, placeAddress: p.place_address ?? '', placeKind: p.place_kind ?? '', placePrecision: p.place_precision ?? 'exact', parentId: p.parent_id,
       palette: p.palette ? JSON.parse(p.palette) : [], brightness: p.brightness, contrast: p.contrast, saturation: p.saturation,
       xmpRating: p.xmp_rating, aiStatus: p.ai_status,
-      ...(full ? {
+      ...(full ? { rawCamera:p.raw_camera, rawLens:p.raw_lens,
         tags: tagsOf(p.id), reviews: reviewsOf(p.id), description: p.description, descSource: p.desc_source,
         aiSuggestion: aiSuggestion(p), variants: (db.prepare('SELECT id FROM photos WHERE parent_id = ?').all(p.id) as Row[]).map((r) => r.id as number),
         conflicts: db.prepare('SELECT field, mine, theirs FROM xmp_conflicts WHERE photo_id = ?').all(p.id),
@@ -602,6 +608,11 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   });
 
   const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: () => runScan(), scanning: () => tenants.current().scan.running, sys, tenants, tenant: () => tenants.current(), bag: (key, init) => { const m = tenants.current().bag; if (!m.has(key)) m.set(key, init()); return m.get(key); }, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow() };
+  registerVersions(app, ctx);
+  registerImports(app, ctx);
+  registerWishHistory(app, ctx);
+  registerOrganize(app, ctx);
+  registerWorkflow(app, ctx);
   registerPhotos(app, ctx);
   registerLibrary(app, ctx);
   registerInsights(app, ctx);
@@ -645,7 +656,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   startup.push(setTimeout(() => { if (loadTunnel(sys).enabled) tunnelRunner.start(); ctx.tunnelRefresh?.(); }, 1500));
   startup.push(setTimeout(() => { for (const t of tenants.all()) tenants.run(t, () => kickAi(t)); }, 2000)); // and so does AI analysis, where it left off
   const cleanLowRatings = () => {
-    try { for (const tenant of tenants.all()) { try { tenants.run(tenant, () => autoRemoveLowRated(tenant.db, tenant.cfg)); } catch (error) { console.error('Automatic photo cleanup failed', error instanceof Error ? error.message : 'Unknown error'); } } } catch (error) { console.error('Automatic photo cleanup could not load libraries', error instanceof Error ? error.message : 'Unknown error'); }
+    try { for (const tenant of tenants.all()) { try { tenants.run(tenant, () => { pruneRecovery(tenant.db); autoRemoveLowRated(tenant.db, tenant.cfg); }); } catch (error) { console.error('Automatic photo cleanup failed', error instanceof Error ? error.message : 'Unknown error'); } } } catch (error) { console.error('Automatic photo cleanup could not load libraries', error instanceof Error ? error.message : 'Unknown error'); }
   };
   startup.push(setTimeout(cleanLowRatings, 2000));
   const cleanupTimer = setInterval(cleanLowRatings, 60_000); cleanupTimer.unref();

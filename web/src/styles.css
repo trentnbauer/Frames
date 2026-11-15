@@ -856,3 +856,36 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .wishlist-editor { padding:16px 26px 24px 100px; }
 .wishlist-footer { font-size:11px; }
 @media(max-width:767px) { .wishlist-row { grid-template-columns:10px 14px minmax(0,1fr) auto 42px; gap:8px; height:50px; padding:0 10px; } .wishlist-row > svg, .wishlist-listing-slot { display:none; } .wishlist-name { min-width:0; } .wishlist-name h2 { font-size:12.5px; } .wishlist-price { font-size:11px; } .wishlist-edit-toggle { width:42px; font-size:11px; } .wishlist-top h1 { font-size:33px; } .wishlist-editor { padding:16px; } .wishlist-footer, .wishlist-footer label { font-size:10px; } }
+
+.workflow-shortcuts { display:flex; gap:14px; flex-wrap:wrap; padding:12px 0; font-size:13px; }
+.workflow-list { margin-top:24px; border:1px solid var(--outline); border-radius:12px; padding:0 20px; }
+.workflow-row { display:flex; align-items:center; gap:16px; padding:18px 0; border-bottom:1px solid var(--outline); }
+.workflow-row:last-child { border-bottom:0; }
+.workflow-row img { width:64px; height:48px; object-fit:cover; border-radius:5px; }
+.workflow-row .grow { flex:1; min-width:0; overflow-wrap:anywhere; }
+.workflow-row small { display:block; color:var(--muted); margin-top:6px; }
+.undo-notice { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:90; display:flex; gap:14px; align-items:center; padding:12px 18px; border:1px solid var(--outline); border-radius:12px; background:var(--raised); box-shadow:var(--float); max-width:calc(100vw - 32px); }
+@media(max-width:767px){.workflow-row{flex-wrap:wrap}.undo-notice{width:calc(100vw - 32px);font-size:12px}.workflow-list{padding:0 12px}}
+.batch-edit-fields { border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0; }
+.batch-choice { display:flex;align-items:center;gap:10px;font-size:13px; }
+.batch-choice input { width:16px;height:16px; }
+.batch-edit-row { display:flex;gap:12px;align-items:center;flex-wrap:wrap; }
+.batch-edit-row > .batch-choice { width:150px; }
+.batch-edit-row > .field-in { flex:1;min-width:180px; }
+.workflow-preview { background:var(--surface);border:1px solid var(--outline);padding:16px;border-radius:10px; }
+.workflow-metrics { display:flex;gap:14px;flex-wrap:wrap;margin:24px 0; }
+.workflow-metrics > div { background:var(--surface);border:1px solid var(--outline);border-radius:10px;padding:16px 22px;min-width:130px; }
+.workflow-metrics strong { display:block;font:36px var(--serif); }
+.workflow-metrics small { display:block;color:var(--muted); }
+.arrangement-comparison { display: grid; gap: 16px; margin: 16px 0; }
+.arrangement-comparison.two { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.arrangement-comparison section { min-width: 0; }
+.arrangement-preview { min-height: 200px; aspect-ratio: 1.2; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--outline); border-radius: 10px; overflow: hidden; }
+@media(max-width:680px) { .arrangement-comparison.two { grid-template-columns: 1fr; } }
+
+/* Keep shared dialogs above transformed editor controls and keep their actions visible. */
+@media(min-width:768px) {
+  .modal { display:flex;flex-direction:column;max-height:calc(100dvh - 136px); }
+  .mbody { min-height:0;overflow:auto; }
+  .mfoot { flex-shrink:0; }
+}

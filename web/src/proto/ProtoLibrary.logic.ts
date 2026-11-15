@@ -71,9 +71,9 @@ export class Logic extends DCLogic {
       compPicker: S.cm ? P.renderCompPicker(S.picked, () => this.setState({ cm: null }), (msg) => { this.setState({ cm: null, picked: [], selMode: false }); this.flash(msg); }) : null,
       delOpen: !!S.del, openDel: () => this.setState({ del: true, delMode: 'frames' }), closeDel: () => this.setState({ del: false }),
       delTitle: 'Delete ' + n + (n === 1 ? ' photo?' : ' photos?'), delSub: 'Their ratings, tags and places in compositions go too.',
-      delOpts: [['frames', 'Remove from Frames', 'Originals stay on disk. You can import them again.'], ['trash', 'Also move the originals to the trash', 'Includes RAW files and XMP sidecars']].map(([k, label, hint]) => ({ label, hint, bg: dm === k ? 'var(--hover)' : 'transparent', ring: dm === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: dm === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', pick: () => this.setState({ delMode: k }) })),
-      delLabel: dm === 'trash' ? 'Delete and trash files' : 'Delete ' + n + (n === 1 ? ' photo' : ' photos'),
-      confirmDel: async () => { await P.onDelete(S.picked, dm); this.setState({ del: false, picked: [], selMode: false }); this.flash(n + (n === 1 ? ' photo' : ' photos') + (dm === 'trash' ? ' deleted · originals in the trash' : ' removed from Frames · originals kept')); },
+      delOpts: [['frames', 'Remove from Frames', 'Recover metadata and ratings during the recovery period. Originals stay unchanged.']].map(([k, label, hint]) => ({ label, hint, bg: dm === k ? 'var(--hover)' : 'transparent', ring: dm === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: dm === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', pick: () => this.setState({ delMode: k }) })),
+      delLabel: 'Delete ' + n + (n === 1 ? ' photo' : ' photos'),
+      confirmDel: async () => { await P.onDelete(S.picked, dm); this.setState({ del: false, picked: [], selMode: false }); this.flash(n + (n === 1 ? ' photo' : ' photos') + ' removed · recoverable during the recovery period'); },
       toast: S.toast, toastOp: S.tOp,
     };
   }
