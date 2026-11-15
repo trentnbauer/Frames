@@ -53,6 +53,7 @@ export function pending(db: DB, cfg: Cfg) {
   const known = new Set([
     ...(db.prepare('SELECT path FROM photos').all() as { path: string }[]).map((r) => r.path),
     ...(db.prepare('SELECT path FROM duplicates').all() as { path: string }[]).map((r) => r.path),
+    ...(db.prepare('SELECT path FROM removed').all() as { path: string }[]).map((r) => r.path),
   ]);
   const files: string[] = [];
   const skip = cfg.skip ?? [];
