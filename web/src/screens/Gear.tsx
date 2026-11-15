@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
 import { GearBlacklist } from '../components/GearBlacklist';
+import { GearSystems } from '../components/GearSystems';
 import ProtoGear from '../proto/ProtoGear';
 
 type Item = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; serial: string; year: number | null; why: string; link: string; price: number | null; rank: number; used?: number };
-type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; currency?: string } };
+type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; systems?: string[]; currency?: string } };
 
 const TO_DESIGN: Record<string, string> = { camera: 'Body', lens: 'Lens', film: 'Film', light: 'Light', app: 'App', other: 'Other' };
 const TO_API: Record<string, string> = { Body: 'camera', Lens: 'lens', Film: 'film', Light: 'light', App: 'app', Other: 'other' };
@@ -55,6 +56,7 @@ export function Gear() {
 
       {blocklistError && <p role="alert" style={{ color: 'var(--danger)' }}>{blocklistError}</p>}
       <ProtoGear
+        ownedControl={d?.prefs.arrange === 'system' || !d?.prefs.arrange ? <GearSystems items={own} systems={d?.prefs.systems ?? []} onChanged={async () => { g.set(await api<Data>('/gear/items')); }} /> : undefined}
         onBlocklistFound={blocklistFound} blocklistingFound={blocklisting}
         blacklistControl={<GearBlacklist items={d?.blacklisted ?? []} onChanged={() => window.dispatchEvent(new Event('frames:gear-changed'))} />}
         currency={d?.prefs.currency ?? '$'} arrange={d?.prefs.arrange === 'era' ? 'year' : d?.prefs.arrange ?? 'system'} showWish={!!d?.prefs.showWant}
