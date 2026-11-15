@@ -1,3 +1,4 @@
+import { DialogHost } from './components/dialogs';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -20,7 +21,7 @@ async function start() {
     <StrictMode>
       <BrowserRouter>
         <StoreProvider>
-          <App />
+          <App /><DialogHost />
         </StoreProvider>
       </BrowserRouter>
     </StrictMode>,

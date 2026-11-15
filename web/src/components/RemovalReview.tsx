@@ -1,3 +1,4 @@
+import { confirmAction } from './dialogs';
 import { useEffect, useState } from 'react';
 import { api, imgUrl, useApi } from '../api';
 import type { PhotoFull } from '../data';
@@ -13,7 +14,7 @@ export function RemovalReview({ onChanged }: { onChanged: () => void }) {
   useEffect(() => { setError(''); }, [current?.id]);
   const act = async (action: 'keep' | 'delete') => {
     if (!p || busy) return;
-    if (action === 'delete' && !window.confirm('Delete this photo from Frames?\n\nIts reviews and tags will be removed. Original files will be kept. Photos in compositions or actively shared shoots are protected.')) return;
+    if (action === 'delete' && !(await confirmAction('Delete this photo from Frames?\n\nIts reviews and tags will be removed. Original files will be kept. Photos in compositions or actively shared shoots are protected.'))) return;
     setBusy(true); setError('');
     try {
       if (action === 'keep') await api(`/photos/${p.id}/removal/keep`, { body: {} });

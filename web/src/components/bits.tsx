@@ -90,7 +90,7 @@ export function useKey(handler: (e: KeyboardEvent) => void, deps: unknown[] = []
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       handler(e);
     };
     window.addEventListener('keydown', f);

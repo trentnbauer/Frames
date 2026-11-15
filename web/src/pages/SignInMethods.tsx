@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useStore } from '../store';
 import { api, useApi } from '../api';
 
@@ -22,7 +23,7 @@ export function SignInMethods() {
             {list.map((i) => (
               <div className="row" key={`${i.provider}-${i.id}`}>
                 <span><b>{i.provider}</b> <span className="muted">{i.email}</span></span>
-                {i.primary ? <span className="faint">the one you started with</span> : <button className="t2" onClick={async () => { if (window.confirm(`Stop signing in with ${i.provider}?\n\nYou can still sign in with your other accounts, and your library is not touched.`)) { await api(`/me/identities/${i.id}`, { method: 'DELETE' }); linked.reload(); } }}>Remove</button>}
+                {i.primary ? <span className="faint">the one you started with</span> : <button className="t2" onClick={async () => { if ((await confirmAction(`Stop signing in with ${i.provider}?\n\nYou can still sign in with your other accounts, and your library is not touched.`))) { await api(`/me/identities/${i.id}`, { method: 'DELETE' }); linked.reload(); } }}>Remove</button>}
               </div>
             ))}
             {more.length > 0 && (

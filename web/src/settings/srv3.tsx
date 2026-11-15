@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from '../components/Modal';
@@ -28,7 +29,7 @@ function PolicyModal({ which, ctx, data, onDone }: { which: 'terms' | 'privacy';
   return (
     <Modal title={name} sub={which === 'terms' ? 'Shown when people sign up and on the terms page.' : 'Shown on the privacy page, which anyone can read.'} width={760} onClose={() => ctx.modal(null)}
       foot={<>
-        <button className="btn" disabled={!data.custom && list === data.sections} onClick={() => { if (window.confirm(`Go back to the ${name.toLowerCase()} text Frames writes? Your own sections are removed.`)) void save([]); }}>Use Frames’ text</button>
+        <button className="btn" disabled={!data.custom && list === data.sections} onClick={async () => { if ((await confirmAction(`Go back to the ${name.toLowerCase()} text Frames writes? Your own sections are removed.`))) void save([]); }}>Use Frames’ text</button>
         <span className="grow" />
         <button className="btn" onClick={() => ctx.modal(null)}>Cancel</button>
         <button className="btn primary" onClick={() => void save(list.filter((s) => s.h.trim() || s.p.trim()))}>Save</button>

@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '../components/dialogs';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { fmtDate } from '../data';
@@ -58,14 +59,14 @@ export function People({ onInvite }: { onInvite?: (open: () => void) => void }) 
                   <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>Added {fmtDate(u.created, { day: 'numeric', month: 'short', year: 'numeric' })}{u.provider ? ` · signs in with ${u.provider}` : ''}. The size counts what Frames holds for them, not the photographs in their read-only folder.</p>
                   {u.id !== 1 && <FolderField u={u} root={root} patch={patch} />}
                   <div className="sfoot">
-                    {u.role !== 'guest' && u.provider !== 'emergency' && <button className="ghost" onClick={() => {
-                      if (window.confirm(`Reset the authenticator, recovery codes and passkeys for ${u.name || u.email}? All their sessions will be signed out. Verify their identity before continuing.`))
+                    {u.role !== 'guest' && u.provider !== 'emergency' && <button className="ghost" onClick={async () => {
+                      if ((await confirmAction(`Reset the authenticator, recovery codes and passkeys for ${u.name || u.email}? All their sessions will be signed out. Verify their identity before continuing.`)))
                         void act(async () => { await api(`/admin/users/${u.id}/reset-mfa`, { body: { confirm: 'RESET' } }); if (self) window.location.assign('/signin'); }, 'Security factors reset. They must sign in and enrol again if required.');
                     }}>Reset two-factor authentication</button>}
 
                     {!self && <button className="ghost" onClick={() => patch(u, { disabled: !u.disabled }, u.disabled ? 'Switched on.' : 'Switched off and signed out.')}>{u.disabled ? 'Switch on' : 'Switch off'}</button>}
-                    <span style={{ marginLeft: 'auto' }}><button className="ghost danger" onClick={() => {
-                      if (window.prompt(`Delete everything Frames holds for ${u.name || u.email}${u.id === 1 ? ' (the library is emptied, the account stays)' : ' and remove the account'}?\n\nType “delete” to confirm. This cannot be undone.`) === 'delete')
+                    <span style={{ marginLeft: 'auto' }}><button className="ghost danger" onClick={async () => {
+                      if ((await promptAction(`Delete everything Frames holds for ${u.name || u.email}${u.id === 1 ? ' (the library is emptied, the account stays)' : ' and remove the account'}?\n\nType “delete” to confirm. This cannot be undone.`)) === 'delete')
                         act(() => api(`/admin/users/${u.id}/data`, { method: 'DELETE', body: { confirm: 'delete' } }), 'Deleted.');
                     }}>Delete their data</button></span>
                   </div>

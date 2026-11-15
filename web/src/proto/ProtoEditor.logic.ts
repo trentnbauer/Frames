@@ -1,5 +1,6 @@
 /* eslint-disable */
 // @ts-nocheck
+import { promptAction } from '../components/dialogs';
 // Ported from the logic class in design_handoff_frames/prototype/Proto Editor.dc.html. Behaviour is the spec; sample data is replaced by real data passed in props.
 import React from 'react';
 import { DCLogic } from './runtime';
@@ -173,7 +174,7 @@ export class Logic extends DCLogic {
       shOpen: !!S.shOpen, openSh: () => P.onOpenShare ? P.onOpenShare() : this.setState({ shOpen: true, gOpen: false }), closeSh: () => this.setState({ shOpen: false, shCopied: false }),
       shPreview: () => { if (H0.url) window.open(H0.url, '_blank', 'noopener'); }, shActive: !!H0.active, shInactive: !H0.active, shStart: async () => { await P.onShareStart(D); this.setState({ shDraft: null }); },
       shLink: H0.display || '', shLinkBg: S.shFresh ? 'rgba(239,237,232,.12)' : 'var(--bg)',
-      shCopyLabel: S.shCopied ? 'Copied ✓' : 'Copy link', shCopy: async () => { try { await navigator.clipboard.writeText(H0.url); } catch (e) { window.prompt('Copy this', H0.url); } this.setState({ shCopied: true }); },
+      shCopyLabel: S.shCopied ? 'Copied ✓' : 'Copy link', shCopy: async () => { try { await navigator.clipboard.writeText(H0.url); } catch (e) { (await promptAction('Copy this', H0.url)); } this.setState({ shCopied: true }); },
       shLinkNote: H0.active ? 'Expires ' + H0.expLabel + (H0.pin ? ' · PIN ' + H0.pin : '') : '',
       shRegen: async () => { await P.onShareRegen(); this.setState({ shCopied: false, shFresh: true }); clearTimeout(this.fT); this.fT = setTimeout(() => this.setState({ shFresh: false }), 900); this.flash('New link made · the old one stops working'); },
       shPerms: [['rate', 'Rate photos', 'allowReview'], ['suggest', 'Suggest changes', 'allowSuggest'], ['dl', 'Download files', 'allowDownload']].map(([k, l, f]) => ({ label: (H[f] ? '✓ ' : '') + l, bg: H[f] ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: H[f] ? 'var(--text)' : 'var(--muted)', ring: H[f] ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)', go: () => patch({ [f]: !H[f] }) })),

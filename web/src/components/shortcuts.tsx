@@ -37,7 +37,7 @@ export function useShortcuts(list: Shortcut[]) {
 /** The little key beside a button's label: the key that does the same thing. */
 export const Kbd = ({ k }: { k: string }) => <kbd className="kbd" aria-hidden="true">{k}</kbd>;
 
-const GLOBAL: [string, string][] = [['R', 'Review'], ['/', 'Search'], ['⌘ K', 'Search'], ['?', 'This list'], ['Esc', 'Close a dialog']];
+const GLOBAL: [string, string][] = [['T', 'To do'], ['R', 'Review'], ['/', 'Search'], ['⌘ K', 'Search'], ['?', 'This list'], ['Esc', 'Close a dialog']];
 const KEYNAME: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→' };
 
 export function ShortcutHelp({ onClose }: { onClose: () => void }) {

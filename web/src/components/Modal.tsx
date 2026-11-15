@@ -11,6 +11,14 @@ export function Modal({ title, sub, onClose, children, foot, width = 560, eyebro
     const before = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     const f = (e: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('.modal');
+      if (dialogs[dialogs.length - 1] !== ref.current) return;
+      if (e.key === 'Tab') {
+        const controls = [...(ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex="0"]') ?? [])];
+        const first = controls[0], last = controls[controls.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || document.activeElement === ref.current)) { e.preventDefault(); first?.focus(); }
+      }
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
       // Enter, with nothing in the dialog being typed in or focused as a button, does its main action (the top dialog only).
       const t = e.target as HTMLElement;

@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -15,7 +16,7 @@ export function DeleteSuggestions({ s, save, inline = false, onChanged }: { s: S
   const n = list.data?.photos.length ?? 0;
   const validPicked = picked.filter((id) => list.data?.photos.some((photo) => photo.id === id));
   const take = async () => {
-    if (!validPicked.length || !window.confirm(`Take ${validPicked.length} ${validPicked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; copies Frames holds itself (uploads, cloud copies) are deleted. A scan will not bring them back.`)) return;
+    if (!validPicked.length || !(await confirmAction(`Take ${validPicked.length} ${validPicked.length === 1 ? 'photograph' : 'photographs'} out of Frames?\n\nTheir reviews, tags and composition places go with them. Files in your library folders are not touched; original files, including uploads and cloud copies, are kept. A scan will not bring them back.`))) return;
     try {
       const r = await api<{ removed: number; filesDeleted: number }>('/photos/remove', { body: { ids: validPicked } });
       setMsg(`Took ${r.removed} out of Frames${r.filesDeleted ? ` and deleted ${r.filesDeleted} of Frames’ own copies` : ''}.`);
@@ -96,7 +97,7 @@ export function Vocabulary() {
         </form> : <Link to={`/library?${t.kind}=${encodeURIComponent(t.name)}`}>{t.name} <span className="faint">{t.n} · {t.kind}</span></Link>}
         <span style={{ display: 'flex', gap: 14, fontSize: 12.5 }}>
           <button disabled={busy} aria-label={`Rename ${t.kind} ${t.name}`} onClick={() => { setEditing(key); setTo(t.name); }}>Rename</button>
-          <button disabled={busy} aria-label={`Delete ${t.kind} ${t.name}`} onClick={() => { if (confirm(`Delete ${t.kind} “${t.name}”${t.n ? ` from ${t.n} photographs` : ''}? The photographs are not touched.`)) void act(() => api(path, { method: 'DELETE' })); }}>Delete</button>
+          <button disabled={busy} aria-label={`Delete ${t.kind} ${t.name}`} onClick={async () => { if (await confirmAction(`Delete ${t.kind} “${t.name}”${t.n ? ` from ${t.n} photographs` : ''}? The photographs are not touched.`)) void act(() => api(path, { method: 'DELETE' })); }}>Delete</button>
         </span>
       </div>;
     })}</div>

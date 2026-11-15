@@ -1,3 +1,4 @@
+import { promptAction, confirmAction } from './dialogs';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from './Modal';
@@ -76,9 +77,9 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
   const settings = link ?? draft;
   const start = () => run(() => api<ShareLink>('/shares', { body: { kind, id: targetId, ...draft, allowSuggest: kind === 'collection' && draft.allowSuggest } }));
   const patch = (body: Partial<typeof draft>) => link ? run(() => api(`/shares/${link.id}`, { method: 'PATCH', body })) : setDraft((d) => ({ ...d, ...body }));
-  const copy = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); } catch { window.prompt('Copy this', text); } setCopied(key); setTimeout(() => setCopied(''), 1800); };
-  const stop = () => link && window.confirm(`Stop sharing through ${link.label || `Link ${link.id}`}? Other links will keep working.`) && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
-  const regen = () => link && window.confirm('Replace this link’s address? Its old address will stop working. Other links are unchanged.') && run(async () => { const saved = await api<ShareLink>(`/shares/${link.id}/regenerate`, { body: {} }); setFresh(true); return saved; });
+  const copy = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); } catch { if (await promptAction('Copy this', text) === null) return; } setCopied(key); setTimeout(() => setCopied(''), 1800); };
+  const stop = async () => link && (await confirmAction(`Stop sharing through ${link.label || `Link ${link.id}`}? Other links will keep working.`)) && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
+  const regen = async () => link && (await confirmAction('Replace this link’s address? Its old address will stop working. Other links are unchanged.')) && run(async () => { const saved = await api<ShareLink>(`/shares/${link.id}/regenerate`, { body: {} }); setFresh(true); return saved; });
   const send = async () => {
     if (!link || link.status !== 'active' || busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
     setBusy(true); onBusy(true);

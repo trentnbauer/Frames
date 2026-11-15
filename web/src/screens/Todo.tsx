@@ -1,7 +1,7 @@
 import { SameShootGear, sameShootGear } from '../components/SameShootGear';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
@@ -26,7 +26,11 @@ export function TodoPage() {
   const shoots = useApi<Shoot[]>('/shoots');
   const gear = useApi<{ own: GearChoice[]; found: GearChoice[] }>('/gear/items');
   const colls = useApi<Collection[]>('/collections');
-  const [reason, setReason] = useState('all');
+  const [params, setParams] = useSearchParams();
+  const selectedReason = params.get('reason') ?? 'all';
+  const reason = REASONS.some(([key]) => key === selectedReason) ? selectedReason : 'all';
+  const setReason = (value: string) => setParams(value === 'all' ? {} : { reason: value });
+  useEffect(() => { setSkipped([]); }, [reason]);
   const [skipped, setSkipped] = useState<number[]>([]);
   const [done, setDone] = useState(0);
   const [cam, setCam] = useState<string[]>(['', '', '', '', '', '']);

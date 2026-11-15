@@ -72,7 +72,6 @@ export class Logic extends DCLogic {
     const avg = rated.length ? (rated.reduce((t, p) => t + p.score, 0) / rated.length).toFixed(1) : '–';
     const pct = sh.reviewPct ?? 0;
     const missing = photos.filter((p) => p.missing).length;
-    const ai = P.aiState || 'idle';
     return {
       inShoot: true,
       sv: {
@@ -85,10 +84,8 @@ export class Logic extends DCLogic {
           return { placeVal: sh.placeVal,
             camVal: sh.camVal, onCamCommit: (v) => { if (v !== sh.camVal) P.onCamera(v); },
             placeOpen: S.placeOpen, openPlace: () => this.setState({ placeOpen: true }), closePlace: () => this.setState({ placeOpen: false }), placePin: sh.placePin, kitRest: sh.kitRest }; })(),
-        shareControl: P.shareControl,
+        shareControl: P.shareControl, shootActions: P.shootActions,
         unrated: sh.dueCount ?? 0, reviewDue: sh.dueCount ?? 0,
-        aiLabel: ai === 'busy' ? 'Analyzing…' : ai === 'done' ? '✓ Analyzed' : '✦ Analyze with AI', aiFg: ai === 'busy' ? 'var(--text2)' : 'var(--text)', aiSpin: ai === 'busy' ? spin() : null,
-        ai: async () => { if (ai === 'busy' || !P.aiOn) { if (!P.aiOn) this.flash('AI is off. Turn it on in Settings.'); return; } const msg = await P.onAnalyse(); if (msg) this.flash(msg); },
         startReview: () => P.onStartReview(), compose: () => P.onCompose(),
         stats: [[String(photos.length), 'photos', null], [pct + '%', 'review complete', pct], [avg, 'average score', null], [String(photos.filter((p) => p.comp).length), 'in compositions', null], [String(missing), 'missing details', null]].map(([v, l, bar]) => ({ v, l, pct: bar != null ? bar + '%' : '0%', barShow: bar != null ? 'block' : 'none' })),
         filters: [['all', 'All'], ['new', 'New'], ['unrated', 'Unrated'], ['top', 'Rated 4+'], ['comp', 'In a composition'], ['details', 'Missing details']].filter(([k]) => k !== 'new' || photos.some(F.new)).map(([k, label]) => ({ label, n: photos.filter(F[k]).length, bg: fk === k ? 'var(--text)' : 'var(--hover)', fg: fk === k ? 'var(--bg)' : 'var(--text2)', go: () => this.setState({ shootFilter: k }) })),
