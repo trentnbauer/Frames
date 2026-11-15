@@ -1,3 +1,4 @@
+import { photoChange, photoTags, journal } from '../workflowCore.js';
 import { DUE_REVIEW_SQL } from '../reviewEligibility.js';
 import { discoverPhotoGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
@@ -285,6 +286,9 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const id = num((req.params as Row).id);
     const p = one('SELECT * FROM photos WHERE id = ?', id);
     if (!p) return notFound(rep);
+    const beforeTags = photoTags(db, id);
+    const abort = Symbol('invalid edit');
+    try { return db.transaction(() => { const result = (() => {
     const b = (req.body ?? {}) as Row;
     const set = (sql: string, ...a: unknown[]) => db.prepare(sql).run(...a);
     if (typeof b.title === 'string' && b.title.trim()) { set('UPDATE photos SET title = ?, title_user = 1 WHERE id = ?', b.title.trim().slice(0, 200), id); set("DELETE FROM xmp_conflicts WHERE photo_id = ? AND field = 'title'", id); }
@@ -314,7 +318,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     }
     // Camera details a person sets by hand: kept when the file is read again. A blank clears the value.
     const bad = (m: string) => rep.code(400).send({ error: m });
-    const text = (k: string, max: number, field: string, col = k) => { if (b[k] === undefined) return true; if (typeof b[k] !== 'string') return false; set(`UPDATE photos SET ${col} = ? WHERE id = ?`, (b[k] as string).trim().slice(0, max), id); if (field) mark(field); return true; };
+    const text = (k: string, max: number, field: string, col = k) => { if (b[k] === undefined) return true; if (typeof b[k] !== 'string') return false; set(`UPDATE photos SET ${col} = ? WHERE id = ?`, (b[k] as string).trim().slice(0, max), id); if (k === 'camera' || k === 'lens') set(`UPDATE photos SET raw_${k}=? WHERE id=?`, (b[k] as string).trim().slice(0, max), id); if (field) mark(field); return true; };
     if (!text('camera', 120, 'camera') || !text('lens', 120, 'lens') || !text('film', 60, 'film')) return bad('Camera, lens and film must be text.');
     if (b.medium !== undefined) { if (b.medium !== '' && b.medium !== 'digital' && b.medium !== 'film') return bad('Choose film or digital.'); set('UPDATE photos SET medium = ?, film = CASE WHEN ? = \'film\' THEN film ELSE \'\' END WHERE id = ?', b.medium, b.medium, id); mark('medium'); }
     {
@@ -352,6 +356,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     if (b.reanalyse === true) set('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE id = ?', id);
     if ('camera' in b || 'lens' in b) discoverPhotoGear(db, id);
     return x.photoDto(one('SELECT * FROM photos WHERE id = ?', id)!, true);
+    })(); if (rep.statusCode >= 400) throw abort; const after = one('SELECT * FROM photos WHERE id=?',id)!; const change = photoChange(p, after, beforeTags, photoTags(db,id)); const operationId = change ? journal(db, 'Edit photograph', [change]) : null; return result === rep ? result : { ...result, operationId }; })(); } catch (error) { if (error === abort) return rep; throw error; }
   });
 
   /** Makes `childIds` variants (edits, crops) of `parentId`. Variants stay ordinary photos. Returns false if it would make a loop. */

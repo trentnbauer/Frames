@@ -1,3 +1,7 @@
+import { rememberWish } from '../wishHistory.js';
+import { WorkflowError } from '../workflowCore.js';
+import { gearFields, valuesOf, journal } from '../workflowCore.js';
+import { syncGearTags } from '../gear.js';
 import { blacklistGear, blacklistedGear, foundGear, syncGearDiscoveries, unblacklistGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
@@ -127,13 +131,19 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (typeof b.why === 'string') set('why', b.why.trim().slice(0, 200));
     if (b.link !== undefined) { const l = clean(b.link, 300); if (l && !/^https?:\/\//i.test(l)) return rep.code(400).send({ error: 'A link starts with https://' }); set('link', l); }
     if (b.price !== undefined) { const p = b.price === null || b.price === '' ? null : Number(b.price); if (p !== null && !(p >= 0 && p < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' }); set('price', p); }
-    if (sets.length || b.priority !== undefined) db.transaction(() => { const old = one('SELECT kind, system FROM gear_items WHERE id = ?', id)!; if (old.kind === 'own' && typeof b.system === 'string') rememberSystems(old.system, b.system.trim().slice(0, 60)); if (sets.length) db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id); if (b.priority !== undefined) prioritize(id, b.priority); })();
-    return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
+    return db.transaction(() => {
+      if (sets.length || b.priority !== undefined) { if (current.kind === 'own' && typeof b.system === 'string') rememberSystems(current.system,b.system.trim().slice(0,60)); if (sets.length) db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args,id); if (b.priority !== undefined) prioritize(id,b.priority); }
+      const updated = one('SELECT * FROM gear_items WHERE id = ?',id)!;
+      const fields = gearFields.filter(field=>JSON.stringify(current[field])!==JSON.stringify(updated[field]));
+      const operationId = current.kind === 'own' && fields.length ? journal(db,'Edit owned gear',[{table:'gear_items',id,identity:current.created_at,before:valuesOf(current,fields),after:valuesOf(updated,fields)}]) : null;
+      if (fields.includes('name') || fields.includes('type')) for (const photo of all('SELECT id FROM photos')) syncGearTags(db,photo.id);
+      return {...dto(updated),operationId};
+    })();
   });
   app.delete('/api/gear/items/:id', async (req, rep) => {
     const id = num((req.params as Row).id), kind = ((req.query ?? {}) as Row).kind;
     if (kind !== undefined && kind !== 'want') return rep.code(400).send({ error: 'The removal kind must be want.' });
-    const removed = kind === 'want' ? db.prepare("DELETE FROM gear_items WHERE id = ? AND kind = 'want'").run(id).changes : db.prepare('DELETE FROM gear_items WHERE id = ?').run(id).changes;
+    const removed = db.transaction(()=>{const current=one('SELECT * FROM gear_items WHERE id=?',id);if(!current||(kind==='want'&&current.kind!=='want'))return 0;if(current.kind==='want')rememberWish(db,current,'declined');const count=db.prepare('DELETE FROM gear_items WHERE id=?').run(id).changes;if(current.kind==='own')for(const photo of all('SELECT id FROM photos'))syncGearTags(db,photo.id);return count;})();
     if (kind === 'want' && !removed) return rep.code(409).send({ error: 'This item is no longer on your wishlist. Refresh the list before trying again.' });
     return { removed };
   });
@@ -160,10 +170,15 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
   });
   // "Bought it": the wished-for item becomes something you own.
   app.post('/api/gear/items/:id/bought', async (req, rep) => {
-    const id = num((req.params as Row).id);
-    if (!one("SELECT 1 x FROM gear_items WHERE id = ? AND kind = 'want'", id)) return notFound(rep);
-    db.prepare("UPDATE gear_items SET kind = 'own', rank = 0, bought_at = ?, year = COALESCE(year, ?) WHERE id = ?").run(new Date().toISOString(), new Date().getFullYear(), id);
-    return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
+    const id=num((req.params as Row).id),b=(req.body??{})as Row,current=one("SELECT * FROM gear_items WHERE id=? AND kind='want'",id);if(!current)return notFound(rep);
+    const name=b.name===undefined?current.name:clean(b.name,120);if(!name)throw new WorkflowError('Give the item a name.');
+    const type=b.type===undefined?current.type:b.type;if(!(TYPES as readonly string[]).includes(type))throw new WorkflowError('Choose an equipment type.');
+    const system=b.system===undefined?current.system:clean(b.system,60);
+    const paid=b.price===undefined?current.price:b.price===null?null:b.price;
+    if(paid!==null&&(typeof paid!=='number'||!Number.isFinite(paid)||paid<0||paid>=1e8))throw new WorkflowError('Enter a valid paid price.');
+    const year=b.year===undefined?(current.year??new Date().getFullYear()):b.year;if(year!==null&&(!Number.isInteger(year)||year<=1800||year>=2200))throw new WorkflowError('Enter a valid year.');
+    const date=b.purchasedAt===undefined?new Date().toISOString():b.purchasedAt;if(typeof date!=='string'||date.length>40||Number.isNaN(Date.parse(date)))throw new WorkflowError('Choose a valid purchase date.');
+    return db.transaction(()=>{db.prepare("UPDATE gear_items SET kind='own',rank=0,bought_at=?,name=?,type=?,system=?,price=?,year=? WHERE id=?").run(new Date(date).toISOString(),name,type,system,paid,year,id);rememberSystems(system);const after=one('SELECT * FROM gear_items WHERE id=?',id)!;const historyId=rememberWish(db,current,'bought',after,new Date(date).toISOString());return{...dto(after),historyId};})();
   });
   // The wishlist order: a list of ids, #1 first.
   app.put('/api/gear/order', async (req, rep) => {

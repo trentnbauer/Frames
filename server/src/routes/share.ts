@@ -1,3 +1,4 @@
+import { versionSnapshot } from '../compositionVersions.js';
 import { ensureDeriv } from '../cache.js';
 import { policyOf } from '../policy.js';
 import crypto from 'node:crypto';
@@ -71,7 +72,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   // ---------- owner side (behind the login) ----------
   const statusOf = (s: Row) => (s.revoked ? 'revoked' : s.expires_at && new Date(s.expires_at).getTime() < Date.now() ? 'expired' : 'active');
   const shareDto = (s: Row) => ({
-    id: s.id, token: s.token, kind: s.kind, targetId: s.target_id, label: s.label, allowDownload: !!s.allow_download, allowReview: !!s.allow_review,
+    id: s.id, versionId:s.version_id??null, token: s.token, kind: s.kind, targetId: s.target_id, label: s.label, allowDownload: !!s.allow_download, allowReview: !!s.allow_review,
     expiresAt: s.expires_at, createdAt: s.created_at, status: statusOf(s), views: s.views, downloads: s.downloads,
     allowSuggest: s.allow_suggest === null || s.allow_suggest === undefined ? !!s.allow_review : !!s.allow_suggest, seeEachOther: !!s.see_each_other, showGuests: !!s.show_guests, onlyWall: !!s.only_wall, askName: !!s.ask_name, pin: s.pin || '',
     reviews: (one('SELECT COUNT(*) n FROM share_reviews WHERE share_id = ?', s.id) as Row).n,
@@ -82,6 +83,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const kind = b.kind === 'shoot' ? 'shoot' : b.kind === 'collection' ? 'collection' : null;
     if (!kind) return rep.code(400).send({ error: 'kind must be collection or shoot' });
     if (!one(`SELECT 1 x FROM ${kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, num(b.id))) return notFound(rep);
+    if(b.versionId!==undefined&&b.versionId!==null){if(kind!=='collection'||!Number.isSafeInteger(b.versionId)||!one('SELECT 1 FROM collection_versions WHERE id=? AND collection_id=?',b.versionId,num(b.id)))return rep.code(400).send({error:'Choose an arrangement from this composition.'});}
     const pol = policyOf(x.sys);
     let expires: string | null = b.expiresAt === undefined && pol.shareExpireDays ? new Date(Date.now() + pol.shareExpireDays * 86_400_000).toISOString() : null;
     if (b.expiresAt) {
@@ -96,6 +98,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     else if (typeof b.pin === 'string' && b.pin) { if (!/^\d{4}$/.test(b.pin) || isWeakPin(b.pin)) return rep.code(400).send({ error: PIN_ERR }); pin = b.pin; }
     const id = Number(db.prepare('INSERT INTO shares(token, kind, target_id, label, allow_download, allow_review, expires_at, created_at, pin, allow_suggest, see_each_other, show_guests, ask_name) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(token, kind, num(b.id), String(b.label ?? '').slice(0, 80), (b.allowDownload === undefined ? pol.shareDownload : b.allowDownload) ? 1 : 0, b.allowReview ? 1 : 0, expires, new Date().toISOString(), pin, b.allowSuggest === undefined ? null : b.allowSuggest ? 1 : 0, b.seeEachOther ? 1 : 0, b.showGuests ? 1 : 0, (b.askName === undefined ? pol.shareAskName : b.askName !== false) ? 1 : 0).lastInsertRowid);
+    if(b.versionId!==undefined&&b.versionId!==null)db.prepare('UPDATE shares SET version_id=? WHERE id=?').run(b.versionId,id);
     if (b.onlyWall === true) db.prepare('UPDATE shares SET only_wall = 1 WHERE id = ?').run(id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
   });
@@ -105,6 +108,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const cur = one('SELECT * FROM shares WHERE id = ?', id);
     if (!cur) return notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if(b.versionId!==undefined&&b.versionId!==null&&(cur.kind!=='collection'||!Number.isSafeInteger(b.versionId)||!one('SELECT 1 FROM collection_versions WHERE id=? AND collection_id=?',b.versionId,cur.target_id)))return rep.code(400).send({error:'Choose an arrangement from this composition.'});
     const sets: string[] = [], args: unknown[] = [];
     const flag = (k: string, col: string) => { if (typeof b[k] === 'boolean') { sets.push(`${col} = ?`); args.push(b[k] ? 1 : 0); } };
     flag('allowDownload', 'allow_download'); flag('allowReview', 'allow_review'); flag('allowSuggest', 'allow_suggest'); flag('seeEachOther', 'see_each_other'); flag('showGuests', 'show_guests'); flag('onlyWall', 'only_wall'); flag('askName', 'ask_name');
@@ -122,6 +126,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       sets.push('pin = ?'); args.push(pin);
       for (const k of [...pinFails.keys()]) if (k.startsWith(`${id}|`)) pinFails.delete(k); // a new PIN gives everyone a fresh start
     }
+    if(b.versionId!==undefined){sets.push('version_id=?');args.push(b.versionId);}
     if (typeof b.label === 'string') { sets.push('label = ?'); args.push(b.label.slice(0, 80)); }
     if (sets.length) db.prepare(`UPDATE shares SET ${sets.join(', ')} WHERE id = ?`).run(...args, id);
     return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
@@ -292,6 +297,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (share.kind === 'collection') {
       const c = one('SELECT name, description FROM collections WHERE id = ?', share.target_id);
       if (!c) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
+      if(share.version_id){try{const{data}=versionSnapshot(x,share.version_id,share.target_id);const chosen=data.chosenIds as number[];return{share,name:c.name,description:c.description,photoIds:share.only_wall?data.photoIds.filter((id:number)=>chosen.includes(id)):data.photoIds,chosenIds:chosen,target:data.target,layout:data.layout};}catch{return rep.code(410).send({error:'This saved arrangement is no longer available.'}),null;}}
       const rows = all('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos', share.target_id);
       const t = one('SELECT target FROM collections WHERE id = ?', share.target_id);
       const wallOnly = !!share.only_wall && rows.some((r) => r.chosen);

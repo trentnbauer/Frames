@@ -54,3 +54,6 @@ The Home wishlist is a compact bordered strip below all main Home content, using
 The Gear wishlist uses expandable rows with explicit Edit, Save changes and Cancel actions. Keep URL, estimated price, notes and priority editable after creation; show unknown prices separately from zero. Use shared gear icons, visible save errors, up/down alternatives to dragging, and stacked fields on phones. Keep the owned-gear sidebar below the wishlist.
 
 Keep collapsed wishlist rows single-line and compact, with plain sans-serif names. Put notes, Bought it, Didn't buy it and keyboard reorder actions inside Edit. Truncate long collapsed names with their full value available in the editor. Show the total beside the item count rather than repeating it below the list.
+
+
+Library workflow controls reuse the shared toolbar, fields, modals and theme tokens. Bulk edits separate field inclusion from each field's Fill blanks choice and require a count preview. Put recovery, batch history, saved views, import history and review scheduling near Library controls. Gear aliases and wishlist history remain on Gear. Saved arrangements use the editor's existing room-control area, preserving the title, workflow, Share and Done export positions. Comparisons stack on phones. Undo and recovery failures remain visible and never silently overwrite newer work.

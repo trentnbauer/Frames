@@ -1,3 +1,4 @@
+import { startImport, importOutcome, finishImport } from './importRuns.js';
 import { discoverPhotoGear } from './gearDiscoveries.js';
 import { policyOf, runtime } from './policy.js';
 import { addDays, intervalDays } from './schedule.js';
@@ -231,6 +232,8 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
   // A camera or lens the file names is the file's; a blank in the file leaves one that came from a default alone.
   const srcNow = new Set(String((db.prepare('SELECT gear_src g FROM photos WHERE id = ?').get(id) as { g: string } | undefined)?.g ?? '').split(',').filter(Boolean));
   const fileCamera = [x.Make, x.Model].filter(Boolean).join(' ').trim(), fileLens = String(x.LensModel ?? '');
+  if (!mine.has('camera')) db.prepare('UPDATE photos SET raw_camera=? WHERE id=?').run(fileCamera, id);
+  if (!mine.has('lens')) db.prepare('UPDATE photos SET raw_lens=? WHERE id=?').run(fileLens, id);
   if (fileCamera || !srcNow.has('camera')) { put('camera', { camera: fileCamera }); if (fileCamera) srcNow.delete('camera'); }
   if (fileLens || !srcNow.has('lens')) { put('lens', { lens: fileLens }); if (fileLens) srcNow.delete('lens'); }
   sets.push('gear_src = ?'); args.push([...srcNow].join(','));
@@ -250,8 +253,9 @@ export function readInto(db: DB, id: number, x: Meta, file: string) {
 }
 
 /** Imports every new file into one photoshoot named for today's date, then notices files that changed. Originals are only ever read. */
-export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: number) => void): Promise<ScanResult> {
-  const { files } = pending(db, cfg);
+export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: number) => void, onlyFiles?: string[]): Promise<ScanResult> {
+  const files = pending(db,cfg).files.filter(file=>!onlyFiles||onlyFiles.includes(file));
+  const runId=startImport(db,files);
   const known = db.prepare('SELECT id, path, size_bytes, mtime, hash, xmp_sig FROM photos WHERE missing = 0').all() as { id: number; path: string; size_bytes: number; mtime: number | null; hash: string; xmp_sig: string | null }[];
   let processed = 0;
   const total = files.length + known.length;
@@ -274,7 +278,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
     for (const f of files) {
       try {
         const hash = await hashFile(f);
-        if (db.prepare('SELECT 1 FROM removed WHERE hash = ?').get(hash)) continue; // taken out of Frames on purpose: not imported again
+        if (db.prepare('SELECT 1 FROM removed WHERE hash = ?').get(hash)) {importOutcome(db,runId,f,'removed');continue;} // taken out of Frames on purpose: not imported again
         const same = db.prepare('SELECT id, path FROM photos WHERE hash = ?').get(hash) as { id: number; path: string } | undefined;
         if (same) {
           if (!fs.existsSync(same.path)) {
@@ -285,6 +289,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
             db.prepare('INSERT OR IGNORE INTO duplicates(path, hash) VALUES(?, ?)').run(f, hash);
             result.duplicates++;
           }
+          importOutcome(db,runId,f,'duplicate',same.id);
           continue;
         }
         const ext = path.extname(f).toLowerCase();
@@ -295,11 +300,14 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
           shoot_id: result.shootId, path: f, file: path.basename(f), hash, title: titleFromFile(f),
           file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(), next_review_at: addDays(now, intervalDays(loadSettings(db).intervals[0])).toISOString(),
         }).lastInsertRowid);
+        importOutcome(db,runId,f,'processing',id);
         const x = await exif(f);
         readInto(db, id, x, f);
-        await processPhoto(db, cfg, id, f, { exifW: x.ExifImageWidth ?? x.ImageWidth, exifH: x.ExifImageHeight ?? x.ImageHeight });
+        const ready = await processPhoto(db, cfg, id, f, { exifW: x.ExifImageWidth ?? x.ImageWidth, exifH: x.ExifImageHeight ?? x.ImageHeight });
+        importOutcome(db,runId,f,ready?'ready':'failed',id,ready?'':'Preview could not be generated');
         result.imported++;
       } catch (e) {
+        const stored=db.prepare('SELECT id FROM photos WHERE path=?').get(f) as {id:number}|undefined;importOutcome(db,runId,f,'failed',stored?.id??null,'Metadata or file could not be read');
         result.errors.push({ file: f, error: e instanceof Error ? e.message : String(e) });
       } finally {
         tick();
@@ -308,7 +316,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
   }
 
   // Files already known: did the image change, or did its sidecar?
-  for (const k of known) {
+  for (const k of known.filter(item=>!onlyFiles||onlyFiles.includes(item.path))) {
     try {
       const st = fs.statSync(k.path);
       const m = Math.floor(st.mtimeMs);
@@ -336,6 +344,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
   }
   // A scan with only duplicates, removed files or failed reads must not leave an empty grouping.
   if (result.shootId !== null && pruneEmptyShoots(db, result.shootId)) { result.shootId = null; result.shootName = null; }
+  finishImport(db,runId);
   return result;
 }
 
@@ -388,4 +397,21 @@ export async function rebuild(db: DB, cfg: Cfg, all: boolean, onProgress?: (done
     }
   }));
   return { checked: rows.length, rebuilt: fixed };
+}
+
+/** Retry a stored import outcome without accepting a path from the network. */
+export async function retryImport(db: DB, cfg: Cfg, file: string, photoId: number | null) {
+  const stored = photoId ? db.prepare('SELECT id,hash FROM photos WHERE id=? AND path=?').get(photoId,file) as {id:number;hash:string}|undefined : undefined;
+  if (stored) {
+    const hash=await hashFile(file),stat=fs.statSync(file);
+    if (hash!==stored.hash && db.prepare('SELECT 1 FROM reviews WHERE photo_id=?').get(stored.id)) throw new Error('The reviewed original has changed');
+    if (db.prepare('SELECT 1 FROM photos WHERE hash=? AND id!=?').get(hash,stored.id)) throw new Error('This photograph is already imported');
+    const metadata=await exif(file);
+    db.transaction(()=>{readInto(db,stored.id,metadata,file);db.prepare('UPDATE photos SET hash=?,size_bytes=?,mtime=?,missing=0 WHERE id=?').run(hash,stat.size,Math.floor(stat.mtimeMs),stored.id);})();
+    const ready=await processPhoto(db,cfg,stored.id,file,{exifW:metadata.ExifImageWidth??metadata.ImageWidth});
+    if(!ready)throw new Error('Preview could not be generated');return stored.id;
+  }
+  await scan(db,cfg,undefined,[file]);
+  const photo=db.prepare('SELECT id,has_derivs FROM photos WHERE path=?').get(file)as {id:number;has_derivs:number}|undefined;
+  if(!photo?.has_derivs)throw new Error('File could not be imported');return photo.id;
 }

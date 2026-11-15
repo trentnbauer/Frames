@@ -1,3 +1,4 @@
+import { resolvePhotoAliases } from './gearAliases.js';
 import { clearBlacklistedPhotoGear } from './gearBlacklist.js';
 import { getSetting, type DB } from './db.js';
 
@@ -47,6 +48,7 @@ export function applyGear(db: DB, photoId: number, personal: boolean) {
   const changed = GEAR_FIELDS.filter((f) => val[f] !== was[f]);
   const next = [...src].join(',');
   if (changed.length || next !== String(p.gear_src ?? '')) db.prepare(`UPDATE photos SET ${[...changed.map((f) => `${f} = ?`), 'gear_src = ?'].join(', ')} WHERE id = ?`).run(...changed.map((f) => val[f]), next, photoId);
+  for (const field of ['camera','lens'] as const) if (changed.includes(field) && !hand.has(field)) db.prepare(`UPDATE photos SET raw_${field}=? WHERE id=?`).run(val[field],photoId);
   syncGearTags(db, photoId);
 }
 
@@ -64,6 +66,7 @@ export const lensKind = (mm: number | null | undefined): string => (!mm || mm <=
  * unless its detail changes. Run whenever the details can have changed.
  */
 export function syncGearTags(db: DB, photoId: number) {
+  resolvePhotoAliases(db, photoId);
   clearBlacklistedPhotoGear(db, photoId);
   const p = db.prepare('SELECT camera, lens, medium, film, focal_mm, focal35, gear_sig FROM photos WHERE id = ?').get(photoId) as { camera: string; lens: string; medium: string; film: string; focal_mm: number | null; focal35: number | null; gear_sig: string } | undefined;
   if (!p) return;
