@@ -69,9 +69,10 @@ function Shell() {
     return () => window.removeEventListener('keydown', f);
   }, []);
   useKey((e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('[role=dialog]')) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('[role=dialog]')) return;
     if (e.key === '?' && !inReview && !searching) { e.preventDefault(); setHelp(true); return; }
     if (e.key === '/' && !inReview && !searching) { e.preventDefault(); setSearching(true); return; }
+    if (e.key.toLowerCase() === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !searching) { e.preventDefault(); nav('/todo'); return; }
     if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav(summary && summary.due === 0 && !summary.resumable && summary.early > 0 ? '/review?early' : '/review'); // nothing due: begin anyway
   }, [inReview, searching, summary]);
   useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);

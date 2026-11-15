@@ -1,3 +1,4 @@
+import { confirmAction } from './dialogs';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -72,8 +73,8 @@ export function SavedViews({ children }: { children?: ReactNode }) {
           </button>
           <button
             disabled={busy}
-            onClick={() => {
-              if (window.confirm(`Delete saved view ${selected.name}?`))
+            onClick={async () => {
+              if ((await confirmAction(`Delete saved view ${selected.name}?`)))
                 void run(async () => {
                   await api(`/views/${selected.id}`, { method: 'DELETE' });
                   setSelectedId(null);

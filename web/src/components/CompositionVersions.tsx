@@ -1,3 +1,4 @@
+import { confirmAction } from './dialogs';
 import { useState } from 'react';
 import { api, useApi } from '../api';
 import type { PhotoLite } from '../data';
@@ -228,8 +229,8 @@ function Arrangements({ id, readOnly, onChanged, onClose }: { id: number; readOn
                 <button
                   className="btn primary"
                   disabled={readOnly || !version.available}
-                  onClick={() => {
-                    if (window.confirm(`Apply ${version.name}? The current wall will be saved as a backup.`))
+                  onClick={async () => {
+                    if ((await confirmAction(`Apply ${version.name}? The current wall will be saved as a backup.`)))
                       void run(() => api(`/collections/${id}/versions/${version.id}/apply`, { body: {} }));
                   }}
                 >
@@ -253,8 +254,8 @@ function Arrangements({ id, readOnly, onChanged, onClose }: { id: number; readOn
                 </button>
                 <button
                   disabled={version.links > 0}
-                  onClick={() => {
-                    if (window.confirm(`Delete saved arrangement ${version.name}?`))
+                  onClick={async () => {
+                    if ((await confirmAction(`Delete saved arrangement ${version.name}?`)))
                       void run(() => api(`/collections/${id}/versions/${version.id}`, { method: 'DELETE' }));
                   }}
                 >

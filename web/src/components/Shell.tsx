@@ -1,3 +1,4 @@
+import { TodoNav } from './TodoNav';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api, openPortfolio, useApi } from '../api';
@@ -142,7 +143,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
 }
 
 function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
-  const { me, summary, todo } = useStore();
+  const { me, summary } = useStore();
   const nav = useNavigate();
   const health = useApi<{ version: string }>(open ? '/health' : null);
   const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
@@ -172,7 +173,6 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Gear & wishlist', go('/gear'))}
             <div className="msep" />
             {item('Your stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
-            {item('To do', go('/todo'), todo ? todo.toLocaleString() : '')}
             {item('Community review', go('/community'))}
             {item('Near-duplicates', go('/duplicates'))}
             <div className="msep" />
@@ -210,16 +210,15 @@ export function Header({ right }: { right?: ReactNode }) {
 
 /** The floating bar from the design: Home, Shoots, Library, Compositions, then Search and To do with its count. Desktop and tablet only. */
 export function BottomNav() {
-  const { todo, removals } = useStore();
+  const { todo, removals, todoItems } = useStore();
   const ui = useUi();
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
       {item('/', 'Home')}{item('/shoots', 'Shoots')}{item('/library', 'Library')}{item('/collections', 'Compositions')}
-      {removals > 0 && item('/removals', `Removal review ${removals}`)}
       <i className="bdiv" />
       <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
-      {todo > 0 && <NavLink to="/todo" className="btodo">To do <b className="mono">{todo.toLocaleString()}</b></NavLink>}
+      <TodoNav total={todo} removals={removals} items={todoItems} />
     </nav>
   );
 }

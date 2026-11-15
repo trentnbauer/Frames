@@ -12,7 +12,10 @@ export type Summary = { due: number; resumable: boolean; early: number; nextId: 
 
 export type Me = { mfa?: MfaStatus; mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member' | 'guest'; canSignOut: boolean; displayName?: string; hasAvatar?: boolean; cloudOnly?: boolean; storeOriginalQuality?: boolean; signups: boolean; envConfig: boolean };
 
+export type TodoNavItem = { key: string; count: number; title?: string; ids?: number[]; link?: string };
+
 type Ctx = {
+  todoItems: TodoNavItem[];
   me: Me | null;
   refreshMe: () => void;
   settings: Settings | null;
@@ -30,10 +33,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setS] = useState<Settings | null>(null);
   const [summary, setSum] = useState<Summary | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [todoItems, setTodoItems] = useState<TodoNavItem[]>([]);
   const [todo, setTodo] = useState(0);
   const [removals, setRemovals] = useState(0);
   const refreshMe = useCallback(() => { api<Me>('/me').then(setMe).catch(() => {}); }, []);
-  const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); api<{ total: number; items: { key: string; count: number }[] }>('/todo').then((t) => { setTodo(t.total); setRemovals(t.items.find((item) => item.key === 'delete')?.count ?? 0); }).catch(() => {}); }, []);
+  const refreshSummary = useCallback(() => { api<Summary>('/review/summary').then(setSum).catch(() => {}); api<{ total: number; items: TodoNavItem[] }>('/todo').then((t) => { setTodo(t.total); setTodoItems(t.items); setRemovals(t.items.find((item) => item.key === 'delete')?.count ?? 0); }).catch(() => {}); }, []);
   useEffect(() => {
     // A share link's page has no login, and these calls need one: skip them there, or the browser asks a guest for a password.
     if (window.location.pathname.startsWith('/s/') || /^\/(signin|signup|signed-out|terms)\/?$/.test(window.location.pathname)) return;
@@ -46,5 +50,5 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setS(await api<Settings>('/settings', { method: 'PUT', body: p }));
     refreshSummary();
   };
-  return <C.Provider value={{ me, refreshMe, settings, setSettings, summary, refreshSummary, todo, removals }}>{children}</C.Provider>;
+  return <C.Provider value={{ me, refreshMe, settings, setSettings, summary, refreshSummary, todo, removals, todoItems }}>{children}</C.Provider>;
 }

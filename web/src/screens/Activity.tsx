@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -56,8 +57,8 @@ export function Activity() {
         <button
           className="btn outline"
           disabled={busy || !days}
-          onClick={() => {
-            if (window.confirm('Update recovery retention? Entries older than this period will expire. Original files stay unchanged.'))
+          onClick={async () => {
+            if ((await confirmAction('Update recovery retention? Entries older than this period will expire. Original files stay unchanged.')))
               void run(async () => {
                 await api('/recovery/settings', { method: 'PUT', body: { days: Number(days) } });
                 retention.reload();

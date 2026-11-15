@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { Badge, Eyebrow, SCard, SRow } from '../components/srow';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
@@ -168,9 +169,10 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={c.enabled} disabled={chosen.length === 0 || c.needsReconnect} onChange={(e) => put({ enabled: e.target.checked })} /> Keep these folders up to date automatically</label>
         <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--hover)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink || enforced} disabled={enforced} onChange={(e) => {
-              if (e.target.checked && !window.confirm(`Keep only a smaller copy of each photo in Frames?\n\nThe full-size original stays in ${p.label}, and is fetched from there when you export it.\n\nIMPORTANT: if you delete a photo from ${p.label}, its full-size original is gone for good. Frames will only have the smaller copy.\n\nThis also replaces the full-size copies Frames already holds from this account, the next time it syncs.`)) return;
-              put({ shrink: e.target.checked });
+            <input type="checkbox" aria-label={`Keep only a smaller copy of each photo from ${p.label}`} checked={!!c.shrink || enforced} disabled={enforced} onChange={async (e) => {
+              const checked = e.target.checked;
+              if (checked && !(await confirmAction(`Keep only a smaller copy of each photo in Frames?\n\nThe full-size original stays in ${p.label}, and is fetched from there when you export it.\n\nIMPORTANT: if you delete a photo from ${p.label}, its full-size original is gone for good. Frames will only have the smaller copy.\n\nThis also replaces the full-size copies Frames already holds from this account, the next time it syncs.`))) return;
+              put({ shrink: checked });
             }} />
             <span><b>Keep only a smaller copy of each photo here</b>{enforced && <span className="muted"> (this server keeps smaller copies for everyone; an administrator can turn on “Store original quality”)</span>}, and leave the full-size original in {p.label}. The copy is a JPEG at quality 80, up to 4096 px on the longest side, with the camera data (print sizes and PPI still use the original’s size), which uses about a third to a half of the space. When you export a composition, Frames fetches each original from {p.label}, one photo at a time, so exports are always full size.</span>
           </label>
@@ -190,7 +192,7 @@ function Connection({ enforced, one, c, p, progress, act }: { enforced: boolean;
         {c.needsReconnect
           ? <button className="pill primary" onClick={() => act(async () => { const x = await api<{ url: string }>(`/cloud/connect/${c.provider}`, { body: {} }); window.location.assign(x.url); })}>Reconnect</button>
           : <button className="pill primary" disabled={chosen.length === 0 || progress.running} onClick={() => act(() => api(`/cloud/${c.id}/sync`, { body: {} }))}>{busy ? 'Copying…' : 'Sync now'}</button>}
-        <Destructive onClick={() => { if (window.confirm(c.shrink ? `Disconnect this account?\n\nPhotos already copied stay in Frames, but the ones kept as a smaller copy can only be exported at full size again once you connect this account again.` : 'Disconnect this account? Photos already copied stay in Frames.')) act(() => api(`/cloud/${c.id}`, { method: 'DELETE' }), 'Disconnected. The photos already copied stay.'); }}>Disconnect</Destructive>
+        <Destructive onClick={async () => { if ((await confirmAction(c.shrink ? `Disconnect this account?\n\nPhotos already copied stay in Frames, but the ones kept as a smaller copy can only be exported at full size again once you connect this account again.` : 'Disconnect this account? Photos already copied stay in Frames.'))) act(() => api(`/cloud/${c.id}`, { method: 'DELETE' }), 'Disconnected. The photos already copied stay.'); }}>Disconnect</Destructive>
       </CardFooter>
     </EditRow>
   );

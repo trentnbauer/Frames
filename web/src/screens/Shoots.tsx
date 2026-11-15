@@ -1,3 +1,5 @@
+import { ShootActions } from '../components/ShootActions';
+import { confirmAction } from '../components/dialogs';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -63,12 +65,18 @@ export function Shoots() {
   const [files, setFiles] = useState<File[]>([]);
   const [req, setReq] = useState(0);
   const [sp, setSp] = useSearchParams();
-  useEffect(() => { if (sp.get('upload')) { setReq(Date.now()); setSp({}, { replace: true }); } }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
   const input = useRef<HTMLInputElement>(null);
 
   const local = !!status.data?.storage.local;
   const conns = (cloud.data?.connections ?? []).filter((c) => c.folderId !== null && c.enabled && !c.needsReconnect);
   const cloudOn = conns.length > 0;
+  // Keep the request until storage settings arrive; otherwise open() runs while uploads look disabled.
+  useEffect(() => {
+    if (!sp.get('upload') || (!local && !cloudOn)) return;
+    setReq((request) => request + 1);
+    const next = new URLSearchParams(sp); next.delete('upload');
+    setSp(next, { replace: true });
+  }, [sp, local, cloudOn, setSp]);
   const shootOf = new Map((lib.data?.photos ?? []).map((p) => [p.id, p.shootId]));
   const compsPerShoot = new Map<number, Set<number>>();
   for (const c of colls.data ?? []) for (const pid of c.photoIds) { const s = shootOf.get(pid); if (s != null) (compsPerShoot.get(s) ?? compsPerShoot.set(s, new Set()).get(s)!).add(c.id); }
@@ -95,7 +103,7 @@ export function Shoots() {
     kitRest: [sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · '),
     kit: [sh.gear?.camera, sh.gear?.lens, sh.gear?.film].filter(Boolean).join(' · ') || [...new Set(ph.map((p) => p.camera).filter(Boolean))].slice(0, 2).join(' · '),
   } : null;
-  const askAll = (what: string, v: string) => !v || window.confirm(`Set the ${what} to “${v}” on all ${ph.length} photos in this shoot?`);
+  const askAll = async (what: string, v: string) => !v || (await confirmAction(`Set the ${what} to “${v}” on all ${ph.length} photos in this shoot?`));
   const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.dateEdit ?? p.capturedAt) }));
 
   const place = async (r: ScanResult, o: { mode: string; name: string; existingId: number | null; split: boolean }) => {
@@ -149,12 +157,11 @@ export function Shoots() {
         }}
         searchPlaces={async (q: string) => api<unknown[]>(`/map/search?q=${encodeURIComponent(q)}`)}
         reversePlace={async (lat: number, lon: number) => api<unknown>(`/map/reverse?lat=${lat}&lon=${lon}`)}
-        onSavePlaceFull={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { if (askAll('location', pl.name)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: pl.name, placeInfo: { address: pl.address, kind: pl.kind, lat: pl.lat, lon: pl.lng, precision: pl.precision }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
-        onRemovePlaceFull={async () => { if (window.confirm(`Remove the location from all ${ph.length} photos in this shoot?`)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: '', overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
-        onCamera={async (camera: string) => { if (askAll('camera', camera)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { gear: { camera, lens: sh?.gear?.lens ?? '', medium: sh?.gear?.medium ?? '', film: sh?.gear?.film ?? '' }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        onSavePlaceFull={async (pl: { name: string; address: string; kind: string; lat: number; lng: number; precision: string }) => { if (await askAll('location', pl.name)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: pl.name, placeInfo: { address: pl.address, kind: pl.kind, lat: pl.lat, lon: pl.lng, precision: pl.precision }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        onRemovePlaceFull={async () => { if ((await confirmAction(`Remove the location from all ${ph.length} photos in this shoot?`))) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: '', overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
+        onCamera={async (camera: string) => { if (await askAll('camera', camera)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { gear: { camera, lens: sh?.gear?.lens ?? '', medium: sh?.gear?.medium ?? '', film: sh?.gear?.film ?? '' }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
-        aiOn={!!settings && settings.ai !== 'off'}
-        onAnalyse={async () => { try { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; } catch (e) { return (e as Error).message; } }}
+        shootActions={sh && <ShootActions key={sh.id} name={sh.name} count={ph.length} aiOn={!!settings && settings.ai !== 'off'} onAnalyse={async () => { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; }} onDelete={async () => { await api(`/shoots/${sid}`, { method: 'DELETE' }); reloadAll(); nav('/shoots'); }} />}
         onStartReview={() => { if (sh?.dueCount) nav(reviewUrl(sh.duePhotoIds)); }}
         onCompose={() => openNew({ name: sh?.name, photoIds: ph.map((p) => p.id) })}
       />

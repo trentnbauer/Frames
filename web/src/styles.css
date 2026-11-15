@@ -889,3 +889,13 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
   .mbody { min-height:0;overflow:auto; }
   .mfoot { flex-shrink:0; }
 }
+
+/* Keep task destinations together above the To do dock button. Padding bridges the hover gap. */
+.todo-nav { position: relative; }
+.bnav .btodo.on { background: var(--chip); }
+.todo-nav-popover { position: absolute; bottom: 100%; right: 0; padding-bottom: 12px; width: 290px; }
+.todo-nav-popover nav { padding: 6px; border-radius: 14px; background: var(--raised2); box-shadow: var(--float); max-height: min(65vh, 480px); overflow-y: auto; }
+.bnav .todo-nav-popover a { display: flex; justify-content: space-between; border-radius: 8px; padding: 10px 12px; white-space: normal; }
+.bnav .todo-nav-popover a:hover, .bnav .todo-nav-popover a:focus-visible { background: var(--chip); color: var(--text); }
+.todo-nav-popover a span { font: 12px var(--mono); color: var(--muted); }
+.todo-nav-popover p { padding: 6px 12px; }

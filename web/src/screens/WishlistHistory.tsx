@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -95,8 +96,8 @@ export function WishlistHistory() {
             <button
               className="btn"
               disabled={busy || entry.restored}
-              onClick={() => {
-                if (window.confirm('Undo this decision? A purchase can be undone only if its owned gear is unchanged and unused.'))
+              onClick={async () => {
+                if ((await confirmAction('Undo this decision? A purchase can be undone only if its owned gear is unchanged and unused.')))
                   void run(() => api(`/gear/history/${entry.id}/undo`, { body: {} }));
               }}
             >

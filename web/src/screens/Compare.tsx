@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { RATINGS, fmtDate, type PhotoFull, type PhotoLite } from '../data';
@@ -26,7 +27,7 @@ export function Compare() {
   const v = {
     ...BASE, isCompare: true, isDupes: false,
     cmpTitle: a.title || a.file, cmpSim: `${Math.round(similarity * 100)}% alike`, cmpBack: () => nav(`/photo/${a.id}`),
-    sides: [a, b].map((p) => ({ src: imgUrl(p.id, 'preview'), ring: 'none', title: p.title || p.file, pal: (p.palette ?? []).slice(0, 5).map((c) => c.hex), btn: 'Prefer this one', btnBg: 'transparent', btnFg: 'var(--text)', pick: () => { if (window.confirm(`Prefer “${p.title || p.file}”? The other is left out of review. It stays in your library.`)) void prefer(p); } })),
+    sides: [a, b].map((p) => ({ src: imgUrl(p.id, 'preview'), ring: 'none', title: p.title || p.file, pal: (p.palette ?? []).slice(0, 5).map((c) => c.hex), btn: 'Prefer this one', btnBg: 'transparent', btnFg: 'var(--text)', pick: async () => { if ((await confirmAction(`Prefer “${p.title || p.file}”? The other is left out of review. It stays in your library.`))) void prefer(p); } })),
     cmpRows: rows.map(([k, f], i) => { const x = f(a), y = f(b); return { k, a: x, b: y, border: i < rows.length - 1 ? '1px solid var(--hair)' : 'none', aFg: x !== y ? 'var(--text)' : 'var(--text2)', bFg: x !== y ? 'var(--text)' : 'var(--text2)' }; }),
   };
   return <div className="page-shell"><ProtoMore page="compare" v={v} /></div>;

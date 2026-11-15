@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -34,7 +35,7 @@ export function Restore() {
       {r.data?.pending && (
         <div className="banner" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>A restore is ready ({r.data.pending.parts.length - 1} {r.data.pending.parts.length === 2 ? 'library' : 'libraries'}). Frames applies it when it next starts.</span>
-          {r.data.canRestart && <button className="pill primary" onClick={() => { if (window.confirm('Restart Frames now and apply the restore? Everyone is signed out.')) void restart(); }}>Restart Frames now</button>}
+          {r.data.canRestart && <button className="pill primary" onClick={async () => { if ((await confirmAction('Restart Frames now and apply the restore? Everyone is signed out.'))) void restart(); }}>Restart Frames now</button>}
           <button className="pill" onClick={async () => { await api('/admin/restore', { method: 'DELETE' }); setMsg(null); r.reload(); }}>Cancel the restore</button>
         </div>
       )}
@@ -50,7 +51,7 @@ export function Restore() {
           {l.data?.map((a) => (
             <div className="row" key={`${from}-${a.name}`}>
               <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
-              <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name} (${label.toLowerCase()})? It is downloaded and checked first, and applied the next time Frames starts.`)) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/remote/restore', { body: { from, name: a.name } }); r.reload(); return x; }); }}>Restore</button>
+              <button className="pill" disabled={busy} onClick={async () => { if ((await confirmAction(`Restore from ${a.name} (${label.toLowerCase()})? It is downloaded and checked first, and applied the next time Frames starts.`))) void run(async () => { const x = await api<{ parts: string[]; people: number }>('/admin/backup/remote/restore', { body: { from, name: a.name } }); r.reload(); return x; }); }}>Restore</button>
             </div>
           ))}
         </div>
@@ -58,7 +59,7 @@ export function Restore() {
       {r.data?.archives.map((a) => (
         <div className="row" key={a.name}>
           <span><span className="mono">{a.name}</span> <span className="faint">{(a.bytes / 1e6).toFixed(1)} MB</span></span>
-          <button className="pill" disabled={busy} onClick={() => { if (window.confirm(`Restore from ${a.name}? It is checked first and applied the next time Frames starts.`)) void run(() => api('/admin/restore', { body: { name: a.name } })); }}>Restore this</button>
+          <button className="pill" disabled={busy} onClick={async () => { if ((await confirmAction(`Restore from ${a.name}? It is checked first and applied the next time Frames starts.`))) void run(() => api('/admin/restore', { body: { name: a.name } })); }}>Restore this</button>
         </div>
       ))}
     </div>
@@ -89,7 +90,7 @@ export function S3Backup() {
         <SRow title="" sub>
         <button className="pill primary" disabled={busy} onClick={() => void act(async () => { await api('/admin/backup/s3', { method: 'PUT', body: f }); setF((x) => ({ ...x, secretAccessKey: '' })); return 'Saved.'; })}>Save</button>
         {st.data?.configured && <button className="ghost" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>}
-        {st.data?.configured && <button className="ghost" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to S3? Copies already in the bucket stay there.')) void act(async () => { await api('/admin/backup/s3', { method: 'DELETE' }); setF({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' }); return 'S3 backups are off.'; }); }}>Turn off</button>}
+        {st.data?.configured && <button className="ghost" disabled={busy} onClick={async () => { if ((await confirmAction('Stop backing up to S3? Copies already in the bucket stay there.'))) void act(async () => { await api('/admin/backup/s3', { method: 'DELETE' }); setF({ endpoint: '', region: '', bucket: '', prefix: '', accessKeyId: '', secretAccessKey: '' }); return 'S3 backups are off.'; }); }}>Turn off</button>}
         </SRow>
       </SCard>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.text}</span></div>}
@@ -117,7 +118,7 @@ export function CloudBackup() {
         <div className="form">
           <span>Connected to {PROVIDER_NAMES[st.data.provider] ?? st.data.provider}{st.data.account ? `, ${st.data.account}` : ''}.</span>
           <button className="pill" disabled={busy} onClick={() => void act(async () => { const r = await api<{ uploaded: string[] }>('/admin/backup/sync', { body: {} }); return r.uploaded.length ? `Uploaded ${r.uploaded.join(', ')}.` : 'Already up to date.'; })}>Back up now</button>
-          <button className="pill" disabled={busy} onClick={() => { if (window.confirm('Stop backing up to this account? Copies already there stay there.')) void act(async () => { await api('/admin/backup/cloud', { method: 'DELETE' }); return 'Disconnected.'; }); }}>Disconnect</button>
+          <button className="pill" disabled={busy} onClick={async () => { if ((await confirmAction('Stop backing up to this account? Copies already there stay there.'))) void act(async () => { await api('/admin/backup/cloud', { method: 'DELETE' }); return 'Disconnected.'; }); }}>Disconnect</button>
         </div>
       ) : (
         <div className="form">{Object.entries(PROVIDER_NAMES).map(([id, label]) => <button key={id} className="pill" disabled={busy} onClick={() => void connect(id)}>Connect {label}</button>)}</div>
@@ -166,8 +167,8 @@ export function PhotosStorage() {
       <SCard>
         <SRow title="Allow original downloads on portfolios" hint="When on, a person can let portfolio visitors download the original file, which can hold camera data and the place a photo was taken."><PSwitch label="Let portfolios offer original files" on={!!inst.data?.allowOriginals} set={(v) => put({ allowOriginals: v })} /></SRow>
         <SRow title="Allow original resolution from the cloud" hint="Off: everyone’s cloud imports are saved as 4096 px copies to save disk space."><PSwitch label="Allow original resolution from the cloud" on={!!orig.data?.allow} set={(v) => api('/admin/cloud-originals', { method: 'PUT', body: { allow: v } }).then(orig.reload)} /></SRow>
-        <SRow title="Keep originals in cloud storage only" hint="Nobody can upload to Frames; every cloud photo is kept as a smaller copy and the original stays in the cloud. Deleting a photo from the cloud deletes its only full-size original."><PSwitch label="Keep originals in cloud storage only" on={!!inst.data?.cloudOnly} set={(v) => {
-          if (v && !window.confirm('Require originals to be kept in cloud storage?\n\nNobody will be able to upload photographs to Frames, and every cloud photograph will be kept only as a smaller copy here, with the full-size original left in the cloud.\n\nPhotographs already in Frames are not touched. IMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.')) return;
+        <SRow title="Keep originals in cloud storage only" hint="Nobody can upload to Frames; every cloud photo is kept as a smaller copy and the original stays in the cloud. Deleting a photo from the cloud deletes its only full-size original."><PSwitch label="Keep originals in cloud storage only" on={!!inst.data?.cloudOnly} set={async (v) => {
+          if (v && !(await confirmAction('Require originals to be kept in cloud storage?\n\nNobody will be able to upload photographs to Frames, and every cloud photograph will be kept only as a smaller copy here, with the full-size original left in the cloud.\n\nPhotographs already in Frames are not touched. IMPORTANT: anyone who deletes a photo from their cloud storage deletes its only full-size original.'))) return;
           void put({ cloudOnly: v });
         }} /></SRow>
         <SRow title="Store original quality" hint={inst.data?.cloudOnly ? 'Smaller copies are required while originals are kept in cloud storage only.' : 'Off: cloud photos are kept as smaller copies (JPEG, quality 80) and the original stays in the cloud. On: they are kept exactly as they are.'}>
@@ -197,7 +198,7 @@ export function BackupSection({ registerAction }: { registerAction?: (a: React.R
   const put = (body: Record<string, unknown>) => api('/admin/instance', { method: 'PUT', body }).then(inst.reload).catch(() => undefined);
   const now = async () => { setBusy(true); setMsg(null); try { const r = await api<{ already: boolean }>('/admin/backup/now', { body: {} }); setMsg({ ok: true, text: r.already ? 'A backup was already made today.' : 'Backed up.' }); list.reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } setBusy(false); };
   const restore = async (name: string) => {
-    if (!window.confirm(`Restore from ${name}? It is checked first and applied the next time Frames starts. Everyone is signed out.`)) return;
+    if (!(await confirmAction(`Restore from ${name}? It is checked first and applied the next time Frames starts. Everyone is signed out.`))) return;
     try { const r = await api<{ parts: string[]; people: number }>('/admin/restore', { body: { name } }); setMsg({ ok: true, text: `Checked: ${r.people} ${r.people === 1 ? 'person' : 'people'} and ${r.parts.length - 1} ${r.parts.length === 2 ? 'library' : 'libraries'}. It is applied the next time Frames starts.` }); list.reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
   useEffect(() => { registerAction?.(<button className="pill primary" disabled={busy} onClick={now}>Back up now</button>); }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -280,7 +281,7 @@ export function UpdatesSystem() {
   const bad = sys.data?.checks.filter((c) => !c.ok) ?? [];
   const newer = rel.data?.releases[0];
   const restart = async () => {
-    if (!window.confirm('Restart Frames now? Signed-in people stay signed in; the page is unavailable for about 20 seconds.')) return;
+    if (!(await confirmAction('Restart Frames now? Signed-in people stay signed in; the page is unavailable for about 20 seconds.'))) return;
     try { await api('/admin/restart', { method: 'POST' }); setMsg('Restarting. Reload this page in a few seconds.'); } catch (e) { setMsg((e as Error).message); }
   };
   return (

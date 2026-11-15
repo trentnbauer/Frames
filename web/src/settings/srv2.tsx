@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -223,7 +224,7 @@ type Cmp = { rows: { name: string; secret: boolean; status: 'same' | 'differs' |
 function Diff({ ctx, secrets }: { ctx: Ctx; secrets: boolean }) {
   const c = useApi<Cmp>('/admin/env/compare');
   const rows = (c.data?.rows ?? []).filter((r) => r.status !== 'same');
-  const restart = async () => { if (!window.confirm('Restart Frames now so it loads the file’s values?')) return; await act(ctx, () => api('/admin/restart', { method: 'POST' }), 'Restarting…'); };
+  const restart = async () => { if (!(await confirmAction('Restart Frames now so it loads the file’s values?'))) return; await act(ctx, () => api('/admin/restart', { method: 'POST' }), 'Restarting…'); };
   return (
     <Modal title={rows.length ? `${rows.length} ${rows.length === 1 ? 'setting differs' : 'settings differ'}` : 'The app and the file agree'} sub="Frames is using the app’s values. A restart would load the file’s values instead." width={720} onClose={close(ctx)}
       foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer' }} onClick={() => ctx.toast('The file is /config/frames.env on the server')}>Open the file</span><button className="btn outline" onClick={() => void restart()}>Use the file’s values</button><a className="btn primary" href={`/api/admin/env/export${secrets ? '?secrets=1' : ''}`} download>Export app values to .env</a></>}>
@@ -296,7 +297,7 @@ export function useServer(ctx: Ctx): Section {
           if (!v) { setSecrets(false); return; }
           try { await api('/admin/env/export-enabled', { method: 'PUT', body: { on: true } }); setSecrets(true); } catch (e) { const m = msg(e); if (/Sign in again/.test(m) && ctx.me?.user) window.location.assign(`/auth/login/${encodeURIComponent(ctx.me.user.provider)}?returnTo=${encodeURIComponent('/settings?tab=srv&section=server')}`); else ctx.toast(m); } } },
         { id: 'envImport', t: 'button', label: 'Import a .env file', hint: 'Shows what will change before applying.', meta: 'Import…', act: () => ctx.modal(<Import ctx={ctx} />) },
-        { id: 'restart', t: 'button', label: 'Restart Frames', hint: 'Takes about 20 seconds. Signed-in people stay signed in.', meta: 'Restart', act: async () => { if (!window.confirm('Restart Frames now?')) return; await act(ctx, () => api('/admin/restart', { method: 'POST' }), 'Restarting…'); } },
+        { id: 'restart', t: 'button', label: 'Restart Frames', hint: 'Takes about 20 seconds. Signed-in people stay signed in.', meta: 'Restart', act: async () => { if (!(await confirmAction('Restart Frames now?'))) return; await act(ctx, () => api('/admin/restart', { method: 'POST' }), 'Restarting…'); } },
       ] },
     ],
   };

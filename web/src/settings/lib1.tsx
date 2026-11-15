@@ -1,3 +1,4 @@
+import { promptAction, confirmAction } from '../components/dialogs';
 import { AccountPassword } from '../components/AccountPassword';
 import { TwoFactor } from '../components/TwoFactor';
 import { useState } from 'react';
@@ -46,8 +47,8 @@ function Passkeys({ ctx, onChange }: { ctx: Ctx; onChange: () => void }) {
           <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--hair)', fontSize: 14 }}>
             <span>{k.name}<span style={{ display: 'block', fontSize: 12, color: 'var(--muted)' }}>Added {new Date(k.created).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}{k.lastUsed ? ` · used ${new Date(k.lastUsed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : ''}</span></span>
             <span style={{ display: 'flex', gap: 16 }}>
-              <button style={{ color: 'var(--text2)', fontSize: 13 }} onClick={async () => { const name = window.prompt('Name this passkey', k.name)?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
-            <button style={{ color: 'var(--danger)', fontSize: 13 }} onClick={async () => { if (!window.confirm(`Remove “${k.name}”?`)) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); } catch (e) { setErr(msg(e)); } }}>Remove</button>
+              <button style={{ color: 'var(--text2)', fontSize: 13 }} onClick={async () => { const name = (await promptAction('Name this passkey', k.name))?.trim(); if (!name || name === k.name) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'PATCH', body: { name } }); list.reload(); ctx.toast('Passkey renamed'); } catch (e) { setErr((e as Error).message); } }}>Rename</button>
+            <button style={{ color: 'var(--danger)', fontSize: 13 }} onClick={async () => { if (!(await confirmAction(`Remove “${k.name}”?`))) return; try { await api(`/me/passkeys/${encodeURIComponent(k.id)}`, { method: 'DELETE' }); list.reload(); onChange(); } catch (e) { setErr(msg(e)); } }}>Remove</button>
             </span>
           </div>
         ))}
@@ -261,7 +262,7 @@ export function useSecurity(ctx: Ctx): Section {
   const methods = useApi<{ methods: { id: string; label: string; kind: string; state: string; count?: number; canUnlink?: boolean }[] }>(ctx.me?.user && ctx.me.user.provider !== 'emergency' ? '/me/sign-in-methods' : null);
   const activity = useApi<{ sessions: { id: string; created: string; ip: string; userAgent: string; current: boolean }[]; history: { id: string; created: string; ip: string; userAgent: string; active: boolean }[] }>(ctx.me?.user ? '/me/security' : null);
   const revoke = async (id: string, current: boolean) => {
-    if (!window.confirm(current ? 'Sign out of this browser?' : 'Sign out this session?')) return;
+    if (!(await confirmAction(current ? 'Sign out of this browser?' : 'Sign out this session?'))) return;
     try { await api(`/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (current) window.location.assign('/signin'); else { activity.reload(); ctx.toast('Session signed out'); } }
     catch (e) { ctx.toast(msg(e)); }
   };
@@ -278,7 +279,7 @@ export function useSecurity(ctx: Ctx): Section {
         if (m.kind === 'access') return { id: 'sm_access', t: 'link', label: m.label, hint: 'Automatic. Cloudflare signs you in.' };
         const idn = ids.data?.identities.find((i) => i.provider === m.id);
         return m.state === 'linked'
-          ? { id: `sm_${m.id}`, t: 'button', label: m.label, hint: idn?.email ? `Linked · ${idn.email}` : 'Linked', meta: m.canUnlink ? 'Unlink' : 'In use', act: async () => { if (!m.canUnlink || !idn) return; if (!window.confirm(`Stop signing in with ${m.label}?`)) return; await api(`/me/identities/${idn.id}`, { method: 'DELETE' }); methods.reload(); ids.reload(); ctx.toast('Unlinked'); } }
+          ? { id: `sm_${m.id}`, t: 'button', label: m.label, hint: idn?.email ? `Linked · ${idn.email}` : 'Linked', meta: m.canUnlink ? 'Unlink' : 'In use', act: async () => { if (!m.canUnlink || !idn) return; if (!(await confirmAction(`Stop signing in with ${m.label}?`))) return; await api(`/me/identities/${idn.id}`, { method: 'DELETE' }); methods.reload(); ids.reload(); ctx.toast('Unlinked'); } }
           : { id: `sm_${m.id}`, t: 'button', label: m.label, hint: 'Not linked', meta: 'Link', act: () => window.location.assign(`/auth/link/${m.id}`) };
       }) },
       { title: 'Active sessions', rows: !ctx.me?.user ? [{ id: 'sessionRequired', t: 'link', label: 'Sign in with a personal account to manage sessions', hint: 'Shared-password and automatic access do not create personal sessions.' }] : activity.error ? [{ id: 'sessionError', t: 'button', label: activity.error, meta: 'Retry', act: activity.reload }] : !activity.data ? [{ id: 'sessionLoading', t: 'link', label: 'Loading sessions…' }] : activity.data.sessions.length ? activity.data.sessions.map((s): R => ({ id: `session_${s.id}`, t: 'button', label: `${s.current ? 'This browser · ' : ''}${s.ip || 'IP not recorded'}`, hint: `${s.userAgent || 'Device not recorded'} · Signed in ${new Date(s.created).toLocaleString()}`, meta: 'Sign out', act: () => void revoke(s.id, s.current) })) : [{ id: 'noSessions', t: 'link', label: 'No recorded active sessions' }] },

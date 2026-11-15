@@ -1,10 +1,10 @@
 # Working on Frames
 
-Rules for anyone (human or Claude) changing this repository. What Frames does and how it is run is in `README.md` (the original design document has been retired: every requirement in it was built and tested, and `git log` has its history).
+Rules for anyone (human or Claude) changing this repository. The brief overview is in `README.md`; full user and server guides are in the [wiki](https://github.com/trentnbauer/Frames/wiki) (the original design document has been retired: every requirement in it was built and tested, and `git log` has its history).
 
 ## Every pull request gets exactly one release label
 
-The version number of the container image is worked out from it when the pull request is merged into `main` (see README, "Versions and releases"). Add the label when you open the pull request (`gh pr create --label "release: minor" ...`) and keep it right if the scope changes:
+The version number of the container image is worked out from it when the pull request is merged into `main` (see the wiki’s [Versions and releases](https://github.com/trentnbauer/Frames/wiki/Versions-and-releases)). Add the label when you open the pull request (`gh pr create --label "release: minor" ...`) and keep it right if the scope changes:
 
 | Label | Use it for | Version |
 |---|---|---|
@@ -24,7 +24,7 @@ Write the pull request title as the line users will read in the app's "What's ne
 - A pull request with conflicts will not auto-merge: when `main` moves on, merge `main` into the branch, fix the conflicts and push.
 - Say in the description what changed, what was checked, and what was not (for example "not tested against the real service").
 - Keep `README.md` a brief, high-level overview with a quick start and documentation links. Put detailed user-visible behaviour, settings, limits, troubleshooting and live-service testing notes in the wiki. Update the relevant wiki guide when behaviour changes; update the README only when its overview, quick start or navigation needs changing. If wiki publication is unavailable, include a clearly labelled documentation draft in `docs/` for publication rather than expanding the README.
-- If it adds or changes an environment variable, update the README's *Environment variables* tables, `.env.example` and both compose files.
+- If it adds or changes an environment variable, update the wiki’s *Environment variables* guide, `.env.example` and both compose files.
 - If it adds a database migration, append to `MIGRATIONS` in `server/src/db.ts` (never edit an old one). Two open pull requests can both add the next number: whichever merges second renumbers.
 
 ## Before a pull request is ready

@@ -8,16 +8,14 @@ vi.mock('./store', () => ({ useStore: () => state }));
 vi.mock('./ui', () => ({ useUi: () => ({ openSearch: vi.fn() }) }));
 vi.mock('./components/RemovalReview', () => ({ RemovalReview: () => <section>Photo and personal rating history</section> }));
 beforeEach(() => { state.removals = 0; });
-it('shows the removal tab only for an eligible queue on desktop and phones', () => {
-  for (const Component of [BottomNav, TabBar]) {
-    const html = () => renderToStaticMarkup(<MemoryRouter><Component /></MemoryRouter>);
-    expect(html()).not.toContain('href="/removals"');
-    state.removals = 2;
-    expect(html()).toContain('href="/removals"');
-    expect(html()).toContain('Removal review');
-    state.removals = 0;
-    expect(html()).not.toContain('href="/removals"');
-  }
+it('groups desktop tasks under To do and keeps the existing phone entry conditional', () => {
+  const desktop = renderToStaticMarkup(<MemoryRouter><BottomNav /></MemoryRouter>);
+  expect(desktop).toContain('aria-controls="todo-navigation"');
+  expect(desktop).not.toContain('href="/removals"');
+  state.removals = 2;
+  expect(renderToStaticMarkup(<MemoryRouter><TabBar /></MemoryRouter>)).toContain('href="/removals"');
+  state.removals = 0;
+  expect(renderToStaticMarkup(<MemoryRouter><TabBar /></MemoryRouter>)).not.toContain('href="/removals"');
 });
 it('renders a dedicated immersive review view with an exit control', () => {
   const html = renderToStaticMarkup(<MemoryRouter><RemovalReviewScreen /></MemoryRouter>);

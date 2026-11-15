@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
@@ -59,8 +60,8 @@ export function AiSettings({ server = false }: { server?: boolean }) {
           <div className="form">
             <button className="pill" disabled={status.data.running} onClick={async () => { await api('/ai/run?retry=1', { method: 'POST', body: {} }); setTimeout(status.reload, 500); }}>{status.data.running ? 'Analysing…' : status.data.failed ? 'Retry failed and continue' : 'Analyse now'}</button>
             <button className="pill" disabled={status.data.running} onClick={async () => {
-              if (!window.confirm(`Analyse every photograph again (${everything} of them)?\n\nThe AI looks at each one afresh, which takes a while and, on a paid service, costs one request per photograph. Descriptions and suggestions are replaced as each is redone. Tags you have accepted or rejected are kept.`)) return;
-              try { await api('/ai/run?all=1', { method: 'POST', body: {} }); } catch (e) { window.alert((e as Error).message); }
+              if (!(await confirmAction(`Analyse every photograph again (${everything} of them)?\n\nThe AI looks at each one afresh, which takes a while and, on a paid service, costs one request per photograph. Descriptions and suggestions are replaced as each is redone. Tags you have accepted or rejected are kept.`))) return;
+              try { await api('/ai/run?all=1', { method: 'POST', body: {} }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
               setTimeout(status.reload, 500);
             }}>Re-analyse the whole library</button>
           </div>
@@ -112,7 +113,7 @@ function Item({ base, server, src, type, active, one, run }: { base: string; ser
         <button className="pill primary" disabled={!dirty} onClick={saveIt}>Save changes</button>
         <button className="pill" onClick={async () => { setTest(null); if (dirty) await api(`${base}/sources/${src.id}`, { method: 'PUT', body: body() }).catch(() => {}); setTest(await api<{ ok: boolean; detail: string }>(`${base}/sources/${src.id}/test`, { method: 'POST', body: {} }).catch((e: Error) => ({ ok: false, detail: e.message }))); setF({ ...f, key: '' }); }}>Test</button>
         {test && <span role="status" className={test.ok ? 'muted' : 'reason'} style={{ fontSize: 13 }}>{test.detail}</span>}
-        <Destructive onClick={() => { if (window.confirm(`Remove ${src.name}?`)) run(() => api(`${base}/sources/${src.id}`, { method: 'DELETE' }), 'Removed.'); }}>Remove</Destructive>
+        <Destructive onClick={async () => { if ((await confirmAction(`Remove ${src.name}?`))) run(() => api(`${base}/sources/${src.id}`, { method: 'DELETE' }), 'Removed.'); }}>Remove</Destructive>
       </CardFooter>
     </EditRow>
   );
