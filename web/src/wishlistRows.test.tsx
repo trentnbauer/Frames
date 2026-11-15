@@ -10,7 +10,8 @@ it('validates edited names, prices and links without changing missing prices to 
   for (const link of ['javascript:alert(1)', 'not a URL']) expect(() => wishBody({ ...wishDraft(item, 0), link })).toThrow();
   expect(() => wishBody({ ...wishDraft(item, 0), name: ' ' })).toThrow();
 });
-it('renders explicit editing, priority, listing and purchase controls for every item', () => {
+it('keeps closed rows compact and exposes editing and safe listing links', () => {
   const html = renderToStaticMarkup(<WishlistRows items={[item, { ...item, id: 5, name: 'Body', price: 1.25 }]} currency="€" showWant={false} onChanged={async () => {}} onBought={() => {}} />);
-  for (const text of ['Edit Lens', 'Edit Body', 'Move Lens down', 'Move Body up', 'Bought it', 'Price not set', '€1.25', 'noopener noreferrer']) expect(html).toContain(text);
+  for (const text of ['Edit Lens', 'Edit Body', 'Price not set', '€1.25', 'noopener noreferrer']) expect(html).toContain(text);
+  expect(html).not.toContain('Bought it'); expect(html).not.toContain('Move Lens down'); expect(html).not.toContain('Portraits');
 });

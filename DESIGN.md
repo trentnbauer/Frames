@@ -52,3 +52,5 @@ The owned-gear System view uses a system sidebar and selected-system details. Us
 The Home wishlist is a compact bordered strip below all main Home content, using shared gear icons and theme tokens. Show at most two priority items plus a link to the full wishlist; omit the strip when empty. Keep review and composition content above it. Stack the strip on phones and wrap long equipment names.
 
 The Gear wishlist uses expandable rows with explicit Edit, Save changes and Cancel actions. Keep URL, estimated price, notes and priority editable after creation; show unknown prices separately from zero. Use shared gear icons, visible save errors, up/down alternatives to dragging, and stacked fields on phones. Keep the owned-gear sidebar below the wishlist.
+
+Keep collapsed wishlist rows single-line and compact, with plain sans-serif names. Put notes, Bought it, Didn't buy it and keyboard reorder actions inside Edit. Truncate long collapsed names with their full value available in the editor. Show the total beside the item count rather than repeating it below the list.

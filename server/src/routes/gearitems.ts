@@ -130,7 +130,13 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (sets.length || b.priority !== undefined) db.transaction(() => { const old = one('SELECT kind, system FROM gear_items WHERE id = ?', id)!; if (old.kind === 'own' && typeof b.system === 'string') rememberSystems(old.system, b.system.trim().slice(0, 60)); if (sets.length) db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id); if (b.priority !== undefined) prioritize(id, b.priority); })();
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
-  app.delete('/api/gear/items/:id', async (req) => ({ removed: db.prepare('DELETE FROM gear_items WHERE id = ?').run(num((req.params as Row).id)).changes }));
+  app.delete('/api/gear/items/:id', async (req, rep) => {
+    const id = num((req.params as Row).id), kind = ((req.query ?? {}) as Row).kind;
+    if (kind !== undefined && kind !== 'want') return rep.code(400).send({ error: 'The removal kind must be want.' });
+    const removed = kind === 'want' ? db.prepare("DELETE FROM gear_items WHERE id = ? AND kind = 'want'").run(id).changes : db.prepare('DELETE FROM gear_items WHERE id = ?').run(id).changes;
+    if (kind === 'want' && !removed) return rep.code(409).send({ error: 'This item is no longer on your wishlist. Refresh the list before trying again.' });
+    return { removed };
+  });
   app.post('/api/gear/systems', async (req, rep) => {
     const name = clean(((req.body ?? {}) as Row).name, 60);
     if (!name) return rep.code(400).send({ error: 'Give the system a name.' });
