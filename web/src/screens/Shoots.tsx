@@ -65,12 +65,18 @@ export function Shoots() {
   const [files, setFiles] = useState<File[]>([]);
   const [req, setReq] = useState(0);
   const [sp, setSp] = useSearchParams();
-  useEffect(() => { if (sp.get('upload')) { setReq(Date.now()); setSp({}, { replace: true }); } }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
   const input = useRef<HTMLInputElement>(null);
 
   const local = !!status.data?.storage.local;
   const conns = (cloud.data?.connections ?? []).filter((c) => c.folderId !== null && c.enabled && !c.needsReconnect);
   const cloudOn = conns.length > 0;
+  // Keep the request until storage settings arrive; otherwise open() runs while uploads look disabled.
+  useEffect(() => {
+    if (!sp.get('upload') || (!local && !cloudOn)) return;
+    setReq((request) => request + 1);
+    const next = new URLSearchParams(sp); next.delete('upload');
+    setSp(next, { replace: true });
+  }, [sp, local, cloudOn, setSp]);
   const shootOf = new Map((lib.data?.photos ?? []).map((p) => [p.id, p.shootId]));
   const compsPerShoot = new Map<number, Set<number>>();
   for (const c of colls.data ?? []) for (const pid of c.photoIds) { const s = shootOf.get(pid); if (s != null) (compsPerShoot.get(s) ?? compsPerShoot.set(s, new Set()).get(s)!).add(c.id); }
