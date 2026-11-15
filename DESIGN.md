@@ -48,3 +48,5 @@ Removal decisions open in a dedicated full-screen view, with Back/Escape to leav
 Share links use a named-link sidebar and a selected-link settings panel. Keep New link separate from Replace address, and show stopped/expired links explicitly. On phones stack the link list above the settings; retain the shared full-screen modal and footer. Each link’s permissions, PIN, expiry and invitations stay independent.
 
 The owned-gear System view uses a system sidebar and selected-system details. Use consistent 1.4px stroked SVG equipment icons, draggable gear rows and labelled move selectors for keyboard/phone users. Show empty stored systems and Unassigned explicitly. Rename and edit operations use shared confirmation forms with visible save errors. Keep discovery and blacklist sections in their existing positions.
+
+The Home wishlist is a compact bordered strip below all main Home content, using shared gear icons and theme tokens. Show at most two priority items plus a link to the full wishlist; omit the strip when empty. Keep review and composition content above it. Stack the strip on phones and wrap long equipment names.
