@@ -50,3 +50,5 @@ Share links use a named-link sidebar and a selected-link settings panel. Keep Ne
 The owned-gear System view uses a system sidebar and selected-system details. Use consistent 1.4px stroked SVG equipment icons, draggable gear rows and labelled move selectors for keyboard/phone users. Show empty stored systems and Unassigned explicitly. Rename and edit operations use shared confirmation forms with visible save errors. Keep discovery and blacklist sections in their existing positions.
 
 The Home wishlist is a compact bordered strip below all main Home content, using shared gear icons and theme tokens. Show at most two priority items plus a link to the full wishlist; omit the strip when empty. Keep review and composition content above it. Stack the strip on phones and wrap long equipment names.
+
+The Gear wishlist uses expandable rows with explicit Edit, Save changes and Cancel actions. Keep URL, estimated price, notes and priority editable after creation; show unknown prices separately from zero. Use shared gear icons, visible save errors, up/down alternatives to dragging, and stacked fields on phones. Keep the owned-gear sidebar below the wishlist.
