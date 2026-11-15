@@ -11,7 +11,7 @@ export const TYPES = ['camera', 'lens', 'film', 'light', 'app', 'other'] as cons
 export type GearType = (typeof TYPES)[number];
 export const ARRANGE = ['system', 'type', 'used', 'era'] as const;
 export const CURRENCIES = ['$', '€', '£', '¥', '₹', 'kr', 'CHF'] as const;
-export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string; currency?: string };
+export type Prefs = { showWant: boolean; arrange: (typeof ARRANGE)[number]; intro?: string; systems?: string[]; currency?: string };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -49,6 +49,11 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
   const prefs = (): Prefs => ({ showWant: false, arrange: 'system', ...getSetting<Partial<Prefs>>(db, 'gearPrefs', {}) });
   const dto = (r: Row) => ({ id: r.id, kind: r.kind, name: r.name, type: r.type, system: r.system, serial: r.serial, year: r.year, why: r.why, link: r.link, price: r.price, rank: r.rank, boughtAt: r.bought_at });
 
+  const rememberSystems = (...names: string[]) => {
+    const current = prefs();
+    current.systems = [...new Set([...(current.systems ?? []), ...names.filter(Boolean)])];
+    setSetting(db, 'gearPrefs', current);
+  };
   /** Once, on first use: the camera and lens the person had set as defaults become gear they own. */
   const migrate = () => {
     if (getSetting<boolean>(db, 'gearMigrated', false)) return false;
@@ -59,6 +64,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     return n > 0;
   };
   const add = (kind: 'own' | 'want', name: string, type: GearType, extra: Row = {}) => {
+    if (kind === 'own' && extra.system) rememberSystems(extra.system);
     const rank = kind === 'want' ? (extra.front ? ((one("SELECT MIN(rank) m FROM gear_items WHERE kind = 'want'") as Row).m ?? 1) - 1 : ((one("SELECT MAX(rank) m FROM gear_items WHERE kind = 'want'") as Row).m ?? 0) + 1) : 0;
     return Number(db.prepare('INSERT INTO gear_items(kind, name, type, system, year, why, link, price, rank, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
       .run(kind, name.slice(0, 120), type, extra.system ?? '', extra.year ?? null, clean(extra.why, 200), clean(extra.link, 300), extra.price ?? null, rank, new Date().toISOString()).lastInsertRowid);
@@ -111,16 +117,30 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (typeof b.why === 'string') set('why', b.why.trim().slice(0, 200));
     if (b.link !== undefined) { const l = clean(b.link, 300); if (l && !/^https?:\/\//i.test(l)) return rep.code(400).send({ error: 'A link starts with https://' }); set('link', l); }
     if (b.price !== undefined) { const p = b.price === null || b.price === '' ? null : Number(b.price); if (p !== null && !(p >= 0 && p < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' }); set('price', p); }
-    if (sets.length) db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id);
+    if (sets.length) db.transaction(() => { const old = one('SELECT kind, system FROM gear_items WHERE id = ?', id)!; if (old.kind === 'own' && typeof b.system === 'string') rememberSystems(old.system, b.system.trim().slice(0, 60)); db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id); })();
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.delete('/api/gear/items/:id', async (req) => ({ removed: db.prepare('DELETE FROM gear_items WHERE id = ?').run(num((req.params as Row).id)).changes }));
-  // Renaming a system renames it on every item in it.
+  app.post('/api/gear/systems', async (req, rep) => {
+    const name = clean(((req.body ?? {}) as Row).name, 60);
+    if (!name) return rep.code(400).send({ error: 'Give the system a name.' });
+    const existing = [...(prefs().systems ?? []), ...all("SELECT DISTINCT system FROM gear_items WHERE kind = 'own'").map((item) => item.system)];
+    if (existing.includes(name)) return rep.code(409).send({ error: 'That system already exists.' });
+    rememberSystems(name);
+    return { name };
+  });
+  // Empty is a real unassigned system, rather than the display label “Other”.
   app.post('/api/gear/systems/rename', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const from = clean(b.from, 60), to = clean(b.to, 60);
-    if (!from || !to) return rep.code(400).send({ error: 'Give the system a name.' });
-    return { renamed: db.prepare("UPDATE gear_items SET system = ? WHERE kind = 'own' AND system = ?").run(to, from).changes };
+    if (typeof b.from !== 'string' || !to) return rep.code(400).send({ error: 'Give the system a name.' });
+    return db.transaction(() => {
+      const renamed = db.prepare("UPDATE gear_items SET system = ? WHERE kind = 'own' AND system = ?").run(to, from).changes;
+      const current = prefs();
+      current.systems = [...new Set([...(current.systems ?? []).filter((name) => name !== from), to])];
+      setSetting(db, 'gearPrefs', current);
+      return { renamed };
+    })();
   });
   // "Bought it": the wished-for item becomes something you own.
   app.post('/api/gear/items/:id/bought', async (req, rep) => {

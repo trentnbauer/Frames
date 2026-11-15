@@ -770,3 +770,27 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
   .share-fields > div > div { flex-wrap:wrap; }
   .share-setting-row { flex-wrap:wrap; }
 }
+
+.gear-workspace { display:grid; grid-template-columns:245px minmax(0,1fr); gap:22px; }
+.gear-system-list { background:var(--bg); border:1px solid var(--outline); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+.gear-system-list > .eyebrow { padding:8px 12px; }
+.gear-system-choice { display:flex; flex-direction:column; gap:6px; text-align:left; padding:16px; border-radius:8px; overflow-wrap:anywhere; }
+.gear-system-choice.selected { background:var(--chip); }
+.gear-system-choice small { color:var(--muted); }
+.gear-system-choice.drop-target { outline:1px dashed var(--text); background:var(--hover); }
+.gear-system-detail { min-width:0; background:var(--surface); border-radius:12px; padding:24px; }
+.gear-system-detail h2 { margin:0 0 6px; font-size:30px; overflow-wrap:anywhere; }
+.gear-system-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.gear-system-row { display:flex; gap:14px; align-items:center; border-top:1px solid var(--outline); padding:18px 0; }
+.gear-system-row svg { color:var(--text2); flex:none; }
+.gear-grip { color:var(--muted); cursor:grab; }
+.gear-item-name { flex:1; min-width:0; text-align:left; overflow-wrap:anywhere; }
+.gear-item-name small { display:block; color:var(--muted); margin-top:4px; }
+.gear-photo-count { color:var(--muted); font:11px var(--mono); white-space:nowrap; }
+.gear-system-row select { max-width:150px; background:var(--bg); color:var(--text); border:1px solid var(--outline); border-radius:8px; padding:8px; }
+.gear-empty { padding:28px 0; color:var(--muted); }
+.gear-edit-fields { border:0; padding:0; margin:0; display:flex; flex-direction:column; gap:14px; min-width:0; }
+.gear-edit-fields label { display:flex; flex-direction:column; gap:6px; }
+@media(max-width:850px) { .gear-workspace { grid-template-columns:minmax(0,1fr); } .gear-system-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .gear-system-list > .eyebrow, .gear-system-list > .btn { grid-column:1/-1; } .gear-system-row { flex-wrap:wrap; gap:10px; } .gear-system-row .gear-item-name { min-width:50%; } .gear-system-detail > .spread { flex-wrap:wrap; gap:16px; } }
+
+.gear-move { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted); }
