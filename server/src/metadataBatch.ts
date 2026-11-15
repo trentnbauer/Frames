@@ -11,6 +11,7 @@ const textFields: Record<string, [string, number]> = {
   place: ['place', 120],
   placeAddress: ['place_address', 240],
   placeKind: ['place_kind', 40],
+  placePrecision: ['place_precision', 10],
   dateEdit: ['date_edit', 10],
 };
 export function metadataInput(body: Row) {
@@ -24,9 +25,11 @@ export function metadataInput(body: Row) {
   if (!body.patch || typeof body.patch !== 'object' || Array.isArray(body.patch)) throw new WorkflowError('Send the fields to edit.');
   const patch: Row = {};
   for (const [key, value] of Object.entries(body.patch)) {
-    if (Object.hasOwn(textFields,key)) {
+    if (Object.hasOwn(textFields, key)) {
       if (typeof value !== 'string') throw new WorkflowError('Metadata fields must be text.');
       const [col, max] = textFields[key];
+      if (key === 'placePrecision' && !['exact', 'suburb', 'city'].includes(value))
+        throw new WorkflowError('Choose exact, suburb or city location precision.');
       if (value.length > max) throw new WorkflowError(`${key} is too long.`);
       patch[col] = key === 'dateEdit' && !value.trim() ? null : value.trim();
       if (
@@ -95,11 +98,11 @@ export function metadataBatch(db: DB, body: Row, apply: boolean) {
           }
           continue;
         }
-        const blank =
-          field === 'lat' || field === 'lon' ? before.lat === null && before.lon === null : before[field] === null || before[field] === '';
-        const apiField = ['lat', 'lon', 'place', 'place_address', 'place_kind'].includes(field)
-          ? 'location'
-          : (Object.entries(textFields).find(([, spec]) => spec[0] === field)?.[0] ?? field);
+        const locationField = ['lat', 'lon', 'place', 'place_address', 'place_kind', 'place_precision'].includes(field);
+        const blank = locationField
+          ? before.lat === null && before.lon === null && !String(before.place ?? '').trim()
+          : before[field] === null || before[field] === '';
+        const apiField = locationField ? 'location' : (Object.entries(textFields).find(([, spec]) => spec[0] === field)?.[0] ?? field);
         const onlyBlank = body.blankFields?.[apiField] ?? blanks;
         if ((!onlyBlank || blank) && JSON.stringify(before[field]) !== JSON.stringify(value)) {
           values[field] = value;

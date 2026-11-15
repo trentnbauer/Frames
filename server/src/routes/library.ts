@@ -143,7 +143,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         // Every photograph takes the shoot's camera, and goes on following it (it is no longer "typed by hand").
         const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
         for (const r of db.prepare('SELECT id, user_fields, gear_src FROM photos WHERE shoot_id = ?').all(id) as Row[]) {
-          db.prepare('UPDATE photos SET camera = ?, user_fields = ?, gear_src = ? WHERE id = ?').run(camera, csv(r.user_fields).filter((f) => f !== 'camera').join(','), [...new Set([...csv(r.gear_src), 'camera'])].join(','), r.id);
+          db.prepare('UPDATE photos SET camera = ?, raw_camera = ?, user_fields = ?, gear_src = ? WHERE id = ?').run(camera, camera, csv(r.user_fields).filter((f) => f !== 'camera').join(','), [...new Set([...csv(r.gear_src), 'camera'])].join(','), r.id);
           syncGearTags(db, r.id);
         }
       }

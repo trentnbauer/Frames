@@ -33,6 +33,7 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
         place: place?.name ?? '',
         placeAddress: place?.address ?? '',
         placeKind: place?.kind ?? '',
+        placePrecision: place?.precision ?? 'exact',
         lat: place?.lat ?? null,
         lon: place?.lng ?? null,
       });

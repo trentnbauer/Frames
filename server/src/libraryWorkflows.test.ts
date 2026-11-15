@@ -306,3 +306,32 @@ it('restores into a new photo ID when a later import reused the old number', asy
   expect(row(restored.body.id)).toMatchObject({ file: oldFile, description: 'Retained description' });
   expect(row(oldId).file).toBe('new.jpg');
 });
+
+it('keeps explicit shoot camera overrides through alias resolution and alias removal', async () => {
+  const shootId = row(ids[0]).shoot_id;
+  await a.patch(`/api/photos/${ids[0]}`, { camera: 'Own Camera' });
+  const gear = (await a.post('/api/gear/items', { name: 'Canonical Camera', type: 'camera' })).body;
+  await a.post('/api/gear/aliases', { gearId: gear.id, name: 'Regional Camera' });
+  expect((await a.patch(`/api/shoots/${shootId}`, { gear: { camera: 'Regional Camera' }, overwrite: true })).status).toBe(200);
+  expect(row(ids[0])).toMatchObject({ camera: 'Canonical Camera', raw_camera: 'Regional Camera' });
+  const alias = (await a.get('/api/gear/aliases')).body.aliases.find((item: any) => item.name === 'Regional Camera');
+  await a.del(`/api/gear/aliases/${alias.id}`);
+  expect(row(ids[0])).toMatchObject({ camera: 'Regional Camera', raw_camera: 'Regional Camera' });
+});
+
+it('treats location as one fill-blanks field and retains map precision', async () => {
+  await a.patch(`/api/photos/${ids[0]}`, { place: 'Existing place', lat: -37, lon: 144 });
+  const body = {
+    ids,
+    fillBlanks: true,
+    patch: { place: 'Melbourne', placeAddress: 'Victoria', placeKind: 'city', placePrecision: 'city', lat: -37.81, lon: 144.96 },
+  };
+  const preview = (await a.post('/api/photos/bulk-preview', body)).body;
+  expect(preview.counts.place).toBe(1);
+  const applied = await a.post('/api/photos/bulk-apply', { ...body, versions: preview.versions });
+  expect(applied.status).toBe(200);
+  expect(row(ids[0])).toMatchObject({ place: 'Existing place', lat: -37, lon: 144 });
+  expect(row(ids[1])).toMatchObject({ place: 'Melbourne', place_precision: 'city', lat: -37.81, lon: 144.96 });
+  await a.post(`/api/changes/${applied.body.operationId}/undo`);
+  expect(row(ids[1])).toMatchObject({ place: '', place_precision: 'exact', lat: null, lon: null });
+});
