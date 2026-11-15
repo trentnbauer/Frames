@@ -300,7 +300,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       if(share.version_id){try{const{data}=versionSnapshot(x,share.version_id,share.target_id);const chosen=data.chosenIds as number[];return{share,name:c.name,description:c.description,photoIds:share.only_wall?data.photoIds.filter((id:number)=>chosen.includes(id)):data.photoIds,chosenIds:chosen,target:data.target,layout:data.layout};}catch{return rep.code(410).send({error:'This saved arrangement is no longer available.'}),null;}}
       const rows = all('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos', share.target_id);
       const t = one('SELECT target FROM collections WHERE id = ?', share.target_id);
-      const wallOnly = !!share.only_wall && rows.some((r) => r.chosen);
+      const wallOnly = !!share.only_wall;
       return { share, name: c.name, description: c.description, photoIds: rows.filter((r) => !wallOnly || r.chosen).map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), target: t?.target ? JSON.parse(t.target) : null, layout: x.collectionDto(one('SELECT * FROM collections WHERE id = ?', share.target_id)!).layout };
     }
     const s = one('SELECT name, description FROM shoots WHERE id = ?', share.target_id);

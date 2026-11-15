@@ -113,6 +113,10 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // ---------- security ----------
   app.addHook('onRequest', async (req, rep) => {
     const r = req as any;
+    // The router decodes static URL segments. Authorize the route it actually matched,
+    // so an encoded spelling cannot skip role or second-factor checks.
+    const accessPath = req.routeOptions.url ?? req.url.split('?')[0];
+    const isApi = accessPath.startsWith('/api/');
     // The portfolio hostname shows the public portfolio and nothing else, whatever else is asked of it.
     // The app's own address, when Cloudflare Access protects it: only a valid Access token gets past (public paths excepted).
     if (access.applies(req) && (await access.check(req)) !== 'ok') return rep.code(403).send({ error: 'Sign in through Cloudflare Access to use this address.' });
@@ -127,12 +131,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       r.authUser = v.user;
       r.authVia = v.via;
       // A guest has no library to work in: they sign in to open what was shared with them, and nothing else.
-      if (v.user.role === 'guest' && req.url.startsWith('/api/') && !GUEST_OK.test(req.url.split('?')[0])) return rep.code(403).send({ error: 'A guest account can only open what has been shared with it' });
-      if (ADMIN_ONLY.test(req.url) && v.user.role !== 'admin') return rep.code(403).send({ error: 'Only an administrator can do that' });
+      if (v.user.role === 'guest' && isApi && !GUEST_OK.test(accessPath)) return rep.code(403).send({ error: 'A guest account can only open what has been shared with it' });
+      if (ADMIN_ONLY.test(accessPath) && v.user.role !== 'admin') return rep.code(403).send({ error: 'Only an administrator can do that' });
       if (!baseCfg.authDisabled && mfaRequired(sys, v.user) && (v.via !== 'session' || !factorVerified(sys, sessionIdOf(req)))) {
-        const path = req.url.split('?')[0];
+        const path = accessPath;
         const setup = /^\/api\/me\/mfa(?:\/|$)/.test(path) || path === '/api/me' || /^\/api\/me\/passkeys(?:\/(options|verify))?$/.test(path);
-        if ((req.url.startsWith('/api/') && !setup) || path.startsWith('/auth/link/')) return rep.code(403).send({ error: 'Verify two-factor authentication to continue.', mfaRequired: true });
+        if ((isApi && !setup) || path.startsWith('/auth/link/')) return rep.code(403).send({ error: 'Verify two-factor authentication to continue.', mfaRequired: true });
         if (setup && v.via !== 'session') return rep.code(401).send({ error: 'Sign in with a personal account.', signIn: '/signin' });
       }
       r.tenant = tenants.get(v.user.id);
