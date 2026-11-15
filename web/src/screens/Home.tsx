@@ -1,3 +1,4 @@
+import { HomeWishlist } from '../components/HomeWishlist';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -121,11 +122,12 @@ export function Home() {
     { key: 'c', label: 'Continue composition', run: () => v.wall?.open(), off: !wall },
   ]);
 
-  if (s && s.total === 0) return <Today />;
+  if (s && s.total === 0) return <><Today /><HomeWishlist standalone /></>;
   return (
     <div className="page-shell">
 
       <ProtoHome v={v} cloudOn={v.cloudOn} />
+      <HomeWishlist />
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); shoots.reload(); pending.reload(); batches.reload(); }} />}
     </div>
   );
