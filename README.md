@@ -103,7 +103,7 @@ Scroll over the composition wall, pinch a trackpad, or use two fingers on a touc
 
 ## Security
 
-To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
+To report a vulnerability, see [`SECURITY.md`](SECURITY.md). The [application review notes](docs/security-review-2026-11-16.md) record the latest API permission and wall-only sharing fixes, test coverage and open follow-up findings.
 
 ## Library layout and account security
 
