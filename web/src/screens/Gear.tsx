@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { GearAliases } from '../components/GearAliases';
 import { WishlistRows } from '../components/WishlistRows';
 import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
@@ -56,6 +58,7 @@ export function Gear() {
     <div className="page-shell">
 
       {blocklistError && <p role="alert" style={{ color: 'var(--danger)' }}>{blocklistError}</p>}
+      <div className="workflow-shortcuts"><GearAliases /><Link to="/gear-history">Purchase & decision history →</Link><Link to="/activity">Undo changes →</Link></div>
       <ProtoGear
         renderWishlist={(v: { buyWish: (id: number) => void }) => d ? <WishlistRows items={want.map((item) => ({ ...item, fits: fitsOf(item) }))} currency={d?.prefs.currency ?? '$'} showWant={!!d?.prefs.showWant} onChanged={async () => { g.set(await api<Data>('/gear/items')); window.dispatchEvent(new Event('frames:gear-changed')); }} onBought={v.buyWish} /> : <p className="muted">{g.error || 'Loading wishlist…'}</p>}
         ownedControl={d?.prefs.arrange === 'system' || !d?.prefs.arrange ? <GearSystems items={own} systems={d?.prefs.systems ?? []} onChanged={async () => { g.set(await api<Data>('/gear/items')); }} /> : undefined}
@@ -79,7 +82,7 @@ export function Gear() {
         onRemoveItem={(id: number) => run(() => api(`/gear/items/${id}`, { method: 'DELETE' }))}
         onOrder={(ids: number[]) => run(() => api('/gear/order', { method: 'PUT', body: { ids } }))}
         onRenameSystem={(from: string, to: string) => run(() => api('/gear/systems/rename', { body: { from, to } }))}
-        onBought={(id: number, o: { name: string; type: string; system: string; year: number | null; paid: string | null }) => run(async () => { await api(`/gear/items/${id}/bought`, { body: {} }); await api(`/gear/items/${id}`, { method: 'PATCH', body: { name: o.name, type: TO_API[o.type] ?? 'other', system: o.system, ...(o.year ? { year: o.year } : {}), ...(o.paid ? { price: Number(o.paid) } : {}) } }); })}
+        onBought={(id: number, o: { name: string; type: string; system: string; year: number | null; paid: string | null }) => run(() => api(`/gear/items/${id}/bought`, { body: { name: o.name, type: TO_API[o.type] ?? 'other', system: o.system, ...(o.year ? { year: o.year } : {}), ...(o.paid!==null&&o.paid!=='' ? { price: Number(o.paid) } : {price:null}) } }))}
       />
     </div>
   );

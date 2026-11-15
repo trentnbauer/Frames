@@ -4,7 +4,7 @@ import { Modal } from './Modal';
 import { newSharePin } from '../sharePin';
 
 type ShareLink = {
-  id: number; token: string; label: string; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string;
+  id: number; token: string; label: string; versionId: number | null; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string;
   expiresAt: string | null; status: 'active' | 'expired' | 'revoked'; views: number; downloads: number; reviews: number;
 };
 type Invite = { email: string; status: 'sent' | 'failed'; error: string; at: string };
@@ -67,7 +67,8 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
   const [fresh, setFresh] = useState(false);
   const [err, setErr] = useState('');
   const [email, setEmail] = useState('');
-  const [draft, setDraft] = useState({ label: '', allowReview: true, allowSuggest: true, allowDownload: false, onlyWall: false, askName: true, pin: '', expiresAt: inDays(21) as string | null });
+  const versions = useApi<{ id: number; name: string }[]>(kind === 'collection' ? `/collections/${targetId}/versions` : null);
+  const [draft, setDraft] = useState({ versionId: null as number | null, label: '', allowReview: true, allowSuggest: true, allowDownload: false, onlyWall: false, askName: true, pin: '', expiresAt: inDays(21) as string | null });
   const [pinEdit, setPinEdit] = useState('');
   const inv = useApi<{ invites: Invite[]; canEmail: boolean }>(link ? `/shares/${link.id}/invites` : null);
   useEffect(() => setPinEdit(link?.pin ?? draft.pin), [link?.pin, draft.pin]);
@@ -92,6 +93,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
     {err && <div className="reason" role="alert">{err}</div>}
     <fieldset disabled={busy} className="share-fields">
       <label className="share-name">Link name<input className="field-in" aria-label="Link name" maxLength={80} placeholder="e.g. Client review" defaultValue={link?.label ?? draft.label} onChange={(event) => { if (!link) setDraft((value) => ({ ...value, label: event.target.value })); }} onBlur={(event) => { if (link && event.target.value !== link.label) void patch({ label: event.target.value }); }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
+      {kind === 'collection' && <label>Arrangement<select className="field-in" aria-label="Shared arrangement" value={settings.versionId ?? ''} onChange={event => patch({ versionId: event.target.value ? Number(event.target.value) : null })}><option value="">Live editor</option>{(Array.isArray(versions.data) ? versions.data : []).map(version => <option key={version.id} value={version.id}>{version.name}</option>)}</select><small className="muted">Saved arrangements stay fixed when you edit the wall.</small>{versions.error && <p role="alert">{versions.error}</p>}</label>}
       {link && link.status !== 'active' && <div className="share-inactive"><p className="muted">This link is {link.status === 'revoked' ? 'stopped' : 'expired'}. Its address cannot be opened by guests.{link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? ' Reactivating sets a new expiry in 3 weeks.' : ''}</p><button className="btn outline" onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))}>Reactivate this link</button></div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="eyebrow">Guests can</span>

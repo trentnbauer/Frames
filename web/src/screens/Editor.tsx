@@ -8,6 +8,7 @@ import { SharePanel } from '../components/SharePanel';
 import { EditableCompositionName } from '../components/EditableCompositionName';
 import { CompositionStage } from '../components/CompositionStage';
 import { isFull } from '../layout';
+import { CompositionVersions } from '../components/CompositionVersions';
 import { RoomBackground } from '../components/RoomBackground';
 
 type Ranking = { weight: number; guests: number; items: { id: number; mine: number | null; mineN: number; guest: number | null; guestN: number; score: number }[] };
@@ -119,7 +120,7 @@ export function Editor() {
         stageControl={<CompositionStage value={c.stage} full={isFull(c.layout.prints)} disabled={saving > 0} onChange={async (stage) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { stage } })); }} />}
         onOpenShare={() => setSharing(true)}
         nameControl={readOnly ? <span title={c.name} style={{ font: "400 40px/1 'Instrument Serif',Georgia,serif", whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span> : <EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
-        roomControl={<RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} />}
+        roomControl={<><CompositionVersions id={c.id} readOnly={readOnly} disabled={saving > 0} onChanged={() => { origin.current = null; reload(); }} /><RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} /></>}
         roomImage={c.background ? { url: `/api/collections/${c.id}/background?v=${c.background.v}`, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}
         onPrints={(ds: DPrint[]) => saveLayout(fromDesign(ds, layoutPrints, origin.current!))}

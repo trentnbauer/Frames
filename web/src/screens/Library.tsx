@@ -1,5 +1,7 @@
+import { BulkJobs } from '../components/BulkJobs';
+import { SavedViews } from '../components/SavedViews';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { BrowsePage } from '../components/BrowsePage';
@@ -163,6 +165,8 @@ export function Library() {
   void v;
   return (
     <BrowsePage>
+      <div className="workflow-shortcuts"><Link to="/activity">Recently removed & Undo →</Link><Link to="/review-schedule">Review schedule →</Link><Link to="/imports">Import history →</Link></div>
+      <SavedViews><BulkJobs /></SavedViews>
       <ProtoLibrary
         groupsFor={(by: 'shoot' | 'uploaded' | 'taken') => (flat ? flatGroups() : groupsFor(by))}
         photoOf={(id: number) => { const p = byId.get(id); const n = inComps.get(id) ?? 0; return { src: imgUrl(id, 'thumb'), ar: p?.ar ?? 1, badge: n ? `In ${n}` : '' }; }}
