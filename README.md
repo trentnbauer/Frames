@@ -168,3 +168,5 @@ The environment-drift warning stays above the sticky app header. Header and stic
 Removal decisions open in a full-screen review view with Back (or Escape), a large photo, personal score history and Keep/Delete actions. The Removal review navigation tab appears on desktop and mobile only when eligible photos are waiting. To do and Reviews settings also link to this view.
 
 The removal-review photo fits completely inside its preview panel without cropping, in portrait or landscape orientation, on desktop and phones.
+
+To do offers independent camera-body and lens suggestions from other photos in the same shoot. Each “Use … from the same shoot” action fills only that field; other camera and exposure values stay as entered. Save & next persists the changes. Photos outside a shoot do not receive these suggestions.

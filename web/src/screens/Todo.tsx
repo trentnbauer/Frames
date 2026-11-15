@@ -1,3 +1,4 @@
+import { SameShootGear, sameShootGear } from '../components/SameShootGear';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -40,7 +41,7 @@ export function TodoPage() {
   const photo = useApi<PhotoFull>(id ? `/photos/${id}` : null);
   const p = photo.data && photo.data.id === id ? photo.data : null;
   const shoot = shoots.data?.find((s) => s.id === p?.shootId);
-  const mate = (lib.data?.photos ?? []).find((x) => x.shootId === p?.shootId && x.id !== p?.id && x.camera);
+  const suggestedGear = sameShootGear(lib.data?.photos ?? [], p);
 
   useEffect(() => {
     if (!p) return;
@@ -79,8 +80,8 @@ export function TodoPage() {
     tShowCamera: show('camera') || reason === 'lens', tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: !!p,
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, control: [0, 1, 5].includes(i) ? <TodoGearInput key={`${id}-${i}`} value={cam[i]} type={i === 0 ? 'camera' : i === 1 ? 'lens' : 'film'} placeholder={ph} owned={gear.data?.own ?? []} discovered={gear.data?.found ?? []} onChange={(value) => setCam((current) => current.map((item, index) => index === i ? value : item))} /> : null, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
-    tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`, tRollHint: mate ? [mate.camera, mate.lens].filter(Boolean).join(' · ') : '',
-    useRoll: () => mate && setCam([mate.camera, mate.lens, mate.aperture ? `f/${mate.aperture}` : '', mate.shutter, mate.iso ? String(mate.iso) : '', mate.film]),
+    tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`,
+    tGearHints: <SameShootGear camera={cam[0] === suggestedGear.camera ? '' : suggestedGear.camera} lens={cam[1] === suggestedGear.lens ? '' : suggestedGear.lens} onUse={(field, value) => setCam((current) => current.map((item, index) => index === (field === 'camera' ? 0 : 1) ? value : item))} />,
     tTags: chip('tag'), tSubjects: chip('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
     tComps: [], tCompPicker: p ? <AddToComposition key={p.id} ids={[p.id]} label="Add to composition" onDone={() => { colls.reload(); todo.reload(); walk.reload(); refreshSummary(); }} /> : null,
     tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
