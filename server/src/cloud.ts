@@ -449,6 +449,10 @@ export async function syncConnection(db: DB, cfg: AppCfg, id: string, opts: { un
         if (!ALLOWED.has(path.extname(e.name).toLowerCase())) continue;
         const prior = known.get(id, e.id) as { version: string; rel: string; shrunk: number } | undefined;
         if (prior) {
+          // A catalog removal is deliberate. Do not transform/refetch its retained copy
+          // into different bytes (or a different extension) that can evade its fingerprint.
+          const localPath = path.join(dest, ...prior.rel.split('/'));
+          if (db.prepare('SELECT 1 FROM removed WHERE path = ?').get(localPath)) { res.skipped++; continue; }
           if (prior.version !== e.version) { res.changedRemotely++; continue; }
           // Asked to fetch the full-size copy of something kept smaller: download the original and put it where the smaller one was.
           if (refetch && prior.shrunk && !shrinkOn) {

@@ -147,6 +147,23 @@ describe('keeping a smaller copy of cloud photographs', () => {
     await verifyDerivatives(env.db, { libraries: [], dataDir: env.data });
     expect((await photoByFile('Wide.jpg')).w).toBe(4300); // put right at start-up
   });
+  it('does not resize or reimport a cloud photo removed by the review policy', { timeout: 15000 }, async () => {
+    await A.put('/api/admin/instance', { storeOriginalQuality: true });
+    await A.put(`/api/cloud/${id}`, { shrink: false });
+    nodes.push({ id: 'review-removed', name: 'Review removed.jpg', data: await noisy(600, 400), version: 'v1' });
+    await sync(id); await settle();
+    const photo = await photoByFile('Review removed.jpg');
+    const local = path.join(dir, 'Review removed.jpg'), original = fs.readFileSync(local);
+    env.db.prepare('INSERT INTO reviews(photo_id,session,run_id,date,rating)VALUES(?,1,NULL,?,1)').run(photo.id,new Date().toISOString());
+    await A.put('/api/settings', { autoRemove: true, autoRemoveAfter: 1, autoRemoveBelow: 2 });
+    expect(await photoByFile('Review removed.jpg')).toBeUndefined();
+    await A.put(`/api/cloud/${id}`, { shrink: true });
+    const result = await sync(id); await settle();
+    expect(result.shrunk ?? 0).toBe(0);
+    expect(fs.readFileSync(local)).toEqual(original);
+    expect(await photoByFile('Review removed.jpg')).toBeUndefined();
+    await A.put('/api/settings', { autoRemove: false });
+  });
   it('says plainly when the original cannot be fetched, and disconnecting does not lose the way back to it', async () => {
     const p = await photoByFile('Beach At Dawn.jpg');
     await A.del(`/api/cloud/${id}`);
