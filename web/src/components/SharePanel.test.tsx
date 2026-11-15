@@ -24,15 +24,34 @@ describe('the shared photoshoot and composition dialog', () => {
     vi.stubGlobal('window', { location: { origin: 'https://example.test' } });
     data.links = [{ id: 2, token: 'test-link', status: 'active', expiresAt: null, pin: '', askName: true, allowReview: true }];
     const html = renderToStaticMarkup(<SharePanel kind="shoot" id={1} name="Coastal Light" onClose={() => {}} />);
-    for (const label of ['Share Coastal Light', 'Copy link', 'New link', 'Stop sharing', 'Preview as guest', 'Never expires', 'Done']) expect(html).toContain(label);
+    for (const label of ['Share Coastal Light', 'Copy link', 'New link', 'Stop this link', 'Preview as guest', 'Never expires', 'Done']) expect(html).toContain(label);
     expect(html).not.toContain('Create link');
     expect(html.indexOf('Guests can')).toBeLessThan(html.indexOf('Copy link'));
+  });
+  it('lists all links with independent labels and status, including inactive links', () => {
+    vi.stubGlobal('window', { location: { origin: 'https://example.test' } });
+    data.links = [
+      { id: 3, label: 'Print studio', token: 'print', status: 'active', expiresAt: null, pin: '', allowDownload: true },
+      { id: 2, label: 'Client review', token: 'client', status: 'revoked', expiresAt: null, pin: '', allowReview: true },
+      { id: 1, label: 'Family', token: 'family', status: 'expired', expiresAt: null, pin: '' },
+    ];
+    const html = renderToStaticMarkup(<SharePanel kind="collection" id={1} onClose={() => {}} />);
+    for (const label of ['Print studio', 'Client review', 'Family', 'Stopped', 'Expired', '+ New link', 'Link name', 'Replace address']) expect(html).toContain(label);
+    expect(html).toContain('aria-label="Share links"');
+    expect(html).toContain('Only the selected link is changed.');
+  });
+  it('keeps inactive links selectable and offers explicit reactivation', () => {
+    vi.stubGlobal('window', { location: { origin: 'https://example.test' } });
+    data.links = [{ id: 4, label: 'Old link', token: 'old', status: 'revoked', expiresAt: null, pin: '' }];
+    const html = renderToStaticMarkup(<SharePanel kind="shoot" id={1} onClose={() => {}} />);
+    expect(html).toContain('Reactivate this link');
+    expect(html).not.toContain('href="https://example.test/s/old"');
   });
   it('disables creation while loading or when the existing links cannot be fetched', () => {
     data.links = null; data.error = 'Could not load links';
     const html = renderToStaticMarkup(<SharePanel kind="shoot" id={1} onClose={() => {}} />);
     expect(html).toContain('Could not load links');
-    expect(html).toMatch(/disabled="">Create link/);
+    expect(html).not.toContain('Create link');
     expect(html).not.toContain('Guests can');
   });
 });

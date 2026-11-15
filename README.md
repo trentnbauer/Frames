@@ -170,3 +170,5 @@ Removal decisions open in a full-screen review view with Back (or Escape), a lar
 The removal-review photo fits completely inside its preview panel without cropping, in portrait or landscape orientation, on desktop and phones.
 
 To do offers independent camera-body and lens suggestions from other photos in the same shoot. Each “Use … from the same shoot” action fills only that field; other camera and exposure values stay as entered. Save & next persists the changes. Photos outside a shoot do not receive these suggestions.
+
+The Share modal lists all links for the selected photoshoot or composition. Choose a link in the sidebar to name it and change its own permissions, expiry, PIN and invitations. **+ New link** opens a fresh draft and **Create link** adds it without replacing existing addresses. **Replace address** invalidates only the selected address after confirmation; **Stop this link** stops only that link. Stopped and expired links remain visible and can be explicitly reactivated (an expired link gets a new three-week expiry). On phones the link list sits above the settings. Names save on blur; other settings save immediately.

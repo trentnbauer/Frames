@@ -1,0 +1,28 @@
+import fs from 'node:fs';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { api, cleanup, jpg, makeEnv, svg } from './testutil.js';
+let env: ReturnType<typeof makeEnv>, a: ReturnType<typeof api>, photo: { id: number; shootId: number };
+beforeEach(async () => { env = makeEnv(); a = api(env); fs.writeFileSync(env.lib + '/test.jpg', await jpg(svg(80, 60, '#123', '#789', [.5, .5]))); await a.scan(); photo = (await a.get('/api/photos')).body.photos[0]; });
+afterEach(async () => { await env.app.close(); cleanup(env); });
+it.each(['collection', 'shoot'] as const)('keeps multiple %s links independent through edits, address replacement and stopping', async (kind) => {
+  const id = kind === 'shoot' ? photo.shootId : (await a.post('/api/collections', { name: 'Shared test', photoIds: [photo.id] })).body.id;
+  const first = (await a.post('/api/shares', { kind, id, label: 'Client', allowReview: true, allowDownload: false, allowSuggest: true, askName: true, pin: true, expiresAt: new Date(Date.now() + 86400000).toISOString() })).body;
+  const second = (await a.post('/api/shares', { kind, id, label: 'Family', allowReview: false, allowDownload: true, allowSuggest: false, askName: false, pin: '', expiresAt: null })).body;
+  expect(first.id).not.toBe(second.id); expect(first.token).not.toBe(second.token);
+  expect((await a.get(`/api/shares?kind=${kind}&id=${id}`)).body).toHaveLength(2);
+  expect((await a.get(`/api/s/${second.token}`)).body).toMatchObject({ allowReview: false, allowDownload: true });
+  await a.patch(`/api/shares/${first.id}`, { label: 'Renamed client', allowDownload: true, onlyWall: true, pin: '', expiresAt: null });
+  let links = (await a.get(`/api/shares?kind=${kind}&id=${id}`)).body;
+  expect(links.find((link: { id: number }) => link.id === second.id)).toMatchObject({ token: second.token, label: 'Family', status: 'active', allowReview: false, allowDownload: true, allowSuggest: false, askName: false, pin: '', expiresAt: null });
+  const replaced = (await a.post(`/api/shares/${first.id}/regenerate`)).body;
+  expect(replaced.token).not.toBe(first.token);
+  expect((await a.get(`/api/s/${first.token}`)).status).toBe(404);
+  expect((await a.get(`/api/s/${second.token}`)).status).toBe(200);
+  await a.del(`/api/shares/${first.id}`);
+  expect((await a.get(`/api/s/${replaced.token}`)).status).toBe(410);
+  expect((await a.get(`/api/s/${second.token}`)).status).toBe(200);
+  await a.patch(`/api/shares/${first.id}`, { on: true });
+  expect((await a.get(`/api/s/${replaced.token}`)).status).toBe(200);
+  links = (await a.get(`/api/shares?kind=${kind}&id=${id}`)).body;
+  expect(links.find((link: { id: number }) => link.id === first.id)).toMatchObject({ label: 'Renamed client', status: 'active' });
+});
