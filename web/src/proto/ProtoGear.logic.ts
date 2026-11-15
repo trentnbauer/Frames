@@ -50,8 +50,10 @@ export class Logic extends DCLogic {
       addShow: g.add ? 'block' : 'none', addTileShow: g.add ? 'flex' : 'none', addLabel: g.add ? (g.add.system !== 'Other' && g.add.system !== 'Tools' ? 'to ' + g.title : g.title.toLowerCase().replace(/s$/, '')) : '',
       add: () => g.add && this.act(() => P.onAddItem({ name: g.add.type === 'Body' ? 'New camera body' : 'New ' + this.TYPE_TITLE[g.add.type].toLowerCase().replace(/s$/, ''), type: g.add.type, system: g.add.system })) }));
     const FOUND = (P.found || []);
+    const buyWish = (id) => { const w = wish.find((item) => item.id === id); if (!w) return; const sysGuess = P.guessSystem(w); this.setState({ b: { id: w.id, name: w.name, type: P.guessType(w), system: sysGuess || '__new', sysName: sysGuess ? '' : w.name.split(' ').slice(0, 2).join(' '), paid: w.price != null ? String(w.price) : '', year: '', guessed: !!sysGuess } }); };
     const okNew = S.nName.trim().length > 1; const total = wish.reduce((t, w) => t + (w.price || 0), 0);
     return {
+      buyWish,
       syncLabel: S.syncing ? 'Syncing to portfolio…' : P.syncLabel,
       wishMeta: wish.length + (wish.length === 1 ? ' item' : ' items') + ' · drag or use the arrows to set priority',
       wishEmpty: !wish.length, wishTotal: money(total), wishTop: fmt(wish[0] && wish[0].price),
@@ -63,7 +65,7 @@ export class Logic extends DCLogic {
         onName: (e) => P.onWishText(w.id, { name: e.target.value }), onWhy: (e) => P.onWishText(w.id, { why: e.target.value }),
         up: () => move(i, i - 1), down: () => move(i, i + 1), upFg: i ? 'var(--text2)' : '#3a3936', downFg: i < wish.length - 1 ? 'var(--text2)' : '#3a3936',
         remove: () => this.act(() => P.onRemoveItem(w.id)),
-        bought: () => { const sysGuess = P.guessSystem(w); this.setState({ b: { id: w.id, name: w.name, type: P.guessType(w), system: sysGuess || '__new', sysName: sysGuess ? '' : w.name.split(' ').slice(0, 2).join(' '), paid: w.price != null ? String(Math.round(w.price)) : '', year: '', guessed: !!sysGuess } }); },
+        bought: () => buyWish(w.id),
         dragStart: (e) => { e.dataTransfer.setData('text/plain', String(i)); this.setState({ dragI: i }); }, dragOver: (e) => e.preventDefault(), drop: (e) => { e.preventDefault(); const from = +e.dataTransfer.getData('text/plain'); this.setState({ dragI: null }); move(from, i); }, dragEnd: () => this.setState({ dragI: null }),
       }; }),
       curOpts: ['$', '€', '£', '¥', '₹', 'kr', 'CHF'].map((c) => ({ label: c, bg: C === c ? 'var(--text)' : 'transparent', fg: C === c ? 'var(--bg)' : 'var(--text2)', pick: () => { this.act(() => P.onPrefs({ currency: c })); this.flash('Prices shown in ' + c); } })),

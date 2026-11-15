@@ -54,6 +54,13 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     current.systems = [...new Set([...(current.systems ?? []), ...names.filter(Boolean)])];
     setSetting(db, 'gearPrefs', current);
   };
+  const validPriority = (priority: unknown, kind: string, extra = 0) => priority === undefined || kind === 'want' && Number.isInteger(priority) && Number(priority) >= 1 && Number(priority) <= Number(one("SELECT COUNT(*) n FROM gear_items WHERE kind = 'want'")!.n) + extra;
+  const prioritize = (id: number, priority: number) => {
+    const ids = all("SELECT id FROM gear_items WHERE kind = 'want' AND id != ? ORDER BY rank, id", id).map((item) => item.id);
+    ids.splice(priority - 1, 0, id);
+    const update = db.prepare("UPDATE gear_items SET rank = ? WHERE id = ? AND kind = 'want'");
+    ids.forEach((value, index) => update.run(index + 1, value));
+  };
   /** Once, on first use: the camera and lens the person had set as defaults become gear they own. */
   const migrate = () => {
     if (getSetting<boolean>(db, 'gearMigrated', false)) return false;
@@ -95,18 +102,21 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     const name = clean(b.name, 120);
     if (!name) return rep.code(400).send({ error: 'Give it a name.' });
     const kind = b.kind === 'want' ? 'want' : 'own';
+    if (!validPriority(b.priority, kind, 1)) return rep.code(400).send({ error: 'Choose a valid wishlist priority.' });
     const type = (TYPES as readonly string[]).includes(b.type) ? (b.type as GearType) : 'other';
     const price = b.price === undefined || b.price === null || b.price === '' ? null : Number(b.price);
     if (price !== null && !(price >= 0 && price < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' });
     if (b.link && !/^https?:\/\//i.test(String(b.link))) return rep.code(400).send({ error: 'A link starts with https://' });
-    const id = add(kind, name, type, { system: typeof b.system === 'string' && b.system.trim() ? b.system.trim().slice(0, 60) : undefined, year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true });
+    const id = db.transaction(() => { const added = add(kind, name, type, { system: typeof b.system === 'string' && b.system.trim() ? b.system.trim().slice(0, 60) : undefined, year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true }); if (b.priority !== undefined) prioritize(added, b.priority); return added; })();
     syncGearDiscoveries(db);
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.patch('/api/gear/items/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM gear_items WHERE id = ?', id)) return notFound(rep);
+    const current = one('SELECT * FROM gear_items WHERE id = ?', id);
+    if (!current) return notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if (!validPriority(b.priority, current.kind)) return rep.code(400).send({ error: 'Choose a valid wishlist priority.' });
     const sets: string[] = [], args: unknown[] = [];
     const set = (col: string, v: unknown) => { sets.push(`${col} = ?`); args.push(v); };
     if (typeof b.name === 'string' && b.name.trim()) { set('name', b.name.trim().slice(0, 120)); }
@@ -117,7 +127,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (typeof b.why === 'string') set('why', b.why.trim().slice(0, 200));
     if (b.link !== undefined) { const l = clean(b.link, 300); if (l && !/^https?:\/\//i.test(l)) return rep.code(400).send({ error: 'A link starts with https://' }); set('link', l); }
     if (b.price !== undefined) { const p = b.price === null || b.price === '' ? null : Number(b.price); if (p !== null && !(p >= 0 && p < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' }); set('price', p); }
-    if (sets.length) db.transaction(() => { const old = one('SELECT kind, system FROM gear_items WHERE id = ?', id)!; if (old.kind === 'own' && typeof b.system === 'string') rememberSystems(old.system, b.system.trim().slice(0, 60)); db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id); })();
+    if (sets.length || b.priority !== undefined) db.transaction(() => { const old = one('SELECT kind, system FROM gear_items WHERE id = ?', id)!; if (old.kind === 'own' && typeof b.system === 'string') rememberSystems(old.system, b.system.trim().slice(0, 60)); if (sets.length) db.prepare(`UPDATE gear_items SET ${sets.join(', ')} WHERE id = ?`).run(...args, id); if (b.priority !== undefined) prioritize(id, b.priority); })();
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });
   app.delete('/api/gear/items/:id', async (req) => ({ removed: db.prepare('DELETE FROM gear_items WHERE id = ?').run(num((req.params as Row).id)).changes }));
