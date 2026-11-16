@@ -84,7 +84,7 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
           {canRate ? (
             <div role="tablist" aria-label="Show" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}>
               {([['all', 'All', photos.length], ['todo', 'To rate', photos.length - rated], ['rated', 'Rated', rated]] as const).map(([k, l, n]) => (
-                <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 14px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: filter === k ? 'var(--raised2)' : 'transparent', color: filter === k ? 'var(--text)' : 'var(--text2)' }}>{l}<span style={{ font: `400 11px ${mono}`, color: 'var(--faint)' }}>{n}</span></button>
+                <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 14px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: filter === k ? 'var(--btn-bg)' : 'transparent', color: filter === k ? 'var(--btn-fg)' : 'var(--text2)' }}>{l}<span style={{ font: `400 11px ${mono}`, color: filter === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: filter === k ? 0.6 : 1 }}>{n}</span></button>
               ))}
             </div>
           ) : <span style={{ font: `400 22px ${serif}` }}>All photographs</span>}

@@ -22,7 +22,7 @@ export class Logic extends DCLogic {
     }));
     return {
       compsAfter: prog, ready, readyEmpty: !ready.length,
-      tabs: [['progress', 'Progress', (P.prog || []).length], ['review', 'Review', (P.review || []).length], ['done', 'Done', ready.length]].map(([k, label, n]) => ({ label, n, stage: k, selected: tab === k, bg: tab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: tab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ tab: k }) })),
+      tabs: [['progress', 'Progress', (P.prog || []).length], ['review', 'Review', (P.review || []).length], ['done', 'Done', ready.length]].map(([k, label, n]) => ({ label, n, stage: k, selected: tab === k, bg: tab === k ? 'var(--btn-bg)' : 'transparent', fg: tab === k ? 'var(--btn-fg)' : 'var(--text2)', go: () => this.setState({ tab: k }) })),
       sortLabel: P.sortLabel(tab), toggleSort: P.onToggleSort,
       isProg: tab !== 'done', isReady: tab === 'done',
       newComp: P.onNew, q: P.q, onQ: P.onQ, sugg: tab === 'progress' ? P.sugg : null,
