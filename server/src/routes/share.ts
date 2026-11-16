@@ -40,7 +40,7 @@ const PIN_ERR = 'A PIN is four numbers, not all the same and not a straight run 
 /** The only addresses served without the login: the share page shell, its assets, and the share API. */
 export function isPublicPath(url: string): boolean {
   const path = url.split('?')[0];
-  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg' || path === '/theme.js' || path === '/privacy' || /^\/(signin|signup|signed-out|terms)\/?$/.test(path) || /^\/api\/public\/auth(\/[a-z-]+)*\/?$/.test(path);
+  return new RegExp(`^/s/${TOKEN}/?$`).test(path) || new RegExp(`^/s/${TOKEN}/preview\\.jpg$`).test(path) || new RegExp(`^/api/s/${TOKEN}(/|$)`).test(path) || /^\/assets\/[\w.-]+$/.test(path) || path === '/icon.svg' || path === '/theme.js' || path === '/privacy' || /^\/(signin|signup|signed-out|terms)\/?$/.test(path) || /^\/api\/public\/auth(\/[a-z-]+)*\/?$/.test(path);
 }
 export const isSharePath = (url: string) => /^\/(api\/)?s\//.test(url);
 
@@ -344,6 +344,61 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     noindex(rep);
     return serveDerivative(req, rep, f, String(row.hash), kind);
   };
+  // ---------- the preview shown when a link is pasted into a chat or a social post ----------
+  // Whoever receives the address (and the apps that unfurl it) gets the name, who shared it and one picture, never anything else.
+  // A link with a PIN, a stopped or expired link and an unknown one show nothing about what is behind them. The Turnstile check is not
+  // asked here because unfurlers cannot pass it: the picture is one reduced preview of a link whose address is already the secret.
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const previewOf = (token: string): { name: string; count: number; kind: string; photoId: number } | null => {
+    if (!new RegExp(`^${TOKEN}$`).test(token)) return null;
+    const s = one('SELECT * FROM shares WHERE token = ?', token);
+    if (!s || statusOf(s) !== 'active' || s.pin) return null;
+    if (s.kind === 'photo') {
+      const p = one('SELECT id, title, file FROM photos WHERE id = ? AND missing = 0', s.target_id);
+      return p ? { name: p.title || p.file, count: 1, kind: 'photograph', photoId: p.id } : null;
+    }
+    if (s.kind === 'collection') {
+      const c = one('SELECT name FROM collections WHERE id = ?', s.target_id);
+      const rows = all('SELECT photo_id, chosen FROM collection_photos WHERE collection_id = ? ORDER BY pos', s.target_id);
+      const first = rows.find((r) => r.chosen) ?? rows[0];
+      return c && first ? { name: c.name, count: rows.filter((r) => r.chosen).length || rows.length, kind: 'composition', photoId: first.photo_id } : null;
+    }
+    const sh = one('SELECT name FROM shoots WHERE id = ?', s.target_id);
+    const ids = all('SELECT id FROM photos WHERE shoot_id = ? AND missing = 0 ORDER BY COALESCE(captured_at, added_at), id', s.target_id);
+    return sh && ids.length ? { name: sh.name, count: ids.length, kind: 'photoshoot', photoId: ids[0].id } : null;
+  };
+  let shell: { at: number; html: string } | null = null;
+  const shellHtml = (): string | null => {
+    if (shell && Date.now() - shell.at < 60_000) return shell.html;
+    try { shell = { at: Date.now(), html: fs.readFileSync(`${x.cfg.webDir}/index.html`, 'utf8') }; return shell.html; } catch { return null; }
+  };
+  app.get('/s/:token', async (req, rep) => {
+    const html = shellHtml();
+    if (!html) return notFound(rep);
+    noindex(rep);
+    const token = (req.params as Row).token as string;
+    const p = previewOf(token);
+    const base = (loadAuth(x.sys).publicUrl || `${req.protocol}://${req.hostname}`).replace(/\/+$/, '');
+    const owner = displayNameOf(db) || '';
+    const title = p ? p.name : 'Shared photographs';
+    const text = p ? `${owner ? `${owner} shared a ${p.kind} with you` : `A ${p.kind} shared with you`}${p.kind === 'photograph' ? '' : ` · ${p.count} ${p.count === 1 ? 'photograph' : 'photographs'}`}` : 'Open the link to see what was shared.';
+    const tags = [
+      ['og:site_name', 'Frames'], ['og:type', 'website'], ['og:title', title], ['og:description', text], ['og:url', `${base}/s/${token}`],
+      ...(p ? [['og:image', `${base}/s/${token}/preview.jpg`], ['og:image:width', '1600']] : []),
+      ['twitter:card', p ? 'summary_large_image' : 'summary'], ['twitter:title', title], ['twitter:description', text],
+    ].map(([k, v]) => `<meta ${k.startsWith('og:') ? 'property' : 'name'}="${k}" content="${esc(v)}">`).join('\n    ');
+    return rep.type('text/html').send(html.replace('<title>Frames</title>', `<title>${esc(title)} · Frames</title>\n    ${tags}`));
+  });
+  app.get('/s/:token/preview.jpg', async (req, rep) => {
+    if (limited(req, rep, 'image')) return;
+    const p = previewOf((req.params as Row).token as string);
+    if (!p) return notFound(rep);
+    const f = derivPath(x.cfg, p.photoId, 'preview');
+    const row = one('SELECT hash FROM photos WHERE id = ?', p.photoId);
+    if (!row || !(await ensureDeriv(x.db, x.cfg, p.photoId, 'preview'))) return notFound(rep, 'No preview available');
+    noindex(rep);
+    return serveDerivative(req, rep, f, String(row.hash), 'preview');
+  });
   app.get('/api/s/:token/photos/:id/thumb', image('thumb'));
   app.get('/api/s/:token/photos/:id/preview', image('preview'));
 
