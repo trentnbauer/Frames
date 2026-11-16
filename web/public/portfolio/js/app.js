@@ -46,14 +46,35 @@
     return str
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Only http(s) and mailto destinations become links; anything else is shown as plain text.
+  function safeHref(raw) {
+    try {
+      const u = new URL(raw.trim(), 'https://invalid.example/');
+      return ['http:', 'https:', 'mailto:'].includes(u.protocol) && /^(https?:|mailto:)/i.test(raw.trim()) ? u.href : null;
+    } catch (e) { return null; }
   }
 
   function renderInline(text) {
-    return escapeHtml(text)
+    const links = [];
+    // Pull links out first so their destination never passes through attribute-unsafe string building.
+    const marked = String(text).replace(/\u0000/g, '').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
+      const href = safeHref(url);
+      if (!href) return m;
+      links.push({ label, href });
+      return '\u0000' + (links.length - 1) + '\u0000';
+    });
+    return escapeHtml(marked)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      .replace(/\u0000(\d+)\u0000/g, (m, i) => {
+        const l = links[Number(i)];
+        return '<a href="' + escapeHtml(l.href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(l.label) + '</a>';
+      });
   }
 
   function renderMarkdown(md) {

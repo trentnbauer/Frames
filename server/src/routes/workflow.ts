@@ -44,8 +44,17 @@ export function registerWorkflow(app: FastifyInstance, x: Ctx) {
       entry = one('SELECT snapshot FROM photo_recovery WHERE id=?', id);
     if (!entry) throw new WorkflowError('This recovery entry expired or was already restored.', 410);
     const snapshot = JSON.parse(entry.snapshot);
-    if (fs.existsSync(snapshot.photo.path) && (await hashFile(snapshot.photo.path)) !== snapshot.photo.hash)
-      throw new WorkflowError('The original file has changed. Recovery cannot attach old ratings to a different photograph.', 409);
+    if (fs.existsSync(snapshot.photo.path)) {
+      let current: string;
+      try {
+        current = await hashFile(snapshot.photo.path);
+      } catch {
+        // A directory, a mis-mounted source or a permission problem: leave the snapshot alone so it can be retried.
+        throw new WorkflowError('The original file cannot be read right now. Check that its storage is connected, then try again.', 409);
+      }
+      if (current !== snapshot.photo.hash)
+        throw new WorkflowError('The original file has changed. Recovery cannot attach old ratings to a different photograph.', 409);
+    }
     const restored = restoreRemoval(db, id);
     const ready = restored.missing ? false : await processPhoto(db, x.cfg, restored.id, restored.path, { derivsOnly: true });
     syncGearTags(db, restored.id);

@@ -267,3 +267,24 @@ describe('private workflow records', () => {
     await call('POST',`/api/recovery/${recovery.id}/restore`,a,{});
   });
 });
+
+describe('share PIN isolation between libraries', () => {
+  it("does not accept one library's PIN cookie on another library's link with the same PIN", async () => {
+    const mk = async (who: Record<string, string>) => {
+      const col = (await call('POST', '/api/collections', who, { name: 'Pinned' })).body;
+      const s = (await call('POST', '/api/shares', who, { kind: 'collection', id: col.id, pin: '2468' })).body;
+      return { id: s.id as number, token: s.token as string };
+    };
+    const sa = await mk(a), sb = await mk(b);
+    const unlock = await call('POST', `/api/s/${sa.token}/pin`, {}, { pin: '2468' });
+    expect(unlock.status).toBe(200);
+    const jar = ([] as string[]).concat(unlock.headers['set-cookie'] ?? []).map((c) => c.split(';')[0]).join('; ');
+    expect((await call('GET', `/api/s/${sa.token}`, { cookie: jar })).status).toBe(200);
+    expect((await call('GET', `/api/s/${sb.token}`, { cookie: jar })).status).toBe(401);
+    // Lockouts are per link too: failures on one link never lock the other for the same device.
+    const dev = 'frames_dev=abcdefghijklmnop1234';
+    for (let i = 0; i < 5; i++) await call('POST', `/api/s/${sa.token}/pin`, { cookie: dev }, { pin: '1357' });
+    expect((await call('POST', `/api/s/${sa.token}/pin`, { cookie: dev }, { pin: '2468' })).status).toBe(429);
+    expect((await call('POST', `/api/s/${sb.token}/pin`, { cookie: dev }, { pin: '2468' })).status).toBe(200);
+  });
+});
