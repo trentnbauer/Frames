@@ -66,6 +66,9 @@ export function Photo() {
   const month = Number(dateVal.slice(5, 7));
   const season = hemi === 'none' || !month ? '' : seasonOf(month, hemi);
 
+  // Time of day comes from the camera's capture time; none recorded means the row reads "Add…".
+  const hour = p.capturedAt && p.capturedAt.length > 10 ? Number(p.capturedAt.slice(11, 13)) : NaN;
+  const timeOfDay = Number.isNaN(hour) ? '' : hour < 5 || hour >= 21 ? 'Night' : hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
   const portrait = p.h > p.w;
   const fits = (['A4', 'A3', 'A2'] as const).map((size) => {
     const [a, b] = PAPER_MM[size];
@@ -99,9 +102,7 @@ export function Photo() {
         aiBusy={aiBusy || p.aiStatus === 'pending'} aiDone={p.aiStatus === 'done'}
         onRunAi={async () => { if (!ai) return 'AI is off. Turn it on in Settings.'; setAiBusy(true); try { await patch({ reanalyse: true }); return 'Analysing with AI…'; } catch (e) { return (e as Error).message; } finally { setAiBusy(false); } }}
         moreItems={[
-          { label: inPf.data?.state === 'none' ? 'Add to portfolio' : 'In portfolio ✓', run: async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: inPf.data?.state === 'none' } }); inPf.reload(); }, toast: 'Portfolio updated' },
-          { label: inPf.data?.favourite ? '★ Favourite' : '☆ Favourite', meta: 'F', run: async () => { await api(`/portfolio/photos/${p.id}`, { body: { favourite: !inPf.data?.favourite } }); inPf.reload(); } },
-          { label: 'Download original', meta: `${mb} MB`, sep: true, run: () => { window.location.assign(`/api/photos/${p.id}/original`); }, toast: `Downloading ${p.file}` },
+          { label: 'Download original', meta: `${mb} MB`, run: () => { window.location.assign(`/api/photos/${p.id}/original`); }, toast: `Downloading ${p.file}` },
           { label: 'Export XMP', run: () => { window.location.assign(`/api/photos/${p.id}/xmp`); }, toast: 'XMP sidecar written' },
           { label: 'Review again', sep: true, run: async () => { await patch({ reviewAgain: true }); refreshSummary(); }, toast: 'Added back to the review queue' },
           { label: p.archived ? 'Include in review' : 'Leave out of review', run: async () => { await patch({ archived: !p.archived }); }, toast: p.archived ? 'Back in review' : 'Won’t come back for review' },
@@ -121,6 +122,7 @@ export function Photo() {
         onRate={async (n: number, note: string) => { await api('/review/rate', { body: { photoId: p.id, rating: n, note } }); photo.reload(); refreshSummary(); }}
         printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: 'var(--muted)' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: 'var(--muted)' }}>· {fits[0].ppi} PPI</span></>}
         printSub={next ? `${next.size} looks sharp from ${((3 * 3438) / Math.max(next.ppi, 1) * 0.0254).toFixed(1)} m away or more` : 'Every common size is sharp at arm’s length'}
+        timeOfDay={timeOfDay} light={ai ? p.aiSuggestion?.lighting ?? '' : ''} mood={ai ? p.aiSuggestion?.mood ?? '' : ''}
         place={place} defaultLat={undefined} defaultLng={undefined}
         searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
         reversePlace={async (lat: number, lon: number) => api<MapHit>(`/map/reverse?lat=${lat}&lon=${lon}`)}
