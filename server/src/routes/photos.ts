@@ -392,9 +392,9 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     if (action === 'remove') db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(id, name);
     else if (action === 'reject') {
       // A rejected AI suggestion is kept (hidden) so the AI does not suggest it again. A tag the user added is simply removed.
-      if (existing?.source === 'ai') db.prepare('UPDATE tags SET accepted = -1 WHERE photo_id = ? AND name = ?').run(id, name);
+      if (existing?.source === 'ai') db.prepare("UPDATE tags SET accepted = -1, ai_source_id = '' WHERE photo_id = ? AND name = ?").run(id, name);
       else db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(id, name);
-    } else db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, ?) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1").run(id, name, existing?.kind ?? kind);
+    } else db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, ?) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1, source = 'user', ai_source_id = ''").run(id, name, existing?.kind ?? kind);
     return x.tagsOf(id);
   });
 
