@@ -17,7 +17,7 @@ const close = (ctx: Ctx) => () => ctx.modal(null);
 const act = async (ctx: Ctx, fn: () => Promise<unknown>, ok = 'Saved') => { try { await fn(); ctx.toast(ok); } catch (e) { ctx.toast(msg(e)); } };
 
 /* ---------------------------------------------------------------------- AI */
-type Src = { id: string; type: string; name: string; model: string; shared?: boolean; ready: boolean; why: string };
+type Src = { id: string; type: string; name: string; model: string; color?: string; shared?: boolean; ready: boolean; why: string };
 type Type = { id: string; label: string; local: boolean; needsKey: boolean; endpoint: string; model: string };
 type JobCfg = { on: boolean; order: string[]; skip: string[] };
 const JOBS: [string, string, string][] = [['search', 'Search by description', 'Runs often, so a local model first keeps costs down.'], ['describe', 'Describe and tag photos', 'Titles, captions, alt text and tags for Analyze with AI.'], ['sensitive', 'Flag sensitive photos', 'Suggests nudity, violence or adult tags for you to confirm.'], ['ideas', 'Composition ideas on Home', 'Groups photos by tags and colour.']];
