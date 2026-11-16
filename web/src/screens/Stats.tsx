@@ -4,6 +4,8 @@ import { Imports } from './Imports';
 import { useApi, imgUrl } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
 import ProtoMore from '../proto/ProtoMore';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileStats } from '../mobile/More';
 
 type S = {
   year: string; years: string[]; photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;
@@ -18,6 +20,12 @@ const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'O
 
 /** Stats (design: Proto More, page "stats"): the view model comes straight from the numbers. */
 export function Stats() {
+  const phone = usePhoneWidth();
+  const [params] = useSearchParams();
+  return phone && !params.get('tab') ? <MobileStats /> : <DesktopStats />;
+}
+
+function DesktopStats() {
   const nav = useNavigate();
   // Overview, Community and Imports are tabs of one page; the address keeps the one on show (?tab=imports).
   const [sp, setSp] = useSearchParams();

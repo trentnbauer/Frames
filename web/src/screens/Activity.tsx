@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileRemoved } from '../mobile/More';
 type Recovery = {
   id: number;
   title: string;
@@ -14,6 +16,10 @@ type Recovery = {
 };
 type Change = { id: number; label: string; createdAt: string; undoneAt: string | null };
 export function Activity() {
+  return usePhoneWidth() ? <MobileRemoved /> : <DesktopActivity />;
+}
+
+function DesktopActivity() {
   const [tab, setTab] = useState('removed'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
