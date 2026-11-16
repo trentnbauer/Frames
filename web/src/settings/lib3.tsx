@@ -73,8 +73,8 @@ export function usePhotoTags(ctx: Ctx): Section {
 }
 export function usePhotoXmp(ctx: Ctx): Section {
   const x = useXmp(ctx);
-  // Default film stock and "ask for the film" stay here until the Gear page takes them over.
-  return { ...x, groups: without(x, ['camGear']).map((g) => (g.title === 'Cameras' ? { ...g, title: 'Film scans' } : g)) };
+  // The film defaults live on the Gear page now.
+  return { ...x, groups: without(x, ['camGear', 'film', 'filmTag']) };
 }
 export const usePhotoAi = useAi;
 
