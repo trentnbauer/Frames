@@ -59,6 +59,8 @@ export function ShootPage() {
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, whiteSpace: 'nowrap' } as const;
   const menuItems: { label: string; sub?: string; fg?: string; sep?: boolean; go: () => void }[] = [
     { label: 'Share…', go: () => { setMenu(false); setSharing(true); } },
+    ...(picked.size === 1 ? [{ label: 'Make the selected photograph the cover', go: async () => { setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { coverId: [...picked][0] } }); shoot.reload(); toast.say('Cover changed'); } catch (e) { setErr((e as Error).message); } } }] : []),
+    { label: 'Use the highest rated photograph as the cover', go: async () => { setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { coverId: null } }); shoot.reload(); toast.say('The cover is the highest rated photograph'); } catch (e) { setErr((e as Error).message); } } },
     { label: 'Rename shoot', go: () => { setMenu(false); setName(s.name); setRenaming(true); } },
     { label: 'Edit place, dates and camera…', go: () => { setMenu(false); setSp({ adv: '1' }); } },
     { label: s.protected ? 'Turn off protection' : 'Protect from deletion', go: () => protect(!s.protected) },

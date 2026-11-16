@@ -22,7 +22,7 @@ beforeAll(async () => {
   pinned = (await post('/api/shares', { kind: 'shoot', id: shoot.id, pin: '4827' })).token;
   const gone = await post('/api/shares', { kind: 'shoot', id: shoot.id });
   stopped = gone.token;
-  await env.app.inject({ method: 'DELETE', url: `/api/shares/${gone.id}` });
+  await env.app.inject({ method: 'PATCH', url: `/api/shares/${gone.id}`, payload: { on: false } });
   photoLink = (await post('/api/shares', { kind: 'photo', id: photo.id })).token;
 });
 afterAll(() => { env.app.close(); cleanup(env); });

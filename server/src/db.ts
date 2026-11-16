@@ -423,6 +423,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       END;
     `);
   },
+  // The photograph the photographer chose as a shoot's cover; null means the highest rated one.
+  (db) => { addColumn(db, 'shoots', 'cover_id', 'INTEGER'); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */
@@ -430,6 +432,15 @@ export function unsortedShootId(db: DB): number {
   const row = db.prepare('SELECT id FROM shoots WHERE unsorted = 1').get() as { id: number } | undefined;
   if (row) return row.id;
   return Number(db.prepare("INSERT INTO shoots(name, source, imported_at, unsorted) VALUES('No shoot', 'Unsorted', ?, 1)").run(new Date().toISOString()).lastInsertRowid);
+}
+
+
+/** A shoot's cover: the photograph chosen for it (if still in it), else the highest average rating, else the first. */
+export function shootCoverId(db: DB, shootId: number): number | null {
+  const chosen = db.prepare('SELECT p.id FROM shoots s JOIN photos p ON p.id = s.cover_id AND p.shoot_id = s.id WHERE s.id = ?').get(shootId) as { id: number } | undefined;
+  if (chosen) return chosen.id;
+  const best = db.prepare('SELECT p.id FROM photos p LEFT JOIN reviews r ON r.photo_id = p.id WHERE p.shoot_id = ? GROUP BY p.id ORDER BY AVG(r.rating) IS NULL, AVG(r.rating) DESC, p.id LIMIT 1').get(shootId) as { id: number } | undefined;
+  return best?.id ?? null;
 }
 
 export function migrate(db: DB) {

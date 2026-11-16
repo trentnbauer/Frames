@@ -124,7 +124,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
   const start = () => run(() => api<ShareLink>('/shares', { body: { kind, id: targetId, ...draft, allowSuggest: kind === 'collection' && draft.allowSuggest } }));
   const patch = (body: Partial<typeof draft>) => link ? run(() => api(`/shares/${link.id}`, { method: 'PATCH', body })) : setDraft((d) => ({ ...d, ...body }));
   const copy = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); } catch { if (await promptAction('Copy this', text) === null) return; } setCopied(key); setTimeout(() => setCopied(''), 1800); };
-  const stop = async () => link && (await confirmAction(`Stop sharing through ${link.label || `Link ${link.id}`}? Other links will keep working.`)) && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
+  const stop = async () => link && (await confirmAction(`Delete ${link.label || `Link ${link.id}`}? Anyone with this address loses access for good, and the comments and ratings guests left on it are deleted. Other links will keep working.`)) && run(() => api(`/shares/${link.id}`, { method: 'DELETE' }));
   const regen = async () => link && (await confirmAction('Replace this link’s address? Its old address will stop working. Other links are unchanged.')) && run(async () => { const saved = await api<ShareLink>(`/shares/${link.id}/regenerate`, { body: {} }); setFresh(true); return saved; });
   const send = async () => {
     if (!link || link.status !== 'active' || busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
@@ -218,7 +218,8 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
           <button disabled={stopped} onClick={regen} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--text2)', opacity: stopped ? 0.4 : 1 }}>Replace address</button>
           {stopped
             ? <button onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--text)' }}>Restart link</button>
-            : <button onClick={stop} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--danger)' }}>Stop link</button>}
+            : null}
+          <button onClick={stop} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--danger)' }}>Delete link</button>
         </div>
         <button aria-expanded={more} onClick={() => setMore(!more)} style={{ alignSelf: 'flex-start', minHeight: 44, marginTop: 4, fontSize: 13, color: 'var(--text2)' }}>{more ? 'Fewer options ⌃' : 'More options ⌄'}</button>
         {more && <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -261,7 +262,8 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
   const field = { height: 44, border: 0, outline: 'none', borderRadius: 10, padding: '0 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15 } as const;
   const foot = (
     <>
-      <button disabled={busy} onClick={stopped ? () => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } })) : stop} style={{ fontSize: 13, color: stopped ? 'var(--text)' : 'var(--danger)' }}>{stopped ? 'Restart link' : 'Stop link'}</button>
+{stopped && <button disabled={busy} onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))} style={{ fontSize: 13, color: 'var(--text)' }}>Restart link</button>}
+      <button disabled={busy} onClick={stop} style={{ fontSize: 13, color: 'var(--danger)' }}>Delete link</button>
       <span className="grow" />
       <a className={'btn outline' + (stopped ? ' disabled' : '')} aria-disabled={stopped} href={stopped ? undefined : urlOf(link.token)} target="_blank" rel="noopener noreferrer">Preview as guest</a>
     </>
