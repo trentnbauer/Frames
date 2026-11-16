@@ -197,7 +197,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   // ---------- DTO helpers ----------
   // accepted: 1 = in use, 0 = suggested (AI), -1 = rejected. Rejected tags are remembered so they are not suggested again, but never shown.
   const tagsOf = (id: number) =>
-    (db.prepare('SELECT name, kind, source, accepted FROM tags WHERE photo_id = ? AND accepted >= 0 ORDER BY kind DESC, name').all(id) as Row[]).map((t) => ({ name: t.name, kind: t.kind, source: t.source, accepted: t.accepted === 1 }));
+    (db.prepare('SELECT name, kind, source, accepted, ai_source_id FROM tags WHERE photo_id = ? AND accepted >= 0 ORDER BY kind DESC, name').all(id) as Row[]).map((t) => ({ name: t.name, kind: t.kind, source: t.source, accepted: t.accepted === 1, aiSourceId: t.accepted === 0 && t.source === 'ai' ? t.ai_source_id : '' }));
   const reviewsOf = (id: number) =>
     (db.prepare('SELECT session, date, rating, note FROM reviews WHERE photo_id = ? ORDER BY session, id').all(id) as Row[]).map((r) => ({ session: r.session, date: r.date, rating: r.rating, note: r.note ?? undefined }));
   // The server path of an original is never sent to the browser.
