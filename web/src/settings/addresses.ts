@@ -84,7 +84,7 @@ const SRV_NEW: Idx[] = [
   { tab: 'srv', sec: 'access', sub: 'security', id: 'requireSignin', g: '', label: 'Require sign-in', hint: 'Off: anyone who can reach Frames can use it.' },
   { tab: 'srv', sec: 'access', sub: 'security', id: 'allowList', g: '', label: 'Who is allowed in and the public address', hint: 'The allowed list and the address sign-in comes back to.' },
   { tab: 'srv', sec: 'access', sub: 'security', id: 'tsOn', g: 'Bot check · Cloudflare Turnstile', label: 'Use the bot check', hint: 'A short check before sign-in or opening a share link.' },
-  { tab: 'srv', sec: 'folders', sub: 'local', id: 'userQuota', g: 'Member storage', label: 'Storage per person', hint: 'Total space each member can use in Frames.' },
+  { tab: 'srv', sec: 'folders', sub: 'limits', id: 'userQuota', g: 'Member storage', label: 'Storage per person', hint: 'Total space each member can use in Frames.' },
   { tab: 'srv', sec: 'sharing', sub: 'policies', id: 'terms', g: 'What people read', label: 'Terms', hint: 'The terms people read.' },
   { tab: 'srv', sec: 'sharing', sub: 'policies', id: 'privacy', g: 'What people read', label: 'Privacy', hint: 'The privacy page people read.' },
   { tab: 'srv', sec: 'folders', sub: 'local', id: 'localOn', g: 'Local storage', label: 'Local storage', hint: 'Upload photos to this server and read the library folder.' },

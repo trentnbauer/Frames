@@ -41,7 +41,7 @@ describe('settings addresses', () => {
   });
   it('finds moved and renamed settings under their new names', () => {
     const find = (id: string) => ROWS.find((r) => r.id === id)!;
-    expect(find('userQuota')).toMatchObject({ tab: 'srv', sec: 'folders', sub: 'local' });
+    expect(find('userQuota')).toMatchObject({ tab: 'srv', sec: 'folders', sub: 'limits' });
     expect(find('remind')).toMatchObject({ sec: 'reviews', sub: 'schedule', label: 'Email me when photos are due' });
     expect(find('commHome')).toMatchObject({ sec: 'app' });
     expect(find('sensPf')).toMatchObject({ sec: 'portfolio' });

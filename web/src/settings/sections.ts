@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { Me } from '../store';
 import type { Section } from './ui';
 import { useAccountProfile, useAccountSecurity, useAccountNotifications, useAppSettingsPage, useReviewSchedule, useReviewCommunity, useReviewCleanup, usePhotoTags, usePhotoXmp, usePhotoAi, usePortfolioPage, useStorageTab, useDataTab } from './lib3';
-import { useAccessSignin, useAccessSecurity, useAccessMembers, useSharingGuests, useSharingPortfolios, useSharingPolicies, useStorageLocal, useStorageCloud, useStoragePreviews, useBackup, useNetworkTunnel, useNetworkEmail, useSrvAi, useSystemUpdates, useSystemProcessing, useSystemEnvironment } from './srv4';
+import { useAccessSignin, useAccessSecurity, useAccessMembers, useSharingGuests, useSharingPortfolios, useSharingPolicies, useStorageLocal, useStorageCloud, useStorageLimits, useStoragePreviews, useBackup, useNetworkTunnel, useNetworkEmail, useSrvAi, useSystemUpdates, useSystemProcessing, useSystemEnvironment } from './srv4';
 
 export type Ctx = { toast: (m: string) => void; modal: (n: ReactNode) => void; goto: (tab: 'lib' | 'srv', key: string, sub?: string) => void; me: Me | null; isAdmin: boolean };
 /** One page of a section that opens with the segmented tabs. Only the tab on show runs its hook. */
@@ -44,9 +44,10 @@ export const SRV: SectionDef[] = [
     { key: 'portfolios', label: 'Portfolios', use: useSharingPortfolios },
     { key: 'policies', label: 'Policies', use: useSharingPolicies },
   ] },
-  { tab: 'srv', key: 'folders', name: 'Storage', sub: 'Local · Cloud · Previews & cache', tabs: [
+  { tab: 'srv', key: 'folders', name: 'Storage', sub: 'Local · Cloud · Limits · Previews & cache', tabs: [
     { key: 'local', label: 'Local', use: useStorageLocal },
     { key: 'cloud', label: 'Cloud', use: useStorageCloud },
+    { key: 'limits', label: 'Limits', use: useStorageLimits },
     { key: 'previews', label: 'Previews & cache', use: useStoragePreviews },
   ] },
   { tab: 'srv', key: 'backup', name: 'Backup', sub: 'Schedule · History', use: useBackup },

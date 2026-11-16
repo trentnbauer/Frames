@@ -45,10 +45,14 @@ export function useSharingPortfolios(ctx: Ctx): Section {
 export const useSharingPolicies = usePolicies;
 
 /* ------------------------------------------------------------------ Storage */
+export function useStorageLimits(ctx: Ctx): Section {
+  const f = useFolders(ctx);
+  return section('folders', 'Storage', 'Limits across local and cloud storage.', [{ title: 'Member storage', rows: pick(f, ['userQuota']) }]);
+}
 export function useStorageLocal(ctx: Ctx): Section {
   const f = useFolders(ctx);
   const g = groupOf(f, 'Local storage');
-  return section('folders', 'Storage', 'Photos uploaded to, or read from, this server.', [{ title: 'Member storage', rows: pick(f, ['userQuota']) }, ...(g ? [g] : [])], { notice: f.notice });
+  return section('folders', 'Storage', 'Photos uploaded to, or read from, this server.', g ? [g] : [], { notice: f.notice });
 }
 export function useStorageCloud(ctx: Ctx): Section {
   const f = useFolders(ctx);
