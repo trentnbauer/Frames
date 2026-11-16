@@ -358,6 +358,13 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       if (a.description) set("UPDATE photos SET description = ?, desc_source = 'user', ai_json = ? WHERE id = ?", String(a.description).slice(0, 2000), JSON.stringify({ ...a, sourceId: '' }), id);
     }
     if (b.rejectAiDescription === true && p.ai_json) set('UPDATE photos SET ai_json = ? WHERE id = ?', JSON.stringify({ ...JSON.parse(p.ai_json), sourceId: '', descriptionRejected: true }), id);
+    // The light and mood notes To do asks for: written into the photograph's analysis, so they count as filled in.
+    for (const [field, max] of [['lighting', 300], ['mood', 80]] as const) {
+      if (typeof b[field] !== 'string') continue;
+      const stored = (one('SELECT ai_json j FROM photos WHERE id = ?', id) as Row).j as string | null;
+      const cur = stored ? JSON.parse(stored) : {};
+      set('UPDATE photos SET ai_json = ? WHERE id = ?', JSON.stringify({ ...cur, [field]: (b[field] as string).trim().slice(0, max) }), id);
+    }
     if (b.reanalyse === true) set('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE id = ?', id);
     if ('camera' in b || 'lens' in b) discoverPhotoGear(db, id);
     return x.photoDto(one('SELECT * FROM photos WHERE id = ?', id)!, true);

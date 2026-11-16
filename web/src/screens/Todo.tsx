@@ -13,7 +13,9 @@ type Todo = { total: number; items: { key: string; count: number; ids?: number[]
 type Walk = { photos: { id: number; need: { camera: boolean; lens: boolean } }[]; things: number };
 type MapHit = { name: string; address: string; kind?: string; suburb?: string; city?: string; lat?: number; lon?: number };
 const REASONS: [string, string, string][] = [['all', 'Everything', ''], ['camera', 'Camera', 'camera'], ['lens', 'Lens', 'lens'], ['location', 'Location', 'place'], ['subjects', 'Subjects', 'subjects'], ['tags', 'Tags', 'tags'], ['composition', 'Not in a composition', 'composition']];
-const WHAT: Record<string, string> = { all: 'details', camera: 'a camera', lens: 'a lens', location: 'a location', subjects: 'subjects', tags: 'tags', composition: 'a composition' };
+/** Reasons that are off until switched on in Settings, with the list each one makes. */
+const EXTRA: [string, string, string][] = [['time', 'Time', 'time'], ['light', 'Light', 'light'], ['mood', 'Mood', 'mood']];
+const WHAT: Record<string, string> = { all: 'details', time: 'a date and time', light: 'a light note', mood: 'a mood note', camera: 'a camera', lens: 'a lens', location: 'a location', subjects: 'subjects', tags: 'tags', composition: 'a composition' };
 
 /** To do (design: Proto More, page "todo"): one photograph at a time, with what it still needs. */
 export function TodoPage() {
@@ -27,18 +29,21 @@ export function TodoPage() {
   const gear = useApi<{ own: GearChoice[]; found: GearChoice[] }>('/gear/items');
   const colls = useApi<Collection[]>('/collections');
   const [params, setParams] = useSearchParams();
+  // A chip for every reason that is switched on (Settings, App settings, To do list) and has photographs waiting.
+  const reasons = [...REASONS, ...EXTRA.filter(([, , itemKey]) => todo.data?.items.some((i) => i.key === itemKey))];
   const selectedReason = params.get('reason') ?? 'all';
-  const reason = REASONS.some(([key]) => key === selectedReason) ? selectedReason : 'all';
+  const reason = reasons.some(([key]) => key === selectedReason) ? selectedReason : 'all';
   const setReason = (value: string) => setParams(value === 'all' ? {} : { reason: value });
   useEffect(() => { setSkipped([]); }, [reason]);
   const [skipped, setSkipped] = useState<number[]>([]);
   const [done, setDone] = useState(0);
   const [cam, setCam] = useState<string[]>(['', '', '', '', '', '']);
   const [desc, setDesc] = useState('');
+  const [notes, setNotes] = useState({ light: '', mood: '' });
   const [busy, setBusy] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
 
-  const key = REASONS.find((r) => r[0] === reason)![2];
+  const key = reasons.find((r) => r[0] === reason)![2];
   const baseIds = reason === 'all' ? (walk.data?.photos ?? []).map((p) => p.id) : todo.data?.items.find((i) => i.key === key)?.ids ?? [];
   const ids = baseIds.filter((i) => !skipped.includes(i));
   const id = ids[0];
@@ -51,18 +56,19 @@ export function TodoPage() {
     if (!p) return;
     setCam([p.camera, p.lens, p.aperture ? `f/${p.aperture}` : '', p.shutter, p.iso ? String(p.iso) : '', p.film]);
     setDesc(p.description || '');
+    setNotes({ light: p.aiSuggestion?.lighting ?? '', mood: p.aiSuggestion?.mood ?? '' });
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!todo.data || !walk.data) return <div className="page-shell"></div>;
   const removalCount = todo.data.items.find((item) => item.key === 'delete')?.count ?? 0;
   const counts: Record<string, number> = { all: walk.data.photos.length };
-  for (const [k, , kk] of REASONS) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
+  for (const [k, , kk] of reasons) if (kk) counts[k] = todo.data.items.find((i) => i.key === kk)?.count ?? 0;
   // Tags can be added on any to-do photo, whichever list it came from.
   const currentNeed = walk.data.photos.find((item) => item.id === id)?.need;
   const cameraNeeded = !!(currentNeed?.camera || currentNeed?.lens);
   const show = (k: string) => k === 'tags' || reason === k || (reason === 'all' && (['location', 'subjects', 'desc'].includes(k) || (k === 'camera' && cameraNeeded)));
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: `${t.accepted ? '✓' : '✦'} ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
+  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
   const advance = () => { setSkipped((s) => (id ? [...s, id] : s)); };
   const save = async () => {
     if (!p) return;
@@ -74,14 +80,18 @@ export function TodoPage() {
     const ap = Number(cam[2].replace(/^f\//i, '')); if (cam[2] && ap && ap !== p.aperture) body.aperture = ap;
     const iso = Number(cam[4]); if (cam[4] && iso && iso !== p.iso) body.iso = iso;
     if (desc !== (p.description || '')) body.description = desc;
+    if (notes.light !== (p.aiSuggestion?.lighting ?? '')) body.lighting = notes.light;
+    if (notes.mood !== (p.aiSuggestion?.mood ?? '')) body.mood = notes.mood;
     if (Object.keys(body).length) await api(`/photos/${p.id}`, { method: 'PATCH', body });
     setDone((d) => d + 1); advance(); todo.reload(); walk.reload(); refreshSummary();
   };
   const v = {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     todoCount: ids.length.toLocaleString(), todoDone: done, todoWhat: WHAT[reason],
-    reasons: REASONS.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
-    tShowCamera: show('camera') || reason === 'lens', tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'), tShowComp: !!p,
+    reasons: reasons.map(([k, label]) => ({ label, n: (counts[k] ?? 0).toLocaleString(), bg: reason === k ? 'var(--text)' : 'var(--hover)', fg: reason === k ? 'var(--bg)' : 'var(--text2)', go: () => { setReason(k); setSkipped([]); } })),
+    tShowCamera: show('camera') || reason === 'lens', tShowLocation: show('location'), tShowSubjects: show('subjects'), tShowTags: show('tags'), tShowDesc: show('desc'),
+    tNotes: ([['light', 'Light', 'Soft, low side light'], ['mood', 'Mood', 'Calm']] as const).filter(([k]) => reason === k).map(([k, label, ph]) => ({ label, ph, value: notes[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNotes((n) => ({ ...n, [k]: e.target.value })) })),
+    tTimeNote: reason === 'time' && p ? 'No capture time is recorded for this photograph. Set its date on the photo page.' : '', tOpenPhoto: () => { if (p) nav(`/photo/${p.id}`); }, tShowComp: !!p,
     tPhoto: id ? imgUrl(id, 'preview') : '', tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '', tIdx: skipped.length + 1,
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, control: [0, 1, 5].includes(i) ? <TodoGearInput key={`${id}-${i}`} value={cam[i]} type={i === 0 ? 'camera' : i === 1 ? 'lens' : 'film'} placeholder={ph} owned={gear.data?.own ?? []} discovered={gear.data?.found ?? []} onChange={(value) => setCam((current) => current.map((item, index) => index === i ? value : item))} /> : null, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${cam.filter((x) => !x).length} of 6 missing`,
