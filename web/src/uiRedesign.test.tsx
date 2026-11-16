@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { Footer } from './components/Shell';
 import { isUntitled } from './desktop/LibraryPage';
 import { DeleteShootDialog } from './desktop/parts';
 import { buildTasks } from './todoTasks';
@@ -47,5 +48,10 @@ describe('the redesigned screens', () => {
     const t = buildTasks([{ key: 'orphaned', count: 4, ids: [1, 2, 3, 4] }, { key: 'tags', count: 1, ids: [1] }]);
     expect(t.rows.find((r) => r.key === 'orphaned')?.n).toBe(4);
     expect(t.byPhoto.get(1)).toEqual(['tags']); // the photograph is not also queued under "orphaned"
+  });
+  it('credits the designer and builder and links to the source', () => {
+    const html = renderToStaticMarkup(<Footer />);
+    for (const href of ['https://trentbauer.com', 'https://claude.com', 'https://github.com/trentnbauer/Frames']) expect(html).toContain(`href="${href}"`);
+    expect(html).toContain('Designed by');
   });
 });
