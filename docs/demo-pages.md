@@ -8,7 +8,7 @@ The Pages demo now **mounts the production React application** (`App`, `StorePro
 
 - `web/src/demo/main.tsx` starts the real Frames UI using the `/Frames` BrowserRouter basename.
 - `web/vite.demo.config.ts` sets the `VITE_FRAMES_DEMO` build flag.
-- `web/src/api.ts` routes demo reads to `web/src/demo/api.ts` and image URLs to locally generated gradients. These samples contain no real photographs or user data.
+- `web/src/api.ts` routes demo reads to `web/src/demo/api.ts` and image URLs to stable public sample JPEGs served by Picsum Photos (480px thumbnails and 1600px previews). No personal Frames photographs or user data are included. Sample images require internet access.
 - **Every mutation via `api()` is rejected**; direct same-origin `fetch` requests to API/auth endpoints also receive HTTP 403 within the demo page. No Frames backend is deployed.
 - Editing controls are inherited from the real application for visual fidelity, but do not save changes. Some API-dependent screens have no populated examples yet.
 
