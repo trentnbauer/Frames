@@ -100,6 +100,16 @@ describe('turning AI on', () => {
   });
 });
 
+describe('provider colour validation', () => {
+  it('saves a provider tint and rejects values outside the palette', async () => {
+    const created = (await A.post('/api/ai/sources', { type: 'ollama', color: '#e7b76d' })).body.sources.at(-1);
+    expect(created.color).toBe('#e7b76d');
+    expect((await A.put(`/api/ai/sources/${created.id}`, { color: 'red; background: black' })).status).toBe(400);
+    expect((await A.put(`/api/ai/sources/${created.id}`, { color: '' })).body.sources.find((s: any) => s.id === created.id).color).toBe('');
+    await A.del(`/api/ai/sources/${created.id}`);
+  });
+});
+
 describe('local provider', () => {
   it('analyses photos in the background: descriptions, subjects, tags and embeddings, as suggestions', async () => {
     const { act } = await addSource('ollama', { endpoint: base + '/', model: 'llava', embedModel: 'nomic' });
@@ -115,7 +125,7 @@ describe('local provider', () => {
     expect(full.aiSuggestion.description).toMatch(/\w+/);
     // Suggestions are not facts: nothing is accepted yet.
     expect(full.tags.length).toBeGreaterThan(0);
-    expect(full.tags.every((t: any) => t.source === 'ai' && t.accepted === false)).toBe(true);
+    expect(full.tags.every((t: any) => t.source === 'ai' && t.accepted === false && typeof t.aiSourceId === 'string')).toBe(true);
     expect(full.tags.some((t: any) => t.kind === 'subject')).toBe(true);
     expect(full.description).toBe('');
     // Not searchable as a tag until accepted.
@@ -126,6 +136,9 @@ describe('local provider', () => {
     const full = (await A.get(`/api/photos/${p.id}`)).body;
     const tag = full.tags.find((t: any) => t.kind === 'tag');
     await A.put(`/api/photos/${p.id}/tags`, { name: tag.name, action: 'add' }); // accept
+    const acceptedTag = (await A.get(`/api/photos/${p.id}`)).body.tags.find((t: any) => t.name === tag.name);
+    expect(acceptedTag.source).toBe('user');
+    expect(acceptedTag.aiSourceId).toBe('');
     expect((await A.get(`/api/photos?tag=${tag.name}`)).body.photos.map((x: any) => x.id)).toContain(p.id);
     const other = full.tags.find((t: any) => t.kind === 'subject');
     await A.put(`/api/photos/${p.id}/tags`, { name: other.name, kind: 'subject', action: 'reject' });
