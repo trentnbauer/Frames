@@ -2,33 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loading } from '../components/bits';
 import { useStore } from '../store';
-import proto from './proto.json';
+import { LIB_MOVED, NAMES, ROWS, parseAddress, type Tab } from './addresses';
 import { GroupView, visibleRows, useToast, type Section } from './ui';
-import { LIB, SRV, type Ctx, type SectionDef } from './sections';
+import { LIB, SRV, type Ctx, type SectionDef, type TabDef } from './sections';
 
-type Tab = 'lib' | 'srv';
-type Idx = { tab: Tab; sec: string; id: string; g: string; label: string; hint: string };
-const ROWS = proto.rows as Idx[];
-const NAMES = new Map((proto.sections as { tab: Tab; key: string; name: string }[]).map((s) => [`${s.tab}:${s.key}`, s.name]));
 const mono = "'IBM Plex Mono',monospace";
-
-/** The addresses the old Settings pages used, so a link or a bookmark still lands in the right place. */
-const OLD: Record<string, [Tab, string]> = {
-  'app-settings': ['lib', 'app'], app: ['lib', 'app'], profile: ['lib', 'profile'], notifications: ['lib', 'notifications'], reviews: ['lib', 'reviews'], 'tags-subjects': ['lib', 'tags'], 'metadata-xmp': ['lib', 'xmp'], ai: ['lib', 'ai'], 'cloud-sync': ['lib', 'cloud'], portfolio: ['lib', 'portfolio'], 'your-data': ['lib', 'data'], 'sign-in-methods': ['lib', 'security'], 'password-security': ['lib', 'security'],
-  access: ['srv', 'signin'], 'sign-in-access': ['srv', 'signin'], people: ['srv', 'people'], members: ['srv', 'people'], 'libraries-storage': ['srv', 'folders'], 'photos-storage': ['srv', 'folders'], 'cloud-services': ['srv', 'folders'], backup: ['srv', 'backup'], 'shared-ai': ['srv', 'srvai'],
-  'cloudflare-tunnel': ['srv', 'network'], email: ['srv', 'email'], 'env-file': ['srv', 'server'], 'storage-processing': ['srv', 'processing'], 'updates-system': ['srv', 'server'], about: ['srv', 'server'],
-};
-
-/** Which tab and section an address asks for (the current ones, the older Settings page names, or the old ?access= and ?cloud= returns). */
-function parseAddress(params: URLSearchParams): { tab: Tab; key: string } {
-  const s = params.get('section') ?? '';
-  const t = params.get('tab');
-  if (t === 'srv' || t === 'lib') return { tab: t as Tab, key: s };
-  const o = OLD[s]; if (o) return { tab: o[0], key: o[1] };
-  if (params.has('access')) return { tab: 'srv' as Tab, key: 'signin' };
-  if (params.has('cloud')) return { tab: 'lib' as Tab, key: 'cloud' };
-  return { tab: 'lib' as Tab, key: s };
-}
 
 export function SettingsPage() {
   const { me, settings } = useStore();
@@ -36,7 +14,9 @@ export function SettingsPage() {
   const params = new URLSearchParams(window.location.search);
   const start = parseAddress(params);
   const [tab, setTab] = useState<Tab>(start.tab);
-  const [sec, setSec] = useState<Record<Tab, string>>({ lib: start.tab === 'lib' && start.key ? start.key : 'profile', srv: start.tab === 'srv' && start.key ? start.key : 'signin' });
+  const [sec, setSec] = useState<Record<Tab, string>>({ lib: start.tab === 'lib' && start.key ? start.key : 'account', srv: start.tab === 'srv' && start.key ? start.key : 'signin' });
+  // The tab open inside each section that has tabs, by "tab:section".
+  const [subs, setSubs] = useState<Record<string, string>>(start.sub ? { [`${start.tab}:${start.key}`]: start.sub } : {});
   const [q, setQ] = useState('');
   const [toast, setToast] = useToast();
   const [modal, setModal] = useState<ReactNode>(null);
@@ -44,9 +24,21 @@ export function SettingsPage() {
   const defs = shownTab === 'lib' ? LIB : SRV;
   const cur = defs.find((d) => d.key === sec[shownTab]) ?? defs[0];
 
-  useEffect(() => { const u = new URL(window.location.href); u.searchParams.set('tab', shownTab); u.searchParams.set('section', cur.key); u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u); }, [shownTab, cur.key]);
+  const curSub = cur.tabs ? (cur.tabs.find((x) => x.key === subs[`${cur.tab}:${cur.key}`]) ?? cur.tabs[0]).key : undefined;
 
-  const goto = (t: Tab, key: string) => { setQ(''); setTab(t); setSec((s) => ({ ...s, [t]: key })); };
+  useEffect(() => {
+    const u = new URL(window.location.href); u.searchParams.set('tab', shownTab); u.searchParams.set('section', cur.key);
+    if (curSub) u.searchParams.set('sub', curSub); else u.searchParams.delete('sub');
+    u.searchParams.delete('access'); u.searchParams.delete('cloud'); window.history.replaceState(null, '', u);
+  }, [shownTab, cur.key, curSub]);
+
+  const goto = (t: Tab, key: string, sub?: string) => {
+    // A section that was merged into another opens in its new place, on the tab its settings moved to.
+    const moved = t === 'lib' ? LIB_MOVED[key] : undefined;
+    const k = moved ? moved[0] : key, s2 = sub ?? moved?.[1];
+    setQ(''); setTab(t); setSec((s) => ({ ...s, [t]: k }));
+    if (s2) setSubs((m) => ({ ...m, [`${t}:${k}`]: s2 }));
+  };
   // A link to another section while this page is already open (the "Settings out of sync" banner, for one) changes the address but not
   // this page's state, so follow it.
   const loc = useLocation();
@@ -54,12 +46,18 @@ export function SettingsPage() {
   useEffect(() => {
     if (opened.current) { opened.current = false; return; }
     const want = parseAddress(new URLSearchParams(loc.search));
-    if (want.key) goto(want.tab, want.key);
+    if (want.key) goto(want.tab, want.key, want.sub);
   }, [loc.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctx: Ctx = useMemo(() => ({ toast: setToast, modal: setModal, goto, me, isAdmin: !!isAdmin }), [me, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
   const needle = q.trim().toLowerCase();
   const hits = needle ? ROWS.filter((r) => (isAdmin || r.tab === 'lib') && `${r.label} ${r.hint} ${NAMES.get(`${r.tab}:${r.sec}`)} ${r.g}`.toLowerCase().includes(needle)) : [];
-  const hitSecs = needle ? [...LIB, ...(isAdmin ? SRV : [])].filter((d) => hits.some((h) => h.tab === d.tab && h.sec === d.key)) : [];
+  // Each section (and, inside one, each tab) that has a matching setting.
+  const hitViews = needle ? [...LIB, ...(isAdmin ? SRV : [])].flatMap((d): { def: SectionDef; sub?: string }[] => {
+    const mine = hits.filter((h) => h.tab === d.tab && h.sec === d.key);
+    if (!mine.length) return [];
+    if (!d.tabs) return [{ def: d }];
+    return d.tabs.filter((x) => mine.some((h) => !h.sub || h.sub === x.key)).map((x) => ({ def: d, sub: x.key }));
+  }) : [];
 
   if (!settings) return <div className="page settings-page"><Loading /></div>;
   return (
@@ -90,7 +88,7 @@ export function SettingsPage() {
             return (
               <span key={d.key} role="button" tabIndex={0} aria-current={on ? 'page' : undefined} onClick={() => goto(shownTab, d.key)} onKeyDown={(e) => { if (e.key === 'Enter') goto(shownTab, d.key); }} className="snavi"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: on ? 'var(--hair)' : 'transparent', color: on ? 'var(--text)' : 'var(--text2)' }}>
-                {d.name}<span style={{ font: `400 11px ${mono}`, color: 'var(--muted)' }}>{d.badge ?? ''}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>{d.name}{d.sub && <span style={{ fontSize: 11.5, lineHeight: 1.3, color: 'var(--faint)' }}>{d.sub}</span>}</span><span style={{ font: `400 11px ${mono}`, color: 'var(--muted)' }}>{d.badge ?? ''}</span>
               </span>
             );
           })}
@@ -100,9 +98,9 @@ export function SettingsPage() {
             <>
               <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>Results for “{q.trim()}”</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{hits.length} {hits.length === 1 ? 'setting' : 'settings'} across both tabs</p></div>
               {hits.length === 0 && <div style={{ padding: 24, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 13.5 }}>No settings match. Try “review”, “XMP” or “backup”.</div>}
-              {hitSecs.map((d) => <SectionView key={`${d.tab}:${d.key}`} def={d} ctx={ctx} filter={needle} onJump={() => goto(d.tab, d.key)} />)}
+              {hitViews.map(({ def: d, sub }) => <SectionView key={`${d.tab}:${d.key}:${sub ?? ''}`} def={d} sub={sub} ctx={ctx} filter={needle} onJump={() => goto(d.tab, d.key, sub)} />)}
             </>
-          ) : <SectionView key={`${cur.tab}:${cur.key}`} def={cur} ctx={ctx} />}
+          ) : <SectionView key={`${cur.tab}:${cur.key}`} def={cur} sub={curSub} onSub={(k) => setSubs((m) => ({ ...m, [`${cur.tab}:${cur.key}`]: k }))} ctx={ctx} />}
         </main>
       </div>
       {modal}
@@ -111,8 +109,14 @@ export function SettingsPage() {
 }
 
 /** Calls the section's own hook (so only the section on show loads its data) and draws its cards. */
-function SectionView({ def, ctx, filter, onJump }: { def: SectionDef; ctx: Ctx; filter?: string; onJump?: () => void }) {
-  const s: Section = def.use(ctx);
+function SectionView({ def, sub, onSub, ctx, filter, onJump }: { def: SectionDef; sub?: string; onSub?: (key: string) => void; ctx: Ctx; filter?: string; onJump?: () => void }) {
+  const tabDef = def.tabs ? (def.tabs.find((t) => t.key === sub) ?? def.tabs[0]) : undefined;
+  // Keyed by tab so a tab's hook (and only that one) runs while it is on show.
+  return <SectionBody key={tabDef?.key ?? ''} use={(tabDef?.use ?? def.use)!} def={def} tabDef={tabDef} onSub={onSub} ctx={ctx} filter={filter} onJump={onJump} />;
+}
+
+function SectionBody({ use, def, tabDef, onSub, ctx, filter, onJump }: { use: (ctx: Ctx) => Section; def: SectionDef; tabDef?: TabDef; onSub?: (key: string) => void; ctx: Ctx; filter?: string; onJump?: () => void }) {
+  const s: Section = use(ctx);
   const [open, setOpen] = useState<string | null>(null);
   const all = useMemo(() => s.groups.flatMap((g) => g.rows), [s]);
   const vis = visibleRows(all);
@@ -120,15 +124,20 @@ function SectionView({ def, ctx, filter, onJump }: { def: SectionDef; ctx: Ctx; 
   if (filter) {
     const rows = all.filter((r) => vis(r) && `${typeof r.label === 'string' ? r.label : ''} ${typeof r.hint === 'string' ? r.hint : ''} ${s.name} ${s.groups.find((g) => g.rows.includes(r))?.title ?? ''}`.toLowerCase().includes(filter));
     if (!rows.length) return null;
-    return <>{open && <div onClick={() => setOpen(null)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}<GroupView g={{ rows }} vis={() => true} open={open} setOpen={setOpen} title={s.name + (def.tab === 'srv' ? ' · Server' : '')} jump={onJump} /></>;
+    return <>{open && <div onClick={() => setOpen(null)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}<GroupView g={{ rows }} vis={() => true} open={open} setOpen={setOpen} title={(def.tabs ? `${def.name} · ${tabDef!.label}` : s.name) + (def.tab === 'srv' ? ' · Server' : '')} jump={onJump} /></>;
   }
   return (
     <>
       {open && <div onClick={() => setOpen(null)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
-        <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{s.hint}</p></div>
+        <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{def.tabs ? def.name : s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{s.hint}</p></div>
         {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: 'var(--text)', color: 'var(--bg)', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
       </div>
+      {def.tabs && (
+        <div role="tablist" aria-label={`${def.name} tabs`} className="seg" style={{ alignSelf: 'flex-start' }}>
+          {def.tabs.map((t) => <button key={t.key} role="tab" aria-selected={t.key === tabDef!.key} className={t.key === tabDef!.key ? 'on' : ''} onClick={() => onSub?.(t.key)}>{t.label}</button>)}
+        </div>
+      )}
       {def.tab === 'srv' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--chip)', fontSize: 13, color: 'var(--text2)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text)' }} />Changes here apply to everyone on this server.</div>}
       {s.notice && <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: 'var(--err-bg)', fontSize: 13, color: 'var(--err)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--err)', flex: 'none', marginTop: 6 }} /><span>{s.notice}</span></div>}
       {s.groups.map((g, i) => <GroupView key={i} g={g} vis={vis} open={open} setOpen={setOpen} />)}

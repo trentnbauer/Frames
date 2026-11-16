@@ -129,7 +129,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
               <button role="tab" aria-selected={source === 'cloud'} className={source === 'cloud' ? 'on' : ''} onClick={() => setTab('cloud')}>Sync from the cloud</button>
             </div>
           )}
-          {st.data && !local && !hasCloud && <p className="muted">Nothing to add from yet. {st.data.admin ? <>Turn on storage in <Link to="/settings?section=storage">Settings</Link>.</> : 'Ask an admin to enable storage.'}</p>}
+          {st.data && !local && !hasCloud && <p className="muted">Nothing to add from yet. {st.data.admin ? <>Turn on storage in <Link to="/settings?tab=srv&section=folders">Settings</Link>.</> : 'Ask an admin to enable storage.'}</p>}
           {source === 'upload' && local && me?.storeOriginalQuality === false && <SmallerCopyNote />}
           {(local || hasCloud) && (
             <>
