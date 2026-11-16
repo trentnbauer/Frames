@@ -1,27 +1,35 @@
 # Frames GitHub Pages demo
 
-Issue #367. A static, read-only interactive **sample** of Frames, published to GitHub Pages.
+GitHub issue #367.
 
-## How it works
+The Pages demo now **mounts the production React application** (`App`, `StoreProvider`, production routes, components and styles). It is not a separate recreation of the interface.
 
-The demo is a separate React entry point (`web/demo.html` and `web/src/demo/`), not a copy of the authenticated application. It reuses Frames typography and design tokens but **never calls the Frames API**, stores no visitor data and does not offer upload, editing, rating or saving controls. Visitors can browse example photographs, search/filter, open a photo, browse photoshoots and open compositions.
+## Read-only, synthetic data
 
-Sample images are generated locally as deterministic SVG gradients and abstract shapes. They require no external image service; this demo does not contain or expose private photographs.
+- `web/src/demo/main.tsx` starts the real Frames UI using the `/Frames` BrowserRouter basename.
+- `web/vite.demo.config.ts` sets the `VITE_FRAMES_DEMO` build flag.
+- `web/src/api.ts` routes demo reads to `web/src/demo/api.ts` and image URLs to locally generated gradients. These samples contain no real photographs or user data.
+- **Every mutation via `api()` is rejected**; direct same-origin `fetch` requests to API/auth endpoints also receive HTTP 403 within the demo page. No Frames backend is deployed.
+- Editing controls are inherited from the real application for visual fidelity, but do not save changes. Some API-dependent screens have no populated examples yet.
 
-## Deployment
+This design deliberately avoids running a public writable instance or copying its database. Unlike the previous standalone imitation, the shared frontend components mean ordinary UI improvements also appear in the demo on its next deploy.
 
-The `Publish Frames demo` GitHub Actions workflow builds the demo with the GitHub Pages project base path `/Frames/`, then deploys `web/dist-demo`. It runs when relevant files change on main, on manual dispatch, and every day at **20:00 UTC = 07:00 AEDT**. During AEST (UTC+10) this runs at 06:00; the requested fixed AEDT time is preserved.
+## Deploy
 
-To activate the site, enable GitHub Pages for this repository and select **GitHub Actions** as its build and deployment source. The expected project URL is `https://trentnbauer.github.io/Frames/` once the workflow deploys successfully. Repository Pages configuration is not changed by this PR.
+Set GitHub Settings → Pages → Build and deployment → **Source: GitHub Actions**.
 
-## Local preview
+`Publish Frames demo` runs when relevant files on main change, manually, and daily at 20:00 UTC (07:00 AEDT, or 06:00 AEST). It produces an SPA `404.html` for refreshable deep links under the `/Frames/` project path.
+
+Expected address: https://trentnbauer.github.io/Frames/
+
+## Local build
 
 ```sh
 cd web
 npm ci
+npx tsc --noEmit
 npx vite build --config vite.demo.config.ts
 mv dist-demo/demo.html dist-demo/index.html
+cp dist-demo/index.html dist-demo/404.html
 npx vite preview --outDir dist-demo --base /Frames/
 ```
-
-This is a lightweight tour of the main navigation and photography views, not a complete simulation of every Frames screen.
