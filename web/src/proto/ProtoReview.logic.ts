@@ -45,7 +45,7 @@ export class Logic extends DCLogic {
       revToast: S.toast, revToastOp: S.tOp, rToast: '', rToastOp: 0,
       delOpen: S.del, closeDel: () => this.setState({ del: false }), stop: (e) => e.stopPropagation(),
       delSub: P.delSub, delWarn: P.delWarn,
-      delOpts: [['frames', 'Remove from Frames', 'Recover metadata and ratings during the recovery period. Originals stay unchanged.']].map(([k, label, hint]) => ({ label, hint, bg: mode === k ? 'var(--hover)' : 'transparent', ring: mode === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: mode === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent)', pick: () => this.setState({ delMode: k }) })),
+      delOpts: [['frames', 'Remove from Frames', 'The original isn’t touched, on disk or in the cloud, and won’t be imported again. Its ratings and tags can be recovered for 30 days.']].map(([k, label, hint]) => ({ label, hint, bg: mode === k ? 'var(--hover)' : 'transparent', ring: mode === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: mode === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent)', pick: () => this.setState({ delMode: k }) })),
       delLabel: 'Remove from Frames',
       confirmDel: async () => { this.setState({ del: false }); await P.onDelete(mode); this.flash('Removed · available in Recently removed during the recovery period'); },
       offer: P.offer, quickAdd: () => P.onAddOffer(), openRPick: () => { P.onChooseOffer(); this.setState({ pick: true }); },
