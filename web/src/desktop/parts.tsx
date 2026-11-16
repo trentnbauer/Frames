@@ -1,3 +1,4 @@
+import { useWheelSize } from '../thumbZoom';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
@@ -48,12 +49,13 @@ export function DeleteShootDialog({ title, count, onKeep, onDelete, onClose }: {
 
 /** Photographs as rows of equal height, each as wide as its shape asks (the design's grid). */
 export function JustifiedGrid({ photos, selecting, picked, onClick, due }: { photos: PhotoLite[]; selecting: boolean; picked: Set<number>; onClick: (p: PhotoLite) => void; due: (p: PhotoLite) => boolean }) {
+  const { size, el } = useWheelSize();
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+    <div ref={el} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {photos.map((p) => {
         const on = picked.has(p.id), ar = p.ar || 1.5;
         return (
-          <button key={p.id} onClick={() => onClick(p)} aria-label={p.title || p.file} aria-pressed={selecting ? on : undefined} style={{ position: 'relative', flex: `${ar.toFixed(3)} 1 ${Math.round(ar * 190)}px`, aspectRatio: String(ar), borderRadius: 4, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)`, outline: on ? '2px solid var(--text)' : 'none', outlineOffset: -2 }}>
+          <button key={p.id} onClick={() => onClick(p)} aria-label={p.title || p.file} aria-pressed={selecting ? on : undefined} style={{ position: 'relative', flex: `${ar.toFixed(3)} 1 ${Math.round(ar * size)}px`, aspectRatio: String(ar), borderRadius: 4, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)`, outline: on ? '2px solid var(--text)' : 'none', outlineOffset: -2 }}>
             {selecting && <b style={{ position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: '50%', background: on ? '#efede8' : 'rgba(0,0,0,.35)', boxShadow: 'inset 0 0 0 2px #efede8', color: '#0d0d0d', fontSize: 12, lineHeight: '22px', textAlign: 'center', fontWeight: 500 }}>{on ? '✓' : ''}</b>}
             {due(p) && <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.62)', padding: '2px 7px', borderRadius: 999, color: '#efede8' }}>Due</span>}
           </button>

@@ -1,3 +1,4 @@
+import { usePinchColumns } from '../thumbZoom';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -13,6 +14,7 @@ const glass = { background: 'rgba(30,30,29,.82)', color: '#efede8' } as const;
 
 /** One photoshoot on a phone: a cover collage, its name and stats, Review due, Rename, Protect from deletion, and its photographs. */
 export function MobileShoot() {
+  const pinch = usePinchColumns();
   const { id } = useParams();
   const nav = useNavigate();
   const { settings, refreshSummary } = useStore();
@@ -65,7 +67,7 @@ export function MobileShoot() {
         </button>
         {(s.tags.length > 0 || s.subjects.length > 0) && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{[...s.subjects, ...s.tags].map((t) => <span key={t} style={{ height: 28, display: 'inline-flex', alignItems: 'center', padding: '0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 12.5 }}>{t}</span>)}</div>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 2, paddingBottom: 40 }}>
+      <div {...pinch.handlers} style={{ display: 'grid', gridTemplateColumns: `repeat(${pinch.cols},minmax(0,1fr))`, gap: 2, paddingBottom: 40, ...pinch.style }}>
         {photos.map((p) => (
           <button key={p.id} onClick={() => nav(`/photo/${p.id}`)} aria-label={p.title || p.file} style={{ position: 'relative', aspectRatio: '1', background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)` }}>
             {!!p.nextReviewAt && p.nextReviewAt <= now && <span style={{ position: 'absolute', left: 6, bottom: 6, height: 18, display: 'inline-flex', alignItems: 'center', padding: '0 7px', borderRadius: 999, background: 'rgba(20,20,19,.82)', color: '#efede8', fontSize: 10.5 }}>Due</span>}
