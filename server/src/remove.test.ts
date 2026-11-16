@@ -13,7 +13,7 @@ beforeAll(async () => {
   env = makeEnv(); A = api(env);
   (env.cfg as any).libraries = [env.lib];
   for (const [n, c] of [['keep.jpg', '#336699'], ['low.jpg', '#993333'], ['mid.jpg', '#339966'], ['gone.jpg', '#996633']] as const) await put(n, c);
-  await A.post('/api/library/scan?wait=1');
+  await A.scan();
 });
 afterAll(() => { env.app.close(); cleanup(env); });
 
@@ -27,12 +27,12 @@ describe('taking a photograph out of Frames', () => {
     expect(env.db.prepare('SELECT COUNT(*) n FROM reviews WHERE photo_id = ?').get(id)).toEqual({ n: 0 });
     expect(fs.existsSync(path.join(env.data, 'derivatives', String(id)))).toBe(false);
     expect(fs.existsSync(path.join(env.lib, 'gone.jpg'))).toBe(true); // a file in a library folder is never touched
-    await A.post('/api/library/scan?wait=1');
+    await A.scan();
     expect(await idOf('gone.jpg')).toBeUndefined(); // not imported again
     expect((await A.get('/api/removed')).body.count).toBe(1);
     // Bringing them back: the next scan imports whatever is still there.
     expect((await A.post('/api/removed/restore')).body.cleared).toBe(1);
-    await A.post('/api/library/scan?wait=1');
+    await A.scan();
     expect(await idOf('gone.jpg')).toBeDefined();
   });
   it('preserves an uploaded original for recoverable removal', async () => {
@@ -40,7 +40,7 @@ describe('taking a photograph out of Frames', () => {
     fs.mkdirSync(path.dirname(up), { recursive: true });
     fs.writeFileSync(up, await jpg(svg(900, 600, '#112233', '#eeeeee', [0.3, 0.3])));
     (env.cfg as any).libraries = [env.lib, path.join(env.data, 'originals')];
-    await A.post('/api/library/scan?wait=1');
+    await A.scan();
     const id = await idOf('uploaded.jpg');
     expect(id).toBeDefined();
     expect((await A.del(`/api/photos/${id}`)).body).toMatchObject({ removed: 1, filesDeleted: 0, kept: 1 });
@@ -65,7 +65,7 @@ describe('suggesting what to delete by its review score', () => {
   it('is off until a score is chosen, then lists only photographs whose average, after every session, is below it, lowest first', async () => {
     // The photoshoot test above emptied the library: three new photographs with different ratings.
     await put('x1.jpg', '#101010'); await put('x2.jpg', '#202020'); await put('x3.jpg', '#303030');
-    await A.post('/api/library/scan?wait=1');
+    await A.scan();
     const list = ((await A.get('/api/photos')).body.photos as any[]).map((p) => p.id as number).slice(0, 3);
     env.db.prepare('DELETE FROM reviews').run();
     const rate = (id: number, ratings: number[]) => ratings.forEach((r, i) => env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z', ?)").run(id, i + 1, `r${id}${i}`, r));

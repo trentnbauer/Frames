@@ -7,7 +7,8 @@ export type DB = Database.Database;
 
 /** Remove only shoots with no photo records, including their polymorphic share links. */
 export function pruneEmptyShoots(db: DB, id?: number): number {
-  const empty = `SELECT s.id FROM shoots s WHERE NOT EXISTS (SELECT 1 FROM photos p WHERE p.shoot_id = s.id)${id === undefined ? '' : ' AND s.id = ?'}`;
+  const hasUnsorted = (db.prepare('PRAGMA table_info(shoots)').all() as { name: string }[]).some((c) => c.name === 'unsorted'); // an older database gets the column from a later migration
+  const empty = `SELECT s.id FROM shoots s WHERE ${hasUnsorted ? 's.unsorted = 0 AND ' : ''}NOT EXISTS (SELECT 1 FROM photos p WHERE p.shoot_id = s.id)${id === undefined ? '' : ' AND s.id = ?'}`;
   const args = id === undefined ? [] : [id];
   return db.transaction(() => {
     db.prepare(`DELETE FROM shares WHERE kind = 'shoot' AND target_id IN (${empty})`).run(...args);
@@ -402,9 +403,37 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // A protected shoot cannot be removed manually or by low-rating cleanup.
   (db) => { addColumn(db, 'shoots', 'protected', 'INTEGER NOT NULL DEFAULT 0'); },
+  // One hidden shoot holds the photographs that are in no photoshoot ("orphaned"). It is never listed, never pruned and never shared.
+  (db) => {
+    addColumn(db, 'shoots', 'unsorted', 'INTEGER NOT NULL DEFAULT 0');
+    db.exec(`
+      DROP TRIGGER IF EXISTS prune_shoot_after_photo_delete;
+      DROP TRIGGER IF EXISTS prune_shoot_after_photo_move;
+      CREATE TRIGGER prune_shoot_after_photo_delete AFTER DELETE ON photos
+      WHEN NOT EXISTS (SELECT 1 FROM photos WHERE shoot_id = OLD.shoot_id) AND (SELECT unsorted FROM shoots WHERE id = OLD.shoot_id) = 0
+      BEGIN
+        DELETE FROM shares WHERE kind = 'shoot' AND target_id = OLD.shoot_id;
+        DELETE FROM shoots WHERE id = OLD.shoot_id;
+      END;
+      CREATE TRIGGER prune_shoot_after_photo_move AFTER UPDATE OF shoot_id ON photos
+      WHEN OLD.shoot_id != NEW.shoot_id AND NOT EXISTS (SELECT 1 FROM photos WHERE shoot_id = OLD.shoot_id) AND (SELECT unsorted FROM shoots WHERE id = OLD.shoot_id) = 0
+      BEGIN
+        DELETE FROM shares WHERE kind = 'shoot' AND target_id = OLD.shoot_id;
+        DELETE FROM shoots WHERE id = OLD.shoot_id;
+      END;
+    `);
+  },
   // The photograph the photographer chose as a shoot's cover; null means the highest rated one.
   (db) => { addColumn(db, 'shoots', 'cover_id', 'INTEGER'); },
 ];
+
+/** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */
+export function unsortedShootId(db: DB): number {
+  const row = db.prepare('SELECT id FROM shoots WHERE unsorted = 1').get() as { id: number } | undefined;
+  if (row) return row.id;
+  return Number(db.prepare("INSERT INTO shoots(name, source, imported_at, unsorted) VALUES('No shoot', 'Unsorted', ?, 1)").run(new Date().toISOString()).lastInsertRowid);
+}
+
 
 /** A shoot's cover: the photograph chosen for it (if still in it), else the highest average rating, else the first. */
 export function shootCoverId(db: DB, shootId: number): number | null {

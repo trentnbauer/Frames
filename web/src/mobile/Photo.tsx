@@ -106,7 +106,7 @@ export function MobilePhoto() {
             {row('title', 'Title', p.title, 'Add a title')}
             {row('description', 'Description', p.description || '', 'Add a description', p.descSource === 'ai')}
             {row('place', 'Place', p.place, 'Add a place')}
-            {row(null, 'Shoot', shoot?.name ?? '', '—', false, { label: 'Move', run: () => setSheet('move') })}
+            {row(null, 'Shoot', p.orphaned ? 'No shoot' : shoot?.name ?? '', '—', false, { label: 'Move', run: () => setSheet('move') })}
             {row(null, 'Date taken', fmtDate(p.dateEdit ?? p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }), '—')}
             {row(null, 'Camera', p.camera, '—')}
             {row(null, 'Lens', p.film ? `${p.lens} · ${p.film}` : p.lens, '—')}
@@ -165,7 +165,8 @@ export function MobilePhoto() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {[
               { label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } },
-              { label: 'Move to shoot', act: () => setSheet('move') },
+              { label: p.orphaned ? 'Put in a shoot' : 'Move to shoot', act: () => setSheet('move') },
+              ...(p.orphaned ? [] : [{ label: 'Take out of its shoot (no shoot)', act: async () => { setSheet(null); try { await api('/photos/orphan', { body: { photoIds: [p.id] } }); photo.reload(); say('Now in no shoot'); } catch (e) { setErr((e as Error).message); } } }]),
               { label: 'Compare with similar', meta: 'Full app ↗', act: () => nav('/compare') },
               { label: 'Download original', meta: p.file, act: () => { setSheet(null); window.location.assign(`/api/photos/${p.id}/original`); } },
               { label: 'Remove from Frames…', fg: protectedShoot ? 'var(--faint)' : 'var(--danger)', meta: protectedShoot ? 'Shoot protected' : '', act: () => { if (protectedShoot) say('This shoot is protected from deletion'); else setSheet('remove'); } },

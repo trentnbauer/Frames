@@ -6,7 +6,7 @@ export type Tag = { name: string; kind: 'tag' | 'subject'; source: string; accep
 export type Review = { session: number; date: string; rating: number; note?: string };
 export type Swatch = { hex: string; pct: number; name: string };
 export type PhotoLite = {
-  id: number; title: string; file: string; shootId: number; w: number; h: number; ar: number; hasImage: boolean;
+  id: number; title: string; file: string; shootId: number; /** In no photoshoot: shown as "No shoot". */ orphaned: boolean; w: number; h: number; ar: number; hasImage: boolean;
   capturedAt: string | null; addedAt: string; dateEdit: string | null; camera: string; lens: string; exposure: string; iso: number | null; aperture: number | null; shutter: string; focalMm: number | null; medium: '' | 'digital' | 'film'; film: string; fileType: string; sizeMb: number;
   archived: boolean; missing: boolean; lastReviewedAt: string; nextReviewAt: string | null; reviewCount: number; avgRating: number;
   lat: number | null; lon: number | null; place: string; placeAddress: string; placeKind: string; placePrecision: 'exact' | 'suburb' | 'city'; parentId: number | null;

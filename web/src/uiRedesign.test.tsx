@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { isUntitled } from './desktop/LibraryPage';
+import { DeleteShootDialog } from './desktop/parts';
+import { buildTasks } from './todoTasks';
 import { ShareShoot } from './pages/ShareShoot';
 import { TAB_PATHS } from './mobile/Chrome';
 import type { Shoot } from './data';
@@ -36,5 +38,14 @@ describe('the redesigned screens', () => {
     );
     expect(html).toContain('All photographs');
     for (const text of ['To rate', 'Download all', 'Send to']) expect(html).not.toContain(text);
+  });
+  it('asks whether to keep or delete a shoot’s photographs', () => {
+    const html = renderToStaticMarkup(<DeleteShootDialog title="Delete “Coast”?" count={3} onKeep={() => undefined} onDelete={() => undefined} onClose={() => undefined} />);
+    for (const text of ['Delete “Coast”?', '3 photographs', 'Delete shoot', 'Delete shoot &amp; photos', 'Cancel']) expect(html).toContain(text);
+  });
+  it('lists photographs in no shoot as a task of their own, not one card per photograph', () => {
+    const t = buildTasks([{ key: 'orphaned', count: 4, ids: [1, 2, 3, 4] }, { key: 'tags', count: 1, ids: [1] }]);
+    expect(t.rows.find((r) => r.key === 'orphaned')?.n).toBe(4);
+    expect(t.byPhoto.get(1)).toEqual(['tags']); // the photograph is not also queued under "orphaned"
   });
 });

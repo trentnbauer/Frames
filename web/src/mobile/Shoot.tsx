@@ -33,7 +33,7 @@ export function MobileShoot() {
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast(''), 2600); };
   const protect = async (on: boolean) => { setErr(''); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { protected: on } }); shoot.reload(); say(on ? 'Protected from deletion' : 'Protection turned off'); } catch (e) { setErr((e as Error).message); } };
   const rename = async () => { const v = name.trim(); if (!v) return; try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { name: v } }); setSheet(null); shoot.reload(); } catch (e) { setErr((e as Error).message); } };
-  const remove = async () => { try { await api(`/shoots/${s.id}`, { method: 'DELETE' }); refreshSummary(); nav('/library?view=shoots', { replace: true }); } catch (e) { setSheet(null); setErr((e as Error).message); } };
+  const remove = async (photos: 'orphan' | 'delete') => { try { await api(`/shoots/${s.id}${photos === 'orphan' ? '?photos=orphan' : ''}`, { method: 'DELETE' }); refreshSummary(); nav('/library?view=shoots', { replace: true }); } catch (e) { setSheet(null); setErr((e as Error).message); } };
   const pct = Math.round(s.reviewPct);
 
   return (
@@ -96,8 +96,10 @@ export function MobileShoot() {
         </Sheet>
       )}
       {sheet === 'delete' && (
-        <Sheet title="Delete this shoot?" sub={`All ${s.count} photographs leave Frames. Their originals are kept, and you can restore them from Recently removed.`} onClose={() => setSheet(null)}>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button onClick={() => setSheet(null)} style={{ height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Cancel</button><button onClick={remove} style={{ ...primaryBtn, height: 46, padding: '0 22px', fontSize: 14.5, background: 'var(--danger)', color: '#0d0d0d' }}>Delete shoot</button></div>
+        <Sheet title="Delete this shoot?" sub={`The shoot goes either way. Keep its ${s.count} photographs (they stay in Frames, in no shoot) or delete them with it (they move to Recently removed). Originals are never touched.`} onClose={() => setSheet(null)}>
+          <button onClick={() => remove('orphan')} style={{ ...primaryBtn, height: 48 }}>Delete shoot</button>
+          <button onClick={() => remove('delete')} style={{ ...primaryBtn, height: 48, background: 'var(--danger)', color: '#0d0d0d' }}>Delete shoot & photos</button>
+          <button onClick={() => setSheet(null)} style={{ height: 44, fontSize: 14, color: 'var(--text2)' }}>Cancel</button>
         </Sheet>
       )}
     </div>

@@ -288,7 +288,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     const complete = (one(`SELECT COUNT(*) n FROM (SELECT photo_id FROM reviews ${rw} GROUP BY photo_id HAVING COUNT(*) >= ?)`, ...ra, sessions) as Row).n;
     const dist = [1, 2, 3, 4, 5].map((v) => ({ value: v, n: (one(`SELECT COUNT(*) n FROM reviews ${rw ? rw + ' AND' : 'WHERE'} rating = ?`, ...ra, v) as Row).n }));
     const avg = (one(`SELECT AVG(rating) a FROM reviews ${rw}`, ...ra) as Row).a ?? 0;
-    const perShoot = all(`SELECT s.id, s.name, COUNT(p.id) n FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id ${year ? "AND substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 4) = ?" : ''} GROUP BY s.id ${year ? 'HAVING n > 0' : ''} ORDER BY n DESC, s.imported_at DESC`, ...pa);
+    const perShoot = all(`SELECT s.id, s.name, COUNT(p.id) n FROM shoots s LEFT JOIN photos p ON p.shoot_id = s.id ${year ? "AND substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 4) = ?" : ''} WHERE s.unsorted = 0 GROUP BY s.id ${year ? 'HAVING n > 0' : ''} ORDER BY n DESC, s.imported_at DESC`, ...pa);
     const inCollections = (one('SELECT COUNT(DISTINCT photo_id) n FROM collection_photos') as Row).n;
     const agg = x.ratingAgg();
     const top = all(`SELECT p.* FROM photos p JOIN reviews r ON r.photo_id = p.id ${year ? 'WHERE substr(r.date, 1, 4) = ?' : ''} GROUP BY p.id ORDER BY AVG(r.rating) DESC, COUNT(r.id) DESC LIMIT 10`, ...ra).map((r) => x.photoDto(r, false, agg));

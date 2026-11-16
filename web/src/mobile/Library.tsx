@@ -8,7 +8,7 @@ import { RATINGS, type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
 import { Eyebrow, Seg } from './ui';
 
-const FILTERS: [string, string][] = [['due', 'Due for review'], ['ai', '✦ AI suggestions'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location']];
+const FILTERS: [string, string][] = [['due', 'Due for review'], ['ai', '✦ AI suggestions'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location'], ['noshoot', 'No shoot']];
 const dueNow = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new Date().toISOString();
 
 /** Library on a phone: Photos (by shoot, three across) and Shoots (a card each), with search, filters and a Select mode that rates, moves or adds to a composition. */
@@ -21,7 +21,7 @@ export function MobileLibrary() {
   const [qText, setQText] = useState(sp.get('q') ?? '');
   const timer = useRef(0);
   const [adding, setAdding] = useState(sp.get('add') === '1');
-  const [selecting, setSelecting] = useState(false);
+  const [selecting, setSelecting] = useState(sp.get('select') === '1');
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [sheet, setSheet] = useState<null | 'rate' | 'move' | 'comp'>(null);
   const [note, setNote] = useState('');
@@ -38,9 +38,10 @@ export function MobileLibrary() {
   const list = useApi<{ total: number; photos: PhotoLite[] }>(`/photos?${server.toString()}`);
   const shoots = useApi<Shoot[]>('/shoots');
   const aiIds = useMemo(() => new Set(todoItems.filter((i) => i.key === 'ai-tags' || i.key === 'ai-description').flatMap((i) => i.ids ?? [])), [todoItems]);
-  const photos = (list.data?.photos ?? []).filter((p) => (filter === 'ai' ? aiIds.has(p.id) : filter === 'noplace' ? p.lat === null && !p.place : true));
+  const photos = (list.data?.photos ?? []).filter((p) => (filter === 'ai' ? aiIds.has(p.id) : filter === 'noplace' ? p.lat === null && !p.place : filter === 'noshoot' ? p.orphaned : true));
   const shootName = (id: number) => shoots.data?.find((s) => s.id === id)?.name ?? 'Photos';
-  const groups = (shoots.data ?? []).map((s) => ({ s, ps: photos.filter((p) => p.shootId === s.id) })).filter((g) => g.ps.length);
+  const orphans = photos.filter((p) => p.orphaned);
+  const groups = [...(orphans.length ? [{ s: { id: 0, name: 'No shoot', dates: '' } as Shoot, ps: orphans }] : []), ...(shoots.data ?? []).map((s) => ({ s, ps: photos.filter((p) => p.shootId === s.id) })).filter((g) => g.ps.length)];
   const flip = (id: number) => setSel((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const ids = [...sel];
   const done = (msg: string) => { setSheet(null); setSelecting(false); setSel(new Set()); setNote(msg); list.reload(); shoots.reload(); refreshSummary(); window.setTimeout(() => setNote(''), 2600); };
@@ -83,7 +84,7 @@ export function MobileLibrary() {
           <div key={s.id}>
             <div style={{ padding: '22px 20px 10px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-                <button onClick={() => nav(`/shoots/${s.id}`)} style={{ font: '400 24px/1 var(--serif)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</button>
+                <button onClick={() => { if (s.id) nav(`/shoots/${s.id}`); }} style={{ font: '400 24px/1 var(--serif)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: s.id ? undefined : 'var(--text2)' }}>{s.name}</button>
                 <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)', whiteSpace: 'nowrap' }}>{s.dates} · {ps.length}</span>
               </div>
               {selecting && <button onClick={() => setSel((c) => { const n = new Set(c); const all = ps.every((p) => n.has(p.id)); ps.forEach((p) => (all ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 12.5, color: 'var(--text2)', whiteSpace: 'nowrap', height: 32 }}>Select all</button>}
@@ -151,6 +152,7 @@ export function MobileLibrary() {
         <Sheet title="Move to a photoshoot" sub={`${sel.size} ${sel.size === 1 ? 'photograph' : 'photographs'}. They are kept; an emptied shoot is removed.`} onClose={() => setSheet(null)}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New photoshoot name" aria-label="New photoshoot name" style={{ height: 50, border: 0, outline: 'none', borderRadius: 12, padding: '0 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 16 }} />
           {newName.trim() && <button disabled={busy} onClick={() => move(newName.trim())} style={{ height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>Create “{newName.trim()}” and move</button>}
+          {ids.some((id) => !(list.data?.photos.find((p) => p.id === id)?.orphaned)) && <button disabled={busy} onClick={async () => { setBusy(true); setErr(''); try { await api('/photos/orphan', { body: { photoIds: ids } }); done(`Took ${ids.length} out of their shoots`); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } }} style={{ minHeight: 52, textAlign: 'left', fontSize: 15, color: 'var(--text2)' }}>No shoot (take out of its shoot)</button>}
           <div style={{ display: 'flex', flexDirection: 'column' }}>{(shoots.data ?? []).map((s) => <button key={s.id} disabled={busy} onClick={() => move(s)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1, fontSize: 15 }}>{s.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{s.count}</span></button>)}</div>
           {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
         </Sheet>

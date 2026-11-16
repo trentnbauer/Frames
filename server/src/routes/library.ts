@@ -17,7 +17,7 @@ import { tenantProxy } from '../tenants.js';
 import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, reindex } from '../ingest.js';
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
-import { getSetting, setSetting } from '../db.js';
+import { getSetting, setSetting, unsortedShootId } from '../db.js';
 import { applyGear, applyShootGear, cleanGear, syncGearTags } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
@@ -98,19 +98,42 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
   });
   app.get('/api/shoots/:id', async (req, rep) => {
-    const s = one('SELECT * FROM shoots WHERE id = ?', num((req.params as Row).id));
+    const s = one('SELECT * FROM shoots WHERE id = ? AND unsorted = 0', num((req.params as Row).id));
     return s ? x.shootDto(s) : notFound(rep);
   });
-  // Take a photoshoot, and every photograph in it, out of Frames. Files in library folders are never touched (see remove.ts).
+  // Take a photoshoot out of Frames. By default its photographs go with it; `photos=orphan` keeps them, in no shoot. Files in library folders are never touched (see remove.ts).
   app.delete('/api/shoots/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    if (!one('SELECT 1 x FROM shoots WHERE id = ? AND unsorted = 0', id)) return notFound(rep);
     if (one('SELECT protected FROM shoots WHERE id = ?', id)?.protected) return rep.code(409).send({ error: 'Unprotect this shoot before removing it.' });
+    const photos = ((req.query ?? {}) as Row).photos ?? ((req.body ?? {}) as Row).photos;
+    if (photos === 'orphan') {
+      const to = unsortedShootId(db);
+      return db.transaction(() => {
+        const orphaned = db.prepare('UPDATE photos SET shoot_id = ? WHERE shoot_id = ?').run(to, id).changes;
+        db.prepare("DELETE FROM shares WHERE kind = 'shoot' AND target_id = ?").run(id);
+        db.prepare('DELETE FROM shoots WHERE id = ?').run(id);
+        return { removed: 0, orphaned, filesDeleted: 0, kept: 0 };
+      })();
+    }
     return removeShoot(db, cfg, id);
+  });
+  // Take photographs out of their photoshoots without removing them from Frames. A photoshoot emptied by this goes away.
+  app.post('/api/photos/orphan', async (req) => {
+    const to = unsortedShootId(db);
+    const ids = ((((req.body ?? {}) as Row).photoIds as unknown[]) ?? []).slice(0, 5000).map((v) => num(v));
+    const rows = ids.filter((i) => !!one('SELECT 1 x FROM photos WHERE id = ?', i));
+    for (const from of new Set(rows.map((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id as number))) {
+      if (from === to) continue;
+      const old = one('SELECT * FROM shoots WHERE id = ?', from);
+      if (old) unapplyShoot(old, rows.filter((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id === from));
+    }
+    for (const i of rows) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(to, i);
+    return { orphaned: rows.length };
   });
   app.patch('/api/shoots/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    if (!one('SELECT 1 x FROM shoots WHERE id = ? AND unsorted = 0', id)) return notFound(rep);
     const b = (req.body ?? {}) as Row;
     if ('photoDate' in b && (typeof b.photoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.photoDate) || !Number.isFinite(Date.parse(b.photoDate)) || new Date(b.photoDate).toISOString().slice(0, 10) !== b.photoDate)) return rep.code(400).send({ error: 'Choose a valid photoshoot date.' });
 
@@ -171,7 +194,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   });
   app.post('/api/shoots/:id/move', async (req, rep) => {
     const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    if (!one('SELECT 1 x FROM shoots WHERE id = ? AND unsorted = 0', id)) return notFound(rep);
     moveInto(id, (((req.body ?? {}) as Row).photoIds as unknown[]) ?? []);
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
   });

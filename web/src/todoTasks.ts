@@ -5,6 +5,7 @@ import type { TodoNavItem } from './store';
  * everything), and comes back later for the others.
  */
 export const TASKS = [
+  { key: 'orphaned', title: 'Put photographs in a shoot', row: 'Put photos in a shoot', later: 'a shoot' },
   { key: 'delete', title: 'Removal review', row: 'Removal review', later: 'removal review' },
   { key: 'ai-tags', title: 'Accept AI tags', row: 'Accept AI tags', later: 'AI tags' },
   { key: 'tags', title: 'Add tags', row: 'Add tags', later: 'tags' },
@@ -44,6 +45,8 @@ export function buildTasks(items: TodoNavItem[]): Tasks {
   }
   const sorted = new Map<number, TaskKey[]>([...byPhoto].map(([id, set]) => [id, [...set].sort((a, b) => rank(a) - rank(b))]));
   const queue = (mode: TaskKey | 'all') => [...sorted].filter(([, ks]) => mode === 'all' || ks[0] === mode).sort((a, b) => rank(a[1][0]) - rank(b[1][0]) || b[0] - a[0]).map(([id]) => id);
-  const rows = TASKS.map((t) => ({ key: t.key, row: t.row, n: queue(t.key).length })).filter((r) => r.n > 0);
+  // Photographs in no shoot are one list of their own, not one-at-a-time cards.
+  const orphans = items.find((i) => i.key === 'orphaned')?.count ?? 0;
+  const rows = TASKS.map((t) => ({ key: t.key, row: t.row, n: t.key === 'orphaned' ? orphans : queue(t.key).length })).filter((r) => r.n > 0);
   return { byPhoto: sorted, queue, rows };
 }

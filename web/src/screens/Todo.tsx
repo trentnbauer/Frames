@@ -1,7 +1,7 @@
 import { SameShootGear, sameShootGear } from '../components/SameShootGear';
 import { TodoGearInput, type GearChoice } from '../components/TodoGearInput';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
@@ -12,6 +12,7 @@ import ProtoMapPicker from '../proto/ProtoMapPicker';
 import { TASKS, buildTasks, taskMeta, type TaskKey } from '../todoTasks';
 import { usePhoneWidth } from '../usePhoneWidth';
 import { MobileTodoList } from '../mobile/TodoList';
+import { OrphanTodo } from '../desktop/OrphanTodo';
 
 type Todo = { total: number; items: { key: string; count: number; ids?: number[] }[] };
 type MapHit = { name: string; address: string; kind?: string; suburb?: string; city?: string; lat?: number; lon?: number };
@@ -36,6 +37,7 @@ const WHY: Record<string, (p: PhotoFull | null, extra: { camMissing: number; tag
 export function TodoPage() {
   const phone = usePhoneWidth();
   const [params] = useSearchParams();
+  if (params.get('task') === 'orphaned') return phone ? <Navigate to="/library?f=noshoot&select=1" replace /> : <OrphanTodo />; // a list to choose from, not one-at-a-time cards
   return phone && !params.get('task') ? <MobileTodoList /> : <TodoTasks />;
 }
 

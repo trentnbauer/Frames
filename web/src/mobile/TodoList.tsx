@@ -5,10 +5,10 @@ import { TASKS, buildTasks, type TaskKey } from '../todoTasks';
 import { BackPill, Eyebrow, Row } from './ui';
 
 export const SUB: Record<TaskKey, string> = {
-  delete: 'Below your removal threshold', 'ai-tags': 'Accept or reject what the AI suggested', tags: 'Make photos findable', 'ai-desc': 'Use, edit or replace the AI’s words',
+  orphaned: 'Not in any photoshoot yet', delete: 'Below your removal threshold', 'ai-tags': 'Accept or reject what the AI suggested', tags: 'Make photos findable', 'ai-desc': 'Use, edit or replace the AI’s words',
   desc: 'One sentence is enough', location: 'Pin them on the map', camera: 'Fill in what the metadata missed', time: 'No capture time recorded', light: 'No note about the light', mood: 'No note about the mood', composition: 'Not in any composition yet',
 };
-const GROUPS: [string, TaskKey[]][] = [['REVIEW', ['delete']], ['MISSING DETAILS', ['ai-tags', 'tags', 'ai-desc', 'desc', 'location', 'camera', 'time', 'light', 'mood']], ['COMPOSITIONS', ['composition']]];
+const GROUPS: [string, TaskKey[]][] = [['PUT AWAY', ['orphaned']], ['REVIEW', ['delete']], ['MISSING DETAILS', ['ai-tags', 'tags', 'ai-desc', 'desc', 'location', 'camera', 'time', 'light', 'mood']], ['COMPOSITIONS', ['composition']]];
 
 /** To do on a phone: the kinds of task as a list with counts. A row opens that kind in the one-at-a-time view. */
 export function MobileTodoList() {

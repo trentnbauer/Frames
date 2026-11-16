@@ -7,7 +7,7 @@ import { JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts'
 
 const mono = "'IBM Plex Mono',monospace";
 const SHOOT_CHIPS: [string, string][] = [['due', 'Has photos due'], ['prot', 'Protected'], ['untitled', 'Untitled']];
-const PHOTO_CHIPS: [string, string][] = [['due', 'Due for review'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location']];
+const PHOTO_CHIPS: [string, string][] = [['due', 'Due for review'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location'], ['noshoot', 'No shoot']];
 /** A shoot nobody has named keeps the date (or nothing) it was given. */
 export const isUntitled = (s: Shoot) => !s.name.trim() || /^\d{1,2} [A-Za-z]{3} \d{4}$/.test(s.name.trim());
 
@@ -50,7 +50,8 @@ export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
   });
   const shootName = new Map(all.map((s) => [s.id, s]));
   const match = (p: PhotoLite) => (!needle || [p.title, p.file, p.place, p.camera, shootName.get(p.shootId)?.name ?? ''].join(' ').toLowerCase().includes(needle))
-    && (!chip || (chip === 'due' && isDue(p)) || (chip === 'unrated' && p.reviewCount === 0) || (chip === 'loved' && p.avgRating >= 4.5) || (chip === 'noplace' && !p.place && p.lat === null));
+    && (!chip || (chip === 'due' && isDue(p)) || (chip === 'unrated' && p.reviewCount === 0) || (chip === 'loved' && p.avgRating >= 4.5) || (chip === 'noplace' && !p.place && p.lat === null) || (chip === 'noshoot' && p.orphaned));
+  const orphans = list.filter((p) => p.orphaned && match(p));
   const groups = useMemo(() => all.map((s) => ({ s, ps: list.filter((p) => p.shootId === s.id && match(p)) })).filter((g) => g.ps.length), [all, list, needle, chip]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = photos.data?.total ?? list.length;
   const year = all[0]?.importedAt?.slice(0, 4) ?? String(new Date().getFullYear());
@@ -100,6 +101,16 @@ export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
 
       {view === 'photos' && (
         <>
+          {orphans.length > 0 && (
+            <div style={{ marginBottom: 36 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}><span style={{ font: `400 24px/1 ${serif}`, color: 'var(--text2)' }}>No shoot</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{orphans.length} photos</span></div>
+                {selecting ? <button onClick={() => setPicked((c) => { const n = new Set(c); const every = orphans.every((p) => n.has(p.id)); orphans.forEach((p) => (every ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>{orphans.every((p) => picked.has(p.id)) ? 'Clear' : 'Select all'}</button>
+                  : <button onClick={() => { setView('photos'); setSelecting(true); }} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>Put them in a shoot →</button>}
+              </div>
+              <JustifiedGrid photos={orphans} selecting={selecting} picked={picked} due={isDue} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}?in=library`))} />
+            </div>
+          )}
           {groups.map(({ s, ps }) => (
             <div key={s.id} style={{ marginBottom: 36 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 16 }}>
@@ -114,7 +125,7 @@ export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
               <JustifiedGrid photos={ps} selecting={selecting} picked={picked} due={isDue} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}?in=library`))} />
             </div>
           ))}
-          {photos.data && groups.length === 0 && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>No photographs match that.</div>}
+          {photos.data && groups.length === 0 && orphans.length === 0 && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>No photographs match that.</div>}
         </>
       )}
 

@@ -33,7 +33,7 @@ const photos: PhotoFull[] = titles.map((title,i) => {
   const shot = s.date + 'T' + String(9 + i % 7).padStart(2,'0') + ':25:00';
   const score = i % 5 === 0 ? 0 : 3 + (i % 3);
   return {
-    id,title,file:`sample-${String(id).padStart(3,'0')}.jpg`,shootId:s.id,
+    id,title,file:`sample-${String(id).padStart(3,'0')}.jpg`,shootId:s.id,orphaned:false,
     w:6000,h:4000,ar:1.5,hasImage:true,capturedAt:shot,addedAt:now,dateEdit:null,
     camera:s.camera,lens:'35mm',exposure:'',iso:200,aperture:5.6,shutter:'1/250',focalMm:35,
     medium:s.id === 2 ? 'film' : 'digital',film:s.id === 2 ? 'Colour negative' : '',

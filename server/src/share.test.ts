@@ -30,7 +30,7 @@ beforeAll(async () => {
   await app.inject({ method: 'PATCH', url: `/api/photos/${insideIds[0]}`, headers: owner, payload: { place: 'Secret cove', description: 'private note' } });
   const s = (await post('/api/shares', { kind: 'collection', id: c.id, allowDownload: true, allowReview: true, label: 'Client' })).json();
   tokenColl = s.token; shareId = s.id; collectionId = c.id;
-  const shootId = photos[0].shootId;
+  const shootId = (await post('/api/shoots', { name: 'Shared shoot', photoIds: photos.map((p) => p.id) })).json().id; // imports are in no shoot until put in one
   tokenShoot = (await post('/api/shares', { kind: 'shoot', id: shootId, allowDownload: false, allowReview: false })).json().token;
 });
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));

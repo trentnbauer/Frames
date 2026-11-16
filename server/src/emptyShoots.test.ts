@@ -43,9 +43,9 @@ it('migrates legacy empty shoots and shares without touching populated shoots or
 it('does not leave a shoot after a duplicate-only scan or a removed file reappears',async()=>{
  const bytes=await jpg(svg(100,80,'#123456','#abcdef',[.2,.4]));fs.writeFileSync(path.join(env.lib,'original.jpg'),bytes);await scan(env.db,env.cfg);
  env.db.prepare("UPDATE shoots SET source='Manual'").run();fs.writeFileSync(path.join(env.lib,'copy.jpg'),bytes);
- const duplicate=await scan(env.db,env.cfg);expect(duplicate.duplicates).toBe(1);expect(duplicate.shootId).toBeNull();expect(env.db.prepare('SELECT COUNT(*) n FROM shoots').get()).toEqual({n:1});
- const p=(env.db.prepare('SELECT id FROM photos').get() as {id:number}).id;removePhotos(env.db,env.cfg,[p],'keep');expect(env.db.prepare('SELECT COUNT(*) n FROM shoots').get()).toEqual({n:0});
- const removed=await scan(env.db,env.cfg);expect(removed.imported).toBe(0);expect(removed.shootId).toBeNull();expect(env.db.prepare('SELECT COUNT(*) n FROM shoots').get()).toEqual({n:0});expect(fs.existsSync(path.join(env.lib,'original.jpg'))).toBe(true);
+ const duplicate=await scan(env.db,env.cfg);expect(duplicate.duplicates).toBe(1);expect(duplicate.shootId).toBeNull();expect(env.db.prepare('SELECT COUNT(*) n FROM shoots WHERE unsorted=0').get()).toEqual({n:0});
+ const p=(env.db.prepare('SELECT id FROM photos').get() as {id:number}).id;removePhotos(env.db,env.cfg,[p],'keep');expect(env.db.prepare('SELECT COUNT(*) n FROM shoots WHERE unsorted=0').get()).toEqual({n:0});
+ const removed=await scan(env.db,env.cfg);expect(removed.imported).toBe(0);expect(removed.shootId).toBeNull();expect(env.db.prepare('SELECT COUNT(*) n FROM shoots WHERE unsorted=0').get()).toEqual({n:0});expect(fs.existsSync(path.join(env.lib,'original.jpg'))).toBe(true);
 });
 it('can continue importing if the user empties the current shoot between files',async()=>{
  for(let i=0;i<2;i++)fs.writeFileSync(path.join(env.lib,`${i}.jpg`),await jpg(svg(100,80,i?'#345678':'#123456','#abcdef',[.2,.4])));
