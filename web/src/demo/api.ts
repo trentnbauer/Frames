@@ -5,25 +5,19 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Settings, Me, Summary } from '../store';
 import { arrange, type Print } from '../layout';
 
-const themes = [
-  ['#253f53','#b8a38b','#dde2cc'],['#182f48','#718da1','#d1b899'],
-  ['#673a35','#b77b60','#f4c891'],['#254657','#76a7a8','#d6dad2'],
-  ['#343149','#866f89','#e5b6aa'],['#30383d','#79818a','#ddc7a9'],
-  ['#233e34','#7c9c78','#b9c5a1'],['#765343','#b79874','#edd1a0'],
-  ['#303b53','#798ba5','#e0c5ba']
+// Stable public sample photographs (not private Frames content). The same ID
+// maps to the same picture everywhere: Library, Photoshoots, detail and walls.
+// Picsum serves resized JPEGs, so grids download thumbnails instead of full
+// resolution previews. External image hosting requires an internet connection.
+const sampleIds = [
+  10, 15, 29, 37, 54, 66,
+  71, 75, 83, 89, 96, 101,
+  103, 104, 106, 119, 122, 124,
 ];
-export function demoImage(id: number): string {
-  const [a,b,c] = themes[(Math.max(1,id)-1) % themes.length];
-  const k = (id * 37) % 260;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900"><defs>
-  <linearGradient id="a" x2="1" y2="1"><stop stop-color="${a}"/><stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></linearGradient>
-  <radialGradient id="b"><stop stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>
-  </defs><path fill="url(#a)" d="M0 0h1200v900H0z"/>
-  <ellipse cx="${300+k}" cy="${220+k/4}" rx="490" ry="440" fill="url(#b)"/>
-  <path d="M0 ${620+k/3} Q250 ${480+k/3} 530 620 T1200 ${540+k/2}V900H0Z" fill="${a}" opacity=".45"/>
-  <path d="M0 840 Q450 ${710-k/4} 1200 850" fill="none" stroke="${c}" stroke-opacity=".35" stroke-width="5"/>
-  </svg>`;
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+export function demoImage(id: number, kind: 'thumb' | 'preview' = 'thumb'): string {
+  const photoId = sampleIds[(Math.max(1, id) - 1) % sampleIds.length];
+  const width = kind === 'preview' ? 1600 : 480;
+  return `https://picsum.photos/id/${photoId}/${width}/${Math.round(width / 1.5)}`;
 }
 
 const shootsBase = [
@@ -46,7 +40,7 @@ const photos: PhotoFull[] = titles.map((title,i) => {
     fileType:'JPEG',sizeMb:8.2,archived:false,missing:false,lastReviewedAt:score ? now : '',
     nextReviewAt:score ? '2027-01-01T12:00:00' : null,reviewCount:score ? 1 : 0,avgRating:score,
     lat:null,lon:null,place:s.place,placeAddress:'',placeKind:'',placePrecision:'city',parentId:null,
-    palette:[{hex:themes[i%9][0],pct:45,name:'Dark'},{hex:themes[i%9][1],pct:35,name:'Mid'},{hex:themes[i%9][2],pct:20,name:'Light'}],
+    palette:[{hex:'#34495e',pct:45,name:'Dark'},{hex:'#8495a5',pct:35,name:'Mid'},{hex:'#d4c3ae',pct:20,name:'Light'}],
     brightness:45,contrast:50,saturation:50,xmpRating:null,aiStatus:'done',
     description:'An illustrative photograph in the Frames demo.',descSource:'manual',
     tags:[...s.tags,'Travel'].map(name=>({name,kind:'tag' as const,source:'manual',accepted:true})),
