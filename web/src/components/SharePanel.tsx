@@ -186,7 +186,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
         {toggles.map(([k, label, sub, on, flip]) => (
           <button key={k} role="switch" aria-checked={on} disabled={busy} onClick={flip} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>{label}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span></span>
-            <span style={{ position: 'relative', flex: 'none', width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
+            <span style={{ position: 'relative', flexShrink: 0, width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
           </button>
         ))}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 0', borderTop: '1px solid var(--hair)' }}>
@@ -216,7 +216,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
           {extras.map(([k, label, sub, on, flip]) => (
             <button key={k} role="switch" aria-checked={on} disabled={busy} onClick={flip} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
               <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>{label}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span></span>
-              <span style={{ position: 'relative', flex: 'none', width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
+              <span style={{ position: 'relative', flexShrink: 0, width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
             </button>
           ))}
           <button onClick={() => { setNameDraft(link.label); setSheet('rename'); }} style={{ display: 'flex', alignItems: 'center', minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}><span style={{ flex: 1, fontSize: 15 }}>Rename link</span><span style={{ color: 'var(--faint)' }}>›</span></button>
@@ -236,8 +236,8 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span className="mono" style={{ flex: 1, height: 42, borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', transition: 'background .3s', background: fresh ? 'var(--chip)' : 'var(--bg)' }}>{urlOf(link.token).replace(/^https?:\/\//, '')}</span>
-                <button className="btn primary" style={{ height: 42, flex: 'none' }} onClick={() => copy(urlOf(link.token), 'link')}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button>
-                <a className={'btn outline' + (link.status === 'active' ? '' : ' disabled')} style={{ height: 42, flex: 'none' }} aria-disabled={link.status !== 'active'} href={link.status === 'active' ? urlOf(link.token) : undefined} target="_blank" rel="noopener noreferrer">Preview as guest</a>
+                <button className="btn primary" style={{ height: 42, flexShrink: 0 }} onClick={() => copy(urlOf(link.token), 'link')}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button>
+                <a className={'btn outline' + (link.status === 'active' ? '' : ' disabled')} style={{ height: 42, flexShrink: 0 }} aria-disabled={link.status !== 'active'} href={link.status === 'active' ? urlOf(link.token) : undefined} target="_blank" rel="noopener noreferrer">Preview as guest</a>
               </div>
               <div className="spread" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
                 <span>{settings.expiresAt ? `Expires ${new Date(settings.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'Never expires'}{settings.pin ? ' · PIN on' : ''}{fresh ? ' · New link made, the old one stops working' : ''}</span>

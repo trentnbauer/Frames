@@ -82,7 +82,7 @@ export function MobileHome() {
         {err && <div role="alert" className="reason">{err}</div>}
         <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', margin: '0 -20px', padding: '0 20px', scrollbarWidth: 'none' }}>
           {ideas.map((idea) => (
-            <div key={idea.name} style={{ flex: 'none', width: 292, scrollSnapAlign: 'center', background: 'var(--surface)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12, boxSizing: 'border-box' }}>
+            <div key={idea.name} style={{ flexShrink: 0, width: 292, scrollSnapAlign: 'center', background: 'var(--surface)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12, boxSizing: 'border-box' }}>
               <div style={{ height: 118, display: 'flex', gap: 3, borderRadius: 8, overflow: 'hidden' }}>{idea.photos.slice(0, 4).map((p) => <div key={p.id} style={{ flex: `${p.ar || 1} 1 0`, minWidth: 0, background: `url(${thumb(p.id)}) center/cover var(--hair)` }} />)}</div>
               <h3 style={{ font: '400 25px/1.05 var(--serif)', margin: 0 }}>{idea.aiAssisted && <span aria-label="AI-assisted idea">✦ </span>}{idea.name}</h3>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -102,7 +102,7 @@ export function MobileHome() {
 
       {openBatches.length > 0 && (
         <button onClick={() => nav('/organise')} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 14, boxShadow: 'inset 0 0 0 1px var(--hair)', textAlign: 'left' }}>
-          <span style={{ display: 'flex', gap: 2, flex: 'none' }}>{openBatches[0].covers.slice(0, 2).map((id) => <i key={id} style={{ width: 30, height: 38, borderRadius: 2, background: `url(${thumb(id)}) center/cover var(--hair)` }} />)}</span>
+          <span style={{ display: 'flex', gap: 2, flexShrink: 0 }}>{openBatches[0].covers.slice(0, 2).map((id) => <i key={id} style={{ width: 30, height: 38, borderRadius: 2, background: `url(${thumb(id)}) center/cover var(--hair)` }} />)}</span>
           <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}><Eyebrow>TO ORGANISE</Eyebrow><span style={{ fontSize: 14.5 }}>{openBatches.reduce((n, b) => n + b.count, 0)} new photos in {openBatches.length} batch{openBatches.length === 1 ? '' : 'es'}</span></span>
           <span style={{ color: 'var(--faint)' }}>›</span>
         </button>
@@ -115,7 +115,7 @@ export function MobileHome() {
             <MiniWall c={wip} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}><span style={{ font: '400 24px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>Finish {wip.name}</span><span style={{ fontSize: 13, color: 'var(--text2)' }}>{wip.chosenIds.length} of {wip.layout.prints.length} prints chosen · {printsSummary(wip)}</span></div>
-              <span style={{ flex: 'none', height: 40, display: 'inline-flex', alignItems: 'center', padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Continue</span>
+              <span style={{ flexShrink: 0, height: 40, display: 'inline-flex', alignItems: 'center', padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Continue</span>
             </div>
           </button>
         </div>

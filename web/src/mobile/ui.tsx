@@ -16,7 +16,7 @@ export function BackPill({ label = 'Back', to = '/' }: { label?: string; to?: st
 export function Row({ label, sub, count, onClick, thumb, meta, chevron = '›', fg }: { label: ReactNode; sub?: ReactNode; count?: ReactNode; onClick?: () => void; thumb?: string; meta?: ReactNode; chevron?: string; fg?: string }) {
   return (
     <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: sub || thumb ? 58 : 56, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%', color: fg }}>
-      {thumb !== undefined && <span style={{ width: 40, height: 40, flex: 'none', borderRadius: 4, background: thumb ? `url(${thumb}) center/cover var(--surface)` : 'var(--surface)' }} />}
+      {thumb !== undefined && <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, background: thumb ? `url(${thumb}) center/cover var(--surface)` : 'var(--surface)' }} />}
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{label}</span>{sub && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span>}</span>
       {meta !== undefined && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{meta}</span>}
       {count !== undefined && <span style={{ font: '500 12px var(--mono)', padding: '3px 8px', borderRadius: 999, background: 'var(--chip)', color: 'var(--text2)' }}>{count}</span>}
@@ -37,7 +37,7 @@ export function Seg<T extends string>({ options, value, onPick, label }: { optio
 export const Toggle = ({ on, onClick, label, sub }: { on: boolean; onClick: () => void; label: string; sub?: string }) => (
   <button role="switch" aria-checked={on} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
     <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>{label}</span>{sub && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span>}</span>
-    <span style={{ position: 'relative', flex: 'none', width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
+    <span style={{ position: 'relative', flexShrink: 0, width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
   </button>
 );
 

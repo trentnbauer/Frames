@@ -46,7 +46,7 @@ export function MobileNotifications() {
           {list.map((n) => (
             <div key={n.id} style={{ position: 'relative', borderTop: '1px solid var(--hair)' }}>
               <button onClick={() => open(n)} style={{ display: 'flex', gap: 12, padding: '14px 44px 14px 0', width: '100%', textAlign: 'left', boxSizing: 'border-box' }}>
-                <span aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--chip)', display: 'grid', placeItems: 'center', flex: 'none', fontSize: 13, color: 'var(--text2)' }}>{ICON[n.kind] ?? '•'}</span>
+                <span aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--chip)', display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 13, color: 'var(--text2)' }}>{ICON[n.kind] ?? '•'}</span>
                 <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}><span style={{ fontSize: 14.5, lineHeight: 1.4, color: n.read ? 'var(--text2)' : 'var(--text)', textWrap: 'pretty' as never }}>{n.text}</span><span style={{ fontSize: 12, color: 'var(--faint)' }}>{ago(n.createdAt)}</span></span>
               </button>
               {!n.read && <i aria-hidden style={{ position: 'absolute', right: 42, top: 22, width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />}

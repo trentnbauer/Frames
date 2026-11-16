@@ -48,7 +48,7 @@ export function MobileCompositions() {
           <Eyebrow>IDEAS FOR YOU</Eyebrow>
           <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 10, overflowX: 'auto', scrollSnapType: 'x mandatory', margin: '0 -20px', padding: '0 20px', scrollbarWidth: 'none' }}>
             {ideas.map((i) => (
-              <div key={i.name} style={{ flex: 'none', width: 236, scrollSnapAlign: 'start', borderRadius: 12, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, boxSizing: 'border-box' }}>
+              <div key={i.name} style={{ flexShrink: 0, width: 236, scrollSnapAlign: 'start', borderRadius: 12, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, boxSizing: 'border-box' }}>
                 <div style={{ height: 80, display: 'flex', gap: 2, borderRadius: 6, overflow: 'hidden' }}>{i.photos.slice(0, 4).map((p) => <div key={p.id} style={{ flex: `${p.ar || 1} 1 0`, minWidth: 0, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--hair)` }} />)}</div>
                 <span style={{ font: '400 21px/1.05 var(--serif)' }}>{i.aiAssisted && <span aria-label="AI-assisted idea">✦ </span>}{i.name}</span>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -66,7 +66,7 @@ export function MobileCompositions() {
             <MiniWall c={c} height={170} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: '400 25px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>{c.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{printsSummary(c)}</span></div>
-              <span style={{ flex: 'none', height: 26, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}><span aria-hidden>{STAGE_LABEL[c.stage][0]}</span>{STAGE_LABEL[c.stage][1]}</span>
+              <span style={{ flexShrink: 0, height: 26, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}><span aria-hidden>{STAGE_LABEL[c.stage][0]}</span>{STAGE_LABEL[c.stage][1]}</span>
             </div>
             <span style={{ fontSize: 13, color: 'var(--text2)' }}>{status(c)}</span>
           </button>

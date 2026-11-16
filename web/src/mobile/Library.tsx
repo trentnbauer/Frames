@@ -77,7 +77,7 @@ export function MobileLibrary() {
 
       {view === 'photos' && <>
         <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', padding: '10px 20px 2px' }}>
-          {FILTERS.map(([k, l]) => { const on = filter === k; return <button key={k} aria-pressed={on} onClick={() => set('f', on ? null : k)} style={{ flex: 'none', height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text2)', boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{l}</button>; })}
+          {FILTERS.map(([k, l]) => { const on = filter === k; return <button key={k} aria-pressed={on} onClick={() => set('f', on ? null : k)} style={{ flexShrink: 0, height: 34, padding: '0 14px', borderRadius: 999, fontSize: 13, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text2)', boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{l}</button>; })}
         </div>
         {groups.map(({ s, ps }) => (
           <div key={s.id}>
@@ -120,7 +120,7 @@ export function MobileLibrary() {
                     <span style={{ font: '400 26px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>{s.name}</span>
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>{s.place || 'No place'} · {s.dates} · {s.count} photos</span>
                   </div>
-                  {s.dueCount > 0 && <span style={{ flex: 'none', height: 26, display: 'inline-flex', alignItems: 'center', padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}>{s.dueCount} due</span>}
+                  {s.dueCount > 0 && <span style={{ flexShrink: 0, height: 26, display: 'inline-flex', alignItems: 'center', padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}>{s.dueCount} due</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ flex: 1, height: 2, background: 'var(--hair)', borderRadius: 2 }}><div style={{ height: '100%', width: `${s.reviewPct}%`, background: 'var(--text2)', borderRadius: 2 }} /></div><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{Math.round(s.reviewPct)}% REVIEWED</span></div>
               </button>
