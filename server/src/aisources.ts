@@ -32,7 +32,9 @@ export const AI_TYPES: AiType[] = [
 ];
 export const aiType = (id: string) => AI_TYPES.find((t) => t.id === id);
 
-export type AiSource = { id: string; type: string; name: string; endpoint: string; model: string; embedModel: string; ack: boolean };
+/** An optional provider tint. Empty means the existing neutral appearance. */
+export const AI_COLOURS = ['#9b9b9b', '#e7b76d', '#a6c5aa', '#94abd4', '#c88d9c', '#d08e6c', '#b9a1d8', '#79bcc0'] as const;
+export type AiSource = { id: string; type: string; name: string; endpoint: string; model: string; embedModel: string; ack: boolean; color?: string };
 
 export const loadSources = (db: DB): AiSource[] => getSetting<AiSource[]>(db, 'aiSources', []);
 export const saveSources = (db: DB, list: AiSource[]) => setSetting(db, 'aiSources', list);
@@ -80,6 +82,10 @@ export function newSource(typeId: string, input: Record<string, unknown> = {}): 
 /** Validates untrusted input over a source. Unknown keys are dropped. */
 export function applySource(cur: AiSource, input: Record<string, unknown>): AiSource {
   const next = { ...cur };
+  if (input.color !== undefined) {
+    if (typeof input.color !== 'string' || (input.color !== '' && !(AI_COLOURS as readonly string[]).includes(input.color))) throw new BadSetting('Choose a valid provider colour');
+    next.color = input.color;
+  }
   if (input.name !== undefined) next.name = short(input.name, 60) || aiType(cur.type)!.label;
   if (input.endpoint !== undefined) next.endpoint = cleanEndpoint(input.endpoint);
   if (input.model !== undefined) next.model = short(input.model, 100);
@@ -89,11 +95,11 @@ export function applySource(cur: AiSource, input: Record<string, unknown>): AiSo
 }
 
 /** What the rest of the app uses: the active source, or null when AI is off or not fully set up. */
-export type AiCfg = { protocol: AiProtocol; local: boolean; name: string; endpoint: string; model: string; embedModel: string; key: string; /** One the administrator set up for everyone, outside the person's own list. */ shared?: boolean };
+export type AiCfg = { id?: string; color?: string; protocol: AiProtocol; local: boolean; name: string; endpoint: string; model: string; embedModel: string; key: string; /** One the administrator set up for everyone, outside the person's own list. */ shared?: boolean };
 export function activeConfig(db: DB, activeId: string): AiCfg | null {
   if (!activeId) return null;
   const s = getSource(db, activeId);
   if (!s || !isReady(s)) return null; // never send photos out without the explicit acknowledgement
   const t = aiType(s.type)!;
-  return { protocol: t.protocol, local: t.local, name: s.name, endpoint: s.endpoint, model: s.model, embedModel: t.canEmbed ? s.embedModel : '', key: sourceKey(db, s.id), shared: !loadSources(db).some((o) => o.id === s.id) };
+  return { id: s.id, color: s.color, protocol: t.protocol, local: t.local, name: s.name, endpoint: s.endpoint, model: s.model, embedModel: t.canEmbed ? s.embedModel : '', key: sourceKey(db, s.id), shared: !loadSources(db).some((o) => o.id === s.id) };
 }
