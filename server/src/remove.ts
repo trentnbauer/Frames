@@ -69,6 +69,27 @@ export function deleteSuggestions(db: DB, sessions: number, below: number, limit
     ORDER BY AVG(r.rating), p.id LIMIT ?`).all(new Date().toISOString(), ...(onlyId === undefined ? [] : [onlyId]), Math.max(1, sessions), below, limit) as { id: number; title: string; file: string; shootId: number; avg: number; reviews: number }[];
 }
 
+/**
+ * A photograph that has had enough bin votes (the setting, 3 by default; 0 is off) is removed from Frames. Only the person who owns the
+ * library can vote (the vote goes through the signed-in review), and the original file is always kept. Returns whether it was removed.
+ */
+export function removeIfBinned(db: DB, cfg: Cfg, photoId: number): boolean {
+  const need = loadSettings(db).binVotes;
+  if (!need) return false;
+  const votes = (db.prepare('SELECT COUNT(*) n FROM reviews WHERE photo_id = ? AND bin = 1').get(photoId) as { n: number }).n;
+  if (votes < need) return false;
+  return db.transaction(() => {
+    removePhotos(db, cfg, [photoId], 'keep');
+    const session = getSetting<{ queue: { id: number }[]; index: number } | null>(db, 'reviewSession', null);
+    if (session) {
+      const before = session.queue.slice(0, session.index).filter((photo) => photo.id === photoId).length;
+      session.queue = session.queue.filter((photo) => photo.id !== photoId); session.index = Math.max(0, session.index - before);
+      setSetting(db, 'reviewSession', session);
+    }
+    return true;
+  })();
+}
+
 /** Explicitly enabled catalog cleanup. Original files are always kept. */
 export function autoRemoveLowRated(db: DB, cfg: Cfg, onlyId?: number) {
   const settings = loadSettings(db);

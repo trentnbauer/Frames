@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { setPhotoWalk } from '../photoWalk';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
@@ -82,9 +83,9 @@ export function Search({ onClose }: { onClose: () => void }) {
     <ProtoSearch
       q={q} onQ={(v: string) => { setQ(v); setRemoved([]); setParsed(null); }} busy={busy}
       chips={[...metaLive.map((c) => ({ label: c.label, remove: () => setRemoved([...removed, c.key]) })), ...live.map((c) => ({ label: c.label, remove: () => setRemoved([...removed, c.key]) }))]}
-      files={meta.files.map((f) => ({ name: f.file, meta: [f.camera, f.date].filter(Boolean).join(' · '), src: imgUrl(f.id, 'thumb'), go: () => { onClose(); nav(`/photo/${f.id}`); } }))}
+      files={meta.files.map((f) => ({ name: f.file, meta: [f.camera, f.date].filter(Boolean).join(' · '), src: imgUrl(f.id, 'thumb'), go: () => { setPhotoWalk(meta.files.map((x) => x.id)); onClose(); nav(`/photo/${f.id}?in=list`); } }))}
       hits={hits} onOpenHit={(h: { to: string }) => { onClose(); nav(h.to); }}
-      photos={results.map((p) => ({ id: p.id, src: imgUrl(p.id, 'thumb'), ar: p.ar, flex: `${p.ar} ${p.ar} ${Math.round(p.ar * 110)}px`, tip: tip(p), go: () => { onClose(); nav(`/photo/${p.id}`); } }))}
+      photos={results.map((p) => ({ id: p.id, src: imgUrl(p.id, 'thumb'), ar: p.ar, flex: `${p.ar} ${p.ar} ${Math.round(p.ar * 110)}px`, tip: tip(p), go: () => { setPhotoWalk(results.map((x) => x.id)); onClose(); nav(`/photo/${p.id}?in=list`); } }))}
       count={count} shootCount={new Set(results.map((p) => p.shootId)).size}
       onOpenAll={openAll} onClose={onClose}
       renderCompPicker={(ids: number[], close: () => void, done: (m: string) => void) => <CompPicker ids={ids} from="From your search" onClose={close} onDone={done} />}

@@ -74,6 +74,7 @@ const ROW_LABEL: Record<string, Partial<Pick<Idx, 'label' | 'hint'>>> = {
 const ROW_GONE = new Set(['welcomeTour', 'sensAiLink', 'removeVotes', 'exportXmp', 'pfGear', 'camGear', 'film', 'filmTag']);
 /** Rows the search index did not list before. */
 const ROW_NEW: Idx[] = [
+  { tab: 'lib', sec: 'reviews', sub: 'clean-up', id: 'binVotes', g: 'Bin votes', label: 'Remove after this many bin votes', hint: 'Your own bin votes. The photograph leaves Frames; the original file is kept.' },
   { tab: 'lib', sec: 'reviews', sub: 'clean-up', id: 'protectedInfo', g: 'Never removed', label: 'Protected photos', hint: 'Photos in any composition, or in a shoot with an active share link.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvSize', g: 'Previews', label: 'Preview size', hint: 'What you see on the Photo page and in Review.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvQuality', g: 'Previews', label: 'Preview quality', hint: 'JPEG quality, 70 to 95.' },

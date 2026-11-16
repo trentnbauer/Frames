@@ -177,6 +177,7 @@ export function useReviews(ctx: Ctx): Section {
         { id: 'suggested', t: 'link', label: 'Suggested now', dep: 'suggestRemove', meta: `${sug.data?.photos.length ?? 0} photos`, act: () => nav('/removals') },
         { id: 'autoRemove', t: 'toggle', label: 'Automatically remove low-rated photos', hint: 'Off by default. When enabled, qualifying photos are removed from Frames without confirmation, including existing photos. Original files are kept.', value: !!s?.autoRemove, set: (value) => void save({ autoRemove: value }) },
         { id: 'autoRemoveBelow', t: 'select', label: 'Automatically remove when averaging below', dep: 'autoRemove', opts: ['1.0','1.5','2.0','2.5','3.0','3.5','4.0','4.5'], value: (s?.autoRemoveBelow ?? 2).toFixed(1), set: (value) => void save({ autoRemoveBelow: Number(value) }) },
+        { id: 'binVotes', t: 'stepper', label: 'Remove after this many bin votes', hint: 'Your own bin votes (0 on the rating scale). The photograph leaves Frames; the original file is kept. 0 turns it off.', min: 0, max: 10, value: s?.binVotes ?? 3, set: (value) => void save({ binVotes: value }) },
         { id: 'autoRemoveAfter', t: 'stepper', label: 'After at least this many reviews', hint: 'Your own ratings only. Independent of the suggestion settings.', dep: 'autoRemove', min: 1, max: 12, value: s?.autoRemoveAfter ?? 4, set: (value) => void save({ autoRemoveAfter: value }) },
       ] },
       { title: 'To do list counts photos missing', rows: [

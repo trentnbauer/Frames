@@ -5,6 +5,7 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
 import { useStore } from '../store';
+import { getPhotoWalk } from '../photoWalk';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
 import { PhotoColourVariants } from '../components/PhotoColourVariants';
@@ -45,9 +46,12 @@ export function Photo() {
   const here = Number(id);
   const libList = all.data?.photos ?? [];
   const walk = todoKey ? (snapshot.current ?? []).filter((x) => x === here || !live || live.includes(x)) : null;
-  const stepIds = walk ?? libList.map((x) => x.id);
+  // Stepping through photographs stays inside the photograph's shoot, unless it was opened from a list (search results, or the Library with its filters): then it steps through exactly that list.
+  const listed = qs.get('in') === 'list' ? getPhotoWalk() : null;
+  const fromList = !!listed && listed.includes(here);
+  const stepIds = walk ?? (fromList ? listed! : libList.filter((x) => x.shootId === p.shootId).map((x) => x.id));
   const idx = stepIds.indexOf(here);
-  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : ''}`); };
+  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromList ? '?in=list' : ''}`); };
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
   const mates = libList.filter((x) => x.shootId === p.shootId);
   const back = () => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); };
@@ -125,6 +129,7 @@ export function Photo() {
         rankLine={rank !== null ? `#${rank} of ${mates.length} in its shoot` : `${mates.length} in its shoot`} nextDue={p.nextReviewAt ? `Next review due ${new Date(p.nextReviewAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Not due for review'}
         rateSub={`Session ${Math.min(rs.length + 1, 9)}`}
         rateResult={(n: number) => { const you = (rs.reduce((a, r) => a + r.rating, 0) + n) / (rs.length + 1); return `Your score ${avg !== null ? avg.toFixed(1) : '–'} → ${you.toFixed(1)} · combined ${(combined(you) ?? you).toFixed(1)}.`; }}
+        onBin={async () => { await api('/review/rate', { body: { photoId: p.id, bin: true } }); refreshSummary(); const gone = await api(`/photos/${p.id}`).then(() => false).catch(() => true); if (gone) step(1); else photo.reload(); }}
         onRate={async (n: number, note: string) => { await api('/review/rate', { body: { photoId: p.id, rating: n, note } }); photo.reload(); refreshSummary(); }}
         printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: 'var(--muted)' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: 'var(--muted)' }}>· {fits[0].ppi} PPI</span></>}
         printSub={next ? `${next.size} looks sharp from ${((3 * 3438) / Math.max(next.ppi, 1) * 0.0254).toFixed(1)} m away or more` : 'Every common size is sharp at arm’s length'}

@@ -10,6 +10,7 @@ import { useUi } from '../ui';
 import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
 import { reviewUrl } from '../reviewScope';
+import { setPhotoWalk } from '../photoWalk';
 
 const REVIEW_OPTIONS = [['', 'All review states'], ['due', 'Due now'], ['unrated', 'Unrated'], ['waiting', 'Waiting for next review'], ['complete', 'Review complete'], ['excluded', 'Left out of review']];
 const COLOURS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'black', 'white', 'grey'];
@@ -183,7 +184,7 @@ export function Library() {
         years={years.map((y) => ({ label: y, go: () => { const n = new URLSearchParams(sp); n.set('from', `${y}-01-01`); n.set('to', `${y}-12-31`); setSp(n, { replace: true }); } }))}
         shoots={(shoots.data ?? []).map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos · ${s.dates}`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
         fromLabel={(ids: number[]) => [...new Set(ids.map((id) => shootById.get(byId.get(id)?.shootId ?? -1)?.name).filter(Boolean))].join(', ')}
-        onOpenPhoto={(id: number) => nav(`/photo/${id}`)}
+        onOpenPhoto={(id: number) => { setPhotoWalk((list.data?.photos ?? []).map((x) => x.id)); nav(`/photo/${id}?in=list`); }}
         onEditDetails={(ids: number[]) => setEditIds(ids)}
         onReview={(ids: number[]) => nav(reviewUrl(ids))}
         onPortfolio={async (ids: number[]) => { for (const id of ids) await api(`/portfolio/photos/${id}`, { body: { on: true } }); }}

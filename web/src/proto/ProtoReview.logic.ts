@@ -13,6 +13,7 @@ export class Logic extends DCLogic {
       const P = this.props, S = this.state;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || S.del || S.pick) return;
       if (/^[1-5]$/.test(e.key)) P.onRate(+e.key);
+      else if (e.key === '0' && P.onBin) P.onBin();
       else if ((e.key === 'a' || e.key === 'A') && P.offer) { e.preventDefault(); P.onAddOffer(); }
       else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); this.setState({ noting: true }); }
       else if (e.key === 'ArrowLeft') P.onBack();
@@ -31,7 +32,7 @@ export class Logic extends DCLogic {
     return {
       progress: Array.from({ length: P.total }, (_, i) => (i < P.index ? 'var(--text)' : i === P.index ? 'var(--text2)' : 'color-mix(in srgb, var(--text) 12%, transparent)')),
       idxLabel: Math.min(P.index + 1, P.total), total: P.total, shootName: P.shootName || '', photoSrc: P.photoSrc, finish: P.onFinish,
-      ratingsAfter: R.map(([emoji, label], i) => ({ emoji, label, value: i + 1, bg: sel === i + 1 ? 'color-mix(in srgb, var(--text) 14%, transparent)' : 'transparent', col: sel === i + 1 ? 'var(--text)' : 'var(--text2)', pick: () => P.onRate(i + 1) })),
+      ratingsAfter: [...(P.onBin ? [{ emoji: '🗑️', label: 'bin', value: 0, bg: 'transparent', col: 'oklch(0.75 0.14 28)', pick: () => P.onBin() }] : []), ...R.map(([emoji, label], i) => ({ emoji, label, value: i + 1, bg: sel === i + 1 ? 'color-mix(in srgb, var(--text) 14%, transparent)' : 'transparent', col: sel === i + 1 ? 'var(--text)' : 'var(--text2)', pick: () => P.onRate(i + 1) }))],
       revMoreOpen: S.more, toggleRevMore: () => this.setState({ more: !S.more }), revMoreFg: S.more ? 'var(--text)' : 'var(--muted)', revMoreBg: S.more ? 'var(--hair)' : 'transparent',
       revItems: [
         { label: 'Skip for now', key: 'Space', sep: 'none', fg: 'var(--text)', to: '', go: close('Skipped · it comes back next session', () => P.onSkip()) },

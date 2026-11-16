@@ -60,6 +60,7 @@ export function useReviewCleanup(ctx: Ctx): Section {
       title: 'Remove automatically', meta: 'No confirmation',
       rows: pick(r, ['autoRemove', 'autoRemoveBelow', 'autoRemoveAfter'], { autoRemoveBelow: { label: 'Averaging below' } }),
     },
+    { title: 'Bin votes', meta: 'Your own votes only', rows: pick(r, ['binVotes']) },
     { title: 'Never removed', rows: [{ id: 'protectedInfo', t: 'link', label: 'Protected photos', hint: 'Photos in any composition, or in a shoot with an active share link.', meta: 'Always' }] },
   ]);
 }

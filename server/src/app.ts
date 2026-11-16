@@ -4,7 +4,7 @@ import { registerWishHistory } from './routes/wishHistory.js';
 import { registerOrganize } from './routes/organize.js';
 import { registerWorkflow } from './routes/workflow.js';
 import { pruneRecovery } from './workflowCore.js';
-import { autoRemoveLowRated } from './remove.js';
+import { autoRemoveLowRated, removeIfBinned } from './remove.js';
 import { DUE_REVIEW_SQL } from './reviewEligibility.js';
 import { noteUse } from './activity.js';
 import { ensureDeriv } from './cache.js';
@@ -423,17 +423,19 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.delete('/api/review/session', async () => { setSetting(db, 'reviewSession', null); return { ok: true }; });
   app.post('/api/review/rate', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
-    const photoId = num(b.photoId), rating = Math.round(num(b.rating));
+    // A bin vote is the lowest rating: it counts as a 1 and is marked, and enough of them remove the photograph.
+    const bin = b.bin === true;
+    const photoId = num(b.photoId), rating = bin ? 1 : Math.round(num(b.rating));
     const s = getSession();
     if (!s || rating < 1 || rating > 5 || !s.queue.some((q) => q.id === photoId)) return rep.code(400).send({ error: 'bad rating' });
     if (!one('SELECT 1 FROM photos WHERE id = ?', photoId)) return rep.code(404).send({ error: 'This photo has been removed.' });
     const settings = loadSettings(db);
     const now = new Date();
     const prior = one('SELECT id FROM reviews WHERE photo_id = ? AND run_id = ?', photoId, s.runId);
-    if (prior) db.prepare('UPDATE reviews SET rating = ?, note = COALESCE(?, note) WHERE id = ?').run(rating, typeof b.note === 'string' ? b.note.slice(0, 2000) : null, prior.id);
+    if (prior) db.prepare('UPDATE reviews SET rating = ?, bin = ?, note = COALESCE(?, note) WHERE id = ?').run(rating, bin ? 1 : 0, typeof b.note === 'string' ? b.note.slice(0, 2000) : null, prior.id);
     else {
       const n = (one('SELECT COUNT(*) n FROM reviews WHERE photo_id = ?', photoId) as Row).n;
-      db.prepare('INSERT INTO reviews(photo_id, session, run_id, date, rating, note) VALUES(?, ?, ?, ?, ?, ?)').run(photoId, n + 1, s.runId, now.toISOString(), rating, typeof b.note === 'string' ? b.note.slice(0, 2000) : null);
+      db.prepare('INSERT INTO reviews(photo_id, session, run_id, date, rating, bin, note) VALUES(?, ?, ?, ?, ?, ?, ?)').run(photoId, n + 1, s.runId, now.toISOString(), rating, bin ? 1 : 0, typeof b.note === 'string' ? b.note.slice(0, 2000) : null);
     }
     const ratings = (db.prepare('SELECT rating FROM reviews WHERE photo_id = ? ORDER BY session, id').all(photoId) as Row[]).map((r) => r.rating as number);
     const days = nextIntervalDays(settings, ratings);
@@ -442,8 +444,9 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (typeof b.note === 'string') s.notes[photoId] = b.note;
     if (b.advance !== false) s.index = Math.max(s.index, s.queue.findIndex((q) => q.id === photoId) + 1);
     setSetting(db, 'reviewSession', s);
+    if (bin) removeIfBinned(db, cfg, photoId);
     autoRemoveLowRated(db, cfg, photoId);
-    return s;
+    return getSession() ?? s;
   });
   app.post('/api/review/note', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
