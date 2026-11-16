@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
 import { isWeakPin, randomPin } from './routes/share.js';
@@ -110,5 +110,20 @@ describe('the gate', () => {
     expect((await call('GET', `/api/s/${s.token}`)).statusCode).toBe(404); // the old address is gone
     expect((await call('GET', `/api/s/${fresh.token}`)).statusCode).toBe(200);
     expect((await own('DELETE', `/api/shares/${s.id}/invites?email=nobody@x.test`)).json()).toEqual({ removed: 0 });
+  });
+});
+
+describe('guessing the PIN', () => {
+  it('counts wrong PINs per address too, so dropping the device cookie does not reset the count', async () => {
+    const from = (remoteAddress: string, pin: string) => app.inject({ method: 'POST', url: `/api/s/${token}/pin`, payload: { pin }, remoteAddress });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (let batch = 0; batch < 2; batch++) {
+        for (let i = 0; i < 10; i++) expect((await from('203.0.113.9', '9999')).statusCode).toBe(400); // a fresh device every time
+        vi.setSystemTime(Date.now() + 61_000); // past the per-minute lookup limit, well inside the 15-minute lock
+      }
+      expect((await from('203.0.113.9', '2468')).statusCode).toBe(429);
+      expect((await from('203.0.113.10', '2468')).statusCode).toBe(200); // someone else is not locked out
+    } finally { vi.useRealTimers(); }
   });
 });

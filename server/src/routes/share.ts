@@ -34,7 +34,8 @@ const TABLE_OF = { shoot: 'shoots', collection: 'collections', photo: 'photos' }
 /** The one 4-number PIN in Frames: an optional lock on a share link. Never four of a kind or a straight run (1234, 9876). */
 export const isWeakPin = (p: string) => /^(\d)\1{3}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p);
 export const randomPin = () => { let p: string; do { p = String(crypto.randomInt(10000)).padStart(4, '0'); } while (isWeakPin(p)); return p; };
-const PIN_TRIES = 5, PIN_LOCK_MS = 15 * 60_000;
+// PIN_IP_TRIES: the device count lives in a cookie a guesser can drop, so wrong PINs are also counted per address.
+const PIN_TRIES = 5, PIN_IP_TRIES = 20, PIN_LOCK_MS = 15 * 60_000;
 const PIN_ERR = 'A PIN is four numbers, not all the same and not a straight run like 1234.';
 
 /** The only addresses served without the login: the share page shell, its assets, and the share API. */
@@ -481,19 +482,25 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const dev = deviceOf(req, cookies);
     const key = `${linkKey(share)}|${dev}`;
     const reply = (code: number, body: Row) => { if (cookies.length) rep.header('Set-Cookie', cookies); return rep.code(code).send(body); };
-    const wait = lockOf(share, dev);
+    const ipKey = `${linkKey(share)}|ip:${req.ip}`;
+    const wait = Math.max(lockOf(share, dev), lockOf(share, `ip:${req.ip}`));
     if (wait) return reply(429, { error: 'Too many wrong PINs. This link is locked on this device for a while.', lockedFor: wait });
     const given = String(((req.body ?? {}) as Row).pin ?? '');
     const a = Buffer.from(given.padEnd(8).slice(0, 8)), b = Buffer.from(String(share.pin).padEnd(8).slice(0, 8));
     if (/^\d{4}$/.test(given) && crypto.timingSafeEqual(a, b)) {
-      pinFails.delete(key);
+      pinFails.delete(key); pinFails.delete(ipKey);
       cookies.push(`${pinCookie(share)}=${pinSig(share)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
       return reply(200, { ok: true });
     }
-    const f = pinFails.get(key) ?? { n: 0, until: 0 };
-    f.n = f.until && f.until <= Date.now() ? 1 : f.n + 1;
-    if (f.n >= PIN_TRIES) { f.until = Date.now() + PIN_LOCK_MS; f.n = 0; }
-    pinFails.set(key, f);
+    const bump = (k: string, max: number) => {
+      const f = pinFails.get(k) ?? { n: 0, until: 0 };
+      f.n = f.until && f.until <= Date.now() ? 1 : f.n + 1;
+      if (f.n >= max) { f.until = Date.now() + PIN_LOCK_MS; f.n = 0; }
+      pinFails.set(k, f);
+      return f;
+    };
+    const f = bump(key, PIN_TRIES), byIp = bump(ipKey, PIN_IP_TRIES);
+    if (byIp.until > Date.now() && f.until <= Date.now()) { f.until = byIp.until; f.n = 0; }
     if (pinFails.size > 5000) for (const [k, v] of pinFails) if (v.until < Date.now() && !v.n) pinFails.delete(k);
     const locked = f.until > Date.now();
     return reply(400, { error: locked ? 'Too many wrong PINs. This link is locked on this device for 15 minutes.' : 'That PIN is not right.', triesLeft: locked ? 0 : PIN_TRIES - f.n, lockedFor: locked ? Math.ceil((f.until - Date.now()) / 1000) : 0 });

@@ -102,7 +102,9 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     // Someone who came from a share link to make a guest account needs no place on the list; that lets in a guest and no one else (checked below).
     const allowed = listed || !!flow.guest;
     if (flow.linkUser) {
-      // Someone signed in is adding this account to themselves. The flow was started by their own session, so it is theirs to finish.
+      // Someone signed in is adding this account to themselves. Only that same session may finish it: a link flow's address passed to
+      // someone else would otherwise attach their account to the sender's library.
+      if (sessionUser(db, req)?.id !== flow.linkUser) return rep.code(403).type('text/html').send(auth.messagePage('Sign in first', 'Finish adding an account in the same browser you started it from, while signed in.'));
       return rep.redirect(`/settings?section=security&linked=${allowed ? linkIdentity(db, flow.linkUser, who) : 'notallowed'}`);
     }
     if (!allowed) {
@@ -167,6 +169,8 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     };
   });
 
+  // Anyone can ask for a code, so its links never come from the Host header they sent: the public address, a listed host, or none.
+  const mailBase = (req: any) => loadAuth(db).publicUrl || ((cfg.allowedHosts ?? []).includes(req.host) ? auth.baseUrl(req) : '');
   // Sends a code. The answer is the same whether or not the address may sign in, so this cannot be used to find out who has an account.
   app.post('/api/public/auth/email/send', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
@@ -187,7 +191,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const eligible = existing ? !existing.disabled && (listed || existing.role === 'guest' || existing.provider !== 'invite') : (listed && signupsOn(db, cfg.allowSignups !== false)) || guestFlow(b);
     if (eligible) {
       const code = issueCode(db, email);
-      const sent = await sendMail(db, { to: email, template: 'code', type: 'code', params: { ...footer(db, ownerName(), auth.baseUrl(req)), name: existing?.name?.split(' ')[0] || who.name.split('@')[0], code, device: String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a browser', location: '', time: new Date().toUTCString() } });
+      const sent = await sendMail(db, { to: email, template: 'code', type: 'code', params: { ...footer(db, ownerName(), mailBase(req)), name: existing?.name?.split(' ')[0] || who.name.split('@')[0], code, device: String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a browser', location: '', time: new Date().toUTCString() } });
       if (!sent.ok) return rep.code(502).send({ error: 'The email could not be sent. Ask the owner to check Settings, Email.' });
     }
     return { ok: true };
