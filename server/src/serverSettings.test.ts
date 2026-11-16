@@ -56,6 +56,13 @@ describe('what the administrator sets up for the whole server', () => {
     expect(JSON.stringify(list)).not.toContain(KEY);
     expect((await call('PUT', `/api/ai/sources/${shared.id}`, alice.id, { model: 'other' })).status).toBe(404);
     expect((await call('DELETE', `/api/ai/sources/${shared.id}`, alice.id)).status).toBe(404);
+    // The one thing a member may change is the colour they see it in, for themselves only.
+    expect((await call('PUT', `/api/ai/sources/${shared.id}`, alice.id, { color: 'not a colour' })).status).toBe(400);
+    const tinted = await call('PUT', `/api/ai/sources/${shared.id}`, alice.id, { color: '#94abd4' });
+    expect(tinted.status).toBe(200);
+    expect(tinted.body.sources.find((s: any) => s.id === shared.id).color).toBe('#94abd4');
+    expect((await call('GET', '/api/admin/ai/sources', 1)).body.sources.find((s: any) => s.id === shared.id).color ?? '').not.toBe('#94abd4');
+    expect((await call('GET', '/api/ai/sources', 1)).body.sources.find((s: any) => s.id === shared.id).color ?? '').not.toBe('#94abd4');
     const use = await call('PUT', '/api/ai/active', alice.id, { id: shared.id });
     expect(use.status).toBe(200);
     expect(use.body.active).toBe(shared.id);
