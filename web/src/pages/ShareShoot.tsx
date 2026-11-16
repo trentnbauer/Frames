@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RATINGS } from '../data';
 import { Mark } from '../components/bits';
 import { imgUrl } from '../api';
+import { Who } from './ShareMobile';
 
 type P = { id: number; title: string; ar: number; n: number };
 type Props = {
@@ -61,6 +62,7 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
             <span style={{ display: 'flex', alignItems: 'center', gap: 10, font: `italic 400 22px/1 ${serif}` }}><Mark />Frames</span>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>{d.owner ? `Shared by ${d.owner}` : 'Shared with you'}</span>
           </div>
+          <Who name={reviewer} />
         </header>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,380px),1fr))', gap: '40px 56px', alignItems: 'end', marginBottom: 52 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
