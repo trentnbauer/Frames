@@ -78,6 +78,12 @@ const ROW_NEW: Idx[] = [
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvSize', g: 'Previews', label: 'Preview size', hint: 'What you see on the Photo page and in Review.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvQuality', g: 'Previews', label: 'Preview quality', hint: 'JPEG quality, 70 to 95.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvConvert', g: 'Previews', label: 'Convert existing previews', hint: 'Every preview matches your settings.' },
+  { tab: 'lib', sec: 'photo', sub: 'tags', id: 'tagsSubjects', g: 'Subjects', label: 'Tags & subjects', hint: 'Create, search, rename, merge or delete in one list.' },
+  { tab: 'lib', sec: 'photo', sub: 'camera-xmp', id: 'xmpWrite', g: 'Export and differences', label: 'Write XMP sidecars', hint: 'Titles, descriptions, accepted tags and average ratings, for every photo.' },
+  { tab: 'lib', sec: 'photo', sub: 'ai', id: 'aiAutoAnalyse', g: 'Providers', label: 'Automatically analyse new photos', hint: 'Analyse new and waiting photos.' },
+  { tab: 'lib', sec: 'portfolio', id: 'pfFavMark', g: 'What’s shown', label: 'Favourites', hint: 'Pinned to the top. Only you add these.' },
+  { tab: 'lib', sec: 'portfolio', id: 'pfHandMark', g: 'What’s shown', label: 'Added by hand', hint: 'From a photo’s page or a Library selection.' },
+  { tab: 'lib', sec: 'portfolio', id: 'pfOutMark', g: 'What’s shown', label: 'Left out', hint: 'Never shown, even if they meet the score.' },
 ];
 
 const SRV_NEW: Idx[] = [
@@ -91,6 +97,21 @@ const SRV_NEW: Idx[] = [
   { tab: 'srv', sec: 'folders', sub: 'cloud', id: 'cloudOn', g: 'Cloud storage', label: 'Cloud storage', hint: 'Members bring photos in from their own cloud account.' },
   { tab: 'srv', sec: 'folders', sub: 'previews', id: 'previewQuality', g: 'Previews', label: 'Highest preview quality', hint: 'JPEG quality, 70 to 95.' },
   { tab: 'srv', sec: 'folders', sub: 'previews', id: 'convertAll', g: 'Previews', label: 'Convert everyone’s previews', hint: 'Every preview matches the current standards.' },
+  { tab: 'srv', sec: 'access', sub: 'members', id: 'manage', g: 'Defaults', label: 'Folders, security recovery, switching off, deleting data, privacy page', hint: 'Per-person tools.' },
+  { tab: 'srv', sec: 'sharing', sub: 'policies', id: 'policyLinks', g: 'What people read', label: 'Read them as a visitor', hint: 'Both can be read without signing in.' },
+  { tab: 'srv', sec: 'folders', sub: 'local', id: 'localOrig', g: 'Local storage', label: 'Store original quality', hint: 'Uploads are kept exactly as they are.' },
+  { tab: 'srv', sec: 'folders', sub: 'local', id: 'localPx', g: 'Local storage', label: 'Resize to', hint: 'Longest side.' },
+  { tab: 'srv', sec: 'folders', sub: 'local', id: 'localQ', g: 'Local storage', label: 'JPEG quality', hint: 'Lower makes smaller files.' },
+  { tab: 'srv', sec: 'folders', sub: 'local', id: 'maxUpload', g: 'Local storage', label: 'Largest upload', hint: 'The biggest single photo.' },
+  { tab: 'srv', sec: 'folders', sub: 'cloud', id: 'cloudOrig', g: 'Cloud storage', label: 'Store original quality', hint: 'Off: smaller copies here; the original is fetched on export.' },
+  { tab: 'srv', sec: 'folders', sub: 'cloud', id: 'cloudPx', g: 'Cloud storage', label: 'Resize to', hint: 'Longest side.' },
+  { tab: 'srv', sec: 'folders', sub: 'cloud', id: 'cloudQ', g: 'Cloud storage', label: 'JPEG quality', hint: 'Lower makes smaller files.' },
+  { tab: 'srv', sec: 'folders', sub: 'cloud', id: 'maxCloudFile', g: 'Cloud storage', label: 'Largest cloud import', hint: 'Larger files are skipped and listed.' },
+  { tab: 'srv', sec: 'folders', sub: 'previews', id: 'previewSizeMax', g: 'Previews', label: 'Largest preview', hint: 'The most pixels any preview can have.' },
+  { tab: 'srv', sec: 'backup', id: 'bDl', g: 'History', label: 'Download a backup', hint: 'One archive of everyone’s libraries, made now.' },
+  { tab: 'srv', sec: 'backup', id: 'bMore', g: 'History', label: 'Off-server copies and restore from a file', hint: '' },
+  { tab: 'srv', sec: 'network', sub: 'tunnel', id: 'cfName', g: '1 · Let Frames use your Cloudflare account', label: 'Tunnel name', hint: '' },
+  { tab: 'srv', sec: 'network', sub: 'email', id: 'mailCode', g: '', label: 'Let people sign in with a code', hint: 'Offered while the connection check passes.' },
 ];
 
 /** What the settings search looks through: every row, with the section and tab it lives in now. */

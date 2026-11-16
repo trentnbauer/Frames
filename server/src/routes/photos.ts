@@ -34,6 +34,39 @@ const haversineKm = (a: number, b: number, c: number, d: number) => {
 const normSql = (col: string) => `lower(replace(replace(replace(replace(replace(replace(replace(${col}, ' ', ''), '-', ''), '.', ''), '_', ''), '/', ''), '(', ''), ')', ''))`;
 export const normText = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
+const NEAR = 8; // of 64 bits. Different crops and edits of the same frame land well inside this; different scenes do not.
+const dupCache = new WeakMap<object, { sig: string; groups: number[][] }>();
+export const forgetNearDuplicates = (x: Ctx) => { dupCache.delete(x.db); };
+
+/** Groups of near-duplicate photographs (ids, two or more each). The comparison is pairwise, so the answer is kept until something it depends on changes. */
+export function nearDuplicateGroups(x: Ctx): number[][] {
+  const { all, one } = x;
+  // The answer is kept until the photographs, their links or the ignored pairs change.
+  const sig = JSON.stringify([one('SELECT COUNT(*) n, MAX(id) m, SUM(missing) g, SUM(parent_id IS NOT NULL) v, COUNT(dhash) h FROM photos'), one('SELECT COUNT(*) n FROM dup_ignored')]);
+  const hit = dupCache.get(x.db);
+  if (hit && hit.sig === sig) return hit.groups;
+    const present = new Set((all('SELECT id FROM photos WHERE missing = 0') as Row[]).map((r) => r.id as number));
+    const f = [...loadFeatures(x).values()].filter((o) => o.dhash && present.has(o.id));
+    const ints = new Map(f.map((o) => [o.id, hashInts(o.dhash!)]));
+    const ignored = new Set(all('SELECT a, b FROM dup_ignored').map((r) => `${r.a}-${r.b}`));
+    const parent = new Map<number, number>();
+    const find = (a: number): number => { let r = a; while (parent.has(r) && parent.get(r) !== r) r = parent.get(r)!; return r; };
+    for (const o of f) parent.set(o.id, o.id);
+    for (let i = 0; i < f.length; i++) {
+      for (let j = i + 1; j < f.length; j++) {
+        const a = f[i], b = f[j];
+        if (a.parentId === b.id || b.parentId === a.id || (a.parentId && a.parentId === b.parentId)) continue; // already linked as variants
+        if (ignored.has(`${Math.min(a.id, b.id)}-${Math.max(a.id, b.id)}`)) continue;
+        if (hammingInts(ints.get(a.id)!, ints.get(b.id)!) <= NEAR) parent.set(find(a.id), find(b.id));
+      }
+    }
+  const groups = new Map<number, number[]>();
+  for (const o of f) { const r = find(o.id); groups.set(r, [...(groups.get(r) ?? []), o.id]); }
+  const out = [...groups.values()].filter((g) => g.length > 1);
+  dupCache.set(x.db, { sig, groups: out });
+  return out;
+}
+
 export function registerPhotos(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
@@ -464,26 +497,9 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     return scored.map((r) => ({ ...x.photoDto(one('SELECT * FROM photos WHERE id = ?', r.id)!, false, agg), similarity: Math.round(r.s * 100) / 100 }));
   });
 
-  const NEAR = 8; // of 64 bits. Different crops and edits of the same frame land well inside this; different scenes do not.
   app.get('/api/duplicates', async () => {
-    const f = [...loadFeatures(x).values()].filter((o) => o.dhash);
-    const ints = new Map(f.map((o) => [o.id, hashInts(o.dhash!)]));
-    const ignored = new Set(all('SELECT a, b FROM dup_ignored').map((r) => `${r.a}-${r.b}`));
-    const parent = new Map<number, number>();
-    const find = (a: number): number => { let r = a; while (parent.has(r) && parent.get(r) !== r) r = parent.get(r)!; return r; };
-    for (const o of f) parent.set(o.id, o.id);
-    for (let i = 0; i < f.length; i++) {
-      for (let j = i + 1; j < f.length; j++) {
-        const a = f[i], b = f[j];
-        if (a.parentId === b.id || b.parentId === a.id || (a.parentId && a.parentId === b.parentId)) continue; // already linked as variants
-        if (ignored.has(`${Math.min(a.id, b.id)}-${Math.max(a.id, b.id)}`)) continue;
-        if (hammingInts(ints.get(a.id)!, ints.get(b.id)!) <= NEAR) parent.set(find(a.id), find(b.id));
-      }
-    }
-    const groups = new Map<number, number[]>();
-    for (const o of f) { const r = find(o.id); groups.set(r, [...(groups.get(r) ?? []), o.id]); }
     const agg = x.ratingAgg();
-    return [...groups.values()].filter((g) => g.length > 1).map((ids) => {
+    return nearDuplicateGroups(x).map((ids) => {
       const photos = ids.map((id) => one('SELECT * FROM photos WHERE id = ?', id)!);
       // The best candidate for "original" is the largest in pixels.
       photos.sort((a, b) => b.w * b.h - a.w * a.h || a.id - b.id);
@@ -491,6 +507,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     });
   });
   app.post('/api/duplicates/ignore', async (req) => {
+    forgetNearDuplicates(x);
     const ids = (((req.body ?? {}) as Row).photoIds as number[] | undefined ?? []).map(Number).filter(Number.isFinite);
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) db.prepare('INSERT OR IGNORE INTO dup_ignored(a, b) VALUES(?, ?)').run(Math.min(ids[i], ids[j]), Math.max(ids[i], ids[j]));
     return { ok: true };
@@ -498,6 +515,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   app.post('/api/duplicates/variants', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const children = ((b.childIds as number[]) ?? []).map(Number).filter(Number.isFinite);
+    forgetNearDuplicates(x);
     if (!makeVariants(num(b.parentId), children)) return rep.code(400).send({ error: 'Cannot link those photos' });
     return { ok: true };
   });
