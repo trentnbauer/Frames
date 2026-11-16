@@ -100,6 +100,27 @@ describe('recoverable changes', () => {
     expect(row(ids[0]).camera).toBe(before.camera);
   });
 });
+describe('near-duplicates in To do', () => {
+  it('counts each group of near-duplicates as one to-do, and lists none once they are ignored', async () => {
+    const groups = (await a.get('/api/duplicates')).body as any[][];
+    expect(groups.length).toBeGreaterThan(0); // the two test photographs are alike
+    const t = (await a.get('/api/todo')).body;
+    expect(t.items.find((i: any) => i.key === 'duplicates')).toMatchObject({ count: groups.length, link: '/duplicates' });
+    await a.post('/api/duplicates/ignore', { photoIds: ids });
+    const after = (await a.get('/api/todo')).body;
+    expect(after.items.find((i: any) => i.key === 'duplicates')).toBeUndefined();
+    expect(t.total - after.total).toBe(groups.length); // each group was one thing to do
+  });
+});
+describe('description list', () => {
+  it('lists photographs with no description at all, and drops one once it has one', async () => {
+    await a.put('/api/settings', { todoReasons: ['description'] });
+    const item = async () => ((await a.get('/api/todo')).body.items as any[]).find((i) => i.key === 'description');
+    expect((await item())?.ids.sort()).toEqual([...ids].sort());
+    await a.patch(`/api/photos/${ids[0]}`, { description: 'A harbour at dawn' });
+    expect((await item())?.ids).toEqual([ids[1]]);
+  });
+});
 describe('light and mood notes', () => {
   it('writes them into the analysis so To do stops asking, and keeps the rest of it', async () => {
     env.db.prepare("UPDATE photos SET ai_status='done', ai_json=? WHERE id=?").run(JSON.stringify({ description: 'A harbour', lighting: '', mood: '' }), ids[0]);

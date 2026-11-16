@@ -19,7 +19,7 @@ afterAll(() => { env.app.close(); cleanup(env); });
 describe('the To do list', () => {
   it('is empty with no photographs, and lists new photographs that have no subject or tag', async () => {
     const t = (await A.get('/api/todo')).body;
-    expect(t.total).toBe(2); // each photograph counts once, even with several missing details
+    expect(t.total).toBe(3); // each photograph counts once, even with several missing details, plus the one group of near-duplicates the two test photographs make
     expect(await kinds()).toEqual(expect.arrayContaining(['subjects', 'tags']));
     expect(t.items.find((i: any) => i.key === 'subjects')).toMatchObject({ count: 2 });
   });

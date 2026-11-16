@@ -5,6 +5,7 @@ import { displayNameOf } from './profile.js';
 import type { Ctx, Row } from '../ctx.js';
 import { loadSettings } from '../settings.js';
 import { deleteSuggestions } from '../remove.js';
+import { nearDuplicateGroups } from './photos.js';
 
 /** One thing for the person to do: a kind, how many photographs it covers, and the first few of them. */
 export type TodoItem = { key: string; title: string; detail: string; count: number; photoIds: number[]; /** Every photograph in the item (newest first), so the photograph page can step through them. */ ids?: number[]; link?: string };
@@ -62,6 +63,13 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     if (on.has('subjects') || on.has('tags')) add('ai-tags', 'Approve the AI’s suggested tags and subjects', 'The AI suggested these. Nothing is kept until you accept it.', [...pendingTags]);
     if (on.has('description')) add('ai-description', 'Approve the AI’s suggested descriptions', 'A suggested description is shown on the photograph’s page until you accept or reject it.', pendingDesc);
 
+    // Photographs with no description at all (one an AI wrote is in the list above; each photograph is counted once there).
+    if (on.has('description')) {
+      const aiHas = new Set(pendingDesc);
+      add('description', 'Add a description', 'No description yet. One sentence is enough.',
+        ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.description) = '' ORDER BY p.id DESC").filter((id) => !aiHas.has(id)));
+    }
+
     // Photographs with nothing set yet (newest first, so what was just brought in comes first).
     if (on.has('subjects')) add('subjects', 'Add a subject', 'No subject yet, so these do not show up when you filter the library or a composition by subject.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) ORDER BY p.id DESC"));
@@ -82,6 +90,10 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     }
     // Poorly reviewed photographs, when the person has a line set (Settings, Reviews).
     if (st.archiveSuggest) add('delete', 'Take poorly reviewed photographs out of Frames', `Their average, after all ${st.sessions} sessions, is below ${st.deleteBelow}. Nothing is removed until you confirm. Files in your library folders are never touched.`, deleteSuggestions(db, st.sessions, st.deleteBelow, 2000).map((r) => r.id));
+
+    // Near-duplicates are a to-do of their own; the group count is what is shown (the list is on its own page). Nothing is listed when there are none.
+    const dupes = nearDuplicateGroups(x);
+    if (dupes.length) items.push({ key: 'duplicates', title: 'Sort out near-duplicates', detail: 'Photographs that look like the same frame. Link them as variants, or say they are different.', count: dupes.length, photoIds: dupes.flat().slice(0, SAMPLE), link: '/duplicates' });
 
     const stuck = loadCloud(db).connections.filter((c) => c.needsReconnect);
     if (stuck.length) items.push({ key: 'cloud', title: 'Reconnect a cloud account', detail: `${stuck.map((c) => c.account || c.provider).join(', ')} stopped syncing and needs to be reconnected.`, count: stuck.length, photoIds: [], link: '/settings?section=cloud' });
@@ -138,7 +150,8 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     // The navigation badge counts unique photographs, not individual missing details.
     const photos = new Set(needs().map((photo) => photo.id));
     for (const id of items.find((item) => item.key === 'delete')?.ids ?? []) photos.add(id);
-    const things = photos.size + (items.find((item) => item.key === 'cloud')?.count ?? 0);
+    // A group of near-duplicates counts as one thing to do, and a cloud account that needs reconnecting as one each.
+    const things = photos.size + (items.find((item) => item.key === 'cloud')?.count ?? 0) + (items.find((item) => item.key === 'duplicates')?.count ?? 0);
     return { total: things, kinds: items.length, items };
   });
 
