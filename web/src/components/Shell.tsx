@@ -8,6 +8,8 @@ import { useUi } from '../ui';
 import { Modal, Spinner } from './Modal';
 import { ClearSiteDataModal } from './ClearSiteDataModal';
 import { ThemeToggle } from './ThemeToggle';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { PhoneMeSheet, PhoneTabBar } from '../mobile/Chrome';
 
 export function Mark({ w = 24 }: { w?: number }) {
   const s = w / 24;
@@ -23,10 +25,10 @@ export function Mark({ w = 24 }: { w?: number }) {
 export const stepOf = (path: string): 1 | 2 | 3 | 0 => (/^\/shoots/.test(path) ? 1 : /^\/(library|collections)/.test(path) ? 2 : 0);
 
 /** Notifications point at app paths (e.g. /collections/4?guests=suggestions, /#ideas). */
-const ICON: Record<string, string> = { 'guest-suggestion': '✎', 'guest-rating': '★', 'guest-reply': '✎', 'community-rating': '★', idea: '✦', 'cloud-sync': '☁', 'report-outcome': '⚑', 'report-queue': '⚑', 'review-due': '◐', update: '↑', 'sign-in': '⎆', summary: '▦', 'gear-found': '▣' };
-type Notif = { gear?: { id: number; name: string; type: 'camera' | 'lens'; state: string }; id: number; kind: string; text: string; createdAt: string; read: boolean; target: { screen: string; anchor?: string } };
+export const ICON: Record<string, string> = { 'guest-suggestion': '✎', 'guest-rating': '★', 'guest-reply': '✎', 'community-rating': '★', idea: '✦', 'cloud-sync': '☁', 'report-outcome': '⚑', 'report-queue': '⚑', 'review-due': '◐', update: '↑', 'sign-in': '⎆', summary: '▦', 'gear-found': '▣' };
+export type Notif = { gear?: { id: number; name: string; type: 'camera' | 'lens'; state: string }; id: number; kind: string; text: string; createdAt: string; read: boolean; target: { screen: string; anchor?: string } };
 
-const ago = (iso: string) => {
+export const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
   if (m < 1) return 'Just now';
   if (m < 60) return `${m} min ago`;
@@ -100,13 +102,14 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
     finally { setActing(null); }
   };
   const readAll = () => { setItems((l) => l.map((i) => ({ ...i, read: true }))); api('/notifications/read', { body: { all: true } }).catch(() => undefined); };
+  const phone = usePhoneWidth();
   return (
     <>
-      <button className="iconbtn" title="Notifications" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="iconbtn" title="Notifications" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} aria-expanded={phone ? undefined : open} onClick={() => { if (phone) nav('/notifications'); else setOpen(!open); }}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden><path d="M3.5 11.5V7a4.5 4.5 0 0 1 9 0v4.5l1 1h-11z" /><path d="M6.5 14h3" /></svg>
         {unread > 0 && <i className="dot" />}
       </button>
-      {open && (
+      {open && !phone && (
         <>
           <div className="pop-scrim" onClick={() => setOpen(false)} />
           <div className="popover notifs" role="dialog" aria-label="Notifications">
@@ -151,13 +154,15 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
   const go = (to: string) => () => { close(); nav(to); };
   const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
   const item = (label: string, onClick: (e: React.MouseEvent) => void, meta?: string) => <button key={label} className="mi" onClick={onClick}><span>{label}</span>{meta && <span className="meta">{meta}</span>}</button>;
+  const phone = usePhoneWidth();
   return (
     <>
+      {phone && open && <PhoneMeSheet name={name} onClose={close} />}
       <button className="userbtn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="avatar" style={me?.hasAvatar ? { backgroundImage: 'url(/api/profile/avatar)' } : undefined}>{!me?.hasAvatar && name.slice(0, 1).toUpperCase()}</span>
         <span className="uname">{name.split(' ')[0]}</span><span className="caret" style={{ color: 'var(--faint)' }}>▾</span>
       </button>
-      {open && (
+      {open && !phone && (
         <>
           <div className="pop-scrim" onClick={close} />
           <div className="popover" role="menu" aria-label="Your menu" style={{ right: 42 }}>
@@ -213,6 +218,7 @@ function MoreMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
 
 export function Header({ right }: { right?: ReactNode }) {
   const loc = useLocation();
+  const ui = useUi();
   const [menu, setMenu] = useState<'user' | 'bell' | 'more' | null>(null);
   useEffect(() => setMenu(null), [loc.pathname]);
   return (
@@ -222,9 +228,10 @@ export function Header({ right }: { right?: ReactNode }) {
       <div className="head-right">
         {right}
         <AiIndicator />
+        <button type="button" className="iconbtn phone-only" aria-label="Search" onClick={ui.openSearch}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg></button>
         <ThemeToggle />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
-        <MoreMenu open={menu === 'more'} setOpen={(b) => setMenu(b ? 'more' : null)} />
+        <span className="no-phone"><MoreMenu open={menu === 'more'} setOpen={(b) => setMenu(b ? 'more' : null)} /></span>
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
       </div>
     </header>
@@ -235,10 +242,14 @@ export function Header({ right }: { right?: ReactNode }) {
 export function BottomNav() {
   const { todo, removals, todoItems } = useStore();
   const ui = useUi();
+  const here = useLocation().pathname;
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
-      {item('/', 'Home')}{item('/shoots', 'Shoots')}{item('/library', 'Library')}{item('/collections', 'Compositions')}
+      {item('/', 'Home')}
+      {/* One Library item: its Shoots and Photos views, a shoot and a photograph all belong to it. */}
+      <NavLink to="/library" className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>
+      {item('/collections', 'Compositions')}
       <i className="bdiv" />
       <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
       <TodoNav total={todo} removals={removals} items={todoItems} />
@@ -248,30 +259,8 @@ export function BottomNav() {
 
 /** Phone only: the workflow steps live here. */
 export function TabBar() {
-  const loc = useLocation();
-  const step = stepOf(loc.pathname);
-  const [more, setMore] = useState(false);
-  const nav = useNavigate();
-  return (
-    <>
-      <nav className="tabbar" aria-label="Workflow">
-        <NavLink to="/shoots" className={step === 1 ? 'on' : ''}>Shoots</NavLink>
-        <NavLink to="/collections" className={step === 2 ? 'on' : ''}>Compositions</NavLink>
-        <NavLink to="/collections?filter=done">Done</NavLink>
-        <button onClick={() => setMore(true)}>More</button>
-      </nav>
-      {more && (
-        <>
-          <div className="pop-scrim" onClick={() => setMore(false)} />
-          <div className="popover" role="menu">
-            {[['Home', '/'], ['Library', '/library'], ['Review', '/review'], ['Gear & wishlist', '/gear'], ['Your stats', '/stats'], ['To do', '/todo'], ['Community review', '/community'], ['Settings', '/settings']].map(([l, to]) => (
-              <button key={to} className="mi" onClick={() => { setMore(false); nav(to); }}>{l}</button>
-            ))}
-          </div>
-        </>
-      )}
-    </>
-  );
+  const phone = usePhoneWidth();
+  return phone ? <PhoneTabBar /> : null;
 }
 
 const KINDS = [['bug', 'Bug', 'Short summary of the problem'], ['enhancement', 'Idea', 'What would you like Frames to do?'], ['question', 'Question', 'What do you want to know?']] as const;

@@ -186,7 +186,7 @@ export function ShareMobile(p: Props) {
                 const ids = photosOf(pr), origin = photosOf(wallPrints[i])[0], kept = origin !== undefined && p.mine[origin] !== undefined;
                 return ids.length === 0 ? (
                   <section key={pr.id} aria-label={`Print ${i + 1}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: '1px solid var(--hair)' }}>
-                    <span style={{ width: 52, height: 52, flex: 'none', borderRadius: 4, background: 'var(--surface)' }} />
+                    <span style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 4, background: 'var(--surface)' }} />
                     <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>Not chosen yet</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Print {i + 1} · {pr.size}</span></span>
                   </section>
                 ) : (
@@ -196,7 +196,7 @@ export function ShareMobile(p: Props) {
                       return (
                         <div key={pid} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           <button onClick={() => { const at = order.findIndex((x) => x.id === pid); if (at >= 0) { setLook(at); setLookText(''); } }} aria-label={ph ? `Look closer at ${ph.title}` : 'Empty print'} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
-                            <span style={{ width: 52, height: 52, flex: 'none', borderRadius: 4, background: ph ? `url(${imgUrl(pid, 'thumb', token)}) center/cover` : 'var(--surface)' }} />
+                            <span style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 4, background: ph ? `url(${imgUrl(pid, 'thumb', token)}) center/cover` : 'var(--surface)' }} />
                             <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{ph?.title ?? `Print ${i + 1}`}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Print {i + 1} · {pr.size}</span></span>
                           </button>
                           {canReview && rateRow(pid, 46, 20)}
@@ -237,7 +237,7 @@ export function ShareMobile(p: Props) {
             {d.allowDownload && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                  <span style={{ width: 44, height: 44, flex: 'none', borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
+                  <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: `400 26px/1.05 ${serif}` }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)' }}>Full-size originals, one file after another. {owner === 'them' ? 'They allowed' : `${owner} allowed`} downloads on this link.</span></div>
                 </div>
                 <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
@@ -326,26 +326,26 @@ export function ShareMobile(p: Props) {
               style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'pan-y' }}>
               <img src={imgUrl(lp.id, 'preview', token)} alt={lp.title} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
             </div>
-            <div className="sm-lbp" style={{ flex: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 14, padding: '12px 16px max(30px, env(safe-area-inset-bottom))' }}>
+            <div className="sm-lbp" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 14, padding: '12px 16px max(30px, env(safe-area-inset-bottom))' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: '0 4px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                   <span style={{ font: `400 26px/1.05 ${serif}`, overflowWrap: 'anywhere' }}>{lp.title}</span>
                   <span style={{ fontSize: 12.5, color: '#8f8c86' }}>{slot >= 0 ? `Print ${slot + 1} · ${sizeLabel(wallPrints[slot])}` : f ? 'Candidate' : ''}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button onClick={() => go(-1)} aria-label="Previous" style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(239,237,232,.1)', display: 'grid', placeItems: 'center', opacity: look > 0 ? 1 : 0.3 }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg></button>
                   <button onClick={() => go(1)} aria-label="Next" style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(239,237,232,.1)', display: 'grid', placeItems: 'center', opacity: look < order.length - 1 ? 1 : 0.3 }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3.5 10.5 8 6 12.5" /></svg></button>
                 </div>
               </div>
               {canReview && slot >= 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={() => setPicking(photosOf(wallPrints[slot])[0])} style={{ flex: 'none', height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Swap photo</button>
-                  {wallPrints[slot].frame && <button onClick={() => setFraming(slot)} style={{ flex: 'none', height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Frame colour</button>}
+                  <button onClick={() => setPicking(photosOf(wallPrints[slot])[0])} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Swap photo</button>
+                  {wallPrints[slot].frame && <button onClick={() => setFraming(slot)} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Frame colour</button>}
                   {sugOf && (
                     <>
-                      <img src={imgUrl(sugOf.id, 'thumb', token)} alt="" style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flex: 'none' }} />
+                      <img src={imgUrl(sugOf.id, 'thumb', token)} alt="" style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
                       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#a8a59f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>In your version: {sugOf.title}</span>
-                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flex: 'none', minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
+                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flexShrink: 0, minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
                     </>
                   )}
                 </div>
@@ -366,7 +366,7 @@ export function ShareMobile(p: Props) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input value={lookText} onChange={(e) => setLookText(e.target.value)} onKeyDown={(e) => { if (e.key !== 'Escape') e.stopPropagation(); }} maxLength={1000} placeholder="Comment on this photograph…" aria-label="Comment on this photograph"
                       style={{ flex: 1, minWidth: 0, height: 44, background: '#161615', border: 0, borderRadius: 999, padding: '0 16px', fontSize: 15, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.14)', outline: 'none', color: 'inherit', fontFamily: 'inherit' }} />
-                    <button onClick={() => { if (lookText.trim()) sendText(lp.id, lookText, () => { setLookText(''); flash(`Sent to ${owner}`); }); }} style={{ flex: 'none', height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)', opacity: lookText.trim() ? 1 : 0.45 }}>Send</button>
+                    <button onClick={() => { if (lookText.trim()) sendText(lp.id, lookText, () => { setLookText(''); flash(`Sent to ${owner}`); }); }} style={{ flexShrink: 0, height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)', opacity: lookText.trim() ? 1 : 0.45 }}>Send</button>
                   </div>
                 </>
               )}
@@ -384,7 +384,7 @@ export function ShareMobile(p: Props) {
                 const wrong = !!pr && (pr.orientation === 'portrait') !== (x.ar < 1);
                 return (
                   <button key={x.id} onClick={() => { p.swap(picking, x.id); setPicking(null); flash(`Changed print ${idx + 1}. Send it back when you are ready.`); }} aria-label={`Suggest ${x.title}`}
-                    style={{ flex: 'none', height: 96, aspectRatio: String(x.ar), borderRadius: 3, position: 'relative', overflow: 'hidden', opacity: wrong ? 0.55 : 1 }}>
+                    style={{ flexShrink: 0, height: 96, aspectRatio: String(x.ar), borderRadius: 3, position: 'relative', overflow: 'hidden', opacity: wrong ? 0.55 : 1 }}>
                     <img src={imgUrl(x.id, 'thumb', token)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     {wrong && <span style={{ position: 'absolute', left: 4, right: 4, bottom: 4, fontSize: 11, lineHeight: 1.25, background: 'rgba(0,0,0,.72)', color: '#efede8', padding: '3px 5px', borderRadius: 3, textAlign: 'left' }}>{x.ar < 1 ? 'Portrait' : 'Landscape'}</span>}
                   </button>

@@ -1,7 +1,10 @@
 import { ShootActions } from '../components/ShootActions';
 import { confirmAction } from '../components/dialogs';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileShoot } from '../mobile/Shoot';
+import { ShootPage } from '../desktop/ShootPage';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { BrowsePage } from '../components/BrowsePage';
@@ -42,7 +45,19 @@ function send(files: File[], onProgress: (pct: number) => void) {
 }
 
 /** Shoots (the list) and a shoot (the view), from the design. One screen: /shoots and /shoots/:id. */
+/** On a phone the shoot list is the Library's Shoots view and one shoot has its own page (mobile/Shoot.tsx). */
 export function Shoots() {
+  const phone = usePhoneWidth();
+  const { id } = useParams();
+  const [sp] = useSearchParams();
+  if (phone && !id) return <Navigate to={sp.get('upload') ? '/library?view=shoots&add=1' : '/library?view=shoots'} replace />;
+  if (phone) return <MobileShoot />;
+  // The design's shoot page; `/shoots` alone is the Library's Shoots view, and ?adv=1 is the detailed page (place, dates, gear, tags, filters).
+  if (!id) return <Navigate to={sp.get('upload') ? '/library?add=1' : '/library'} replace />;
+  return sp.get('adv') ? <DesktopShoots /> : <ShootPage />;
+}
+
+function DesktopShoots() {
   const { id } = useParams();
   const sid = id ? Number(id) : null;
   const nav = useNavigate();

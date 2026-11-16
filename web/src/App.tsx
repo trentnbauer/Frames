@@ -33,6 +33,11 @@ import { GuestHome } from './pages/GuestHome';
 import { api, openPortfolio } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
+import { usePhoneWidth } from './usePhoneWidth';
+import { TAB_PATHS } from './mobile/Chrome';
+import { MobileNotifications } from './mobile/Notifications';
+import { MobileReviewTab } from './mobile/ReviewTab';
+import { MobileOrganise } from './mobile/Organise';
 
 const PAGE_NAMES: Record<string, string> = {
   '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
@@ -42,6 +47,11 @@ const PAGE_NAMES: Record<string, string> = {
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
 const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
 
+/** Pages that only exist in the phone layout: a wider screen goes Home instead. */
+function PhoneOnly({ children }: { children: React.ReactNode }) {
+  return usePhoneWidth() ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function Shell() {
   const [searching, setSearching] = useState(false);
   const [help, setHelp] = useState(false);
@@ -49,6 +59,7 @@ function Shell() {
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
+  const phone = usePhoneWidth();
   const inReview = loc.pathname === '/review' || loc.pathname === '/removals';
   useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']} · Frames` : 'Frames'; }, [loc.pathname]);
   // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
@@ -83,10 +94,13 @@ function Shell() {
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
-      {!inReview && <div className="app-header"><Header /></div>}
+      {!inReview && !(phone && TAB_PATHS[loc.pathname.replace(/\/$/, '') || '/'] && loc.pathname !== '/') && <div className="app-header"><Header /></div>}
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
+        <Route path="/notifications" element={<PhoneOnly><MobileNotifications /></PhoneOnly>} />
+        <Route path="/reviews" element={<PhoneOnly><MobileReviewTab /></PhoneOnly>} />
+        <Route path="/organise" element={<PhoneOnly><MobileOrganise /></PhoneOnly>} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/imports" element={<Navigate to="/stats?tab=imports" replace />} />
         <Route path="/review-schedule" element={<ReviewSchedule />} />

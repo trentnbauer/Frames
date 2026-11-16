@@ -6,6 +6,8 @@ import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
 import ProtoReview from '../proto/ProtoReview';
 import { reviewRequest } from '../reviewScope';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileReviewDone, MobileReviewSession } from '../mobile/ReviewSession';
 
 type Session = { shootName?: string; runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };
 
@@ -22,6 +24,7 @@ export function Review() {
   const colls = useApi<Collection[]>('/collections');
   const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
   const [pickFor, setPickFor] = useState<number | null>(null);
+  const phone = usePhoneWidth();
 
   useEffect(() => {
     api<Session>('/review/start', { method: 'POST', body: reviewRequest(window.location.search) }).then(setS).catch((e: Error) => setError(e.message));
@@ -59,6 +62,7 @@ export function Review() {
   if (s.queue.length === 0 || done) {
     const rated = Object.values(s.ratings);
     const mean = rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : 0;
+    if (phone) return <MobileReviewDone empty={s.queue.length === 0} rated={rated.length} skipped={s.queue.length - rated.length} mean={mean} removals={removals} onRemovals={() => nav('/removals')} onDone={() => api('/review/session', { method: 'DELETE' }).then(leave)} />;
     return (
       <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--text)' }}>
         <div>
@@ -71,6 +75,20 @@ export function Review() {
     );
   }
   const inComps = colls.data?.filter((c) => cur && c.photoIds.includes(cur.id)).length ?? 0;
+  if (phone && cur) {
+    return (
+      <MobileReviewSession
+        key={cur.id} total={s.queue.length} index={s.index} shootName={s.shootName} photoId={cur.id} photoSrc={imgUrl(cur.id, 'preview')} rating={s.ratings[cur.id]} note={s.notes[cur.id] ?? ''}
+        onRate={rate} onBin={bin} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
+        onNote={async (note: string) => { if (s.ratings[cur.id] !== undefined) setS(await api<Session>('/review/note', { body: { photoId: cur.id, note } })); else setS({ ...s, notes: { ...s.notes, [cur.id]: note } }); }}
+        offer={offer ? { name: offer.comp.name } : null} onDismissOffer={() => setOffer(null)}
+        onAddOffer={async () => { if (!offer) return; await api(`/collections/${offer.comp.id}/photos/${offer.id}`, { method: 'PUT' }); setOffer(null); colls.reload(); }}
+        onChooseOffer={() => { if (offer) { setPickFor(offer.id); setOffer(null); } }}
+        renderCompPicker={(close, d) => <CompPicker ids={[pickFor ?? cur.id]} from="The photo you just rated" onClose={() => { setPickFor(null); close(); }} onDone={(m) => { setPickFor(null); colls.reload(); d(m); }} />}
+        error={saveErr}
+      />
+    );
+  }
   return (
     <ProtoReview
       total={s.queue.length} index={s.index} shootName={s.shootName} photoSrc={cur ? imgUrl(cur.id, 'preview') : ''} rating={cur ? s.ratings[cur.id] : undefined}

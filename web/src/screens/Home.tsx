@@ -10,6 +10,8 @@ import { useShortcuts } from '../components/shortcuts';
 import { AddPhotosModal, useStatus } from '../components/AddPhotos';
 import { Today, greetingFor } from '../pages/Today';
 import ProtoHome from '../proto/ProtoHome';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileHome } from '../mobile/Home';
 
 type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: (PhotoLite & { ar: number })[]; tags?: string[]; colours?: { name: string; hex: string }[] };
 type Batch = { id: number; name: string; count: number; days: number; importedAt: string; covers: number[]; done: boolean };
@@ -40,7 +42,12 @@ function useCarousel(n: number, ms: number, offset = 0) {
   return { i: n ? i % n : 0, fade, go, pause: () => { paused.current = true; }, resume: () => { paused.current = false; } };
 }
 
+/** A phone gets its own Home (see mobile/Home.tsx); wider screens keep this one. */
 export function Home() {
+  return usePhoneWidth() ? <MobileHome /> : <DesktopHome />;
+}
+
+function DesktopHome() {
   const { summary: s, me } = useStore();
   const nav = useNavigate();
   const status = useStatus();

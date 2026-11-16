@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
 import ProtoCommunity from '../proto/ProtoCommunity';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileCommunity } from '../mobile/Community';
 
 type Next = { photo: { token: string; ar: number } | null; meta?: { anon: string; details: string }; written?: boolean; left: number; others?: { n: number; avg: number | null } };
 type Stats = { reviewed: number; shared: number; received: number; average: number | null };
 
 /** Community review: rate other photographers' photos, anonymous both ways. */
 export function Community() {
+  return usePhoneWidth() ? <PhoneCommunity /> : <DesktopCommunity />;
+}
+
+function DesktopCommunity() {
   const nav = useNavigate();
   const stats = useApi<Stats>('/community/stats');
   const [cur, setCur] = useState<Next | null>(null);
@@ -38,5 +44,24 @@ export function Community() {
         onRestart={() => { setSkipped([]); setSeen(1); setRated(0); void load([]); }}
       />
     </div>
+  );
+}
+
+function PhoneCommunity() {
+  const [cur, setCur] = useState<Next | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [seen, setSeen] = useState(1);
+  const [rated, setRated] = useState(0);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const load = async (skip: string[] = skipped) => { setLoading(true); try { setCur(await api<Next>(`/community/next${skip.length ? `?skip=${skip.join(',')}` : ''}`)); } finally { setLoading(false); } };
+  useEffect(() => { void load([]); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const photo = cur?.photo;
+  const total = seen - 1 + (cur?.left ?? 0);
+  return (
+    <MobileCommunity loading={loading} src={photo ? `/api/community/image/${photo.token}` : null} who={`Photographer ${cur?.meta?.anon ?? ''}`.trim()} kit={cur?.meta?.details ?? ''} progress={`${rated} rated`} seen={seen} total={total}
+      onRate={async (rating) => { if (!photo) return; await api('/community/rate', { body: { token: photo.token, rating, note: '' } }); setRated((r) => r + 1); setSeen((n) => n + 1); await load(); }}
+      onSkip={async () => { if (!photo) return; const sk = [...skipped, photo.token]; setSkipped(sk); setSeen((n) => n + 1); await load(sk); }}
+      onReport={async (reason, note) => { if (!photo) return; await api('/community/report', { body: { token: photo.token, reason, note } }).catch(() => undefined); await load(); }}
+      onRestart={() => { setSkipped([]); setSeen(1); setRated(0); void load([]); }} />
   );
 }
