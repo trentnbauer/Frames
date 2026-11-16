@@ -5,6 +5,8 @@ import type { Collection, PhotoLite, Shoot } from '../data';
 import { useStore } from '../store';
 import { CompPicker } from '../screens/CompPicker';
 import ProtoSearch from '../proto/ProtoSearch';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileSearch } from '../mobile/Search';
 
 type Parsed = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
 type Meta = { chips: { key: string; kind: string; label: string; param: string; value: string }[]; files: { id: number; file: string; camera: string; date: string }[] };
@@ -14,6 +16,10 @@ type Meta = { chips: { key: string; kind: string; label: string; param: string; 
  * removable chips ("fog over water, early morning, no people" becomes a subject, a time of day and an exclusion).
  */
 export function Search({ onClose }: { onClose: () => void }) {
+  return usePhoneWidth() ? <MobileSearch onClose={onClose} /> : <DesktopSearch onClose={onClose} />;
+}
+
+function DesktopSearch({ onClose }: { onClose: () => void }) {
   const { settings } = useStore();
   const ai = !!settings && settings.ai !== 'off';
   const nav = useNavigate();
