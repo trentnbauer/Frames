@@ -9,7 +9,9 @@ describe('GitHub Pages demo API', () => {
     const photo = await demoApi<{ id: number; tags: unknown[]; reviews: unknown[] }>('/photos/1');
     expect(photo.id).toBe(1);
     expect(photo.tags.length).toBeGreaterThan(0);
-    expect(demoImage(1)).toMatch(/^data:image\/svg\+xml,/);
+    expect(demoImage(1)).toMatch(/^https:\/\/picsum\.photos\/id\/\d+\/480\/320$/);
+    expect(demoImage(1, 'preview')).toMatch(/\/1600\/1067$/);
+    expect(demoImage(1)).not.toBe(demoImage(2));
   });
 
   it('filters the same sample library by search and photoshoot', async () => {
@@ -17,6 +19,22 @@ describe('GitHub Pages demo API', () => {
     const subset = await demoApi<{ count: number }>('/photos?shoot=2&q=golden');
     expect(subset.count).toBe(1);
     expect(all.count).toBeGreaterThan(subset.count);
+  });
+
+  it('updates frame choices in demo memory without touching a backend', async () => {
+    const before = await demoApi<{ layout: { prints: { frame: { color: string } | null }[] } }>('/collections/1');
+    const prints = structuredClone(before.layout.prints);
+    const originalColor = prints[0].frame?.color;
+    prints[0].frame = { ...prints[0].frame!, color: 'oak' };
+    const changed = await demoApi<{ layout: { prints: { frame: { color: string } | null }[] } }>('/collections/1', {
+      method: 'PATCH', body: { layout: { ...before.layout, mode: 'free', prints } },
+    });
+    expect(changed.layout.prints[0].frame?.color).toBe('oak');
+    expect((await demoApi<typeof changed>('/collections/1')).layout.prints[0].frame?.color).toBe('oak');
+    await demoApi('/collections/1', {
+      method: 'PATCH', body: { layout: { ...before.layout, prints: before.layout.prints } },
+    });
+    expect((await demoApi<typeof changed>('/collections/1')).layout.prints[0].frame?.color).toBe(originalColor);
   });
 
   it('rejects all mutations without persisting visitor data', async () => {

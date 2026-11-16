@@ -59,7 +59,7 @@ export function Editor() {
   const c = coll.data;
   if (!c || !lib.data) return <div className="page-shell">{coll.error && <p role="alert" className="muted">Something went wrong: {coll.error}</p>}</div>;
 
-  const readOnly = c.stage === 'done';
+  const readOnly = c.stage === 'done' && import.meta.env.VITE_FRAMES_DEMO !== 'true';
   const layoutPrints = c.layout.mode === 'free' ? c.layout.prints : arrange(c.layout.prints, c.layout.mode);
   if (!origin.current) origin.current = centreOf(layoutPrints);
   const byId = new Map(lib.data.photos.map((p) => [p.id, p]));

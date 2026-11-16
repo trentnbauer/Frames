@@ -5,25 +5,19 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Settings, Me, Summary } from '../store';
 import { arrange, type Print } from '../layout';
 
-const themes = [
-  ['#253f53','#b8a38b','#dde2cc'],['#182f48','#718da1','#d1b899'],
-  ['#673a35','#b77b60','#f4c891'],['#254657','#76a7a8','#d6dad2'],
-  ['#343149','#866f89','#e5b6aa'],['#30383d','#79818a','#ddc7a9'],
-  ['#233e34','#7c9c78','#b9c5a1'],['#765343','#b79874','#edd1a0'],
-  ['#303b53','#798ba5','#e0c5ba']
+// Stable public sample photographs (not private Frames content). The same ID
+// maps to the same picture everywhere: Library, Photoshoots, detail and walls.
+// Picsum serves resized JPEGs, so grids download thumbnails instead of full
+// resolution previews. External image hosting requires an internet connection.
+const sampleIds = [
+  10, 15, 29, 37, 54, 66,
+  71, 75, 83, 89, 96, 101,
+  103, 104, 106, 119, 122, 124,
 ];
-export function demoImage(id: number): string {
-  const [a,b,c] = themes[(Math.max(1,id)-1) % themes.length];
-  const k = (id * 37) % 260;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900"><defs>
-  <linearGradient id="a" x2="1" y2="1"><stop stop-color="${a}"/><stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></linearGradient>
-  <radialGradient id="b"><stop stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>
-  </defs><path fill="url(#a)" d="M0 0h1200v900H0z"/>
-  <ellipse cx="${300+k}" cy="${220+k/4}" rx="490" ry="440" fill="url(#b)"/>
-  <path d="M0 ${620+k/3} Q250 ${480+k/3} 530 620 T1200 ${540+k/2}V900H0Z" fill="${a}" opacity=".45"/>
-  <path d="M0 840 Q450 ${710-k/4} 1200 850" fill="none" stroke="${c}" stroke-opacity=".35" stroke-width="5"/>
-  </svg>`;
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+export function demoImage(id: number, kind: 'thumb' | 'preview' = 'thumb'): string {
+  const photoId = sampleIds[(Math.max(1, id) - 1) % sampleIds.length];
+  const width = kind === 'preview' ? 1600 : 480;
+  return `https://picsum.photos/id/${photoId}/${width}/${Math.round(width / 1.5)}`;
 }
 
 const shootsBase = [
@@ -46,7 +40,7 @@ const photos: PhotoFull[] = titles.map((title,i) => {
     fileType:'JPEG',sizeMb:8.2,archived:false,missing:false,lastReviewedAt:score ? now : '',
     nextReviewAt:score ? '2027-01-01T12:00:00' : null,reviewCount:score ? 1 : 0,avgRating:score,
     lat:null,lon:null,place:s.place,placeAddress:'',placeKind:'',placePrecision:'city',parentId:null,
-    palette:[{hex:themes[i%9][0],pct:45,name:'Dark'},{hex:themes[i%9][1],pct:35,name:'Mid'},{hex:themes[i%9][2],pct:20,name:'Light'}],
+    palette:[{hex:'#34495e',pct:45,name:'Dark'},{hex:'#8495a5',pct:35,name:'Mid'},{hex:'#d4c3ae',pct:20,name:'Light'}],
     brightness:45,contrast:50,saturation:50,xmpRating:null,aiStatus:'done',
     description:'An illustrative photograph in the Frames demo.',descSource:'manual',
     tags:[...s.tags,'Travel'].map(name=>({name,kind:'tag' as const,source:'manual',accepted:true})),
@@ -65,7 +59,7 @@ const makeCollection = (id:number,name:string,ids:number[],stage:'progress'|'rev
   id,name,stage,updatedAt:now,description:'An example composition',theme:'',target:null,photoIds:ids,
   chosenIds:ids.slice(0,3),printedAt:null,layout:{mode:'grid',prints:arrange(ids.slice(0,3).map((p,i)=>makePrint(p,i+1)),'grid'),ppi:300},layoutSaved:true
 });
-const collections:Collection[] = [
+let collections:Collection[] = [
   makeCollection(1,'Places & spaces',[1,2,3,14,15],'progress'),
   makeCollection(2,'Summer colours',[7,8,9,10],'review'),
   makeCollection(3,'City geometry',[13,14,15,16],'done')
@@ -160,9 +154,27 @@ function read(path:string):unknown {
   throw new Error('This section is not available with sample data.');
 }
 
-/** No writes are accepted, including same-origin requests. Data is never persisted. */
+/** Composition edits live only in this browser tab's demo memory.
+ * No request reaches a backend and refreshing restores the sample compositions.
+ */
+function updateDemoCollection(path: string, body: unknown): Collection {
+  const match = /^\/collections\/(\d+)$/.exec(new URL(path, 'https://demo.invalid').pathname);
+  if (!match || !body || typeof body !== 'object') throw new Error('Read-only demo: changes are disabled.');
+  const index = collections.findIndex(c => c.id === Number(match[1]));
+  if (index < 0) throw new Error('Sample composition not found.');
+  const patch = body as Partial<Collection>;
+  const allowed = Object.keys(patch).every(k => ['layout', 'name', 'stage'].includes(k));
+  if (!allowed) throw new Error('Read-only demo: changes are disabled.');
+  const current = collections[index];
+  const next: Collection = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  collections = collections.map((c, i) => i === index ? next : c);
+  return next;
+}
+
+/** Only isolated in-memory composition changes are allowed; all other writes fail. */
 export async function demoApi<T>(path:string,init?:{method?:string;body?:unknown}):Promise<T>{
   const method=(init?.method??(init?.body!==undefined?'POST':'GET')).toUpperCase();
+  if(method==='PATCH' && path.startsWith('/collections/') && /^\d+$/.test(path.split('?')[0].slice('/collections/'.length))) return updateDemoCollection(path, init?.body) as T;
   if(method!=='GET'||init?.body!==undefined)throw new Error('Read-only demo: changes are disabled.');
   return read(path) as T;
 }

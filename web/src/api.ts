@@ -40,7 +40,7 @@ export function useApi<T>(path: string | null) {
  * makes every browser fetch fresh ones once (the server now checks them every time, so it is only needed for pictures kept before that).
  */
 const IMG_REV = 2;
-export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoImage(id) : `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;
+export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoImage(id, kind) : `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;
 
 /** Opens the person's own portfolio in a new tab: their own web address if they set one, else their /name/, else /portfolio/. The tab opens first so a pop-up blocker allows it. */
 export async function openPortfolio() {

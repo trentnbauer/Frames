@@ -4,13 +4,13 @@ GitHub issue #367.
 
 The Pages demo now **mounts the production React application** (`App`, `StoreProvider`, production routes, components and styles). It is not a separate recreation of the interface.
 
-## Read-only, synthetic data
+## Isolated, synthetic demo data
 
 - `web/src/demo/main.tsx` starts the real Frames UI using the `/Frames` BrowserRouter basename.
 - `web/vite.demo.config.ts` sets the `VITE_FRAMES_DEMO` build flag.
-- `web/src/api.ts` routes demo reads to `web/src/demo/api.ts` and image URLs to locally generated gradients. These samples contain no real photographs or user data.
-- **Every mutation via `api()` is rejected**; direct same-origin `fetch` requests to API/auth endpoints also receive HTTP 403 within the demo page. No Frames backend is deployed.
-- Editing controls are inherited from the real application for visual fidelity, but do not save changes. Some API-dependent screens have no populated examples yet.
+- `web/src/api.ts` routes demo reads to `web/src/demo/api.ts` and image URLs to stable public sample JPEGs served by Picsum Photos (480px thumbnails and 1600px previews). No personal Frames photographs or user data are included. Sample images require internet access.
+- **Composition PATCH operations update only in-memory demo fixtures** so visitors can try frame colours, print sizes, orientations, layouts and photo placements. Reloading resets the fixtures. All other mutations via `api()` are rejected; direct same-origin `fetch` requests to API/auth endpoints also receive HTTP 403 within the demo page. No Frames backend is deployed.
+- Editing controls are inherited from the real application. Composition changes are temporary and are not saved to a server. Some API-dependent screens have no populated examples yet.
 
 This design deliberately avoids running a public writable instance or copying its database. Unlike the previous standalone imitation, the shared frontend components mean ordinary UI improvements also appear in the demo on its next deploy.
 
