@@ -233,15 +233,15 @@ export function ShareMobile(p: Props) {
               {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}
               <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
-            {photos[0] && <button onClick={() => setLook(0)} aria-label="Open the cover photograph" style={{ display: 'block', width: '100%', aspectRatio: '1.5', borderRadius: 8, marginTop: 6, background: `url(${imgUrl(photos[0].id, 'preview', token)}) center/cover var(--surface)` }} />}
             {d.allowDownload && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)', overflow: 'hidden' }}>
+                {photos[0] && <div aria-hidden style={{ position: 'absolute', inset: -40, background: `url(${imgUrl(photos[0].id, 'thumb', token)}) center/cover`, filter: 'var(--home-review-image-filter)', opacity: 'var(--home-review-image-opacity)' as never }} />}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: `400 26px/1.05 ${serif}` }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)' }}>Full-size originals, one file after another. {owner === 'them' ? 'They allowed' : `${owner} allowed`} downloads on this link.</span></div>
                 </div>
-                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
-                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
+                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ position: 'relative', height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
+                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ position: 'relative', minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--hair)', padding: '14px 0 12px' }}>
