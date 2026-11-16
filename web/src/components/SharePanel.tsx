@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { Modal } from './Modal';
 import { newSharePin } from '../sharePin';
+import { Sheet } from './Sheet';
+import { usePhoneWidth } from '../usePhoneWidth';
 
 type ShareLink = {
   id: number; token: string; label: string; versionId: number | null; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string;
@@ -45,6 +47,8 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
     links.set((previous) => [saved, ...(previous ?? []).filter((item) => item.id !== saved.id)].sort((a, b) => b.id - a.id));
     setSelected(saved.id);
   };
+  const phone = usePhoneWidth();
+  if (phone) return <ShareScreen kind={kind} id={id} name={name} onClose={onClose} links={links.data} error={links.error} link={link} selected={selected} setSelected={setSelected} busy={busy} update={update} onBusy={setBusy} />;
   return <Modal title={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} sub="Different links for different people. Each keeps its own settings." width={960} onClose={onClose}
     foot={<><span className="grow">Only the selected link is changed.</span><button className="btn primary" disabled={busy} onClick={onClose}>Done</button></>}>
     {!links.data ? <p role={links.error ? 'alert' : undefined} className="muted">{links.error || 'Loading…'}</p> : <div className="share-manager">
@@ -62,7 +66,36 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
   </Modal>;
 }
 
-function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'collection' | 'shoot'; targetId: number; link: ShareLink | null; onSaved: (link: ShareLink) => void; onBusy: (busy: boolean) => void }) {
+/** The phone's share screen: a full page with a Back button, the links as rows, and the chosen link's settings below. */
+function ShareScreen({ kind, id, name, onClose, links, error, link, selected, setSelected, busy, update, onBusy }: { kind: 'collection' | 'shoot'; id: number; name?: string; onClose: () => void; links: ShareLink[] | null; error: string | null; link: ShareLink | null; selected: number | 'new' | null; setSelected: (s: number | 'new' | null) => void; busy: boolean; update: (l: ShareLink) => void; onBusy: (b: boolean) => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-sheet], .modal')) onClose(); };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, [onClose]);
+  const mono11 = { font: '500 11px var(--mono)', letterSpacing: '.08em', color: 'var(--faint)' } as const;
+  const shown = selected === 'new' ? null : link;
+  return <div role="dialog" aria-label={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--page)', overflowY: 'auto', padding: '54px 20px 48px', boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ paddingTop: 4 }}><button onClick={onClose} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Back</button></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={mono11}>SHARE · {kind === 'shoot' ? 'PHOTOSHOOT' : 'COMPOSITION'}</span><h1 style={{ font: '400 38px/1.02 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{name ?? (kind === 'shoot' ? 'This photoshoot' : 'This composition')}</h1></div>
+      {!links ? <p role={error ? 'alert' : undefined} className="muted">{error || 'Loading…'}</p> : <>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={mono11}>LINKS</span><button disabled={busy} onClick={() => setSelected('new')} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>+ New link</button></div>
+          {links.map((item) => { const on = shown?.id === item.id; return (
+            <button key={item.id} disabled={busy} aria-pressed={on} onClick={() => setSelected(item.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 58, padding: '0 14px', borderRadius: 12, background: on ? 'var(--surface)' : 'transparent', boxShadow: on ? 'inset 0 0 0 1px var(--outline)' : 'inset 0 0 0 1px var(--hair)', textAlign: 'left' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{item.label || `Link ${item.id}`}</span><span style={{ fontSize: 12.5, color: item.status === 'active' ? 'var(--ok)' : 'var(--faint)' }}>{item.status === 'active' ? `Active · ${item.expiresAt ? `expires ${new Date(item.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'never expires'}` : item.status === 'revoked' ? 'Stopped' : 'Expired'}</span></span>
+              <span style={{ color: 'var(--faint)' }}>›</span>
+            </button>); })}
+          {links.length === 0 && selected !== 'new' && <div style={{ padding: '16px 0', fontSize: 13.5, lineHeight: 1.5, color: 'var(--muted)' }}>No links yet. Create one for family, a framer or a friend.</div>}
+        </div>
+        <ShareLinkEditor key={shown?.id ?? 'new'} kind={kind} targetId={id} link={shown} onSaved={update} onBusy={onBusy} phone startNew={selected === 'new'} onCancelNew={() => setSelected(null)} />
+      </>}
+    </div>
+  </div>;
+}
+
+function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNew, onCancelNew }: { kind: 'collection' | 'shoot'; targetId: number; link: ShareLink | null; onSaved: (link: ShareLink) => void; onBusy: (busy: boolean) => void; phone?: boolean; startNew?: boolean; onCancelNew?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
   const [fresh, setFresh] = useState(false);
@@ -88,6 +121,98 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
   const perms: [string, string, boolean][] = [['rate', 'Rate photos', settings.allowReview], ['suggest', 'Suggest changes', settings.allowSuggest], ['dl', 'Download files', settings.allowDownload]];
   const setPerm = (k: string, v: boolean) => patch(k === 'rate' ? { allowReview: v } : k === 'suggest' ? { allowSuggest: v } : { allowDownload: v });
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const [sheet, setSheet] = useState<null | 'invite' | 'rename' | 'new'>(phone && startNew && !link ? 'new' : null);
+  const [nameDraft, setNameDraft] = useState('');
+  if (phone) {
+    const stopped = !!link && link.status !== 'active';
+    type Tog = [string, string, string, boolean, () => void];
+    const toggles: Tog[] = [
+      ['rate', 'Guests can rate', 'Ratings show up in your notifications', settings.allowReview, () => setPerm('rate', !settings.allowReview)],
+      ...(kind === 'collection' ? [
+        ['suggest', 'Guests can suggest photos', 'Suggest a different photo for a print', settings.allowSuggest, () => setPerm('suggest', !settings.allowSuggest)] as Tog,
+        ['wall', 'Only show the wall', 'Hide the other candidates', settings.onlyWall, () => patch({ onlyWall: !settings.onlyWall })] as Tog,
+      ] : []),
+      ['dl', 'Allow downloads', 'Full-size files', settings.allowDownload, () => setPerm('dl', !settings.allowDownload)],
+      ['name', 'Ask for their name', 'So you know whose ratings are whose', settings.askName, () => patch({ askName: !settings.askName })],
+      ['pin', 'Require a PIN', settings.pin ? `PIN ${settings.pin} · share it separately` : 'A 4-digit PIN is asked before viewing', !!settings.pin, () => patch({ pin: settings.pin ? '' : newSharePin() })],
+    ];
+    const sent = (inv.data?.invites ?? []).filter((v, i, a) => a.findIndex((x) => x.email === v.email) === i);
+    const pill = { height: 40, padding: '0 14px', borderRadius: 999, fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)' } as const;
+    const inputStyle = { height: 50, border: 0, outline: 'none', borderRadius: 12, padding: '0 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 16 } as const;
+    const cta = (on = true) => ({ height: 46, padding: '0 22px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5, opacity: on ? 1 : 0.4 }) as const;
+    const ghost = { height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' } as const;
+    const closeNew = () => { setSheet(null); onCancelNew?.(); };
+    return <>
+      {sheet === 'new' && <Sheet title="New link" sub="Name it so you recognise it later. Each link keeps its own permissions, PIN and expiry." onClose={closeNew}>
+        <input autoFocus aria-label="Link name" maxLength={80} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="e.g. Family, Framer quote" style={inputStyle}
+          onKeyDown={(e) => { if (e.key === 'Enter' && nameDraft.trim()) (e.currentTarget.parentElement?.querySelector('[data-create]') as HTMLButtonElement | null)?.click(); }} />
+        {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={closeNew} style={ghost}>Cancel</button>
+          <button data-create disabled={busy || !nameDraft.trim()} onClick={() => void run(() => api<ShareLink>('/shares', { body: { kind, id: targetId, ...draft, label: nameDraft.trim(), allowSuggest: kind === 'collection' && draft.allowSuggest } }))} style={cta(!!nameDraft.trim())}>Create link</button>
+        </div>
+      </Sheet>}
+      {sheet === 'rename' && link && <Sheet title="Rename link" onClose={() => setSheet(null)}>
+        <input autoFocus aria-label="Link name" maxLength={80} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="e.g. Client review" style={inputStyle} />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={() => setSheet(null)} style={ghost}>Cancel</button>
+          <button onClick={() => { void patch({ label: nameDraft.trim() }); setSheet(null); }} style={cta()}>Save</button>
+        </div>
+      </Sheet>}
+      {sheet === 'invite' && link && <Sheet title="Invitations" sub={inv.data && !inv.data.canEmail ? 'This server can’t send email, so copy the link instead.' : 'They get the link by email. Remove one to take it off the list.'} onClose={() => setSheet(null)}>
+        {!(inv.data && !inv.data.canEmail) && <>
+          <input autoFocus type="email" aria-label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void send(); }} placeholder="name@example.com" style={inputStyle} />
+          {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setSheet(null)} style={ghost}>Done</button>
+            <button disabled={!valid || busy || link.status !== 'active'} onClick={send} style={cta(valid && link.status === 'active')}>Send invite</button>
+          </div>
+          {sent.map((m) => <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 48, borderTop: '1px solid var(--hair)' }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, overflowWrap: 'anywhere' }}>{m.email}</span><span title={m.error} style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{m.status === 'sent' ? 'Sent' : 'Failed'}</span>
+            <button aria-label={`Remove ${m.email}`} onClick={async () => { setBusy(true); onBusy(true); setErr(''); try { await api(`/shares/${link.id}/invites?email=${encodeURIComponent(m.email)}`, { method: 'DELETE' }); inv.reload(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); onBusy(false); } }} style={{ width: 40, height: 40, color: 'var(--muted)' }}>✕</button>
+          </div>)}
+        </>}
+      </Sheet>}
+      {link && <div style={{ display: 'flex', flexDirection: 'column', padding: 16, borderRadius: 14, background: 'var(--surface)' }}>
+        <span style={{ font: '500 11px var(--mono)', letterSpacing: '.08em', color: 'var(--faint)', overflowWrap: 'anywhere' }}>SETTINGS · {(link.label || `Link ${link.id}`).toUpperCase()}</span>
+        {err && <div role="alert" style={{ marginTop: 10, fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
+        {stopped && <span style={{ marginTop: 10, fontSize: 13, lineHeight: 1.45, color: 'var(--text2)' }}>This link is {link.status === 'revoked' ? 'stopped' : 'expired'}. Anyone who opens it sees a message instead of your work.</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 44, padding: '0 5px 0 14px', borderRadius: 999, background: 'var(--page)', margin: '12px 0 6px' }}>
+          <span style={{ flex: 1, minWidth: 0, font: '400 12.5px var(--mono)', color: stopped ? 'var(--faint)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{urlOf(link.token).replace(/^https?:\/\//, '')}</span>
+          <button onClick={() => copy(urlOf(link.token), 'link')} style={{ height: 34, padding: '0 14px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontSize: 13, fontWeight: 500 }}>{copied === 'link' ? 'Copied ✓' : 'Copy'}</button>
+        </div>
+        {kind === 'collection' && Array.isArray(versions.data) && versions.data.length > 0 && <label style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, borderTop: '1px solid var(--hair)' }}>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>Arrangement</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Saved ones stay fixed when you edit the wall.</span></span>
+          <select aria-label="Shared arrangement" value={settings.versionId ?? ''} onChange={(e) => patch({ versionId: e.target.value ? Number(e.target.value) : null })} style={{ maxWidth: 130, height: 36, borderRadius: 999, border: 0, background: 'var(--page)', color: 'var(--text)', padding: '0 10px', fontSize: 13 }}><option value="">Live editor</option>{versions.data.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+        </label>}
+        {toggles.map(([k, label, sub, on, flip]) => (
+          <button key={k} role="switch" aria-checked={on} disabled={busy} onClick={flip} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
+            <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>{label}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span></span>
+            <span style={{ position: 'relative', flex: 'none', width: 48, height: 28, borderRadius: 999, background: on ? 'var(--btn-bg)' : 'var(--chip)' }}><i style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: on ? 'var(--btn-fg)' : 'var(--text2)' }} /></span>
+          </button>
+        ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 0', borderTop: '1px solid var(--hair)' }}>
+          <span style={{ fontSize: 15 }}>Expires</span>
+          <div role="group" aria-label="Link expires" style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--page)' }}>
+            {EXPIRY.map(([l, n]) => { const on = expiryLabel(settings.expiresAt) === l; return <button key={l} aria-pressed={on} disabled={busy} onClick={() => patch({ expiresAt: n === null ? null : inDays(n) })} style={{ flex: 1, height: 36, borderRadius: 999, background: on ? 'var(--raised2)' : 'transparent', color: on ? 'var(--text)' : 'var(--text2)', fontSize: 12.5, fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>{l}</button>; })}
+          </div>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{settings.expiresAt ? `Expires ${new Date(settings.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'Never expires'}{fresh ? ' · New address made, the old one stops working' : ''}</span>
+        </div>
+        <button onClick={() => { setErr(''); setSheet('invite'); }} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>Invitations</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{sent.length ? `${sent.length} invited` : 'No one invited yet'}</span></span>
+          <span style={{ fontSize: 13, color: 'var(--text2)' }}>Invite ›</span>
+        </button>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid var(--hair)' }}>
+          {!stopped && <a href={urlOf(link.token)} target="_blank" rel="noopener noreferrer" style={{ ...pill, display: 'inline-flex', alignItems: 'center', color: 'var(--text)', textDecoration: 'none' }}>Preview as guest</a>}
+          <button onClick={() => { setNameDraft(link.label); setSheet('rename'); }} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Rename</button>
+          <button disabled={stopped} onClick={regen} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--text2)', opacity: stopped ? 0.4 : 1 }}>Replace address</button>
+          {stopped
+            ? <button onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--text)' }}>Restart link</button>
+            : <button onClick={stop} style={{ height: 40, padding: '0 10px', fontSize: 13, color: 'var(--danger)' }}>Stop this link</button>}
+        </div>
+      </div>}
+    </>;
+  }
 
   return <div className="share-editor">
     <div className="spread"><h2 className="serif">{link ? link.label || `Link ${link.id}` : 'New link'}</h2><span className="muted">{link ? link.status === 'active' ? '● Active' : link.status === 'revoked' ? 'Stopped' : 'Expired' : 'Not shared yet'}</span></div>
