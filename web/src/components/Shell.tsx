@@ -143,11 +143,8 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
 }
 
 function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
-  const { me, summary } = useStore();
+  const { me } = useStore();
   const nav = useNavigate();
-  const health = useApi<{ version: string }>(open ? '/health' : null);
-  const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
-  const [resetOpen, setResetOpen] = useState(false);
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
   const close = () => setOpen(false);
   const go = (to: string) => () => { close(); nav(to); };
@@ -170,29 +167,52 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             </div>
             {item('Settings', go('/settings'), '⌘ ,')}
             {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
-            {item('Gear & wishlist', go('/gear'))}
-            <div className="msep" />
-            {item('Your stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
-            {item('Community review', go('/community'))}
-            {item('Near-duplicates', go('/duplicates'))}
-            <div className="msep" />
-            {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); }, ver)}
-            {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
-            {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
-            <div className="msep" />
-            {item('Clear site data', () => { close(); setResetOpen(true); })}
+            {me?.user && <div className="msep" />}
             {me?.user && item('Sign out', signOut)}
           </div>
         </>
       )}
-      {resetOpen && <ClearSiteDataModal onClose={() => setResetOpen(false)} />}
+    </>
+  );
+}
+
+/** Tools and help that are not about your account: the ☰ menu. */
+function MoreMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
+  const { summary } = useStore();
+  const nav = useNavigate();
+  const health = useApi<{ version: string }>(open ? '/health' : null);
+  const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
+  const close = () => setOpen(false);
+  const go = (to: string) => () => { close(); nav(to); };
+  const item = (label: string, onClick: (e: React.MouseEvent) => void, meta?: string) => <button key={label} className="mi" onClick={onClick}><span>{label}</span>{meta && <span className="meta">{meta}</span>}</button>;
+  return (
+    <>
+      <button className="iconbtn" title="Menu" aria-label="Menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" /></svg>
+      </button>
+      {open && (
+        <>
+          <div className="pop-scrim" onClick={close} />
+          <div className="popover" role="menu" aria-label="Menu" style={{ right: 98 }}>
+            <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>Your library</div>
+            {item('Gear & wishlist', go('/gear'))}
+            {item('Stats & imports', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
+            <div className="msep" />
+            <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>Help</div>
+            {item('Welcome tour', go('/welcome'))}
+            {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); }, ver)}
+            {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
+            {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
+          </div>
+        </>
+      )}
     </>
   );
 }
 
 export function Header({ right }: { right?: ReactNode }) {
   const loc = useLocation();
-  const [menu, setMenu] = useState<'user' | 'bell' | null>(null);
+  const [menu, setMenu] = useState<'user' | 'bell' | 'more' | null>(null);
   useEffect(() => setMenu(null), [loc.pathname]);
   return (
     <header className="shell-head">
@@ -201,8 +221,9 @@ export function Header({ right }: { right?: ReactNode }) {
       <div className="head-right">
         {right}
         <ThemeToggle />
-        <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
+        <MoreMenu open={menu === 'more'} setOpen={(b) => setMenu(b ? 'more' : null)} />
+        <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
       </div>
     </header>
   );
@@ -225,7 +246,6 @@ export function BottomNav() {
 
 /** Phone only: the workflow steps live here. */
 export function TabBar() {
-  const { removals } = useStore();
   const loc = useLocation();
   const step = stepOf(loc.pathname);
   const [more, setMore] = useState(false);
@@ -233,10 +253,9 @@ export function TabBar() {
   return (
     <>
       <nav className="tabbar" aria-label="Workflow">
-        <NavLink to="/shoots" className={step === 1 ? 'on' : ''}>Upload</NavLink>
-        <NavLink to="/collections" className={step === 2 ? 'on' : ''}>Compose</NavLink>
-        <NavLink to="/collections?filter=done">Export</NavLink>
-        {removals > 0 && <NavLink to="/removals">Removal review <b>{removals}</b></NavLink>}
+        <NavLink to="/shoots" className={step === 1 ? 'on' : ''}>Shoots</NavLink>
+        <NavLink to="/collections" className={step === 2 ? 'on' : ''}>Compositions</NavLink>
+        <NavLink to="/collections?filter=done">Done</NavLink>
         <button onClick={() => setMore(true)}>More</button>
       </nav>
       {more && (
@@ -262,6 +281,7 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [ctx, setCtx] = useState(true);
+  const [reset, setReset] = useState(false);
   const version = health.data?.version ?? 'dev';
   const ctxText = `${loc.pathname} · v${version.replace(/^v/, '')}`;
   const ok = title.trim().length > 0;
@@ -275,6 +295,11 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Send feedback" sub="Opens a new issue on GitHub · trentnbauer/Frames. You can check it before posting." onClose={onClose}
       foot={<><span className="grow">{ok ? '' : 'Add a title to continue.'}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" style={{ opacity: ok ? 1 : .45 }} onClick={send} disabled={!ok}>Open issue on GitHub ↗</button></>}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--hair)' }}>
+        <div style={{ flex: 1, fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}><b style={{ color: 'var(--text)', fontWeight: 500 }}>Something looks broken or out of date?</b><br />Clearing site data often fixes it. Your photos, reviews and server settings stay saved.</div>
+        <button type="button" className="btn outline" onClick={() => setReset(true)}>Clear site data…</button>
+      </div>
+      {reset && <ClearSiteDataModal onClose={() => setReset(false)} />}
       <div className="seg" role="tablist">{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
       <input className="field-in" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={KINDS.find((k) => k[0] === kind)![2]} aria-label="Title" />
       <textarea className="field-in" value={body} onChange={(e) => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" aria-label="Details" />
