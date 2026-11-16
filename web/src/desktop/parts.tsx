@@ -2,6 +2,7 @@ import { useWheelSize } from '../thumbZoom';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
+import { BulkEdit } from '../components/BulkEdit';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { Modal } from '../components/Modal';
 import { useApi } from '../api';
@@ -76,7 +77,7 @@ export const isDue = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new
 export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { ids: number[]; photos: PhotoLite[]; shoots: Shoot[]; onClear: () => void; onChanged: () => void; say: (t: string, undo?: () => void) => void }) {
   const { refreshSummary, settings } = useStore();
   const [scanning, setScanning] = useState(false);
-  const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove'>(null);
+  const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove' | 'edit'>(null);
   const [err, setErr] = useState('');
   if (ids.length === 0) return null;
   const protectedIds = new Set(shoots.filter((s) => s.protected).map((s) => s.id));
@@ -95,6 +96,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
       <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 96, zIndex: 25, display: 'flex', gap: 8, alignItems: 'center', background: 'var(--raised2)', borderRadius: 999, padding: '8px 8px 8px 24px', boxShadow: 'var(--float)', fontSize: 14, whiteSpace: 'nowrap' }}>
         <b style={{ fontWeight: 500, marginRight: 4 }}>{ids.length} selected</b>
         <button onClick={onClear} style={{ height: 32, padding: '0 12px', color: 'var(--text2)' }}>Clear</button>
+        <button onClick={() => { setErr(''); setDlg('edit'); }} title="Set camera, lens, film, place, date, tags and more on every selected photograph" style={pill}>Edit details…</button>
         <button onClick={() => { setErr(''); setDlg('move'); }} style={pill}>Move to shoot…</button>
         {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={pill}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
         <button onClick={() => { if (allBlocked) say('These photos are in a protected shoot. Turn off protection to remove them.'); else setDlg('remove'); }} title={blocked.length ? `${blocked.length} selected photo${blocked.length > 1 ? 's are' : ' is'} in a protected shoot and can’t be removed` : 'Move to Recently removed'} style={{ ...pill, color: allBlocked ? 'var(--faint)' : 'var(--danger)', boxShadow: allBlocked ? 'inset 0 0 0 1px var(--hair)' : 'inset 0 0 0 1px color-mix(in srgb, var(--danger) 60%, transparent)' }}>{allBlocked ? 'Protected' : blocked.length ? `Remove ${removable.length}` : 'Remove'}</button>
@@ -106,6 +108,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
           <MoveToShoot count={ids.length} shoots={shoots} canOrphan={picked.some((p) => !p.orphaned)} busy={false} error={err} onAdd={move} onCreate={create} onOrphan={orphan} onClose={() => setDlg(null)} />
         </Modal>
       )}
+      {dlg === 'edit' && <BulkEdit ids={ids} onClose={() => setDlg(null)} onDone={onChanged} />}
       {dlg === 'comp' && <CompPicker ids={ids} onClose={() => setDlg(null)} onDone={(m) => { setDlg(null); onClear(); say(m); }} />}
       {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photograph' : 'photographs'}?`} sub="They move to Recently removed, where you can restore them. The original files are kept." cta="Remove" onGo={remove} onClose={() => setDlg(null)} />}
     </>
