@@ -5,6 +5,34 @@ import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/brow
 import { api, useApi } from '../api';
 import ProtoAuth from '../proto/ProtoAuth';
 import { PasswordSignIn } from '../components/AccountPassword';
+import { useState } from 'react';
+import { Mark } from '../components/bits';
+import { usePhoneWidth } from '../usePhoneWidth';
+
+/** The share link's PIN page on a phone: the lock screen from the design, full width. */
+function PinGatePhone({ owner, name, pin, lockedMsg }: { owner?: string; name?: string; pin: (p: string) => Promise<void>; lockedMsg: string }) {
+  const [val, setVal] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const who = owner || 'the person who sent it';
+  const go = async () => {
+    if (val.length !== 4) return setErr('The PIN is 4 digits.');
+    setBusy(true); setErr('');
+    try { await pin(val); } catch (e) { setErr((e as Error).message || 'That did not work.'); setVal(''); } finally { setBusy(false); }
+  };
+  const shown = lockedMsg || err;
+  return (
+    <main style={{ minHeight: '100dvh', background: 'var(--page)', color: 'var(--text)', padding: '64px 28px 40px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)', marginBottom: 14 }}><Mark /><span style={{ font: "italic 400 19px/1 var(--serif)" }}>Frames</span></div>
+      <h1 style={{ font: '400 40px/1 var(--serif)', margin: 0 }}>Enter the PIN</h1>
+      <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text2)' }}>{owner ? `${owner} protected ${name ? `“${name}”` : 'this link'} with a 4-digit PIN.` : 'This link is locked with a 4-digit PIN.'} Ask {who} for it if you don’t have it.</span>
+      <input value={val} onChange={(e) => { setVal(e.target.value.replace(/\D/g, '').slice(0, 4)); setErr(''); }} onKeyDown={(e) => { if (e.key === 'Enter') void go(); }} inputMode="numeric" autoComplete="off" autoFocus placeholder="····" aria-label="Link PIN"
+        style={{ height: 60, borderRadius: 999, border: 0, outline: 'none', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', textAlign: 'center', font: '400 30px var(--mono)', letterSpacing: '.5em', textIndent: '.5em', marginTop: 8 }} />
+      {shown && <span role="alert" style={{ fontSize: 13.5, color: 'var(--danger)' }}>{shown}</span>}
+      <button onClick={go} disabled={busy || !!lockedMsg || val.length !== 4} style={{ height: 50, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center', opacity: val.length === 4 && !lockedMsg ? 1 : 0.5 }}>Open</button>
+    </main>
+  );
+}
 
 /** Pages that work before anyone is signed in: sign in, sign up, the emailed code, terms, signed out. */
 export const AUTH_PATHS = /^\/(signin|signup|signed-out|terms)\/?$/;
@@ -67,12 +95,14 @@ export function AuthApp() {
 
 /** The guest's "link PIN" screen: four numbers, five tries. */
 export function PinGate({ token, owner, name, lockedFor, onDone }: { token: string; owner?: string; name?: string; lockedFor?: number; onDone: () => void }) {
+  const phone = usePhoneWidth();
   const gate = useApi<{ lockedFor: number }>(`/s/${token}/gate`);
   const locked = gate.data?.lockedFor ?? lockedFor ?? 0;
   const pin = async (p: string) => {
     try { await api(`/s/${token}/pin`, { body: { pin: p } }); onDone(); } catch (e) { gate.reload(); throw e; }
   };
   const mins = Math.ceil(locked / 60);
+  if (phone) return <PinGatePhone owner={owner} name={name} pin={pin} lockedMsg={locked > 0 ? `Too many wrong tries. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` : ''} />;
   return (
     <div className="auth-shell">
       <ProtoAuth view="lock" options={{ providers: [], email: false, password: false, turnstile: null, signups: false, serverName: 'Frames' }}
