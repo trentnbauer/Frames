@@ -17,7 +17,7 @@ export function MobileReviewTab() {
   const dueShoots = (shoots.data ?? []).filter((x) => x.dueCount > 0).sort((a, b) => b.dueCount - a.dueCount);
   const begin = () => nav(s && s.due === 0 && !s.resumable ? '/review?early' : '/review');
   return (
-    <div className="pscreen ptab" style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+    <div className="pscreen ptab headless" style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
       <h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Review</h1>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 20, borderRadius: 16, background: 'var(--surface)' }}>
         <Eyebrow>{due ? 'DUE NOW' : s?.resumable ? 'IN PROGRESS' : 'ANYTIME'}</Eyebrow>

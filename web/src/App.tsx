@@ -34,6 +34,7 @@ import { api, openPortfolio } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 import { usePhoneWidth } from './usePhoneWidth';
+import { TAB_PATHS } from './mobile/Chrome';
 import { MobileNotifications } from './mobile/Notifications';
 import { MobileReviewTab } from './mobile/ReviewTab';
 
@@ -57,6 +58,7 @@ function Shell() {
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
+  const phone = usePhoneWidth();
   const inReview = loc.pathname === '/review' || loc.pathname === '/removals';
   useEffect(() => { if (!NAMES_ITSELF.test(loc.pathname)) document.title = PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/'] ? `${PAGE_NAMES[loc.pathname.replace(/\/$/, '') || '/']} · Frames` : 'Frames'; }, [loc.pathname]);
   // Someone new, with an empty library, is shown the welcome tour once, when they arrive at the front page.
@@ -91,7 +93,7 @@ function Shell() {
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
-      {!inReview && <div className="app-header"><Header /></div>}
+      {!inReview && !(phone && TAB_PATHS[loc.pathname.replace(/\/$/, '') || '/'] && loc.pathname !== '/') && <div className="app-header"><Header /></div>}
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />

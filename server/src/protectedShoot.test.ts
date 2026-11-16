@@ -31,7 +31,7 @@ describe('protecting a photoshoot from deletion', () => {
   it('keeps the photographs of a protected shoot out of removal suggestions', async () => {
     const photo = ((await A.get('/api/photos')).body.photos as any[])[0];
     const shoot = (await A.post('/api/shoots', { name: 'Protected', photoIds: [photo.id] })).body;
-    for (const session of [1, 2]) env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, 'r', '2026-01-01T00:00:00.000Z', 1)").run(photo.id, session);
+    for (const session of [1, 2, 3, 4, 5]) env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, 'r', '2026-01-01T00:00:00.000Z', 1)").run(photo.id, session);
     await A.put('/api/settings', { deleteBelow: 3, archiveSuggest: true });
     expect(((await A.get('/api/photos/delete-suggestions')).body.photos as any[]).map((p) => p.id)).toContain(photo.id);
     await A.patch(`/api/shoots/${shoot.id}`, { protected: true });

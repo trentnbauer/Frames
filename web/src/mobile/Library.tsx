@@ -59,7 +59,7 @@ export function MobileLibrary() {
   const count = (list.data?.total ?? photos.length).toLocaleString();
 
   return (
-    <div className="pscreen ptab" style={{ padding: '8px 0 130px' }}>
+    <div className="pscreen ptab" style={{ padding: '28px 0 130px' }}>
       <div style={{ padding: '0 20px 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: 8 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Library</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{count}</span></div>

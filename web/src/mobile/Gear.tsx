@@ -32,7 +32,7 @@ export function MobileGear() {
   const move = (id: number, by: number) => run(async () => { const ids = want.map((w) => w.id); const i = ids.indexOf(id), j = i + by; if (j < 0 || j >= ids.length) return; ids.splice(i, 1); ids.splice(j, 0, id); await api('/gear/order', { method: 'PUT', body: { ids } }); });
   const save = () => { if (!draft || !draft.name.trim()) return; const price = draft.price.trim() === '' ? null : Number(draft.price); if (price !== null && !Number.isFinite(price)) { setErr('The price must be a number.'); return; } const body = { name: draft.name.trim(), price, link: draft.link.trim(), why: draft.why.trim() }; void run(async () => { await api(draft.id === 'new' ? '/gear/items' : `/gear/items/${draft.id}`, { method: draft.id === 'new' ? 'POST' : 'PATCH', body: draft.id === 'new' ? { ...body, kind: 'want' } : body }); setDraft(null); }); };
   return (
-    <div className="pscreen ptab" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="pscreen ptab headless" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Gear</h1>
         <button onClick={() => { setErr(''); setDraft({ id: 'new', name: '', price: '', link: '', why: '' }); }} style={{ height: 40, padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>+ Wishlist</button>

@@ -18,4 +18,5 @@
   .ppage.flush { padding-left: 0; padding-right: 0; }
   /* a tab's own page: the shell's header above, the tab bar below */
   .ptab { padding: 8px 20px 130px; }
+  .ptab.headless { padding-top: 28px; }
 }
