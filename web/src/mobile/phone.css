@@ -1,9 +1,9 @@
 /* The phone redesign (Frames Mobile prototype): shared pieces. Everything here applies at 767px and narrower only, except the helpers. */
-.phone-only { display: none; }
+.phone-only, .iconbtn.phone-only { display: none; } /* the icon button's own display must not win on wide screens */
 .ptabbar { display: none; }
 .pscreen { display: none; }
 @media (max-width: 767px) {
-  .phone-only { display: grid; }
+  .phone-only, .iconbtn.phone-only { display: grid; }
   .no-phone { display: none; }
   .ptabbar { position: fixed; left: 12px; right: 12px; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 40; height: 64px; border-radius: 999px; background: var(--raised2); box-shadow: var(--float); display: flex; padding: 5px; box-sizing: border-box; gap: 2px; }
   .pscreen { display: block; }

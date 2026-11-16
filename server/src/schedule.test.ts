@@ -9,6 +9,10 @@ describe('nextIntervalDays', () => {
     expect(nextIntervalDays(S, [3])).toBe(1);
     expect(nextIntervalDays({ ...S, adaptive: false }, [3, 3])).toBe(7);
   });
+  it('can be instant, however steady the ratings', () => {
+    expect(nextIntervalDays({ ...S, intervals: ['Instant'] }, [4])).toBe(0);
+    expect(nextIntervalDays({ ...S, intervals: ['Instant'] }, [4, 4, 4])).toBe(0);
+  });
   it('is complete after the last session', () => {
     expect(nextIntervalDays(S, [3, 3, 3, 3, 3, 3])).toBeNull();
   });
