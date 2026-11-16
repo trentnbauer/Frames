@@ -1,3 +1,4 @@
+import { AI_COLOURS } from '../aiColours';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 /** One row of a settings card, as the handover's Settings screen defines them. */
@@ -11,6 +12,8 @@ export type R = {
   value?: any; set?: (v: any) => void;
   opts?: string[]; /** select: choices that cannot be picked (shown greyed out). */ offOpts?: string[]; step?: number; min?: number; max?: number; unit?: string; prefix?: string;
   meta?: string; act?: () => void;
+  /** Optional inline AI-provider colour control, independent of the Manage action. */
+  aiColour?: { value: string; set: (value: string) => void; readonly?: boolean };
   ph?: string; inputType?: string; disabled?: boolean;
   /** false: not shown. indent: drawn as belonging to the row above (a dep does this too). */
   show?: boolean; indent?: boolean;
@@ -205,6 +208,27 @@ export function RowView({ r, last, indent, open, setOpen, text }: { r: R; last: 
           </div>
         )}
         {t === 'text' && <TextBox value={String(v ?? '')} ph={r.ph} type={r.inputType} set={(x) => r.set?.(x)} disabled={r.disabled} label={labelText} />}
+        {r.aiColour && <span className="ai-inline-colour" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+          <button type="button" aria-label={`Choose provider colour for ${labelText}`} title={r.aiColour.readonly ? 'Managed by the server administrator' : 'Provider colour'}
+            disabled={r.aiColour.readonly} aria-expanded={open === r.id}
+            onClick={() => setOpen(open === r.id ? null : r.id)}
+            className="ai-inline-colour-button"
+            style={{ width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center', cursor: r.aiColour.readonly ? 'default' : 'pointer', background: 'transparent', border: '1px solid var(--outline)' }}>
+            <span style={{ width: 24, height: 24, borderRadius: '50%', background: r.aiColour.value || 'var(--muted)', border: '2px solid var(--bg)', boxShadow: '0 0 0 1px var(--outline)' }} />
+          </button>
+          {open === r.id && !r.aiColour.readonly && <div className="ai-colour-popover" role="group" aria-label={`Provider colour for ${labelText}`} style={{ top: 'calc(100% + 12px)', right: -80 }}>
+            <b>Provider colour</b>
+            <div className="ai-colour-grid">
+              {AI_COLOURS.map((colour) => <button key={colour.value} type="button" className="ai-colour-choice"
+                aria-label={colour.name} aria-pressed={r.aiColour!.value === colour.value}
+                style={{ background: colour.value || 'var(--muted)' }}
+                onClick={() => { r.aiColour!.set(colour.value); setOpen(null); }}>
+                {r.aiColour!.value === colour.value ? '✓' : ''}
+              </button>)}
+            </div>
+            <p>Use this tint for AI tags and suggestions.</p>
+          </div>}
+        </span>}
         {t === 'link' && (r.meta ? <span role="button" tabIndex={0} onClick={r.act} onKeyDown={(e) => { if (e.key === 'Enter') r.act?.(); }} className="slink" style={{ fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer' }}>{r.meta} →</span> : null)}
         {t === 'button' && <span role="button" tabIndex={0} onClick={r.act} onKeyDown={(e) => { if (e.key === 'Enter') r.act?.(); }} className="sbtn" style={{ height: 32, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 999, boxShadow: ringBtn, fontSize: 13.5, cursor: 'pointer', color: r.danger ? 'var(--danger)' : 'var(--text)' }}>{r.meta}</span>}
         {t === 'method' && m && (
