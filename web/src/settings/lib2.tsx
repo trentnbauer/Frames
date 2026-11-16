@@ -121,6 +121,11 @@ export function useAi(ctx: Ctx): Section {
         id: `ai-${s.id}`, t: 'link' as const, icon: initials(s.name || s.type), label: s.name || s.type,
         hint: s.shared ? `Shared by this server · ${s.model || 'no model yet'}` : `${s.ready ? 'Connected' : s.why || 'Not ready'} · ${s.model || 'no model yet'}`,
         meta: s.shared ? 'Shared' : 'Manage', act: s.shared ? () => ctx.toast('Shared AI is managed by an admin in Server → AI') : manage,
+        aiColour: { value: s.color ?? '', readonly: !!s.shared, set: (color: string) => {
+          void api(`/ai/sources/${s.id}`, { method: 'PUT', body: { color } })
+            .then(() => { d.reload(); ctx.toast('Provider colour saved'); })
+            .catch((error) => ctx.toast(msg(error)));
+        } },
       })) },
       { title: 'Automatic analysis', rows: [
         { id: 'aiAutoAnalyse', t: 'toggle', label: 'Automatically analyse new photos', hint: 'Analyse new and waiting photos after imports and startup. Turn off to use Analyze with AI manually. An in-flight photo finishes before automatic analysis stops.', value: settings?.aiAutoAnalyse ?? true, set: async (value: boolean) => { try { await setSettings({ aiAutoAnalyse: value }); ctx.toast('Saved'); } catch (error) { ctx.toast(msg(error)); } } },
