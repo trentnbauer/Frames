@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { GearAliases } from '../components/GearAliases';
+import { GearMore } from '../components/GearMore';
+import { FilmDefaults } from '../components/FilmDefaults';
 import { WishlistRows } from '../components/WishlistRows';
 import { useEffect, useRef, useState } from 'react';
 import { api, useApi } from '../api';
@@ -58,7 +58,8 @@ export function Gear() {
     <div className="page-shell">
 
       {blocklistError && <p role="alert" style={{ color: 'var(--danger)' }}>{blocklistError}</p>}
-      <div className="workflow-shortcuts"><GearAliases /><Link to="/gear-history">Purchase & decision history →</Link><Link to="/activity">Undo changes →</Link></div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><GearMore /></div>
+      <FilmDefaults />
       <ProtoGear
         renderWishlist={(v: { buyWish: (id: number) => void }) => d ? <WishlistRows items={want.map((item) => ({ ...item, fits: fitsOf(item) }))} currency={d?.prefs.currency ?? '$'} showWant={!!d?.prefs.showWant} onChanged={async () => { g.set(await api<Data>('/gear/items')); window.dispatchEvent(new Event('frames:gear-changed')); }} onBought={v.buyWish} /> : <p className="muted">{g.error || 'Loading wishlist…'}</p>}
         ownedControl={d?.prefs.arrange === 'system' || !d?.prefs.arrange ? <GearSystems items={own} systems={d?.prefs.systems ?? []} onChanged={async () => { g.set(await api<Data>('/gear/items')); }} /> : undefined}
