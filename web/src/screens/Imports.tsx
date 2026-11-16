@@ -12,7 +12,11 @@ type Detail = {
   aiQueued: number;
   files: { id: number; file: string; status: string; photoId: number | null; error: string; retryable: boolean }[];
 };
-export function Imports() {
+/** Import statuses as people read them: upload-failed becomes Upload failed. */
+export const statusName = (status: string) => { const t = status.replace(/[-_]+/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : status; };
+
+/** Import history. On its own page, or (embedded) as the Imports tab of Stats. */
+export function Imports({ embedded }: { embedded?: boolean } = {}) {
   const runs = useApi<Run[]>('/imports'),
     [selected, setSelected] = useState(''),
     [busy, setBusy] = useState(false),
@@ -36,8 +40,8 @@ export function Imports() {
   };
   const d = detail.data?.id === id ? detail.data : null;
   return (
-    <div className="page-shell">
-      <h1 className="serif">Import history</h1>
+    <div className={embedded ? undefined : 'page-shell'} style={embedded ? { display: 'flex', flexDirection: 'column', gap: 16 } : undefined}>
+      {embedded ? <h2 className="serif" style={{ fontSize: 32, fontWeight: 400, margin: 0 }}>Import history</h2> : <h1 className="serif">Import history</h1>}
       <p className="muted">Uploads, library imports and their per-file outcomes. Retry failed files without reimporting successful ones.</p>
       <label>
         Import batch
@@ -52,7 +56,7 @@ export function Imports() {
         >
           {runs.data?.map((run) => (
             <option value={run.id} key={run.id}>
-              {new Date(run.startedAt).toLocaleString()} · {run.source} · {run.files} files · {run.status}
+              {new Date(run.startedAt).toLocaleString()} · {run.source} · {run.files} files · {statusName(run.status).toLowerCase()}
             </option>
           ))}
         </select>
@@ -70,7 +74,7 @@ export function Imports() {
             {Object.entries(d.counts).map(([status, count]) => (
               <div key={status}>
                 <strong>{count}</strong>
-                <small>{status}</small>
+                <small>{statusName(status)}</small>
               </div>
             ))}
           </div>
@@ -88,7 +92,7 @@ export function Imports() {
                 <div className="grow">
                   <strong>{file.file}</strong>
                   <small>
-                    {file.status}
+                    {statusName(file.status)}
                     {file.error ? ` · ${file.error}` : ''}
                   </small>
                 </div>

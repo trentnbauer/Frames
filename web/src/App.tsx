@@ -1,4 +1,3 @@
-import { Imports } from './screens/Imports';
 import { WishlistHistory } from './screens/WishlistHistory';
 import { ReviewSchedule } from './screens/ReviewSchedule';
 import { Activity } from './screens/Activity';
@@ -89,7 +88,7 @@ function Shell() {
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
         <Route path="/activity" element={<Activity />} />
-        <Route path="/imports" element={<Imports />} />
+        <Route path="/imports" element={<Navigate to="/stats?tab=imports" replace />} />
         <Route path="/review-schedule" element={<ReviewSchedule />} />
         <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/review" element={<Review />} />
