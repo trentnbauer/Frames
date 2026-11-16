@@ -10,6 +10,8 @@ import { AddToComposition } from '../components/AddToComposition';
 import { RemovalReview } from '../components/RemovalReview';
 import ProtoMapPicker from '../proto/ProtoMapPicker';
 import { TASKS, buildTasks, taskMeta, type TaskKey } from '../todoTasks';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileTodoList } from '../mobile/TodoList';
 
 type Todo = { total: number; items: { key: string; count: number; ids?: number[] }[] };
 type MapHit = { name: string; address: string; kind?: string; suburb?: string; city?: string; lat?: number; lon?: number };
@@ -30,7 +32,14 @@ const WHY: Record<string, (p: PhotoFull | null, extra: { camMissing: number; tag
 };
 
 /** To do: one task at a time, full screen. A photograph shows only the most important thing it is waiting on. */
+/** On a phone, To do opens as a list of the kinds of task; choosing one (or being on a wide screen) goes to the one-at-a-time view. */
 export function TodoPage() {
+  const phone = usePhoneWidth();
+  const [params] = useSearchParams();
+  return phone && !params.get('task') ? <MobileTodoList /> : <TodoTasks />;
+}
+
+function TodoTasks() {
   const nav = useNavigate();
   const { settings, refreshSummary } = useStore();
   const ai = !!settings && settings.ai !== 'off';

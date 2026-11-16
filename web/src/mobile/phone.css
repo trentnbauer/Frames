@@ -1,0 +1,21 @@
+/* The phone redesign (Frames Mobile prototype): shared pieces. Everything here applies at 767px and narrower only, except the helpers. */
+.phone-only { display: none; }
+.ptabbar { display: none; }
+.pscreen { display: none; }
+@media (max-width: 767px) {
+  .phone-only { display: grid; }
+  .no-phone { display: none; }
+  .ptabbar { position: fixed; left: 12px; right: 12px; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 40; height: 64px; border-radius: 999px; background: var(--raised2); box-shadow: var(--float); display: flex; padding: 5px; box-sizing: border-box; gap: 2px; }
+  .pscreen { display: block; }
+  .app-header .shell-head { box-shadow: none; background: var(--page); }
+  .app-header .lockup { font: italic 400 25px/1 var(--serif); }
+  .app-header .head-right { gap: 0; margin-right: -8px; }
+  .app-header .userbtn { height: 44px; width: 44px; padding: 0; justify-content: center; }
+  .app-header .userbtn .avatar { width: 30px; height: 30px; font-size: 12px; }
+  .app-content > .page-shell, .app-content > .page { padding-bottom: 124px !important; }
+  /* a page above the tab bar (a photo, a shoot, notifications…): it covers the shell */
+  .ppage { position: fixed; inset: 0; z-index: 50; background: var(--page); overflow-y: auto; padding: 54px 20px 48px; box-sizing: border-box; }
+  .ppage.flush { padding-left: 0; padding-right: 0; }
+  /* a tab's own page: the shell's header above, the tab bar below */
+  .ptab { padding: 8px 20px 130px; }
+}

@@ -33,6 +33,9 @@ import { GuestHome } from './pages/GuestHome';
 import { api, openPortfolio } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
+import { usePhoneWidth } from './usePhoneWidth';
+import { MobileNotifications } from './mobile/Notifications';
+import { MobileReviewTab } from './mobile/ReviewTab';
 
 const PAGE_NAMES: Record<string, string> = {
   '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
@@ -41,6 +44,11 @@ const PAGE_NAMES: Record<string, string> = {
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
 const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
+
+/** Pages that only exist in the phone layout: a wider screen goes Home instead. */
+function PhoneOnly({ children }: { children: React.ReactNode }) {
+  return usePhoneWidth() ? <>{children}</> : <Navigate to="/" replace />;
+}
 
 function Shell() {
   const [searching, setSearching] = useState(false);
@@ -87,6 +95,8 @@ function Shell() {
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
+        <Route path="/notifications" element={<PhoneOnly><MobileNotifications /></PhoneOnly>} />
+        <Route path="/reviews" element={<PhoneOnly><MobileReviewTab /></PhoneOnly>} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/imports" element={<Navigate to="/stats?tab=imports" replace />} />
         <Route path="/review-schedule" element={<ReviewSchedule />} />
