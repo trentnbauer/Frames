@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loading } from '../components/bits';
 import { useStore } from '../store';
-import { LIB_MOVED, NAMES, ROWS, parseAddress, type Tab } from './addresses';
+import { LIB_MOVED, SRV_MOVED, NAMES, ROWS, parseAddress, type Tab } from './addresses';
 import { GroupView, visibleRows, useToast, type Section } from './ui';
 import { LIB, SRV, type Ctx, type SectionDef, type TabDef } from './sections';
 
@@ -34,7 +34,7 @@ export function SettingsPage() {
 
   const goto = (t: Tab, key: string, sub?: string) => {
     // A section that was merged into another opens in its new place, on the tab its settings moved to.
-    const moved = t === 'lib' ? LIB_MOVED[key] : undefined;
+    const moved = t === 'lib' ? LIB_MOVED[key] : SRV_MOVED[key];
     const k = moved ? moved[0] : key, s2 = sub ?? moved?.[1];
     setQ(''); setTab(t); setSec((s) => ({ ...s, [t]: k }));
     if (s2) setSubs((m) => ({ ...m, [`${t}:${k}`]: s2 }));
