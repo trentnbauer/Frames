@@ -47,7 +47,8 @@ export class Logic extends DCLogic {
     const dm = S.delMode;
     return {
       groups, countLabel: P.countLabel, toggleFilters: P.onToggleFilters, filterCount: (P.chips || []).length, clearAll: P.onClear, showAdd: P.canAdd && !sel, cantAdd: !P.canAdd, addPhotos: P.onAddPhotos,
-      sortOpts: [['shoot', 'Photoshoot'], ['uploaded', 'Uploaded'], ['taken', 'Date taken']].map(([k, label]) => ({ label, bg: by === k ? 'var(--text)' : 'transparent', fg: by === k ? 'var(--bg)' : 'var(--text2)', go: () => this.setState({ sortBy: k }) })),
+      sortOpts: [['shoot', 'Shoot'], ['uploaded', 'Uploaded'], ['taken', 'Taken'], ['score', 'Score']].map(([k, label]) => ({ label, bg: by === k ? 'var(--text)' : 'transparent', fg: by === k ? 'var(--bg)' : 'var(--text2)', go: () => this.setState({ sortBy: k }) })),
+      orderLabel: P.orderLabelFor ? P.orderLabelFor(by) : P.orderLabel,
       selBtnLabel: sel ? 'Done' : 'Select', selBtnBg: sel ? 'var(--text)' : 'transparent', selBtnFg: sel ? 'var(--bg)' : 'var(--text)', selBtnRing: sel ? 'none' : 'inset 0 0 0 1px var(--outline)',
       toggleSel: () => this.setState({ selMode: !sel, picked: sel ? [] : S.picked }),
       selMode: sel, actOp: n ? 1 : 0.4, actPe: n ? 'auto' : 'none', pickedLabel: n + ' selected', pickedN: n, mvThumbs: thumbs,

@@ -239,6 +239,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   });
 
   // ---------- one photo ----------
+  // One score per rated photograph for the Library's Score grouping: your ratings and your guests' ratings, pooled. Unrated photographs are left out.
+  app.get('/api/photos/scores', async () => {
+    const rows = all('SELECT photo_id, AVG(rating) a FROM (SELECT photo_id, rating FROM reviews UNION ALL SELECT photo_id, rating FROM share_reviews) GROUP BY photo_id');
+    return Object.fromEntries(rows.map((r) => [r.photo_id as number, Math.round((r.a as number) * 100) / 100]));
+  });
   app.get('/api/photos/:id', async (req, rep) => {
     const p = one('SELECT * FROM photos WHERE id = ?', num((req.params as Row).id));
     return p ? x.photoDto(p, true) : notFound(rep);

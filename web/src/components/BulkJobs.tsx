@@ -9,27 +9,32 @@ export async function finishBulkJob(id: string, progress: (value: string) => voi
     if (result.status === 'complete') return;
   }
 }
-export function BulkJobs() {
+/** Batch jobs. Uncontrolled it shows its own button; with `open`/`onClose` the caller (the Library's ⋯ menu) owns it. */
+export function BulkJobs({ open: controlled, onClose }: { open?: boolean; onClose?: () => void } = {}) {
   const jobs = useApi<Job[]>('/photos/bulk-jobs'),
-    [open, setOpen] = useState(false),
+    [openState, setOpenState] = useState(false),
     [busy, setBusy] = useState(false),
     [status, setStatus] = useState(''),
     [error, setError] = useState('');
+  const open = controlled ?? openState;
+  const setOpen = (value: boolean) => { if (controlled === undefined) setOpenState(value); else if (!value) onClose?.(); };
   const pending = jobs.data?.filter((job) => job.status === 'pending') ?? [];
   return (
     <>
-      <button
-        onClick={() => {
-          jobs.reload();
-          setOpen(true);
-        }}
-      >
-        Bulk edit history{pending.length ? ` · ${pending.length} unfinished` : ''}
-      </button>
+      {controlled === undefined && (
+        <button
+          onClick={() => {
+            jobs.reload();
+            setOpen(true);
+          }}
+        >
+          Batch jobs{pending.length ? ` · ${pending.length} unfinished` : ''}
+        </button>
+      )}
       {open && (
         <Modal
-          title="Bulk edit history"
-          sub="Resume an interrupted edit. Conflicts stop before overwriting newer edits; completed chunks remain available in Undo changes."
+          title="Batch jobs"
+          sub="Resume an interrupted edit. Conflicts stop before overwriting newer edits; completed chunks remain available in Recently removed."
           onClose={() => !busy && setOpen(false)}
           foot={
             <button className="btn primary" disabled={busy} onClick={() => setOpen(false)}>
