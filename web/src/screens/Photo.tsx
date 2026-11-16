@@ -132,7 +132,7 @@ export function Photo() {
         aiColour={suggestionColour} aiProviderName={suggestionProvider?.name ?? ''}
         descriptionSuggested={!!ai && !p.description && !!p.aiSuggestion?.description}
         onAcceptDescription={() => patch({ acceptAiDescription: true })}
-        onRejectDescription={() => patch({ rejectAiDescription: true }}
+        onRejectDescription={() => patch({ rejectAiDescription: true })}
         place={place} defaultLat={undefined} defaultLng={undefined}
         searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
         reversePlace={async (lat: number, lon: number) => api<MapHit>(`/map/reverse?lat=${lat}&lon=${lon}`)}
