@@ -35,12 +35,13 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - name: Build standalone read-only demo
+      - name: Build production UI with read-only demo data
         run: npx vite build --config vite.demo.config.ts
         working-directory: web
       - name: Serve the demo at the Pages root
         run: |
           mv web/dist-demo/demo.html web/dist-demo/index.html
+          cp web/dist-demo/index.html web/dist-demo/404.html
           touch web/dist-demo/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
