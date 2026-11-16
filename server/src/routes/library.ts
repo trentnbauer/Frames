@@ -1,4 +1,5 @@
 import { uploadSummary } from '../importRuns.js';
+import { loadCloud, saveCloud, progressOf, refetching } from '../cloud.js';
 import { policyOf } from '../policy.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -333,6 +334,35 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     db.prepare('UPDATE photos SET has_derivs = 0').run();
     void rebuild(db, cfg, false).catch(() => undefined);
     return { cleared: removed };
+  });
+  // A fresh start for the current person's photo library. Account, sign-in, saved
+  // cloud credentials, import source definitions and preferences are not touched.
+  app.post('/api/library/reset', async (req, rep) => {
+    if (((req.body ?? {}) as Row).confirm !== 'RESET') return rep.code(400).send({ error: 'Type RESET to confirm.' });
+    const t = x.tenant();
+    const retry = x.bag('importRetry', () => ({ busy: false }));
+    if (x.scanning() || progressOf(cfg).running || refetching.has(cfg.dataDir) || retry.busy || t.ai.state.running)
+      return rep.code(409).send({ error: 'Wait for active scans, imports and photo processing to finish before resetting.' });
+    const count = (one('SELECT COUNT(*) n FROM photos')?.n ?? 0) as number;
+    db.transaction(() => {
+      // Disable scheduled cloud imports without revoking tokens or forgetting folders.
+      const cloud = loadCloud(db);
+      saveCloud(db, { ...cloud, connections: cloud.connections.map((c) => ({ ...c, enabled: false })) });
+      // Polymorphic shares need removal before their target rows disappear.
+      db.prepare("DELETE FROM shares WHERE kind IN ('shoot', 'collection', 'photo')").run();
+      db.prepare('DELETE FROM collections').run();
+      // Old non-FK history tables are cleared explicitly as well.
+      for (const table of ['dismissed', 'feedback', 'dup_ignored', 'xmp_conflicts', 'removal_kept', 'portfolio_marks'])
+        db.prepare(`DELETE FROM ${table}`).run();
+      db.prepare('DELETE FROM photos').run();
+      db.prepare('DELETE FROM shoots').run();
+      for (const table of ['photo_recovery', 'change_journal', 'removed', 'duplicates', 'cloud_files', 'import_runs', 'metadata_jobs'])
+        db.prepare(`DELETE FROM ${table}`).run();
+      db.prepare("DELETE FROM settings WHERE key = 'reviewSession' OR key = 'lastScan' OR key LIKE 'lastScan:%'").run();
+    })();
+    // Only generated derivatives are discarded; originals and cloud copies remain.
+    fs.rmSync(path.join(cfg.dataDir, 'derivatives'), { recursive: true, force: true });
+    return { removed: count, automaticImportsDisabled: true };
   });
   app.post('/api/reviews/reset', async (req, rep) => {
     if (((req.body ?? {}) as Row).confirm !== 'reset') return rep.code(400).send({ error: 'Send confirm: "reset" to forget every rating.' });
