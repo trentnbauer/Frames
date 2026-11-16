@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiActivity, aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
-import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
+import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSharedColour, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals, shrinkUpload } from '../cloud.js';
 import { removeShoot } from '../remove.js';
@@ -515,8 +515,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.put('/api/ai/sources/:id', async (req, rep) => {
     const list = loadSources(db);
     const i = list.findIndex((s) => s.id === (req.params as Row).id);
-    if (i < 0) return x.notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if (i < 0) {
+      // A shared AI: the only thing a member may change is the colour they see it in.
+      const id = String((req.params as Row).id);
+      if (!loadShared(db).some((s) => s.id === id) || b.color === undefined) return x.notFound(rep);
+      try { setSharedColour(db, id, b.color); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+      return sourcesDto();
+    }
     try { list[i] = applySource(list[i], b); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
     saveSources(db, list);
     if (typeof b.key === 'string' && b.key) setSourceKey(db, list[i].id, b.key.slice(0, 500));
