@@ -396,6 +396,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'tags', 'ai_source_id', "TEXT NOT NULL DEFAULT ''");
   },
+  // A protected shoot cannot be removed manually or by low-rating cleanup.
+  (db) => { addColumn(db, 'shoots', 'protected', 'INTEGER NOT NULL DEFAULT 0'); },
 ];
 
 export function migrate(db: DB) {
