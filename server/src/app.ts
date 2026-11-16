@@ -156,7 +156,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
         r.shareViewer = g; // the share page greets an account by name and skips asking it for one
         const s = g?.role === 'guest' && t ? t.db.prepare('SELECT kind, target_id, label FROM shares WHERE token = ?').get(m[1]) as { kind: string; target_id: number; label: string } | undefined : undefined;
         if (g && s) {
-          const name = (t!.db.prepare(`SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`).get(s.target_id) as { name: string } | undefined)?.name ?? '';
+          const name = (t!.db.prepare(s.kind === 'photo' ? 'SELECT title name FROM photos WHERE id = ?' : `SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`).get(s.target_id) as { name: string } | undefined)?.name ?? '';
           sys.prepare('INSERT INTO guest_links(user_id, token, label, kind, seen) VALUES(?, ?, ?, ?, ?) ON CONFLICT(user_id, token) DO UPDATE SET label = excluded.label, seen = excluded.seen').run(g.id, m[1], s.label || name, s.kind, new Date().toISOString());
         }
       }

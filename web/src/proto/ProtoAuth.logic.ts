@@ -4,6 +4,7 @@
 // The options, the Turnstile check and every request come in through props (see pages/Auth.tsx).
 import React from 'react';
 import { DCLogic } from './runtime';
+const isPhone = () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
 import { HumanCheck } from '../components/HumanCheck';
 
 const okEmail = (x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.trim());
@@ -32,7 +33,7 @@ export class Logic extends DCLogic {
       isSignin: v === 'signin', isSignup: v === 'signup', isCode: v === 'code', isTerms: v === 'terms', isLock: v === 'lock', isSignedOut: v === 'out',
       isApp: false, isHand: false, isGate: false, isName: false, isGuestHome: false, isExpired: false, isPw: false, isStarted: false, states: [],
       serverName: o.serverName || 'Frames', tsWidget: widget,
-      siTitle: 'Frames', siSub: 'Sign in to continue.', siSubGap: '10px', siShowAbout: true, siHasErr: !!S.err, siErr: S.err, siShowTs: !!ts, siShowForm: emailOn,
+      siTitle: isPhone() ? 'Sign in' : 'Frames', siSub: isPhone() ? `to ${o.serverName || (typeof window !== 'undefined' ? window.location.host : '')}` : 'Sign in to continue.', siSubGap: '10px', siShowAbout: !isPhone(), siHasErr: !!S.err, siErr: S.err, siShowTs: !!ts, siShowForm: emailOn,
       siEmail: S.email, onSiEmail: (e) => this.setState({ email: e.target.value, err: '' }), siKey: (e) => { if (e.key === 'Enter') siGo(); }, siGo, siGoOp: S.busy ? 0.6 : 1,
       providers: providers.map((p) => ({ name: p.name, op: 1, go: () => provider(p.id) })),
       passkeyShow: !!o.passkey && typeof window !== 'undefined' && !!window.PublicKeyCredential, passkeyGo: () => run(async () => { const to = await P.passkey(); window.location.assign(to || '/'); }, 'err'),

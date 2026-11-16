@@ -28,7 +28,7 @@ export function usePhone(): boolean {
 
 type Props = {
   token: string;
-  d: { name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; layout?: Layout | null; viewer?: Viewer; owner?: string };
+  d: { kind?: string; name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; layout?: Layout | null; viewer?: Viewer; owner?: string };
   photos: SharedPhoto[]; wallPrints: Print[]; others: SharedPhoto[]; reviewer: string;
   withName: (then: (name: string) => void) => void; changeName: () => void;
   /** The guest's version, kept by the page: print's own photograph -> the candidate put in its place, and print id -> frame colour. */
@@ -227,7 +227,7 @@ export function ShareMobile(p: Props) {
           <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}<span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{d.owner ? `Shared by ${d.owner}` : 'Shared with you'}</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14 }}>
-              <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>A PHOTOSHOOT · {photos.length} {photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}</span>
+              <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>{d.kind === 'photo' ? 'A PHOTOGRAPH' : `A PHOTOSHOOT · ${photos.length} ${photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}`}</span>
               <h1 style={{ font: `400 52px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
               {d.description && <p style={{ margin: '2px 0 0', font: `italic 400 21px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
               {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}

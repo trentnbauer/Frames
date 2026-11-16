@@ -7,6 +7,8 @@ import { Sheet } from './Sheet';
 import { createPortal } from 'react-dom';
 import { usePhoneWidth } from '../usePhoneWidth';
 
+export type ShareKind = 'collection' | 'shoot' | 'photo';
+const KIND_NAME: Record<ShareKind, string> = { collection: 'composition', shoot: 'photoshoot', photo: 'photograph' };
 type ShareLink = {
   id: number; token: string; label: string; versionId: number | null; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string;
   expiresAt: string | null; status: 'active' | 'expired' | 'revoked'; views: number; downloads: number; reviews: number;
@@ -39,7 +41,7 @@ const Row = ({ title, hint, last, children }: { title: string; hint?: string; la
 );
 
 /** Each address has its own permissions, expiry, PIN and invitations. */
-export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | 'shoot'; id: number; name?: string; onClose: () => void }) {
+export function SharePanel({ kind, id, name, onClose }: { kind: ShareKind; id: number; name?: string; onClose: () => void }) {
   const links = useApi<ShareLink[]>(`/shares?kind=${kind}&id=${id}`);
   const [selected, setSelected] = useState<number | 'new' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,7 +52,7 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
   };
   const phone = usePhoneWidth();
   if (phone) return <ShareScreen kind={kind} id={id} name={name} onClose={onClose} links={links.data} error={links.error} link={link} selected={selected} setSelected={setSelected} busy={busy} update={update} onBusy={setBusy} />;
-  const title = name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition');
+  const title = name ?? `this ${KIND_NAME[kind]}`;
   const rel = (item: ShareLink) => item.status === 'active' ? `Active · ${item.expiresAt ? `expires in ${Math.max(0, Math.ceil((new Date(item.expiresAt).getTime() - Date.now()) / 86_400_000))} days` : 'never expires'}${item.pin ? ' · PIN' : ''}` : item.status === 'revoked' ? 'Stopped' : 'Expired';
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const [newErr, setNewErr] = useState('');
@@ -78,7 +80,7 @@ export function SharePanel({ kind, id, name, onClose }: { kind: 'collection' | '
 }
 
 /** The phone's share screen: a full page with a Back button, the links as rows, and the chosen link's settings below. */
-function ShareScreen({ kind, id, name, onClose, links, error, link, selected, setSelected, busy, update, onBusy }: { kind: 'collection' | 'shoot'; id: number; name?: string; onClose: () => void; links: ShareLink[] | null; error: string | null; link: ShareLink | null; selected: number | 'new' | null; setSelected: (s: number | 'new' | null) => void; busy: boolean; update: (l: ShareLink) => void; onBusy: (b: boolean) => void }) {
+function ShareScreen({ kind, id, name, onClose, links, error, link, selected, setSelected, busy, update, onBusy }: { kind: ShareKind; id: number; name?: string; onClose: () => void; links: ShareLink[] | null; error: string | null; link: ShareLink | null; selected: number | 'new' | null; setSelected: (s: number | 'new' | null) => void; busy: boolean; update: (l: ShareLink) => void; onBusy: (b: boolean) => void }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-sheet], .modal')) onClose(); };
     window.addEventListener('keydown', f);
@@ -86,10 +88,10 @@ function ShareScreen({ kind, id, name, onClose, links, error, link, selected, se
   }, [onClose]);
   const mono11 = { font: '500 11px var(--mono)', letterSpacing: '.08em', color: 'var(--faint)' } as const;
   const shown = selected === 'new' ? null : link;
-  return <div role="dialog" aria-label={`Share ${name ?? (kind === 'shoot' ? 'this photoshoot' : 'this composition')}`} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--page)', overflowY: 'auto', padding: '54px 20px 48px', boxSizing: 'border-box' }}>
+  return <div role="dialog" aria-label={`Share ${name ?? `this ${KIND_NAME[kind]}`}`} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--page)', overflowY: 'auto', padding: '54px 20px 48px', boxSizing: 'border-box' }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ paddingTop: 4 }}><button onClick={onClose} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Back</button></div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={mono11}>SHARE · {kind === 'shoot' ? 'PHOTOSHOOT' : 'COMPOSITION'}</span><h1 style={{ font: '400 38px/1.02 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{name ?? (kind === 'shoot' ? 'This photoshoot' : 'This composition')}</h1></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={mono11}>SHARE · {KIND_NAME[kind].toUpperCase()}</span><h1 style={{ font: '400 38px/1.02 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{name ?? (kind === 'shoot' ? 'This photoshoot' : 'This composition')}</h1></div>
       {!links ? <p role={error ? 'alert' : undefined} className="muted">{error || 'Loading…'}</p> : <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={mono11}>LINKS</span><button disabled={busy} onClick={() => setSelected('new')} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>+ New link</button></div>
@@ -106,7 +108,7 @@ function ShareScreen({ kind, id, name, onClose, links, error, link, selected, se
   </div>;
 }
 
-function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNew, onCancelNew, desk, footSlot }: { kind: 'collection' | 'shoot'; targetId: number; link: ShareLink | null; onSaved: (link: ShareLink) => void; onBusy: (busy: boolean) => void; phone?: boolean; startNew?: boolean; onCancelNew?: () => void; desk?: boolean; footSlot?: HTMLElement | null }) {
+function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNew, onCancelNew, desk, footSlot }: { kind: ShareKind; targetId: number; link: ShareLink | null; onSaved: (link: ShareLink) => void; onBusy: (busy: boolean) => void; phone?: boolean; startNew?: boolean; onCancelNew?: () => void; desk?: boolean; footSlot?: HTMLElement | null }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
   const [fresh, setFresh] = useState(false);

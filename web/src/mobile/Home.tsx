@@ -7,7 +7,8 @@ import { greetingFor } from '../pages/Today';
 import { GearIcon } from '../components/GearSystems';
 import type { WishlistData } from '../components/HomeWishlist';
 import { useStore } from '../store';
-import { TASKS, buildTasks } from '../todoTasks';
+import { buildTasks } from '../todoTasks';
+import { SUB } from './TodoList';
 import { MiniWall } from './MiniWall';
 import { Eyebrow, Row, primaryBtn } from './ui';
 
@@ -35,7 +36,7 @@ export function MobileHome() {
   const openBatches = (batches.data?.batches ?? []).filter((b) => !b.done);
   const todoRows = [
     ...(due > 0 ? [{ label: 'Photographs due for review', sub: 'Rate them again', count: due, go: () => nav('/review') }] : []),
-    ...tasks.rows.map((r) => ({ label: r.row, sub: TASKS.find((t) => t.key === r.key)?.title ?? '', count: r.n, go: () => nav(`/todo?task=${r.key}`) })),
+    ...tasks.rows.map((r) => ({ label: r.row, sub: SUB[r.key], count: r.n, go: () => nav(`/todo?task=${r.key}`) })),
   ];
   const todoTotal = todoRows.reduce((n, r) => n + r.count, 0);
   const startIdea = async (idea: Idea) => {
