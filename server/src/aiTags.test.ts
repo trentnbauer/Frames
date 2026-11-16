@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { splitNames } from './ai.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describePhoto, splitNames } from './ai.js';
 import { migrate, openDb } from './db.js';
 
 describe('tags from the AI', () => {
@@ -35,5 +35,17 @@ describe('tags already stored that way', () => {
     expect(names.find((r) => r.name === 'dog')).toMatchObject({ source: 'ai', accepted: 0, kind: 'tag' });
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('light leaks and flare', () => {
+  const answer = (json: object) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ message: { content: JSON.stringify(json) } }))));
+  const c = { protocol: 'ollama', local: true, name: 'test', endpoint: 'http://localhost:1', model: 'm', embedModel: '', key: '' } as const;
+  afterEach(() => vi.unstubAllGlobals());
+  it('are tagged when the model sees them, once each, and not otherwise', async () => {
+    answer({ description: 'd', subjects: [], tags: ['beach', 'lens flare'], light_leak: true, lens_flare: 'true' });
+    expect((await describePhoto(c, Buffer.from(''))).tags).toEqual(['beach', 'lens flare', 'light leak']);
+    answer({ description: 'd', subjects: [], tags: ['beach'], light_leak: false, lens_flare: 'no' });
+    expect((await describePhoto(c, Buffer.from(''))).tags).toEqual(['beach']);
   });
 });
