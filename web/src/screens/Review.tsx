@@ -4,6 +4,7 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
 import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
+import { Modal } from '../components/Modal';
 import ProtoReview from '../proto/ProtoReview';
 import { reviewRequest } from '../reviewScope';
 import { usePhoneWidth } from '../usePhoneWidth';
@@ -22,6 +23,7 @@ export function Review() {
   const [removals, setRemovals] = useState(0);
   const checkRemovals = () => api<{ photos: unknown[] }>('/photos/delete-suggestions').then((result) => setRemovals(result.photos.length)).catch(() => undefined);
   const colls = useApi<Collection[]>('/collections');
+  const [fav, setFav] = useState<{ id: number; busy: boolean } | null>(null); // a 5 out of 5: offer to add the photograph to the portfolio favourites
   const [offer, setOffer] = useState<{ id: number; comp: Collection } | null>(null);
   const [pickFor, setPickFor] = useState<number | null>(null);
   const phone = usePhoneWidth();
@@ -54,6 +56,7 @@ export function Review() {
     setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
     const fit = n >= 4 ? bestFit(cur.id) : null;
     setOffer(fit ? { id: cur.id, comp: fit } : null);
+    if (n === 5) { const id = cur.id; api<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`).then((st) => { if (!st.inPortfolio) setFav({ id, busy: false }); }).catch(() => undefined); }
     api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } }).then(() => { refreshSummary(); void checkRemovals(); }).catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
   };
 
@@ -74,9 +77,15 @@ export function Review() {
       </div>
     );
   }
+  const favModal = fav && (
+    <Modal title="Add this five to your portfolio favourites?" sub="Favourites are shown on your portfolio. You can take it out again from the photograph’s page." width={480} onClose={() => setFav(null)}
+      foot={<><span className="grow" /><button className="btn" onClick={() => setFav(null)}>Not now</button><button className="btn primary" disabled={fav.busy} onClick={async () => { setFav({ ...fav, busy: true }); try { await api(`/portfolio/photos/${fav.id}`, { body: { favourite: true } }); } catch (e) { setSaveErr(`It could not be added to your portfolio (${(e as Error).message}).`); } setFav(null); }}>Add to favourites</button></>}>
+      <img src={imgUrl(fav.id, 'thumb')} alt="" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8, background: '#000' }} />
+    </Modal>
+  );
   const inComps = colls.data?.filter((c) => cur && c.photoIds.includes(cur.id)).length ?? 0;
   if (phone && cur) {
-    return (
+    return (<>
       <MobileReviewSession
         key={cur.id} total={s.queue.length} index={s.index} shootName={s.shootName} photoId={cur.id} photoSrc={imgUrl(cur.id, 'preview')} rating={s.ratings[cur.id]} note={s.notes[cur.id] ?? ''}
         onRate={rate} onBin={bin} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
@@ -87,9 +96,10 @@ export function Review() {
         renderCompPicker={(close, d) => <CompPicker ids={[pickFor ?? cur.id]} from="The photo you just rated" onClose={() => { setPickFor(null); close(); }} onDone={(m) => { setPickFor(null); colls.reload(); d(m); }} />}
         error={saveErr}
       />
-    );
+      {favModal}
+    </>);
   }
-  return (
+  return (<>
     <ProtoReview
       total={s.queue.length} index={s.index} shootName={s.shootName} photoSrc={cur ? imgUrl(cur.id, 'preview') : ''} rating={cur ? s.ratings[cur.id] : undefined}
       onRate={rate} onBin={bin} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
@@ -108,5 +118,6 @@ export function Review() {
       onDelete={async (mode: 'frames' | 'trash') => { if (!cur) return; try { await api('/photos/remove', { body: { ids: [cur.id], originals: mode === 'trash' ? 'trash' : 'keep' } }); refreshSummary(); await move(s.index + 1); } catch (e) { setSaveErr(`Not deleted (${(e as Error).message}).`); } }}
       error={saveErr}
     />
-  );
+    {favModal}
+  </>);
 }

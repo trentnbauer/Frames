@@ -18,7 +18,7 @@ it.each(['collection', 'shoot'] as const)('keeps multiple %s links independent t
   expect(replaced.token).not.toBe(first.token);
   expect((await a.get(`/api/s/${first.token}`)).status).toBe(404);
   expect((await a.get(`/api/s/${second.token}`)).status).toBe(200);
-  await a.del(`/api/shares/${first.id}`);
+  await a.patch(`/api/shares/${first.id}`, { on: false });
   expect((await a.get(`/api/s/${replaced.token}`)).status).toBe(410);
   expect((await a.get(`/api/s/${second.token}`)).status).toBe(200);
   await a.patch(`/api/shares/${first.id}`, { on: true });

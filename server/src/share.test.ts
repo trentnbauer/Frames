@@ -11,7 +11,7 @@ import { jpg, svg } from './testutil.js';
 let tmp: string, lib: string, web: string, app: ReturnType<typeof buildApp>;
 const owner = { authorization: 'Basic ' + Buffer.from('me:pw').toString('base64') };
 const post = (url: string, payload: unknown, headers: Record<string, string> = owner) => app.inject({ method: 'POST', url, payload: payload as any, headers });
-let tokenColl: string, tokenShoot: string, shareId: number, outsideId: number, insideIds: number[];
+let collectionId = 0, tokenColl: string, tokenShoot: string, shareId: number, outsideId: number, insideIds: number[];
 
 beforeAll(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frames-share-'));
@@ -29,7 +29,7 @@ beforeAll(async () => {
   const c = (await post('/api/collections', { name: 'For the client', description: 'Pick your favourites', photoIds: insideIds })).json();
   await app.inject({ method: 'PATCH', url: `/api/photos/${insideIds[0]}`, headers: owner, payload: { place: 'Secret cove', description: 'private note' } });
   const s = (await post('/api/shares', { kind: 'collection', id: c.id, allowDownload: true, allowReview: true, label: 'Client' })).json();
-  tokenColl = s.token; shareId = s.id;
+  tokenColl = s.token; shareId = s.id; collectionId = c.id;
   const shootId = photos[0].shootId;
   tokenShoot = (await post('/api/shares', { kind: 'shoot', id: shootId, allowDownload: false, allowReview: false })).json().token;
 });
@@ -166,11 +166,17 @@ describe('managing links', () => {
     expect((await app.inject({ url: '/api/shares', headers: owner })).json().find((s: any) => s.id === t.id).status).toBe('expired');
   });
   it('is switched off at once by revoking, but keeps what guests said', async () => {
-    const r = await app.inject({ method: 'DELETE', url: `/api/shares/${shareId}`, headers: owner });
+    const r = await app.inject({ method: 'PATCH', url: `/api/shares/${shareId}`, headers: owner, payload: { on: false } });
     expect(r.json().status).toBe('revoked');
     for (const url of [`/api/s/${tokenColl}`, `/api/s/${tokenColl}/photos/${insideIds[0]}/thumb`, `/api/s/${tokenColl}/photos/${insideIds[0]}/original`]) expect((await app.inject(url)).statusCode, url).toBe(410);
     expect((await rateAgain()).statusCode).toBe(410);
     expect(((await app.inject({ url: `/api/shares/${shareId}/reviews`, headers: owner })).json() as any[]).length).toBeGreaterThan(0);
+  });
+  it('is deleted for good, with what guests said on it', async () => {
+    const made = (await app.inject({ method: 'POST', url: '/api/shares', headers: owner, payload: { kind: 'collection', id: collectionId } })).json();
+    expect((await app.inject({ method: 'DELETE', url: `/api/shares/${made.id}`, headers: owner })).json()).toEqual({ removed: 1 });
+    expect((await app.inject({ url: `/api/s/${made.token}` })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'DELETE', url: `/api/shares/${made.id}`, headers: owner })).statusCode).toBe(404);
   });
   const rateAgain = () => post(`/api/s/${tokenColl}/review`, { photoId: insideIds[0], rating: 5 }, {});
 });

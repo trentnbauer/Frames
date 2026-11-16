@@ -118,6 +118,11 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (typeof b.protected !== 'boolean') return rep.code(400).send({ error: 'protected must be true or false' });
       db.prepare('UPDATE shoots SET protected = ? WHERE id = ?').run(b.protected ? 1 : 0, id);
     }
+    if ('coverId' in b) {
+      if (b.coverId !== null && !Number.isInteger(b.coverId)) return rep.code(400).send({ error: 'coverId must be a photograph id or null' });
+      if (b.coverId !== null && !one('SELECT 1 x FROM photos WHERE id = ? AND shoot_id = ?', b.coverId, id)) return rep.code(400).send({ error: 'That photograph is not in this shoot' });
+      db.prepare('UPDATE shoots SET cover_id = ? WHERE id = ?').run(b.coverId, id);
+    }
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
     const everyPhoto = b.overwrite === true; // the person chose to change every photograph in the shoot, even ones with their own value
