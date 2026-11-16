@@ -960,3 +960,5 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .todo-nav-popover .todo-up-next-row { display:flex; justify-content:space-between; gap:12px; font-size:13.5px; color:var(--text); }
 .todo-nav-popover .todo-up-next-row .mono { color:var(--muted); font-size:12px; white-space:nowrap; }
 .todo-nav-popover .todo-nav-head { padding:10px 12px 4px; margin:0; }
+.pickrow input:focus-visible + .cbox { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 767px) { .fpick { grid-template-columns: 1fr !important; } .fpick > div:first-child > div:last-child { height: auto !important; max-height: 50vh; } }
