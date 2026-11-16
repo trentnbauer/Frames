@@ -174,7 +174,7 @@ function updateDemoCollection(path: string, body: unknown): Collection {
 /** Only isolated in-memory composition changes are allowed; all other writes fail. */
 export async function demoApi<T>(path:string,init?:{method?:string;body?:unknown}):Promise<T>{
   const method=(init?.method??(init?.body!==undefined?'POST':'GET')).toUpperCase();
-  if(method==='PATCH' && /^\\/collections\\/\\d+$/.test(new URL(path, 'https://demo.invalid').pathname)) return updateDemoCollection(path, init?.body) as T;
+  if(method==='PATCH' && path.startsWith('/collections/') && /^\d+$/.test(path.split('?')[0].slice('/collections/'.length))) return updateDemoCollection(path, init?.body) as T;
   if(method!=='GET'||init?.body!==undefined)throw new Error('Read-only demo: changes are disabled.');
   return read(path) as T;
 }
