@@ -32,7 +32,7 @@ export class Logic extends DCLogic {
       mates: (P.mates || []).map((m) => ({ src: m.src, ar: m.ar, op: m.current ? 1 : 0.45, go: () => P.onOpenMate(m.id) })),
       pfTitle: P.pfTitle, pfLabel: P.pfLabel, pfDotBg: P.pfOn ? 'var(--text)' : 'transparent', pfDotRing: P.pfOn ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent)', togglePf: () => P.onTogglePf(),
       favLabel: P.fav ? '★ Favourite' : '☆ Favourite', favFg: P.fav ? 'var(--text)' : 'var(--text2)', toggleFav: () => P.onToggleFav(),
-      aiLabel: aiBusy ? 'Analyzing…' : aiDone ? '✓ Analyzed · run again' : '✦ Analyze with AI', aiFg: aiBusy ? 'var(--text2)' : 'var(--text)', aiCursor: aiBusy ? 'default' : 'pointer', aiSpinner: aiBusy ? spin() : null,
+      aiLabel: aiBusy ? 'Analysing…' : aiDone ? '✓ Analysed · run again' : '✦ Analyse with AI', aiFg: aiBusy ? 'var(--text2)' : 'var(--text)', aiCursor: aiBusy ? 'default' : 'pointer', aiSpinner: aiBusy ? spin() : null,
       runAi: async () => { if (aiBusy) return; const m = await P.onRunAi(); if (m) this.ptoast(m); },
       moreOpen: S.more, toggleMore: () => this.setState({ more: !S.more }), moreFg: S.more ? 'var(--text)' : 'var(--text2)', moreBg: S.more ? 'var(--hair)' : 'transparent',
       moreItems: (P.moreItems || []).map((m) => ({ label: m.label, meta: m.meta || '', sep: m.sep ? 'block' : 'none', fg: m.danger ? 'oklch(0.75 0.14 28)' : 'var(--text)', go: m.danger ? () => this.setState({ more: false, del: true }) : closeAnd(m.run, m.toast) })),

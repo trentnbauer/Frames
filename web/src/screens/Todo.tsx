@@ -88,7 +88,7 @@ export function TodoPage() {
     tGearHints: <SameShootGear camera={cam[0] === suggestedGear.camera ? '' : suggestedGear.camera} lens={cam[1] === suggestedGear.lens ? '' : suggestedGear.lens} onUse={(field, value) => setCam((current) => current.map((item, index) => index === (field === 'camera' ? 0 : 1) ? value : item))} />,
     tTags: chip('tag'), tSubjects: chip('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
     tComps: [], tCompPicker: p ? <AddToComposition key={p.id} ids={[p.id]} label="Add to composition" onDone={() => { colls.reload(); todo.reload(); walk.reload(); refreshSummary(); }} /> : null,
-    tAiLabel: busy ? 'Analyzing…' : '✦ Analyze with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
+    tAiLabel: busy ? 'Analysing…' : '✦ Analyse with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const s = p?.aiSuggestion?.description; if (s) setDesc(s); },

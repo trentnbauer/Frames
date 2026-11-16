@@ -130,7 +130,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
                   <button type="button" className="notification-dismiss" aria-label={`Dismiss ${n.text}`} title="Dismiss notification" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>×</button>
                   {n.gear?.state === 'new' && <div style={{ display: 'flex', gap: 8, padding: '0 34px 12px 46px', flexWrap: 'wrap' }}>
                     <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
-                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'blacklist')}>Blacklist</button>
+                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'blacklist')}>Block</button>
                   </div>}
                 </div>
               ))}
