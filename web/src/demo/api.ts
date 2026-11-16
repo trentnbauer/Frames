@@ -59,7 +59,7 @@ const makeCollection = (id:number,name:string,ids:number[],stage:'progress'|'rev
   id,name,stage,updatedAt:now,description:'An example composition',theme:'',target:null,photoIds:ids,
   chosenIds:ids.slice(0,3),printedAt:null,layout:{mode:'grid',prints:arrange(ids.slice(0,3).map((p,i)=>makePrint(p,i+1)),'grid'),ppi:300},layoutSaved:true
 });
-const collections:Collection[] = [
+let collections:Collection[] = [
   makeCollection(1,'Places & spaces',[1,2,3,14,15],'progress'),
   makeCollection(2,'Summer colours',[7,8,9,10],'review'),
   makeCollection(3,'City geometry',[13,14,15,16],'done')
@@ -154,9 +154,27 @@ function read(path:string):unknown {
   throw new Error('This section is not available with sample data.');
 }
 
-/** No writes are accepted, including same-origin requests. Data is never persisted. */
+/** Composition edits live only in this browser tab's demo memory.
+ * No request reaches a backend and refreshing restores the sample compositions.
+ */
+function updateDemoCollection(path: string, body: unknown): Collection {
+  const match = /^\/collections\/(\d+)$/.exec(new URL(path, 'https://demo.invalid').pathname);
+  if (!match || !body || typeof body !== 'object') throw new Error('Read-only demo: changes are disabled.');
+  const index = collections.findIndex(c => c.id === Number(match[1]));
+  if (index < 0) throw new Error('Sample composition not found.');
+  const patch = body as Partial<Collection>;
+  const allowed = Object.keys(patch).every(k => ['layout', 'name', 'stage'].includes(k));
+  if (!allowed) throw new Error('Read-only demo: changes are disabled.');
+  const current = collections[index];
+  const next: Collection = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  collections = collections.map((c, i) => i === index ? next : c);
+  return next;
+}
+
+/** Only isolated in-memory composition changes are allowed; all other writes fail. */
 export async function demoApi<T>(path:string,init?:{method?:string;body?:unknown}):Promise<T>{
   const method=(init?.method??(init?.body!==undefined?'POST':'GET')).toUpperCase();
+  if(method==='PATCH' && /^\\/collections\\/\\d+$/.test(new URL(path, 'https://demo.invalid').pathname)) return updateDemoCollection(path, init?.body) as T;
   if(method!=='GET'||init?.body!==undefined)throw new Error('Read-only demo: changes are disabled.');
   return read(path) as T;
 }
