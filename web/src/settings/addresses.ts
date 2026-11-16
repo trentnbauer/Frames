@@ -71,7 +71,7 @@ const ROW_LABEL: Record<string, Partial<Pick<Idx, 'label' | 'hint'>>> = {
   removeBelow: { label: 'Averaging below' }, autoRemoveBelow: { label: 'Averaging below' }, todo: { label: 'Flag photos missing' },
 };
 /** Rows that no longer exist (link-only duplicates, or moved into a menu). */
-const ROW_GONE = new Set(['welcomeTour', 'sensAiLink', 'removeVotes', 'exportXmp', 'pfGear', 'camGear']);
+const ROW_GONE = new Set(['welcomeTour', 'sensAiLink', 'removeVotes', 'exportXmp', 'pfGear', 'camGear', 'film', 'filmTag']);
 /** Rows the search index did not list before. */
 const ROW_NEW: Idx[] = [
   { tab: 'lib', sec: 'reviews', sub: 'clean-up', id: 'protectedInfo', g: 'Never removed', label: 'Protected photos', hint: 'Photos in any composition, or in a shoot with an active share link.' },

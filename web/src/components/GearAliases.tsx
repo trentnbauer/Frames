@@ -5,13 +5,16 @@ type Data = {
   aliases: { id: number; gearId: number; type: string; name: string; canonical: string }[];
   owned: { id: number; name: string; type: string }[];
 };
-export function GearAliases() {
-  const [open, setOpen] = useState(false),
+/** The aliases dialog. With `open`/`onClose` the Gear page's ⋯ menu owns it; on its own it shows its button. */
+export function GearAliases({ open: controlled, onClose }: { open?: boolean; onClose?: () => void } = {}) {
+  const [openState, setOpenState] = useState(false),
     [gearId, setGearId] = useState(''),
     [name, setName] = useState(''),
     [count, setCount] = useState<number | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const open = controlled ?? openState;
+  const setOpen = (value: boolean) => { if (controlled === undefined) setOpenState(value); else if (!value) onClose?.(); };
   const data = useApi<Data>(open ? '/gear/aliases' : null);
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -29,9 +32,11 @@ export function GearAliases() {
   };
   return (
     <>
-      <button className="btn outline" onClick={() => setOpen(true)}>
-        Gear name aliases
-      </button>
+      {controlled === undefined && (
+        <button className="btn outline" onClick={() => setOpen(true)}>
+          Gear name aliases
+        </button>
+      )}
       {open && (
         <Modal
           title="Gear name aliases"
