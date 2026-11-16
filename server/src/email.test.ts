@@ -79,6 +79,16 @@ describe('SMTP health and the sign-in option', () => {
 });
 
 describe('signing in with a code', () => {
+  it('never takes the links in a code email from the Host header the asker sent', async () => {
+    const conf = { enabled: true, providers: [{ id: 'g', type: 'google', name: 'Google', clientId: 'x' }], allow: ['@x.test'], testedBy: null, email: true };
+    setSetting(sys, 'auth', { ...conf, publicUrl: '' });
+    try {
+      sent.length = 0;
+      expect((await call('POST', '/api/public/auth/email/send', { email: 'hosty@x.test' }, { host: 'attacker.example' })).body).toEqual({ ok: true });
+      expect(sent).toHaveLength(1);
+      expect(String(sent[0].html)).not.toContain('attacker.example');
+    } finally { setSetting(sys, 'auth', { ...conf, publicUrl: 'https://frames.example.com' }); }
+  });
   it('signs in an existing person, whatever they signed in with before, and sets a session', async () => {
     sent.length = 0;
     expect((await call('POST', '/api/public/auth/email/send', { email: 'owner@x.test' })).body).toEqual({ ok: true });
