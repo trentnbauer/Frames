@@ -8,17 +8,31 @@ import '../styles.css';
 import './style.css';
 
 type Sample = { id: number; title: string; shoot: string; location: string; date: string; camera: string; tags: string[]; image: string };
-const photo = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1400&q=82`;
+// Self-contained abstract placeholders: no remote photos or image API requests.
+const palettes: [string, string, string][] = [["#203b56","#d8a56b","#7a99aa"],["#183c53","#78a6b1","#e6cda0"],["#b55745","#e7b46d","#4c5d79"],["#1c5575","#75b8b9","#e8c6a5"],["#181d39","#ad6682","#e7b18b"],["#303847","#a3a0a0","#e2d2b8"],["#183e36","#7ca68d","#d6c3a1"],["#8c513f","#d6a47b","#efd7ac"],["#344052","#9a9ca7","#d8c4b1"]];
+const photo = (index: number) => {
+  const [dark, mid, light] = palettes[index % palettes.length];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${dark}"/><stop offset=".55" stop-color="${mid}"/><stop offset="1" stop-color="${light}"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="${light}" stop-opacity=".65"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient></defs>
+    <rect width="1200" height="900" fill="url(#g)"/>
+    <circle cx="${270 + (index % 4) * 200}" cy="${180 + (index % 3) * 130}" r="420" fill="url(#glow)"/>
+    <path d="M0 ${690 - index * 13} Q300 ${410 + index * 21} 600 ${630 - index * 9} T1200 ${520 + index * 17} V900 H0Z" fill="${dark}" opacity=".28"/>
+    <circle cx="${850 - index * 45}" cy="${230 + index * 20}" r="${90 + index * 12}" fill="${light}" opacity=".17"/>
+    <path d="M0 850 Q600 ${620 + index * 8} 1200 830" fill="none" stroke="${light}" stroke-opacity=".3" stroke-width="3"/>
+  </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
 const samples: Sample[] = [
-  { id: 1, title: 'Mountain light', shoot: 'Alpine weekend', location: 'Mountains', date: '2025-04-12', camera: 'Digital camera', tags: ['Landscape', 'Mountains'], image: photo('photo-1464822759023-fed622ff2c3b') },
-  { id: 2, title: 'Still water', shoot: 'Alpine weekend', location: 'Lakeside', date: '2025-04-12', camera: 'Digital camera', tags: ['Landscape', 'Water'], image: photo('photo-1501785888041-af3ef285b470') },
-  { id: 3, title: 'Golden hour', shoot: 'Coastal walks', location: 'Coast', date: '2025-06-18', camera: '35mm film', tags: ['Landscape', 'Sunset'], image: photo('photo-1473116763249-2faaef81ccda') },
-  { id: 4, title: 'Ocean air', shoot: 'Coastal walks', location: 'Beach', date: '2025-06-18', camera: '35mm film', tags: ['Water', 'Coast'], image: photo('photo-1507525428034-b723cf961d3e') },
-  { id: 5, title: 'City after dark', shoot: 'City stories', location: 'City', date: '2025-08-02', camera: 'Digital camera', tags: ['Architecture', 'Night'], image: photo('photo-1519608487953-e999c86e7455') },
-  { id: 6, title: 'Quiet street', shoot: 'City stories', location: 'City', date: '2025-08-02', camera: 'Digital camera', tags: ['Architecture', 'Street'], image: photo('photo-1519501025264-65ba15a82390') },
-  { id: 7, title: 'Forest path', shoot: 'Alpine weekend', location: 'Forest', date: '2025-04-13', camera: 'Digital camera', tags: ['Nature', 'Forest'], image: photo('photo-1448375240586-882707db888b') },
-  { id: 8, title: 'Desert tones', shoot: 'Coastal walks', location: 'Outdoors', date: '2025-06-19', camera: '35mm film', tags: ['Landscape', 'Travel'], image: photo('photo-1509316785289-025f5b846b35') },
-  { id: 9, title: 'Concrete geometry', shoot: 'City stories', location: 'City', date: '2025-08-03', camera: 'Digital camera', tags: ['Architecture', 'Shapes'], image: photo('photo-1487958449943-2429e8be8625') },
+  { id: 1, title: 'Mountain light', shoot: 'Alpine weekend', location: 'Mountains', date: '2025-04-12', camera: 'Digital camera', tags: ['Landscape', 'Mountains'], image: photo(0) },
+  { id: 2, title: 'Still water', shoot: 'Alpine weekend', location: 'Lakeside', date: '2025-04-12', camera: 'Digital camera', tags: ['Landscape', 'Water'], image: photo(1) },
+  { id: 3, title: 'Golden hour', shoot: 'Coastal walks', location: 'Coast', date: '2025-06-18', camera: '35mm film', tags: ['Landscape', 'Sunset'], image: photo(2) },
+  { id: 4, title: 'Ocean air', shoot: 'Coastal walks', location: 'Beach', date: '2025-06-18', camera: '35mm film', tags: ['Water', 'Coast'], image: photo(3) },
+  { id: 5, title: 'City after dark', shoot: 'City stories', location: 'City', date: '2025-08-02', camera: 'Digital camera', tags: ['Architecture', 'Night'], image: photo(4) },
+  { id: 6, title: 'Quiet street', shoot: 'City stories', location: 'City', date: '2025-08-02', camera: 'Digital camera', tags: ['Architecture', 'Street'], image: photo(5) },
+  { id: 7, title: 'Forest path', shoot: 'Alpine weekend', location: 'Forest', date: '2025-04-13', camera: 'Digital camera', tags: ['Nature', 'Forest'], image: photo(6) },
+  { id: 8, title: 'Desert tones', shoot: 'Coastal walks', location: 'Outdoors', date: '2025-06-19', camera: '35mm film', tags: ['Landscape', 'Travel'], image: photo(7) },
+  { id: 9, title: 'Concrete geometry', shoot: 'City stories', location: 'City', date: '2025-08-03', camera: 'Digital camera', tags: ['Architecture', 'Shapes'], image: photo(8) },
 ];
 const shoots = [...new Set(samples.map(p => p.shoot))];
 const compositions = [
