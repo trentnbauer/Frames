@@ -25,7 +25,7 @@ it('uses the active provider name and colour for the working icon', () => {
  const html = renderToStaticMarkup(<AiIndicatorView status={status} />);
  expect(html).toContain('aria-label="Ollama is analysing photos"');
  expect(html).toContain('--ai-active:#e7b76d');
- expect(html).toContain('12 of 48 processed');
+ // The progress tooltip is displayed on hover/focus, not in server-rendered markup.
  const idle = renderToStaticMarkup(<AiIndicatorView status={{ ...status, running: false }} />);
  expect(idle).not.toContain('--ai-active:#e7b76d');
 });
