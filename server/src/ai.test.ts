@@ -112,7 +112,7 @@ describe('provider colour validation', () => {
 
 describe('local provider', () => {
   it('analyses photos in the background: descriptions, subjects, tags and embeddings, as suggestions', async () => {
-    const { act } = await addSource('ollama', { endpoint: base + '/', model: 'llava', embedModel: 'nomic' });
+    const { act, src } = await addSource('ollama', { endpoint: base + '/', model: 'llava', embedModel: 'nomic', color: '#e7b76d' });
     expect(act!.status).toBe(200);
     expect((await A.get('/api/settings')).body.settings.ai).toBe('local');
     expect((await A.post('/api/ai/test')).body.ok).toBe(true);
@@ -123,9 +123,10 @@ describe('local provider', () => {
     const full = (await A.get(`/api/photos/${p.id}`)).body;
     expect(full.aiStatus).toBe('done');
     expect(full.aiSuggestion.description).toMatch(/\w+/);
+    expect(full.aiSuggestion.sourceId).toBe(src.id);
     // Suggestions are not facts: nothing is accepted yet.
     expect(full.tags.length).toBeGreaterThan(0);
-    expect(full.tags.every((t: any) => t.source === 'ai' && t.accepted === false && typeof t.aiSourceId === 'string')).toBe(true);
+    expect(full.tags.every((t: any) => t.source === 'ai' && t.accepted === false && t.aiSourceId === src.id)).toBe(true);
     expect(full.tags.some((t: any) => t.kind === 'subject')).toBe(true);
     expect(full.description).toBe('');
     // Not searchable as a tag until accepted.
