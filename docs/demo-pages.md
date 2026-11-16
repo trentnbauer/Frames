@@ -6,7 +6,7 @@ Issue #367. A static, read-only interactive **sample** of Frames, published to G
 
 The demo is a separate React entry point (`web/demo.html` and `web/src/demo/`), not a copy of the authenticated application. It reuses Frames typography and design tokens but **never calls the Frames API**, stores no visitor data and does not offer upload, editing, rating or saving controls. Visitors can browse example photographs, search/filter, open a photo, browse photoshoots and open compositions.
 
-Sample photographs are linked from Unsplash. They are illustrative and require internet access; this demo does not contain or expose private photographs.
+Sample images are generated locally as deterministic SVG gradients and abstract shapes. They require no external image service; this demo does not contain or expose private photographs.
 
 ## Deployment
 
