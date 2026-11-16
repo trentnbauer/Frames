@@ -83,7 +83,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const kind = b.kind === 'shoot' ? 'shoot' : b.kind === 'collection' ? 'collection' : b.kind === 'photo' ? 'photo' : null;
     if (!kind) return rep.code(400).send({ error: 'kind must be collection, shoot or photo' });
-    if (!one(`SELECT 1 x FROM ${TABLE_OF[kind]} WHERE id = ?`, num(b.id))) return notFound(rep);
+    if (!one(`SELECT 1 x FROM ${TABLE_OF[kind]} WHERE id = ?${kind === 'shoot' ? ' AND unsorted = 0' : ''}`, num(b.id))) return notFound(rep);
     if(b.versionId!==undefined&&b.versionId!==null){if(kind!=='collection'||!Number.isSafeInteger(b.versionId)||!one('SELECT 1 FROM collection_versions WHERE id=? AND collection_id=?',b.versionId,num(b.id)))return rep.code(400).send({error:'Choose an arrangement from this composition.'});}
     const pol = policyOf(x.sys);
     let expires: string | null = b.expiresAt === undefined && pol.shareExpireDays ? new Date(Date.now() + pol.shareExpireDays * 86_400_000).toISOString() : null;

@@ -13,7 +13,7 @@ beforeAll(async () => {
   (env.cfg as any).libraries = [env.lib];
   files = ['a.jpg', 'b.jpg', 'c.jpg'].map((n) => path.join(env.lib, n));
   for (const [i, f] of files.entries()) fs.writeFileSync(f, await jpg(svg(900, 600, `#33${i}699`, '#eeeeee', [0.3, 0.3])));
-  await A.post('/api/library/scan?wait=1');
+  await A.scan();
   const photos = (await A.get('/api/photos')).body.photos as any[];
   ids = files.map((f) => photos.find((p) => p.file === path.basename(f)).id);
   shootA = (await A.get(`/api/photos/${ids[0]}`)).body.shootId;

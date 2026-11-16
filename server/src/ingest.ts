@@ -267,8 +267,6 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
   if (files.length) {
     // New photographs belong to no photoshoot until the person puts them in one (the To do list asks them to).
     const name = 'No shoot';
-    result.shootId = unsortedShootId(db);
-    result.shootName = name;
 
     const insert = db.prepare(`INSERT INTO photos(shoot_id, path, file, hash, title, w, h, file_type, size_bytes, mtime, has_derivs, added_at, next_review_at)
       VALUES(@shoot_id, @path, @file, @hash, @title, 0, 0, @file_type, @size_bytes, @mtime, 0, @added_at, @next_review_at)`);
@@ -293,7 +291,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
         const ext = path.extname(f).toLowerCase();
         const st = fs.statSync(f);
         // The user may have moved/deleted every earlier import while metadata was being read.
-        result.shootId = unsortedShootId(db);
+        result.shootId = unsortedShootId(db); result.shootName = name; // made the first time a new photograph needs it
         const id = Number(insert.run({
           shoot_id: result.shootId, path: f, file: path.basename(f), hash, title: titleFromFile(f),
           file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(), next_review_at: addDays(now, intervalDays(loadSettings(db).intervals[0])).toISOString(),

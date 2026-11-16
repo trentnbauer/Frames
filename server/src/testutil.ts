@@ -40,8 +40,19 @@ export const api = (env: Env) => {
     get: (u: string) => call('GET', u), post: (u: string, p?: unknown) => call('POST', u, p ?? {}),
     put: (u: string, p?: unknown) => call('PUT', u, p ?? {}), patch: (u: string, p?: unknown) => call('PATCH', u, p ?? {}), del: (u: string) => call('DELETE', u),
     raw: call,
-    scan: () => call('POST', '/api/library/scan?wait=1', {}),
+    // A scan brings new photographs in with no photoshoot; most tests want them in one, as imports used to do, so this puts them in a dated shoot.
+    scan: async () => { const r = await call('POST', '/api/library/scan?wait=1', {}); adopt(env); return r; },
   };
 };
 
 export const cleanup = (env: Env) => fs.rmSync(env.tmp, { recursive: true, force: true });
+
+/** Puts the photographs that are in no photoshoot into one named for today (made once, then reused), as an import used to. Returns its id, or null if there was nothing to move. */
+export function adopt(env: Env, name = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })): number | null {
+  const u = env.db.prepare('SELECT id FROM shoots WHERE unsorted = 1').get() as { id: number } | undefined;
+  if (!u || !(env.db.prepare('SELECT COUNT(*) n FROM photos WHERE shoot_id = ?').get(u.id) as { n: number }).n) return null;
+  const have = env.db.prepare("SELECT id FROM shoots WHERE name = ? AND source = 'Library sync' AND unsorted = 0").get(name) as { id: number } | undefined;
+  const id = have?.id ?? Number(env.db.prepare("INSERT INTO shoots(name, source, imported_at) VALUES(?, 'Library sync', ?)").run(name, new Date().toISOString()).lastInsertRowid);
+  env.db.prepare('UPDATE photos SET shoot_id = ? WHERE shoot_id = ?').run(id, u.id);
+  return id;
+}

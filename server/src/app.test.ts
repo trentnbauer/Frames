@@ -41,10 +41,10 @@ describe('library', () => {
     expect(a.h).toBe(900);
     expect(a.hasImage).toBe(true);
   });
-  it('names the new photoshoot for the import date and serves thumbnails by id', async () => {
-    const shoots = (await j('GET', '/api/shoots')).body;
-    expect(shoots).toHaveLength(1);
-    expect(shoots[0].name).toMatch(/\d{4}/);
+  it('brings imports in with no photoshoot and serves thumbnails by id', async () => {
+    expect((await j('GET', '/api/shoots')).body).toHaveLength(0); // the hidden holder of orphaned photographs is never listed
+    expect(((await j('GET', '/api/photos')).body.photos as any[]).every((p) => p.orphaned)).toBe(true);
+    expect((await j('GET', '/api/photos?orphaned=1')).body.photos).toHaveLength(2);
     const t = await j('GET', '/api/photos/1/thumb');
     expect(t.status).toBe(200);
     expect(t.headers['content-type']).toBe('image/jpeg');
