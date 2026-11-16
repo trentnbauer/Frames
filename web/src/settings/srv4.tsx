@@ -25,12 +25,11 @@ export function useAccessSecurity(ctx: Ctx): Section {
 export function useAccessMembers(ctx: Ctx): Section {
   const m = useMembers(ctx);
   const s = useSignin(ctx);
-  const f = useFolders(ctx);
   const members = groupOf(m, 'Members');
   return section('people', 'Access', 'Who can sign in to this Frames.', [
     ...(members ? [members] : []),
     { title: 'Joining', rows: pick(s, ['signup', 'newRole']) },
-    { title: 'Defaults', rows: [...pick(m, ['shareLib']), ...pick(f, ['userQuota']), ...pick(m, ['manage'])] },
+    { title: 'Defaults', rows: [...pick(m, ['shareLib']), ...pick(m, ['manage'])] },
   ], { action: m.action, after: m.after });
 }
 
@@ -49,7 +48,7 @@ export const useSharingPolicies = usePolicies;
 export function useStorageLocal(ctx: Ctx): Section {
   const f = useFolders(ctx);
   const g = groupOf(f, 'Local storage');
-  return section('folders', 'Storage', 'Photos uploaded to, or read from, this server.', g ? [g] : [], { notice: f.notice });
+  return section('folders', 'Storage', 'Photos uploaded to, or read from, this server.', [{ title: 'Member storage', rows: pick(f, ['userQuota']) }, ...(g ? [g] : [])], { notice: f.notice });
 }
 export function useStorageCloud(ctx: Ctx): Section {
   const f = useFolders(ctx);
