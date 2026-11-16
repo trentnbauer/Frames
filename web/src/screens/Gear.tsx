@@ -2,7 +2,7 @@ import { GearMore } from '../components/GearMore';
 import { FilmDefaults } from '../components/FilmDefaults';
 import { WishlistRows } from '../components/WishlistRows';
 import { useEffect, useRef, useState } from 'react';
-import { api, useApi } from '../api';
+import { api, openPortfolio, useApi } from '../api';
 import { GearBlacklist } from '../components/GearBlacklist';
 import { GearSystems } from '../components/GearSystems';
 import ProtoGear from '../proto/ProtoGear';
@@ -58,7 +58,10 @@ export function Gear() {
     <div className="page-shell">
 
       {blocklistError && <p role="alert" style={{ color: 'var(--danger)' }}>{blocklistError}</p>}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><GearMore /></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 48, lineHeight: 1, margin: 0, fontWeight: 400 }}>Gear</h1><span className="muted" style={{ fontSize: 13 }}>{own.length} owned · {want.length} on wishlist</span></div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><button className="btn outline" onClick={() => void openPortfolio()}>View on portfolio ↗</button><GearMore /></div>
+      </div>
       <FilmDefaults />
       <ProtoGear
         renderWishlist={(v: { buyWish: (id: number) => void }) => d ? <WishlistRows items={want.map((item) => ({ ...item, fits: fitsOf(item) }))} currency={d?.prefs.currency ?? '$'} showWant={!!d?.prefs.showWant} onChanged={async () => { g.set(await api<Data>('/gear/items')); window.dispatchEvent(new Event('frames:gear-changed')); }} onBought={v.buyWish} /> : <p className="muted">{g.error || 'Loading wishlist…'}</p>}

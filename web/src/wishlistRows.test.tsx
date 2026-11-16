@@ -13,5 +13,6 @@ it('validates edited names, prices and links without changing missing prices to 
 it('keeps closed rows compact and exposes editing and safe listing links', () => {
   const html = renderToStaticMarkup(<WishlistRows items={[item, { ...item, id: 5, name: 'Body', price: 1.25 }]} currency="€" showWant={false} onChanged={async () => {}} onBought={() => {}} />);
   for (const text of ['Edit Lens', 'Edit Body', 'Price not set', '€1.25', 'noopener noreferrer']) expect(html).toContain(text);
-  expect(html).not.toContain('Bought it'); expect(html).not.toContain('Move Lens down'); expect(html).not.toContain('Portraits');
+  for (const text of ['Bought it', 'Don’t want it']) expect(html).toContain(text);
+  expect(html).not.toContain('Move Lens down'); expect(html).not.toContain('Portraits');
 });
