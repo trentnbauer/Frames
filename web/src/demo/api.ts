@@ -3,7 +3,7 @@
  */
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Settings, Me, Summary } from '../store';
-import { arrange, type Print } from '../layout';
+import { arrange, nextUp, type Mode, type Orientation, type Print } from '../layout';
 
 // Stable public sample photographs (not private Frames content). The same ID
 // maps to the same picture everywhere: Library, Photoshoots, detail and walls.
@@ -14,10 +14,12 @@ const sampleIds = [
   71, 75, 83, 89, 96, 101,
   103, 104, 106, 119, 122, 124,
 ];
+// These sample photographs are portrait, so the demo has some for portrait prints.
+const portraitIds = new Set([4, 11, 17]);
 export function demoImage(id: number, kind: 'thumb' | 'preview' = 'thumb'): string {
   const photoId = sampleIds[(Math.max(1, id) - 1) % sampleIds.length];
-  const width = kind === 'preview' ? 1600 : 480;
-  return `https://picsum.photos/id/${photoId}/${width}/${Math.round(width / 1.5)}`;
+  const long = kind === 'preview' ? 1600 : 480, short = Math.round(long / 1.5);
+  return `https://picsum.photos/id/${photoId}/${portraitIds.has(id) ? `${short}/${long}` : `${long}/${short}`}`;
 }
 
 const shootsBase = [
@@ -34,7 +36,7 @@ const photos: PhotoFull[] = titles.map((title,i) => {
   const score = i % 5 === 0 ? 0 : 3 + (i % 3);
   return {
     id,title,file:`sample-${String(id).padStart(3,'0')}.jpg`,shootId:s.id,orphaned:false,
-    w:6000,h:4000,ar:1.5,hasImage:true,capturedAt:shot,addedAt:now,dateEdit:null,
+    ...(portraitIds.has(id) ? {w:4000,h:6000,ar:4000/6000} : {w:6000,h:4000,ar:1.5}),hasImage:true,capturedAt:shot,addedAt:now,dateEdit:null,
     camera:s.camera,lens:'35mm',exposure:'',iso:200,aperture:5.6,shutter:'1/250',focalMm:35,
     medium:s.id === 2 ? 'film' : 'digital',film:s.id === 2 ? 'Colour negative' : '',
     fileType:'JPEG',sizeMb:8.2,archived:false,missing:false,lastReviewedAt:score ? now : '',
@@ -54,15 +56,18 @@ const shoots: Shoot[] = shootsBase.map(s => ({
   duePhotoIds:[],sessions:1,subjects:[],tags:s.tags,
   gear:{camera:s.camera,lens:'35mm',medium:s.id===2?'film':'digital',film:s.id===2?'Colour negative':''}
 }));
-const makePrint = (id:number,n:number):Print => ({id:n,size:'A4',orientation:'landscape',frame:{size:'A4',mat:'white',color:n%2?'black':'oak'},photoId:id,stack:false,photoId2:null,x:0,y:0});
-const makeCollection = (id:number,name:string,ids:number[],stage:'progress'|'review'|'done'):Collection => ({
+// Each print hangs in the next frame size up, so a white mount shows around it.
+const framed = (n:number,photoId:number,size:string,orientation:Orientation,color:string):Print =>
+  ({id:n,size,orientation,frame:{size:nextUp(size),mat:'white',color},photoId,stack:false,photoId2:null,x:0,y:0});
+const makeCollection = (id:number,name:string,ids:number[],stage:'progress'|'review'|'done',mode:Mode,prints:Print[]):Collection => ({
   id,name,stage,updatedAt:now,description:'An example composition',theme:'',target:null,photoIds:ids,
-  chosenIds:ids.slice(0,3),printedAt:null,layout:{mode:'grid',prints:arrange(ids.slice(0,3).map((p,i)=>makePrint(p,i+1)),'grid'),ppi:300},layoutSaved:true
+  chosenIds:prints.map(p=>p.photoId!),printedAt:null,layout:{mode,prints:arrange(prints,mode),ppi:300},layoutSaved:true
 });
 let collections:Collection[] = [
-  makeCollection(1,'Places & spaces',[1,2,3,14,15],'progress'),
-  makeCollection(2,'Summer colours',[7,8,9,10],'review'),
-  makeCollection(3,'City geometry',[13,14,15,16],'done')
+  makeCollection(1,'Places & spaces',[1,2,3,4,11,14,15],'progress','feature',
+    [framed(1,1,'A3','landscape','black'),framed(2,4,'A5','portrait','black'),framed(3,11,'A5','portrait','black')]),
+  makeCollection(2,'Summer colours',[7,8,9,10],'review','row',[framed(1,7,'8×10″','landscape','oak')]),
+  makeCollection(3,'City geometry',[13,14,16,17],'done','row',[framed(1,17,'A3','portrait','black')])
 ];
 const settings:Settings = {
   sessions:3,intervals:['1d','7d','30d'],adaptive:false,archiveSuggest:false,autoRemove:false,
@@ -97,7 +102,7 @@ function queryPhotos(url:URL) {
   const from=url.searchParams.get('from'),to=url.searchParams.get('to');
   if(from) result=result.filter(p=>(p.capturedAt??'')>=from);
   if(to) result=result.filter(p=>(p.capturedAt??'').slice(0,10)<=to);
-  if(url.searchParams.get('shape')==='portrait') result=[];
+  if(url.searchParams.get('shape')==='portrait') result=result.filter(p=>p.h>p.w);
   if(url.searchParams.get('order')==='oldest') result=[...result].reverse();
   return {photos:result,total:photos.length,count:result.length,semantic:false};
 }
@@ -141,8 +146,7 @@ function read(path:string):unknown {
   if(p==='/profile')return {hemisphere:'south'};
   if(/^\/portfolio\/photos\/\d+$/.test(p))return {state:'none',inPortfolio:false,favourite:false,score:null};
   if(p==='/portfolio')return {config:{host:''},handle:''};
-  if(p==='/health')return {version:'demo'};
-  if(p==='/releases')return {current:'demo',releases:[],all:[],source:'none'};
+  if(p==='/health')return {version:DEMO_VERSION||'demo'};
   if(p==='/admin/env/drift')return {drift:0};
   if(p==='/getting-started')return {steps:[]};
   if(p==='/shares')return [];
@@ -152,6 +156,31 @@ function read(path:string):unknown {
     subjects:[],tags:[],trend:[],bySession:[]};
   // Unknown GETs are unavailable, not invented.
   throw new Error('This section is not available with sample data.');
+}
+
+// The release this demo was built from: the latest v* tag, set by the Pages workflow (empty in a local build).
+const DEMO_VERSION=String(import.meta.env.VITE_DEMO_VERSION??'').replace(/^v/,'');
+type Release={name:string;date:string;url:string;items:string[]};
+/** Same bullets as releaseItems in server/src/routes/notifications.ts. */
+const releaseItems=(body:string)=>{
+  const lines=body.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const bullets=lines.filter(l=>/^[-*]\s+/.test(l)).map(l=>l.replace(/^[-*]\s+/,''));
+  return (bullets.length?bullets:lines.filter(l=>!l.startsWith('#'))).slice(0,8).map(l=>l.slice(0,200));
+};
+/** What's new: the demo's own release first, then older ones, read from GitHub. Offline, just the demo's version. */
+export async function demoReleases(get:typeof fetch=fetch){
+  if(!DEMO_VERSION)return {current:'demo',releases:[],all:[],source:'none'};
+  const tag=`v${DEMO_VERSION}`;
+  const own:Release={name:tag,date:'',url:`https://github.com/trentnbauer/Frames/releases/tag/${tag}`,items:[]};
+  try{
+    const r=await get('https://api.github.com/repos/trentnbauer/Frames/releases?per_page=10',{headers:{Accept:'application/vnd.github+json'}});
+    if(!r.ok)throw new Error();
+    const data=await r.json() as {tag_name:string;name?:string;published_at?:string;html_url:string;body?:string;draft?:boolean;prerelease?:boolean}[];
+    const list=data.filter(d=>!d.draft&&!d.prerelease&&/^https:\/\//.test(String(d.html_url)));
+    const at=list.findIndex(d=>d.tag_name===tag);
+    const all:Release[]=at<0?[own]:list.slice(at).map(d=>({name:String(d.name||d.tag_name).slice(0,100),date:String(d.published_at??'').slice(0,10),url:d.html_url,items:releaseItems(String(d.body??''))}));
+    return {current:DEMO_VERSION,releases:[],all,source:'github'};
+  }catch{return {current:DEMO_VERSION,releases:[],all:[own],source:'none'};}
 }
 
 /** Composition edits live only in this browser tab's demo memory.
@@ -176,5 +205,6 @@ export async function demoApi<T>(path:string,init?:{method?:string;body?:unknown
   const method=(init?.method??(init?.body!==undefined?'POST':'GET')).toUpperCase();
   if(method==='PATCH' && path.startsWith('/collections/') && /^\d+$/.test(path.split('?')[0].slice('/collections/'.length))) return updateDemoCollection(path, init?.body) as T;
   if(method!=='GET'||init?.body!==undefined)throw new Error('Read-only demo: changes are disabled.');
+  if(path.split('?')[0]==='/releases')return demoReleases() as Promise<T>;
   return read(path) as T;
 }
