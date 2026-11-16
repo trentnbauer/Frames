@@ -899,3 +899,22 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .bnav .todo-nav-popover a:hover, .bnav .todo-nav-popover a:focus-visible { background: var(--chip); color: var(--text); }
 .todo-nav-popover a span { font: 12px var(--mono); color: var(--muted); }
 .todo-nav-popover p { padding: 6px 12px; }
+
+/* AI activity: reserve its header slot so work starting never shifts other controls. */
+:root { --ai-active: oklch(0.76 0.10 75); }
+:root[data-theme="light"] { --ai-active: oklch(0.48 0.10 75); }
+.ai-indicator { position: relative; }
+.ai-status span { font-size: 20px; line-height: 1; }
+.ai-status.working { color: var(--ai-active); }
+.ai-status.working span { animation: ai-pulse 1.8s ease-in-out infinite; }
+.ai-status-tooltip { position: absolute; top: calc(100% + 8px); right: 0; width: 220px; padding: 12px 14px; border-radius: 10px; background: var(--raised2); color: var(--text); box-shadow: var(--float); font-size: 13px; z-index: 50; pointer-events: none; }
+.ai-status-detail { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.ai-status-tooltip progress { display: block; width: 100%; height: 3px; border: 0; border-radius: 99px; overflow: hidden; margin-top: 10px; background: var(--chip); accent-color: var(--ai-active); }
+.ai-status-tooltip progress::-webkit-progress-bar { background: var(--chip); }
+.ai-status-tooltip progress::-webkit-progress-value { background: var(--ai-active); }
+.ai-status-tooltip progress::-moz-progress-bar { background: var(--ai-active); }
+@keyframes ai-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .ai-status.working span { animation: none; } }
+
+.wall-pan-ready, .wall-pan-ready [data-wall-print] { cursor: grab !important; }
+.wall-pan-active, .wall-pan-active [data-wall-print] { cursor: grabbing !important; }

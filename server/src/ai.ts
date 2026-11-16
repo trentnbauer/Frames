@@ -37,17 +37,35 @@ const countShared = (db: DB) => setSetting(db, 'aiUsage', { m: monthOf(), n: use
 /** How many requests this person has made to shared paid AIs this month, and the limit (0: none). */
 export const sharedUsage = (db: DB) => { const s = (db as unknown as { sys?: DB }).sys; return { used: usedShared(db), limit: s ? policyOf(s).aiMonthlyLimit : 0 }; };
 const sharedOverLimit = (db: DB) => { const u = sharedUsage(db); return u.limit > 0 && u.used >= u.limit; };
+// Attached to the tenant database so request proxies resolve the correct person's activity.
+const ACTIVITY = Symbol('ai activity');
+type Activity = { jobs: Partial<Record<Job, number>> };
+export function aiActivity(db: DB): Activity {
+  const owner = db as DB & { [ACTIVITY]?: Activity };
+  return owner[ACTIVITY] ?? (owner[ACTIVITY] = { jobs: {} });
+}
+
 /** Runs `fn` with the first AI for the job; if it errors, the next one takes over. Null when no AI is set up for the job; throws the last error if all fail. */
 export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>): Promise<T | null> {
   const list = aiConfigsFor(db, job);
-  let last: unknown = null;
-  for (const c of list) {
-    // A paid shared AI stops after the monthly number of requests the administrator allows each person; the next AI in the order takes over.
-    if (c.shared && !c.local && sharedOverLimit(db)) { last = new Error('The monthly limit for the shared AI has been reached.'); continue; }
-    try { const r = await fn(c); if (c.shared && !c.local) countShared(db); return r; } catch (e) { if (c.shared && !c.local) countShared(db); last = e; }
+  const activity = aiActivity(db);
+  if (list.length) activity.jobs[job] = (activity.jobs[job] ?? 0) + 1;
+  try {
+    let last: unknown = null;
+    for (const c of list) {
+      // A paid shared AI stops after the monthly number of requests the administrator allows each person; the next AI in the order takes over.
+      if (c.shared && !c.local && sharedOverLimit(db)) { last = new Error('The monthly limit for the shared AI has been reached.'); continue; }
+      try { const r = await fn(c); if (c.shared && !c.local) countShared(db); return r; } catch (e) { if (c.shared && !c.local) countShared(db); last = e; }
+    }
+    if (list.length) throw last;
+    return null;
+  } finally {
+    if (list.length) {
+      const remaining = (activity.jobs[job] ?? 1) - 1;
+      if (remaining) activity.jobs[job] = remaining;
+      else delete activity.jobs[job];
+    }
   }
-  if (list.length) throw last;
-  return null;
 }
 export const aiConfig = (db: DB): AiCfg | null => activeConfig(db, (getSetting<unknown>(db, 'aiJobs', null) || sharedFirstApplies(db) ? orderFor(db, 'describe')[0] : undefined) ?? loadSettings(db).aiActive);
 
@@ -201,8 +219,13 @@ export function createAiWorker(db: DB, cfg: Cfg) {
 
   // Asking for a run while one is going returns that same run, so callers that wait really wait for it.
   let current: Promise<AiState> | null = null;
-  function run(): Promise<AiState> {
-    if (!current) current = go().finally(() => { current = null; });
+  let automatic = false;
+  function run(options: { automatic?: boolean } = {}): Promise<AiState> {
+    if (options.automatic && !loadSettings(db).aiAutoAnalyse) return current ?? Promise.resolve(state);
+    if (!current) {
+      automatic = options.automatic === true;
+      current = go().finally(() => { current = null; });
+    } else if (!options.automatic) automatic = false; // An explicit request promotes an automatic run to manual.
     return current;
   }
   async function go(): Promise<AiState> {
@@ -214,7 +237,7 @@ export function createAiWorker(db: DB, cfg: Cfg) {
       state.total = ids.length;
       for (const id of ids) {
         await waitIdle(db); // "Heavy jobs run: when idle"
-        if (!aiConfig(db)) break; // switched off mid-run
+        if (!aiConfig(db) || (automatic && !loadSettings(db).aiAutoAnalyse)) break; // Finish the in-flight request, then honour an automatic-analysis opt-out.
         try { if ((await tryEach(db, 'describe', (cc) => one(cc, id))) === null) break; } catch (e) {
           state.failed++;
           state.lastError = e instanceof Error ? e.message : String(e);

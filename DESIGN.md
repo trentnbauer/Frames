@@ -61,3 +61,7 @@ Library workflow controls reuse the shared toolbar, fields, modals and theme tok
 Desktop To do navigation is a hover/focus/click disclosure above the dock button, with counts and direct task links. Keep Removal review together with missing-detail tasks and omit empty groups. Support arrow keys and Escape, show the T shortcut, and keep All to do available when caught up. Do not duplicate To do in the top-right user menu.
 
 Use shared themed in-app modals for every confirmation and typed confirmation; never use browser-native confirm, prompt or alert dialogs. Cancel, Escape and backdrop dismissal must leave the pending action untouched. Trap focus inside the topmost modal and restore focus afterward; a nested confirmation must not close its parent modal.
+
+The header reserves a stable slot immediately before the theme toggle for a small ✦ AI activity indicator. Use muted grey at rest and theme-aware amber while working, with a subtle opacity pulse disabled for reduced motion. Hover/focus reveals the task and batch progress where available; never shift the other header controls or show old batch progress for an interactive task.
+
+Composition frames require selection before dragging to move. Ignore pointer jitter below six screen pixels regardless of zoom. Space-drag and middle-button drag pan anywhere on the wall, including over frames, and never save a layout change. Keep these gestures available in Done and guest views; wall controls and text fields retain their own pointer/keyboard behaviour.

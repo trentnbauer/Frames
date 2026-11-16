@@ -51,13 +51,16 @@ export class Logic extends DCLogic {
   endDrag() { window.removeEventListener('pointermove', this.mv); window.removeEventListener('pointerup', this.up); window.removeEventListener('pointercancel', this.cancel); }
   startDrag(e, p) {
     if (this.props.readOnly || e.button !== 0) return; e.stopPropagation();
+    const selected = this.state.sel === p.id;
+    this.setState({ sel: p.id, sizeMenu: false });
+    if (!selected) return; // Select first; a navigation gesture must not also move an unselected frame.
     const el = this.wallRef.current; const z = el ? el.getBoundingClientRect().width / el.offsetWidth : 1; const s = this.scale();
     const d = this.dims(p); const { w, h } = this.state.wall; const base = this.baseScale(); const mx = Math.max(0, (w / base - d.ow) / 2 - 2), my = Math.max(0, (h / base - d.oh) / 2 - 6);
     this.dragOriginal = this.pr();
     const st = { sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, moved: false };
     this.setState({ sel: p.id, sizeMenu: false });
-    this.mv = (ev) => { const dx = (ev.clientX - st.sx) / (s * z), dy = (ev.clientY - st.sy) / (s * z); if (!st.moved && Math.abs(dx) + Math.abs(dy) < 1) return; st.moved = true; if (this.state.dragging !== p.id) this.setState({ dragging: p.id }); this.upd(p.id, { x: Math.round(Math.max(-mx, Math.min(mx, st.ox + dx))), y: Math.round(Math.max(-my, Math.min(my, st.oy + dy))) }); };
-    this.up = () => { this.endDrag(); this.setState({ dragging: null }); this.dragOriginal = null; this.save(); };
+    this.mv = (ev) => { const dx = (ev.clientX - st.sx) / (s * z), dy = (ev.clientY - st.sy) / (s * z); if (!st.moved && Math.hypot(ev.clientX - st.sx, ev.clientY - st.sy) < 6) return; st.moved = true; if (this.state.dragging !== p.id) this.setState({ dragging: p.id }); this.upd(p.id, { x: Math.round(Math.max(-mx, Math.min(mx, st.ox + dx))), y: Math.round(Math.max(-my, Math.min(my, st.oy + dy))) }); };
+    this.up = () => { this.endDrag(); this.setState({ dragging: null }); this.dragOriginal = null; if (st.moved) this.save(); };
     this.cancel = () => this.cancelDrag();
     window.addEventListener('pointermove', this.mv); window.addEventListener('pointerup', this.up); window.addEventListener('pointercancel', this.cancel);
   }
@@ -87,7 +90,7 @@ export class Logic extends DCLogic {
         frameBg: p.framed ? this.COL[p.colour] : 'transparent', matBg: p.framed && p.mat !== 'None' ? this.MAT[p.mat] : 'transparent', matPad: px(my) + ' ' + px(mx),
         cells: this.held(p).slice(0, p.stack ? 2 : 1).map((n, k) => ({ img: n ? this.bg(p, n) : 'var(--wall-empty-bg)', empty: n ? 'none' : 'inset 0 0 0 1px var(--outline)', emptyLabel: n ? '' : p.stack ? (p.or === 'P' ? ['Top', 'Bottom'] : ['Left', 'Right'])[k] : 'Drop a candidate here' })),
         dir: p.or === 'P' ? 'column' : 'row', gap: p.stack ? '2%' : '0', paper: p.stack ? '#fff' : 'transparent', slotsFull: this.held(p).slice(0, p.stack ? 2 : 1).every(Boolean),
-        shadow: S.dragging === p.id ? '0 18px 40px rgba(0,0,0,.55)' : '0 6px 16px rgba(0,0,0,.4)', outline: on ? '2px solid var(--text)' : '2px solid transparent', cursor: this.props.readOnly ? 'default' : S.dragging === p.id ? 'grabbing' : 'grab', trans: 'box-shadow .15s',
+        shadow: S.dragging === p.id ? '0 18px 40px rgba(0,0,0,.55)' : '0 6px 16px rgba(0,0,0,.4)', outline: on ? '2px solid var(--text)' : '2px solid transparent', cursor: this.props.readOnly ? 'default' : S.dragging === p.id ? 'grabbing' : on ? 'grab' : 'pointer', trans: 'box-shadow .15s',
         label: 'Print ' + (i + 1) + ' · ' + p.size + (p.or === 'L' ? ' landscape' : '') + (p.stack ? ' · two photos' : ''),
         sub: (p.framed ? p.frame + ' frame' : 'no frame') + (p.photo ? ' · ' : ''),
         ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'var(--warn)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
