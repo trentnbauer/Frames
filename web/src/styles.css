@@ -267,7 +267,19 @@ textarea.area { background: var(--surface); border-radius: 8px; padding: 8px 10p
 .namebox { background: var(--surface); border: 0; border-radius: 999px; padding: 10px 16px; color: var(--text); min-width: 220px; }
 .lbnav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 40px; color: var(--text2); padding: 10px 16px; z-index: 2; }
 .lbnav:hover { color: var(--text); }
-/* the photo stays in view while the long side column scrolls */
+/* Keep photo details accessible when the right column exceeds the viewport. */
+@media (min-width: 901px) {
+  .detail .side {
+    position: sticky;
+    top: 16px;
+    align-self: flex-start;
+    max-height: calc(100dvh - 32px);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+}
 .detail .main { position: sticky; top: 16px; align-self: flex-start; }
 .detail .stage { flex: none; padding: 16px 0; }
 @media (max-width: 900px) { .detail .main { position: static; } }
