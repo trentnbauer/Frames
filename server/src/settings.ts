@@ -18,6 +18,8 @@ export type Settings = {
   autoRemove: boolean;
   autoRemoveBelow: number;
   autoRemoveAfter: number;
+  /** Bin votes (your own) that remove a photograph from Frames. 0 turns it off. */
+  binVotes: number;
   /** Suggest taking out photographs whose average rating, after all their sessions, is below this (0 = never suggest). */
   deleteBelow: number;
   /** Which reasons put a photograph on the To do list (see TODO_REASONS). */
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoRemove: false,
   autoRemoveBelow: 2,
   autoRemoveAfter: 4,
+  binVotes: 3,
   deleteBelow: 2,
   todoReasons: TODO_DEFAULT,
   gear: { ...NO_GEAR },
@@ -98,6 +101,7 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   if (patch.autoRemove !== undefined) { if (typeof patch.autoRemove !== 'boolean') throw new BadSetting('Choose whether automatic removal is enabled.'); next.autoRemove = patch.autoRemove; }
   if (patch.autoRemoveBelow !== undefined) { const n = Number(patch.autoRemoveBelow); if (typeof patch.autoRemoveBelow !== 'number' || !Number.isFinite(n) || n < 1 || n > 4.5 || !Number.isInteger(n * 2)) throw new BadSetting('Automatic removal needs a threshold from 1 to 4.5 in half-point steps.'); next.autoRemoveBelow = n; }
   if (patch.autoRemoveAfter !== undefined) { const n = Number(patch.autoRemoveAfter); if (typeof patch.autoRemoveAfter !== 'number' || !Number.isInteger(n) || n < 1 || n > 12) throw new BadSetting('Automatic removal needs between 1 and 12 personal reviews.'); next.autoRemoveAfter = n; }
+  if (patch.binVotes !== undefined) { const n = Number(patch.binVotes); if (typeof patch.binVotes !== 'number' || !Number.isInteger(n) || n < 0 || n > 10) throw new BadSetting('Choose between 0 (off) and 10 bin votes.'); next.binVotes = n; }
   if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
   if (patch.gear !== undefined) next.gear = cleanGear(patch.gear);
   if (Array.isArray(patch.todoReasons)) next.todoReasons = TODO_REASONS.filter((r) => (patch.todoReasons as unknown[]).includes(r));

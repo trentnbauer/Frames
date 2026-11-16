@@ -125,6 +125,7 @@ export function Photo() {
         rankLine={rank !== null ? `#${rank} of ${mates.length} in its shoot` : `${mates.length} in its shoot`} nextDue={p.nextReviewAt ? `Next review due ${new Date(p.nextReviewAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Not due for review'}
         rateSub={`Session ${Math.min(rs.length + 1, 9)}`}
         rateResult={(n: number) => { const you = (rs.reduce((a, r) => a + r.rating, 0) + n) / (rs.length + 1); return `Your score ${avg !== null ? avg.toFixed(1) : '–'} → ${you.toFixed(1)} · combined ${(combined(you) ?? you).toFixed(1)}.`; }}
+        onBin={async () => { await api('/review/rate', { body: { photoId: p.id, bin: true } }); refreshSummary(); const gone = await api(`/photos/${p.id}`).then(() => false).catch(() => true); if (gone) step(1); else photo.reload(); }}
         onRate={async (n: number, note: string) => { await api('/review/rate', { body: { photoId: p.id, rating: n, note } }); photo.reload(); refreshSummary(); }}
         printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: 'var(--muted)' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: 'var(--muted)' }}>· {fits[0].ppi} PPI</span></>}
         printSub={next ? `${next.size} looks sharp from ${((3 * 3438) / Math.max(next.ppi, 1) * 0.0254).toFixed(1)} m away or more` : 'Every common size is sharp at arm’s length'}
