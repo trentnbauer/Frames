@@ -41,7 +41,7 @@ describe('the redesigned screens', () => {
   });
   it('asks whether to keep or delete a shoot’s photographs', () => {
     const html = renderToStaticMarkup(<DeleteShootDialog title="Delete “Coast”?" count={3} onKeep={() => undefined} onDelete={() => undefined} onClose={() => undefined} />);
-    for (const text of ['Delete “Coast”?', '3 photographs', 'Delete shoot', 'Delete shoot & photos', 'Cancel']) expect(html).toContain(text);
+    for (const text of ['Delete “Coast”?', '3 photographs', 'Delete shoot', 'Delete shoot &amp; photos', 'Cancel']) expect(html).toContain(text);
   });
   it('lists photographs in no shoot as a task of their own, not one card per photograph', () => {
     const t = buildTasks([{ key: 'orphaned', count: 4, ids: [1, 2, 3, 4] }, { key: 'tags', count: 1, ids: [1] }]);
