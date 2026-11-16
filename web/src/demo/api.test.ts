@@ -9,7 +9,9 @@ describe('GitHub Pages demo API', () => {
     const photo = await demoApi<{ id: number; tags: unknown[]; reviews: unknown[] }>('/photos/1');
     expect(photo.id).toBe(1);
     expect(photo.tags.length).toBeGreaterThan(0);
-    expect(demoImage(1)).toMatch(/^data:image\/svg\+xml,/);
+    expect(demoImage(1)).toMatch(/^https:\/\/picsum\.photos\/id\/\d+\/480\/320$/);
+    expect(demoImage(1, 'preview')).toMatch(/\/1600\/1067$/);
+    expect(demoImage(1)).not.toBe(demoImage(2));
   });
 
   it('filters the same sample library by search and photoshoot', async () => {
