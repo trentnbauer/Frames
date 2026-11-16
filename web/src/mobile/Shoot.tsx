@@ -97,8 +97,8 @@ export function MobileShoot() {
       )}
       {sheet === 'delete' && (
         <Sheet title="Delete this shoot?" sub={`The shoot goes either way. Keep its ${s.count} photographs (they stay in Frames, in no shoot) or delete them with it (they move to Recently removed). Originals are never touched.`} onClose={() => setSheet(null)}>
-          <button onClick={() => remove('orphan')} style={{ ...primaryBtn, height: 48 }}>Keep the photographs</button>
-          <button onClick={() => remove('delete')} style={{ ...primaryBtn, height: 48, background: 'var(--danger)', color: '#0d0d0d' }}>Delete shoot and photographs</button>
+          <button onClick={() => remove('orphan')} style={{ ...primaryBtn, height: 48 }}>Delete shoot</button>
+          <button onClick={() => remove('delete')} style={{ ...primaryBtn, height: 48, background: 'var(--danger)', color: '#0d0d0d' }}>Delete shoot & photos</button>
           <button onClick={() => setSheet(null)} style={{ height: 44, fontSize: 14, color: 'var(--text2)' }}>Cancel</button>
         </Sheet>
       )}

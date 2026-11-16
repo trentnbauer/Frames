@@ -40,7 +40,7 @@ export function ConfirmDialog({ title, sub, cta, onGo, onClose }: { title: strin
 export function DeleteShootDialog({ title, count, onKeep, onDelete, onClose }: { title: string; count: number; onKeep: () => void; onDelete: () => void; onClose: () => void }) {
   return (
     <Modal title={title} sub={`The shoot goes either way. What about its ${count} ${count === 1 ? 'photograph' : 'photographs'}?`} width={520} onClose={onClose}
-      foot={<><button className="btn" onClick={onClose}>Cancel</button><span className="grow" /><button className="btn outline" onClick={onKeep}>Keep the photographs</button><button className="btn" style={{ background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500 }} onClick={onDelete}>Delete shoot and photographs</button></>}>
+      foot={<><button className="btn" onClick={onClose}>Cancel</button><span className="grow" /><button className="btn outline" onClick={onKeep}>Delete shoot</button><button className="btn" style={{ background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500 }} onClick={onDelete}>Delete shoot & photos</button></>}>
       <p className="muted" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>Kept photographs stay in Frames with their ratings and tags, in no shoot, and show up in To do until you put them in one. Deleted photographs move to Recently removed for 30 days. Original files are never touched.</p>
     </Modal>
   );
