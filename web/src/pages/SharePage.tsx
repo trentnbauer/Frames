@@ -4,7 +4,7 @@ import { RATINGS, fmtDate } from '../data';
 import { Fit, Img, Mark, useKey } from '../components/bits';
 import { PrintModal, Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
-import { ShareMobile, usePhone } from './ShareMobile';
+import { ShareMobile, Who, usePhone } from './ShareMobile';
 import { ShareShoot } from './ShareShoot';
 import { HumanCheck } from '../components/HumanCheck';
 import { FRAMES, WALL_BG, arrange, bounds, metres, newPrintId, photosOf, sizeLabel, type Layout, type Print } from '../layout';
@@ -427,7 +427,7 @@ function NameBox({ initial, token, title, owner, signIn, emailCode, onDone, onCa
 function Shell({ children, who }: { children: React.ReactNode; who?: string }) {
   return (
     <div className="page" style={{ paddingBottom: 60 }}>
-      <header className="header"><span className="lockup"><Mark />Frames</span>{who ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}><span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: 'oklch(0.7 0.13 45)', color: '#0d0d0d', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{who.trim()[0]?.toUpperCase()}</span>{who.trim().split(/\s+/)[0]}</span> : <span className="faint" style={{ fontSize: 12 }}>Shared with you</span>}</header>
+      <header className="header"><span className="lockup"><Mark />Frames</span>{who !== undefined && <Who name={who} />}</header>
       {children}
     </div>
   );

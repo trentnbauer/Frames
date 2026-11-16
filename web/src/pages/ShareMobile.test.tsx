@@ -27,4 +27,11 @@ describe('the shared photoshoot on a phone', () => {
     expect(html).not.toContain('rated');
     expect(html).toContain('All photographs');
   });
+
+  it('shows who is looking in the top corner: their first name, or Guest before they have given one', () => {
+    expect(renderToStaticMarkup(<ShareMobile {...props()} />)).toContain('Guest');
+    const html = renderToStaticMarkup(<ShareMobile {...props({ reviewer: 'Sam Lee' })} />);
+    expect(html).toContain('>Sam<');
+    expect(html).not.toContain('Guest');
+  });
 });

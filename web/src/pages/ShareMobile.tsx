@@ -15,6 +15,17 @@ const ring = 'inset 0 0 0 1px var(--outline)';
 const SWATCH: Record<string, string> = { black: '#151514', white: '#e9e7e1', oak: '#b08a5e', walnut: '#5b3f2c', silver: '#a3a3a0' };
 
 /** Whether the page should use the phone layout: a narrow screen, or a phone held sideways. */
+/** Who is looking, top right of every shared page: the signed-in account's or typed name, otherwise Guest. */
+export function Who({ name }: { name: string }) {
+  const n = name.trim();
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13.5, flex: 'none', marginLeft: 'auto' }}>
+      <span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: n ? 'oklch(0.7 0.13 45)' : 'var(--surface)', boxShadow: n ? undefined : 'inset 0 0 0 1px var(--outline)', color: n ? '#0d0d0d' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{n ? n[0].toUpperCase() : 'G'}</span>
+      {n ? n.split(/\s+/)[0] : 'Guest'}
+    </span>
+  );
+}
+
 export function usePhone(): boolean {
   const q = '(max-width: 700px), (max-height: 520px) and (orientation: landscape)';
   const [on, setOn] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(q).matches);
@@ -160,7 +171,7 @@ export function ShareMobile(p: Props) {
       <div className="sm-left" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {f ? (
           <div style={{ padding: '22px 20px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `${d.owner} shared a composition with you` : 'A composition was shared with you'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `${d.owner} shared a composition with you` : 'A composition was shared with you'}</span><Who name={reviewer} /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <h1 style={{ font: `400 40px/1 ${serif}`, margin: 0, textWrap: 'balance' as never }}>{d.name}</h1>
               <span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{spanLabel}</span>
@@ -225,7 +236,7 @@ export function ShareMobile(p: Props) {
           </div>
         ) : (
           <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}<Who name={reviewer} /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14 }}>
               <h1 style={{ font: `400 52px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
               {d.description && <p style={{ margin: '2px 0 0', font: `italic 400 21px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
