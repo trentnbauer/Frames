@@ -6,7 +6,7 @@ import type { PhotoLite, Shoot } from '../data';
 import { reviewUrl } from '../reviewScope';
 import { useStore } from '../store';
 import { useUi } from '../ui';
-import { ConfirmDialog, JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
+import { DeleteShootDialog, JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
 import { isUntitled } from './LibraryPage';
 
 const mono = "'IBM Plex Mono',monospace";
@@ -54,7 +54,7 @@ export function ShootPage() {
   const loved = photos.filter((p) => p.avgRating >= 4.5).length;
   const protect = async (on: boolean) => { setErr(''); setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { protected: on } }); shoot.reload(); toast.say(on ? `“${title}” is protected from deletion` : 'Protection turned off'); } catch (e) { setErr((e as Error).message); } };
   const saveName = async () => { const v = name.trim(); setRenaming(false); if (!v || v === s.name) return; try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { name: v } }); shoot.reload(); } catch (e) { setErr((e as Error).message); } };
-  const remove = async () => { setConfirm(false); try { await api(`/shoots/${s.id}`, { method: 'DELETE' }); refreshSummary(); nav('/library', { replace: true }); } catch (e) { setErr((e as Error).message); } };
+  const remove = async (photos: 'orphan' | 'delete') => { setConfirm(false); try { await api(`/shoots/${s.id}${photos === 'orphan' ? '?photos=orphan' : ''}`, { method: 'DELETE' }); refreshSummary(); nav('/library', { replace: true }); } catch (e) { setErr((e as Error).message); } };
   const flip = (pid: number) => setPicked((c) => { const n = new Set(c); if (n.has(pid)) n.delete(pid); else n.add(pid); return n; });
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, whiteSpace: 'nowrap' } as const;
   const menuItems: { label: string; sub?: string; fg?: string; sep?: boolean; go: () => void }[] = [
@@ -62,7 +62,7 @@ export function ShootPage() {
     { label: 'Rename shoot', go: () => { setMenu(false); setName(s.name); setRenaming(true); } },
     { label: 'Edit place, dates and camera…', go: () => { setMenu(false); setSp({ adv: '1' }); } },
     { label: s.protected ? 'Turn off protection' : 'Protect from deletion', go: () => protect(!s.protected) },
-    { sep: true, label: 'Delete shoot…', sub: s.protected ? 'Protected. Turn off protection to delete it.' : `Moves all ${photos.length} photographs to Recently removed.`, fg: s.protected ? 'var(--faint)' : 'var(--danger)', go: () => { setMenu(false); if (s.protected) toast.say('This shoot is protected. Turn off protection to delete it.'); else setConfirm(true); } },
+    { sep: true, label: 'Delete shoot…', sub: s.protected ? 'Protected. Turn off protection to delete it.' : 'Keep its photographs, or delete them with it.', fg: s.protected ? 'var(--faint)' : 'var(--danger)', go: () => { setMenu(false); if (s.protected) toast.say('This shoot is protected. Turn off protection to delete it.'); else setConfirm(true); } },
   ];
   const cam = s.gear?.camera || photos.find((p) => p.camera)?.camera || '';
 
@@ -120,7 +120,7 @@ export function ShootPage() {
 
       {selecting && <PickedBar ids={[...picked]} photos={photos} shoots={all.data ?? []} onClear={() => setPicked(new Set())} onChanged={() => { list.reload(); shoot.reload(); all.reload(); }} say={toast.say} />}
       {sharing && <SharePanel kind="shoot" id={s.id} name={title} onClose={() => setSharing(false)} />}
-      {confirm && <ConfirmDialog title={`Delete “${title}”?`} sub={`All ${photos.length} photographs move to Recently removed, where you can restore them. Ratings and tags come back with them.`} cta="Delete shoot" onGo={remove} onClose={() => setConfirm(false)} />}
+      {confirm && <DeleteShootDialog title={`Delete “${title}”?`} count={photos.length} onKeep={() => remove('orphan')} onDelete={() => remove('delete')} onClose={() => setConfirm(false)} />}
       {toast.node}
     </div>
   );
