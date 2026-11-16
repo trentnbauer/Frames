@@ -156,9 +156,8 @@ function DesktopPhoto() {
         onAddTag={async (name: string) => { await tagAct(name, 'tag', 'accept'); }}
         description={p.description || (ai && p.aiSuggestion?.description) || ''}
         detailFields={[['camera', 'Camera', 'Camera', p.camera], ['lens', 'Lens', 'Lens', p.lens], ['aperture', 'Aperture', 'f/–', p.aperture ? `f/${p.aperture}` : '']].map(([k, t, ph, val]) => ({ kind: k === 'camera' || k === 'lens' ? k : '', onCommit: (v: string) => { if (v !== String(val)) void patch({ [k]: v }); }, value: val, title: `${t} · click to edit`, ph, size: Math.max(3, String(val || ph).length), onChange: () => undefined, onBlur: (e: React.FocusEvent<HTMLInputElement>) => { const v = e.target.value.trim(); if (v !== String(val)) void patch(k === 'aperture' ? { aperture: Number(v.replace(/^f\//i, '')) || null } : { [k]: v }); } }))}
-        trashHint={`${p.file} and its XMP sidecar${mb ? ` · ${mb} MB` : ''}`}
-        delSub={`${p.title || p.file} · ${shoot?.name ?? ''}`} delWarn={`${inComps.length ? `It’s in ${inComps.length} composition${inComps.length === 1 ? '' : 's'}` : 'It’s not in a composition'}${inPf.data?.state !== 'none' ? ' and your portfolio' : ''}. It will be removed from all of them, along with its ratings and tags.`}
-        onDelete={async (mode: 'frames' | 'trash') => { await api('/photos/remove', { body: { ids: [p.id], originals: mode === 'trash' ? 'trash' : 'keep' } }); refreshSummary(); step(1); }}
+        delSub={`${p.title || p.file} · ${shoot?.name ?? ''}`} delWarn={`${[inComps.length ? `${inComps.length} composition${inComps.length === 1 ? '' : 's'}` : '', inPf.data?.state !== 'none' ? 'your portfolio' : ''].filter(Boolean).join(' and ').replace(/^(.+)$/, 'It will be taken out of $1, along with its ratings and tags.') || 'Its ratings and tags go with it.'}`}
+        onDelete={async () => { await api('/photos/remove', { body: { ids: [p.id], originals: 'keep' } }); refreshSummary(); step(1); }}
       />
     </div>
   );

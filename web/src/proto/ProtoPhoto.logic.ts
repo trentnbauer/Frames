@@ -64,8 +64,8 @@ export class Logic extends DCLogic {
       detailFields: (P.detailFields || []).map((d, i) => ({ ...d, sepShow: i ? 'inline' : 'none' })),
       inComps: P.inComps, inCompsTitle: P.inComps.length === 1 ? 'In 1 composition' : P.inComps.length ? 'In ' + P.inComps.length + ' compositions' : 'In no composition',
       delOpen: S.del, closeDel: () => this.setState({ del: false }),
-      delOpts: [['frames', 'Remove from Frames', 'The original stays on disk. You can import it again later.'], ['trash', 'Also move the original to the trash', P.trashHint]].map(([k, label, hint]) => ({ label, hint, bg: mode === k ? 'var(--hover)' : 'transparent', ring: mode === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: mode === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent)', pick: () => this.setState({ delMode: k }) })),
-      delLabel: mode === 'trash' ? 'Delete and trash file' : 'Remove from Frames', delSub: P.delSub, delWarn: P.delWarn,
+      delOpts: [['frames', 'Remove from Frames', 'The original isn’t touched, on disk or in the cloud, and won’t be imported again. Its ratings and tags can be recovered for 30 days.']].map(([k, label, hint]) => ({ label, hint, bg: mode === k ? 'var(--hover)' : 'transparent', ring: mode === k ? 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)' : 'none', dot: mode === k ? 'inset 0 0 0 5px var(--text)' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent)', pick: () => this.setState({ delMode: k }) })),
+      delLabel: 'Remove from Frames', delSub: P.delSub, delWarn: P.delWarn,
       confirmDel: async () => { this.setState({ del: false }); await P.onDelete(mode); },
       mapToast: (t) => this.ptoast(t), mapOpen: !!S.map, openMap: () => this.openMap(), closeMap: () => this.setState({ map: null }),
     };

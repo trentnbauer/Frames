@@ -185,7 +185,7 @@ export function MobilePhoto() {
       )}
       {sheet === 'comp' && <CompPicker ids={[p.id]} onClose={() => setSheet(null)} onDone={(m) => { setSheet(null); say(m); }} />}
       {sheet === 'remove' && (
-        <Sheet title="Remove this photo from Frames?" sub="Its reviews, tags and composition places go with it. The original file is kept." onClose={() => setSheet(null)}>
+        <Sheet title="Remove this photo from Frames?" sub="Its reviews, tags and composition places go with it. The original isn’t touched and won’t be imported again." onClose={() => setSheet(null)}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => setSheet(null)} style={{ height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Cancel</button>
             <button onClick={remove} style={{ ...primaryBtn, height: 46, padding: '0 22px', background: 'var(--danger)', color: '#0d0d0d', fontSize: 14.5 }}>Remove</button>
