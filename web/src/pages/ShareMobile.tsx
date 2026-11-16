@@ -248,7 +248,7 @@ export function ShareMobile(p: Props) {
               {canReview ? (
                 <div role="tablist" aria-label="Show" style={{ flex: 1, display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
                   {([['all', 'All', photos.length], ['todo', 'To rate', photos.length - ratedCount], ['rated', 'Rated', ratedCount]] as const).map(([k, l, n]) => (
-                    <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, borderRadius: 999, background: filter === k ? 'var(--raised2)' : 'transparent', color: filter === k ? 'var(--text)' : 'var(--text2)', fontSize: 13, whiteSpace: 'nowrap' }}>{l}<span style={{ font: `400 10.5px ${mono}`, color: 'var(--faint)' }}>{n}</span></button>
+                    <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, borderRadius: 999, background: filter === k ? 'var(--btn-bg)' : 'transparent', color: filter === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 13, whiteSpace: 'nowrap' }}>{l}<span style={{ font: `400 10.5px ${mono}`, color: filter === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: filter === k ? 0.6 : 1 }}>{n}</span></button>
                   ))}
                 </div>
               ) : <span style={{ font: `400 22px ${serif}` }}>All photographs</span>}
