@@ -627,6 +627,11 @@ main.auth.terms { width: 640px; }
 }
 @media (max-width: 767px) {
   .settings-wrap h1, .settings-wrap h2 { font-size: 30px !important; }
+  /* A phone lists the sections one under another, each a full-width row, and scrolls a long row of tabs sideways. */
+  .settings-phone > aside { flex-direction: column !important; flex-wrap: nowrap; gap: 0 !important; }
+  .settings-phone > aside .snavi { padding: 14px 4px !important; border-radius: 0 !important; border-top: 1px solid var(--hair); font-size: 15px; }
+  .settings-phone [role=tablist].seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .settings-phone [role=tablist].seg > button { flex: none; }
 }
 
 /* A shortcut key shown beside a button's label */
