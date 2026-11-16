@@ -2,11 +2,11 @@ name: Publish Frames demo
 
 on:
   workflow_dispatch:
-  push:
+  # After each main push has been versioned, so the demo is stamped with the tag just made.
+  workflow_run:
+    workflows: [Create Version and Docker Container]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'web/**'
-      - '.github/workflows/demo-pages.yml'
   schedule:
     # 07:00 AEDT (UTC+11) every day. This is 06:00 during AEST.
     - cron: '0 20 * * *'
@@ -28,6 +28,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Find the release the demo is built from
+        run: echo "VITE_DEMO_VERSION=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v7
         with:
           node-version: 22
