@@ -355,9 +355,9 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     // The AI's description is a suggestion until the user accepts it; rejecting it hides it and keeps it from coming back.
     if (b.acceptAiDescription === true && p.ai_json) {
       const a = JSON.parse(p.ai_json);
-      if (a.description) set("UPDATE photos SET description = ?, desc_source = 'user' WHERE id = ?", String(a.description).slice(0, 2000), id);
+      if (a.description) set("UPDATE photos SET description = ?, desc_source = 'user', ai_json = ? WHERE id = ?", String(a.description).slice(0, 2000), JSON.stringify({ ...a, sourceId: '' }), id);
     }
-    if (b.rejectAiDescription === true && p.ai_json) set('UPDATE photos SET ai_json = ? WHERE id = ?', JSON.stringify({ ...JSON.parse(p.ai_json), descriptionRejected: true }), id);
+    if (b.rejectAiDescription === true && p.ai_json) set('UPDATE photos SET ai_json = ? WHERE id = ?', JSON.stringify({ ...JSON.parse(p.ai_json), sourceId: '', descriptionRejected: true }), id);
     if (b.reanalyse === true) set('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE id = ?', id);
     if ('camera' in b || 'lens' in b) discoverPhotoGear(db, id);
     return x.photoDto(one('SELECT * FROM photos WHERE id = ?', id)!, true);
