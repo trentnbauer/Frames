@@ -395,7 +395,9 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   const aiStatus = () => {
     const jobs = Object.entries(aiActivity(db).jobs).filter(([, count]) => count! > 0).map(([job]) => job);
     return { enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, batchRunning: x.ai.state.running,
-      running: x.ai.state.running || jobs.length > 0, jobs, sharedUsage: sharedUsage(db) };
+      running: x.ai.state.running || jobs.length > 0, jobs,
+      providers: Object.values(aiActivity(db).providers).map(({ id, name, color }) => ({ id, name, color })),
+      sharedUsage: sharedUsage(db) };
   };
   app.get('/api/ai/status', async () => aiStatus());
   app.post('/api/ai/run', async (req, rep) => {
