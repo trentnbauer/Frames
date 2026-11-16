@@ -307,6 +307,7 @@ export function useData(ctx: Ctx): Section {
       ] },
       { title: 'Danger zone', rows: [
         { id: 'resetRatings', t: 'button', danger: true, label: 'Reset all ratings', hint: 'Scores start again. Photos stay.', meta: 'Reset…', act: async () => { if ((await promptAction('This forgets every rating you and your guests gave. Type “reset” to confirm.')) !== 'reset') return; await act(ctx, () => api('/reviews/reset', { body: { confirm: 'reset' } }), 'Every rating was reset'); } },
+        { id: 'resetLibrary', t: 'button', danger: true, label: 'Reset photo library', hint: 'Remove photos, shoots and photo history. Disable automatic imports but keep connections, credentials and settings. Originals stay on disk.', meta: 'Reset…', act: async () => { if ((await promptAction('Remove all photos, shoots, ratings and photo history from Frames? Original files stay untouched. Automatic cloud imports will be disabled; saved credentials and import sources remain. Type “RESET” to confirm.')) !== 'RESET') return; await act(ctx, () => api('/library/reset', { body: { confirm: 'RESET' } }), 'Photo library reset · automatic imports disabled'); window.location.reload(); } },
         { id: 'del', t: 'button', danger: true, label: 'Delete my account', hint: 'Photos on disk are not touched.', meta: 'Delete…', act: manage },
       ] },
     ],
