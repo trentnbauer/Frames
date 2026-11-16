@@ -39,10 +39,10 @@ export const sharedUsage = (db: DB) => { const s = (db as unknown as { sys?: DB 
 const sharedOverLimit = (db: DB) => { const u = sharedUsage(db); return u.limit > 0 && u.used >= u.limit; };
 // Attached to the tenant database so request proxies resolve the correct person's activity.
 const ACTIVITY = Symbol('ai activity');
-type Activity = { jobs: Partial<Record<Job, number>> };
+type Activity = { jobs: Partial<Record<Job, number>>; providers: Record<string, { id: string; name: string; color: string; count: number }> };
 export function aiActivity(db: DB): Activity {
   const owner = db as DB & { [ACTIVITY]?: Activity };
-  return owner[ACTIVITY] ?? (owner[ACTIVITY] = { jobs: {} });
+  return owner[ACTIVITY] ?? (owner[ACTIVITY] = { jobs: {}, providers: {} });
 }
 
 /** Runs `fn` with the first AI for the job; if it errors, the next one takes over. Null when no AI is set up for the job; throws the last error if all fail. */
@@ -53,9 +53,18 @@ export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>)
   try {
     let last: unknown = null;
     for (const c of list) {
+      const activityId = c.id ?? c.name;
+      const running = activity.providers[activityId];
+      activity.providers[activityId] = { id: activityId, name: c.name, color: c.color ?? '', count: (running?.count ?? 0) + 1 };
+      try {
       // A paid shared AI stops after the monthly number of requests the administrator allows each person; the next AI in the order takes over.
       if (c.shared && !c.local && sharedOverLimit(db)) { last = new Error('The monthly limit for the shared AI has been reached.'); continue; }
       try { const r = await fn(c); if (c.shared && !c.local) countShared(db); return r; } catch (e) { if (c.shared && !c.local) countShared(db); last = e; }
+      } finally {
+        const count = (activity.providers[activityId]?.count ?? 1) - 1;
+        if (count) activity.providers[activityId].count = count;
+        else delete activity.providers[activityId];
+      }
     }
     if (list.length) throw last;
     return null;
@@ -210,10 +219,10 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     if (canEmbed(c)) try { emb = await embedText(c, [a.description, ...a.subjects, ...a.tags].join('. ')); } catch (e) { state.lastError = `Embeddings unavailable: ${(e as Error).message}`; }
     db.transaction(() => {
       // Suggestions only: INSERT OR IGNORE keeps anything the user already accepted or rejected.
-      for (const s of a.subjects) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'ai', 0, 'subject')").run(id, s);
-      for (const t of a.tags) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'ai', 0, 'tag')").run(id, t);
+      for (const s of a.subjects) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind, ai_source_id) VALUES(?, ?, 'ai', 0, 'subject', ?)").run(id, s, c.id ?? '');
+      for (const t of a.tags) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind, ai_source_id) VALUES(?, ?, 'ai', 0, 'tag', ?)").run(id, t, c.id ?? '');
       db.prepare("UPDATE photos SET ai_json = ?, ai_status = 'done', ai_attempts = 0, embedding = ? WHERE id = ?")
-        .run(JSON.stringify({ ...a, model: c.model, at: new Date().toISOString() }), emb ? toBlob(emb) : null, id);
+        .run(JSON.stringify({ ...a, model: c.model, sourceId: c.id ?? '', at: new Date().toISOString() }), emb ? toBlob(emb) : null, id);
     })();
   }
 

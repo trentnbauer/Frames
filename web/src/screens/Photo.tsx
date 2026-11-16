@@ -8,6 +8,7 @@ import { useStore } from '../store';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
 import { PhotoColourVariants } from '../components/PhotoColourVariants';
+import { aiTint, tintedChip, type SourceTint } from '../aiColours';
 
 type MapHit = { name: string; address: string; kind: string; suburb: string; city: string; lat: number; lon: number };
 const SENSITIVE = ['Nudity', 'Violence', 'Adult'];
@@ -27,6 +28,7 @@ export function Photo() {
   const all = useApi<{ photos: PhotoLite[] }>('/photos');
   const inPf = useApi<{ state: 'in' | 'auto' | 'none'; inPortfolio: boolean; favourite: boolean; score: number | null }>(`/portfolio/photos/${id}`);
   const profile = useApi<{ hemisphere: Hemisphere }>('/profile');
+  const aiSources = useApi<{ sources: SourceTint[] }>('/ai/sources');
   const colls = useApi<Collection[]>('/collections');
   const guests = useApi<{ avg: number | null; n: number }>(`/photos/${id}/guests`);
   const todo = useApi<{ items: { key: string; ids?: number[] }[] }>(todoKey ? '/todo' : null);
@@ -85,6 +87,10 @@ export function Photo() {
   const accepted = p.tags.filter((t) => t.accepted);
   const sensOn = (n: string) => accepted.some((t) => t.name.toLowerCase() === n.toLowerCase());
   const suggested = ai ? p.tags.filter((t) => !t.accepted && t.source === 'ai') : [];
+  const sources = aiSources.data?.sources ?? [];
+  const suggestionColour = aiTint(p.aiSuggestion?.sourceId, sources);
+  const suggestionProvider = sources.find((s) => s.id === p.aiSuggestion?.sourceId);
+  const tintForTag = (sourceId?: string) => aiTint(sourceId, sources);
   const mb = Math.round(p.sizeMb || 0);
 
   return (
@@ -123,6 +129,10 @@ export function Photo() {
         printLine={best ? <>Sharp up to <b style={{ fontWeight: 500 }}>{best.size}</b>{next && <span style={{ color: 'var(--muted)' }}> · {next.size} at {next.ppi} PPI</span>}</> : <>Below 300 PPI even at A4 <span style={{ color: 'var(--muted)' }}>· {fits[0].ppi} PPI</span></>}
         printSub={next ? `${next.size} looks sharp from ${((3 * 3438) / Math.max(next.ppi, 1) * 0.0254).toFixed(1)} m away or more` : 'Every common size is sharp at arm’s length'}
         timeOfDay={timeOfDay} light={ai ? p.aiSuggestion?.lighting ?? '' : ''} mood={ai ? p.aiSuggestion?.mood ?? '' : ''}
+        aiColour={suggestionColour} aiProviderName={suggestionProvider?.name ?? ''}
+        descriptionSuggested={!!ai && !p.description && !!p.aiSuggestion?.description}
+        onAcceptDescription={() => patch({ acceptAiDescription: true })}
+        onRejectDescription={() => patch({ rejectAiDescription: true })}
         place={place} defaultLat={undefined} defaultLng={undefined}
         searchPlaces={async (q: string) => api<MapHit[]>(`/map/search?q=${encodeURIComponent(q)}`)}
         reversePlace={async (lat: number, lon: number) => api<MapHit>(`/map/reverse?lat=${lat}&lon=${lon}`)}
@@ -130,8 +140,8 @@ export function Photo() {
         onRemovePlace={async () => { await patch({ place: '', placeAddress: '', placeKind: '', lat: null, lon: null }); }}
         sensitive={SENSITIVE.map((n) => ({ name: n, on: sensOn(n) }))}
         onSensitive={async (name: string, on: boolean) => { await tagAct(name.toLowerCase(), 'tag', on ? 'accept' : 'remove'); }}
-        tags={accepted.filter((t) => !SENSITIVE.some((n) => n.toLowerCase() === t.name.toLowerCase())).map((t) => ({ label: t.name, accepted: t.source === 'ai', remove: () => tagAct(t.name, t.kind, 'remove') }))}
-        aiTags={suggested.map((t) => ({ label: t.name, mark: '+', fg: 'var(--text2)', bg: 'transparent', ring: 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', accept: () => tagAct(t.name, t.kind, 'accept'), reject: () => tagAct(t.name, t.kind, 'reject') }))}
+        tags={accepted.filter((t) => !SENSITIVE.some((n) => n.toLowerCase() === t.name.toLowerCase())).map((t) => ({ label: t.name, accepted: false, remove: () => tagAct(t.name, t.kind, 'remove') }))}
+        aiTags={suggested.map((t) => { const color = tintForTag(t.aiSourceId); const tint = tintedChip(color); return { label: t.name, mark: '+', fg: tint.color, bg: tint.background, ring: tint.boxShadow, provider: sources.find((s) => s.id === t.aiSourceId)?.name ?? '', accept: () => tagAct(t.name, t.kind, 'accept'), reject: () => tagAct(t.name, t.kind, 'reject') }; })}
         onAddTag={async (name: string) => { await tagAct(name, 'tag', 'accept'); }}
         description={p.description || (ai && p.aiSuggestion?.description) || ''}
         detailFields={[['camera', 'Camera', 'Camera', p.camera], ['lens', 'Lens', 'Lens', p.lens], ['aperture', 'Aperture', 'f/–', p.aperture ? `f/${p.aperture}` : '']].map(([k, t, ph, val]) => ({ kind: k === 'camera' || k === 'lens' ? k : '', onCommit: (v: string) => { if (v !== String(val)) void patch({ [k]: v }); }, value: val, title: `${t} · click to edit`, ph, size: Math.max(3, String(val || ph).length), onChange: () => undefined, onBlur: (e: React.FocusEvent<HTMLInputElement>) => { const v = e.target.value.trim(); if (v !== String(val)) void patch(k === 'aperture' ? { aperture: Number(v.replace(/^f\//i, '')) || null } : { [k]: v }); } }))}

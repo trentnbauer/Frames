@@ -394,8 +394,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   // ---------- AI ----------
   const aiStatus = () => {
     const jobs = Object.entries(aiActivity(db).jobs).filter(([, count]) => count! > 0).map(([job]) => job);
-    return { enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, batchRunning: x.ai.state.running,
-      running: x.ai.state.running || jobs.length > 0, jobs, sharedUsage: sharedUsage(db) };
+    const activeProviders = Object.values(aiActivity(db).providers).map(({ id, name, color }) => ({ id, name, color }));
+    // While a batch is between photos, retain the selected provider's tint rather than reverting to amber.
+    const configured = aiConfig(db);
+    const providers = activeProviders.length ? activeProviders : x.ai.state.running && configured
+      ? [{ id: configured.id ?? '', name: configured.name, color: configured.color ?? '' }] : [];
+    return { enabled: !!configured, ...aiCounts(db), ...x.ai.state, batchRunning: x.ai.state.running,
+      running: x.ai.state.running || jobs.length > 0, jobs, providers,
+      sharedUsage: sharedUsage(db) };
   };
   app.get('/api/ai/status', async () => aiStatus());
   app.post('/api/ai/run', async (req, rep) => {

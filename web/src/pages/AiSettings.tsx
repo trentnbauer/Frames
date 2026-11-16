@@ -4,9 +4,10 @@ import { api, useApi } from '../api';
 import { useStore } from '../store';
 import { Eyebrow, PSelect, PSwitch, SCard, SRow } from '../components/srow';
 import { CardFooter, Chip, Destructive, EditRow, useOne, type One } from '../components/editcard';
+import { AI_COLOURS, type AiColour } from '../aiColours';
 
 type Type = { id: string; label: string; group: string; local: boolean; endpoint: string; model: string; embedModel: string; needsKey: boolean; canEmbed: boolean; note: string };
-type Source = { shared?: boolean; id: string; type: string; name: string; endpoint: string; model: string; embedModel: string; ack: boolean; hasKey: boolean; ready: boolean; why: string };
+type Source = { shared?: boolean; id: string; type: string; name: string; endpoint: string; model: string; embedModel: string; color?: string; ack: boolean; hasKey: boolean; ready: boolean; why: string };
 type Data = { types: Type[]; active: string; sources: Source[] };
 type Status = { sharedUsage?: { used: number; limit: number }; enabled: boolean; pending: number; done: number; failed: number; running: boolean; total: number; lastError: string | null };
 
@@ -72,14 +73,16 @@ export function AiSettings({ server = false }: { server?: boolean }) {
 }
 
 function Item({ base, server, src, type, active, one, run }: { base: string; server: boolean; src: Source; type: Type; active: boolean; one: One; run: (fn: () => Promise<unknown>, ok?: string) => Promise<void> }) {
-  const [f, setF] = useState({ name: src.name, endpoint: src.endpoint, model: src.model, embedModel: src.embedModel, key: '' });
+  const [f, setF] = useState({ name: src.name, endpoint: src.endpoint, model: src.model, embedModel: src.embedModel, color: src.color ?? '', key: '' });
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; detail: string } | null>(null);
-  const dirty = f.name !== src.name || f.endpoint !== src.endpoint || f.model !== src.model || f.embedModel !== src.embedModel || !!f.key;
-  const body = () => ({ name: f.name, endpoint: f.endpoint, model: f.model, embedModel: f.embedModel, ...(f.key ? { key: f.key } : {}) });
+  const dirty = f.name !== src.name || f.endpoint !== src.endpoint || f.model !== src.model || f.embedModel !== src.embedModel || f.color !== (src.color ?? '') || !!f.key;
+  const body = () => ({ name: f.name, endpoint: f.endpoint, model: f.model, embedModel: f.embedModel, color: f.color, ...(f.key ? { key: f.key } : {}) });
   const saveIt = () => run(async () => { await api(`${base}/sources/${src.id}`, { method: 'PUT', body: body() }); setF({ ...f, key: '' }); }, 'Saved.');
   const state = active ? 'On' : src.ready ? 'Off' : src.why;
   const summary = (
     <>
+      <span className="ai-source-dot" style={{ background: src.color || 'var(--muted)' }} aria-hidden="true" />
       <b>{src.name}</b> {src.name !== type.label && <span className="muted">{type.label}</span>}{' '}
       <span className={active ? '' : src.ready ? 'faint' : 'reason'}>{state}</span>{' '}
       <span className="faint">· {type.local ? 'stays on your network' : 'previews are sent out'}</span>
@@ -94,6 +97,27 @@ function Item({ base, server, src, type, active, one, run }: { base: string; ser
   return (
     <EditRow id={src.id} one={one} title={src.name} right={sw} summary={summary} note={type.note}>
       <div className="form" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+        <div className="ai-colour-field">
+          <span>Provider colour</span>
+          <div className="ai-colour-picker">
+            <button type="button" className="ai-colour-trigger" aria-label={`Choose colour for ${src.name}`} aria-expanded={paletteOpen} onClick={() => setPaletteOpen(!paletteOpen)}>
+              <span style={{ background: f.color || 'var(--muted)' }} />
+              <span>{f.color ? 'Selected colour' : 'Default'}</span>
+            </button>
+            {paletteOpen && <div className="ai-colour-popover" role="group" aria-label="Provider colour">
+              <b>Provider colour</b>
+              <div className="ai-colour-grid">
+                {AI_COLOURS.map((colour: AiColour) => <button type="button" key={colour.value} className="ai-colour-choice"
+                  aria-label={colour.name} aria-pressed={f.color === colour.value}
+                  style={{ background: colour.value || 'var(--muted)' }}
+                  onClick={() => { setF({ ...f, color: colour.value }); setPaletteOpen(false); }}>
+                  {f.color === colour.value && <span aria-hidden="true">✓</span>}
+                </button>)}
+              </div>
+              <p>Use this tint for AI tags and suggestions.</p>
+            </div>}
+          </div>
+        </div>
         <label>Name <input aria-label={`${src.name} name`} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
         <label>Address <input aria-label={`${src.name} address`} value={f.endpoint} placeholder={type.endpoint || 'https://…'} onChange={(e) => setF({ ...f, endpoint: e.target.value })} /></label>
         <label>Vision model <input aria-label={`${src.name} vision model`} value={f.model} placeholder={type.model} onChange={(e) => setF({ ...f, model: e.target.value })} /></label>

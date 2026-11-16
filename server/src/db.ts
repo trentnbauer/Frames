@@ -392,6 +392,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       `CREATE TABLE IF NOT EXISTS metadata_jobs(id TEXT PRIMARY KEY,input TEXT NOT NULL,cursor INTEGER NOT NULL DEFAULT 0,operation_id INTEGER,status TEXT NOT NULL,created_at TEXT NOT NULL);`,
     );
   },
+  // Track the provider only while an AI tag is waiting for approval.
+  (db) => {
+    addColumn(db, 'tags', 'ai_source_id', "TEXT NOT NULL DEFAULT ''");
+  },
 ];
 
 export function migrate(db: DB) {

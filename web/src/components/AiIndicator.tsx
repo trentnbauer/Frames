@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-export type AiStatus = { enabled: boolean; running: boolean; batchRunning?: boolean; jobs?: string[]; done: number; total: number; failed?: number };
+export type AiStatus = { enabled: boolean; running: boolean; batchRunning?: boolean; jobs?: string[]; providers?: { id: string; name: string; color: string }[]; done: number; total: number; failed?: number };
 export function aiIndicatorText(status: AiStatus | null) {
   if (!status) return 'AI status unavailable';
   if (!status.running) return status.enabled ? 'AI is idle' : 'AI is off';
@@ -12,12 +12,14 @@ export function aiIndicatorText(status: AiStatus | null) {
 }
 export function AiIndicatorView({ status }: { status: AiStatus | null }) {
   const [open, setOpen] = useState(false);
+  const provider = status?.providers?.[0];
   const text = aiIndicatorText(status);
+  const displayText = provider && status?.running ? text.replace(/^AI /, `${provider.name} `) : text;
   const progress = status?.running && status.batchRunning && status.total > 0;
   const done = status ? Math.max(0, Math.min(status.total, status.done)) : 0;
-  return <div className="ai-indicator" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false); }} onKeyDown={(event) => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation(); } }}>
-    <button type="button" className={'iconbtn ai-status' + (status?.running ? ' working' : '')} aria-label={text} aria-describedby={open ? 'ai-status-tooltip' : undefined} onFocus={() => setOpen(true)} onClick={() => setOpen(true)}><span aria-hidden="true">✦</span></button>
-    {open && <div id="ai-status-tooltip" role="tooltip" className="ai-status-tooltip"><div>{text}</div>{progress && <><div className="ai-status-detail">{done} of {status.total} processed{status.failed ? ` · ${status.failed} failed` : ''}</div><progress aria-label="AI photo analysis progress" value={done} max={status.total} /></>}</div>}
+  return <div className="ai-indicator" style={status?.running && provider?.color ? { '--ai-active': provider.color } as React.CSSProperties : undefined} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false); }} onKeyDown={(event) => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation(); } }}>
+    <button type="button" className={'iconbtn ai-status' + (status?.running ? ' working' : '')} aria-label={displayText} aria-describedby={open ? 'ai-status-tooltip' : undefined} onFocus={() => setOpen(true)} onClick={() => setOpen(true)}><span aria-hidden="true">✦</span></button>
+    {open && <div id="ai-status-tooltip" role="tooltip" className="ai-status-tooltip"><div>{displayText}</div>{progress && <><div className="ai-status-detail">{done} of {status.total} processed{status.failed ? ` · ${status.failed} failed` : ''}</div><progress aria-label="AI photo analysis progress" value={done} max={status.total} /></>}</div>}
   </div>;
 }
 export function AiIndicator() {
