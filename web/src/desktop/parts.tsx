@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
+import { MoveToShoot } from '../components/MoveToShoot';
 import { Modal } from '../components/Modal';
 import { useApi } from '../api';
 import type { PhotoLite, Shoot } from '../data';
@@ -71,10 +72,10 @@ export const isDue = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new
  * Moving and removing are done here; the page reloads through onChanged.
  */
 export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { ids: number[]; photos: PhotoLite[]; shoots: Shoot[]; onClear: () => void; onChanged: () => void; say: (t: string, undo?: () => void) => void }) {
-  const { refreshSummary } = useStore();
+  const { refreshSummary, settings } = useStore();
+  const [scanning, setScanning] = useState(false);
   const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove'>(null);
   const [err, setErr] = useState('');
-  const [q, setQ] = useState('');
   if (ids.length === 0) return null;
   const protectedIds = new Set(shoots.filter((s) => s.protected).map((s) => s.id));
   const picked = photos.filter((p) => ids.includes(p.id));
@@ -82,8 +83,9 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
   const removable = picked.filter((p) => !protectedIds.has(p.shootId)).map((p) => p.id);
   const allBlocked = picked.length > 0 && blocked.length === picked.length;
   const orphan = async () => { try { await api('/photos/orphan', { body: { photoIds: ids } }); setDlg(null); onClear(); onChanged(); say(`Took ${ids.length} out of their shoots`); } catch (e) { setErr((e as Error).message); } };
-  const create = async () => { const name = q.trim(); if (!name) return; try { const made = await api<Shoot>('/shoots', { body: { name, photoIds: ids } }); setDlg(null); setQ(''); onClear(); onChanged(); say(`Moved ${ids.length} to “${made.name}”`); } catch (e) { setErr((e as Error).message); } };
+  const create = async (name: string) => { try { const made = await api<Shoot>('/shoots', { body: { name, photoIds: ids } }); setDlg(null); onClear(); onChanged(); say(`Moved ${ids.length} to “${made.name}”`); } catch (e) { setErr((e as Error).message); } };
   const move = async (to: Shoot) => { try { await api(`/shoots/${to.id}/move`, { body: { photoIds: ids } }); setDlg(null); onClear(); onChanged(); say(`Moved ${ids.length} to “${to.name}”`); } catch (e) { setErr((e as Error).message); } };
+  const scan = async () => { setErr(''); setScanning(true); try { await api('/ai/run', { method: 'POST', body: { photoIds: ids } }); say(`Scanning ${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'} with AI`); onClear(); } catch (e) { setErr((e as Error).message); } finally { setScanning(false); } };
   const remove = async () => { try { await api('/photos/remove', { body: { ids: removable, originals: 'keep' } }); setDlg(null); onClear(); onChanged(); refreshSummary(); say(`Moved ${removable.length} to Recently removed${blocked.length ? ` · ${blocked.length} protected, kept` : ''}`); } catch (e) { setErr((e as Error).message); setDlg(null); } };
   const pill = { height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)' } as const;
   return (
@@ -92,19 +94,14 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
         <b style={{ fontWeight: 500, marginRight: 4 }}>{ids.length} selected</b>
         <button onClick={onClear} style={{ height: 32, padding: '0 12px', color: 'var(--text2)' }}>Clear</button>
         <button onClick={() => { setErr(''); setDlg('move'); }} style={pill}>Move to shoot…</button>
+        {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={pill}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
         <button onClick={() => { if (allBlocked) say('These photos are in a protected shoot. Turn off protection to remove them.'); else setDlg('remove'); }} title={blocked.length ? `${blocked.length} selected photo${blocked.length > 1 ? 's are' : ' is'} in a protected shoot and can’t be removed` : 'Move to Recently removed'} style={{ ...pill, color: allBlocked ? 'var(--faint)' : 'var(--danger)', boxShadow: allBlocked ? 'inset 0 0 0 1px var(--hair)' : 'inset 0 0 0 1px color-mix(in srgb, var(--danger) 60%, transparent)' }}>{allBlocked ? 'Protected' : blocked.length ? `Remove ${removable.length}` : 'Remove'}</button>
         <button onClick={() => setDlg('comp')} style={{ height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Add to composition</button>
       </div>
       {err && <div role="alert" className="reason" style={{ position: 'fixed', bottom: 150, left: '50%', transform: 'translateX(-50%)', zIndex: 26 }}>{err}</div>}
       {dlg === 'move' && (
-        <Modal title="Move to shoot" sub={`${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'}. They are kept; a shoot emptied by the move is removed.`} width={480} onClose={() => setDlg(null)}>
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void create(); }} placeholder="Find a shoot, or type a name for a new one" aria-label="Shoot name" className="field-in" style={{ width: '100%', marginBottom: 8 }} />
-          {err && <div role="alert" className="reason">{err}</div>}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {q.trim() && <button onClick={create} style={{ display: 'flex', alignItems: 'center', minHeight: 44, borderTop: '1px solid var(--hair)', textAlign: 'left', fontWeight: 500 }}>Create “{q.trim()}” and move</button>}
-            {picked.some((p) => !p.orphaned) && <button onClick={orphan} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 44, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1, color: 'var(--text2)' }}>No shoot (take out of its shoot)</span></button>}
-            {shoots.filter((s) => !q.trim() || s.name.toLowerCase().includes(q.trim().toLowerCase())).map((s) => <button key={s.id} onClick={() => move(s)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 44, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1 }}>{s.name}</span><span style={{ font: `400 12px ${mono}`, color: 'var(--faint)' }}>{s.count}</span></button>)}
-          </div>
+        <Modal title="Move to a shoot" sub={`${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'} selected`} width={560} onClose={() => setDlg(null)}>
+          <MoveToShoot count={ids.length} shoots={shoots} canOrphan={picked.some((p) => !p.orphaned)} busy={false} error={err} onAdd={move} onCreate={create} onOrphan={orphan} onClose={() => setDlg(null)} />
         </Modal>
       )}
       {dlg === 'comp' && <CompPicker ids={ids} onClose={() => setDlg(null)} onDone={(m) => { setDlg(null); onClear(); say(m); }} />}

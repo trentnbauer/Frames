@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { AddPhotosModal } from '../components/AddPhotos';
 import { CompPicker } from '../components/AddToComposition';
+import { MoveToShoot } from '../components/MoveToShoot';
 import { Sheet } from '../components/Sheet';
 import { RATINGS, type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
@@ -17,7 +18,7 @@ export function MobileLibrary() {
   const [sp, setSp] = useSearchParams();
   const view = sp.get('view') === 'shoots' ? 'shoots' : 'photos';
   const filter = sp.get('f') ?? '';
-  const { todoItems, refreshSummary } = useStore();
+  const { todoItems, refreshSummary, settings } = useStore();
   const [qText, setQText] = useState(sp.get('q') ?? '');
   const timer = useRef(0);
   const [adding, setAdding] = useState(sp.get('add') === '1');
@@ -56,7 +57,6 @@ export function MobileLibrary() {
       done(`Moved ${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'}`);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
-  const [newName, setNewName] = useState('');
   const count = (list.data?.total ?? photos.length).toLocaleString();
 
   return (
@@ -138,6 +138,7 @@ export function MobileLibrary() {
           <span style={{ flex: 1, fontSize: 14 }}>{sel.size ? `${sel.size} selected` : 'Select photos'}</span>
           <button disabled={!sel.size} onClick={() => { setErr(''); setSheet('rate'); }} style={{ height: 44, padding: '0 12px', borderRadius: 999, fontSize: 13.5, opacity: sel.size ? 1 : 0.4 }}>Rate</button>
           <button disabled={!sel.size} onClick={() => { setErr(''); setSheet('move'); }} style={{ height: 44, padding: '0 12px', borderRadius: 999, fontSize: 13.5, opacity: sel.size ? 1 : 0.4 }}>Move</button>
+          {settings && settings.ai !== 'off' && <button disabled={!sel.size || busy} onClick={async () => { setBusy(true); setErr(''); try { await api('/ai/run', { method: 'POST', body: { photoIds: ids } }); done(`Scanning ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'} with AI`); } catch (e) { setNote((e as Error).message); window.setTimeout(() => setNote(''), 3200); } finally { setBusy(false); } }} style={{ height: 44, padding: '0 12px', borderRadius: 999, fontSize: 13.5, opacity: sel.size ? 1 : 0.4 }}>✦ Scan</button>}
           <button disabled={!sel.size} onClick={() => setSheet('comp')} style={{ height: 44, padding: '0 14px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 13.5, opacity: sel.size ? 1 : 0.4 }}>Add to…</button>
         </div>
       )}
@@ -149,12 +150,10 @@ export function MobileLibrary() {
         </Sheet>
       )}
       {sheet === 'move' && (
-        <Sheet title="Move to a photoshoot" sub={`${sel.size} ${sel.size === 1 ? 'photograph' : 'photographs'}. They are kept; an emptied shoot is removed.`} onClose={() => setSheet(null)}>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New photoshoot name" aria-label="New photoshoot name" style={{ height: 50, border: 0, outline: 'none', borderRadius: 12, padding: '0 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 16 }} />
-          {newName.trim() && <button disabled={busy} onClick={() => move(newName.trim())} style={{ height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>Create “{newName.trim()}” and move</button>}
-          {ids.some((id) => !(list.data?.photos.find((p) => p.id === id)?.orphaned)) && <button disabled={busy} onClick={async () => { setBusy(true); setErr(''); try { await api('/photos/orphan', { body: { photoIds: ids } }); done(`Took ${ids.length} out of their shoots`); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } }} style={{ minHeight: 52, textAlign: 'left', fontSize: 15, color: 'var(--text2)' }}>No shoot (take out of its shoot)</button>}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>{(shoots.data ?? []).map((s) => <button key={s.id} disabled={busy} onClick={() => move(s)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1, fontSize: 15 }}>{s.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{s.count}</span></button>)}</div>
-          {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
+        <Sheet title="Move to a shoot" sub={`${sel.size} ${sel.size === 1 ? 'photograph' : 'photographs'} selected`} onClose={() => setSheet(null)}>
+          <MoveToShoot phone count={sel.size} shoots={shoots.data ?? []} canOrphan={ids.some((id) => !(list.data?.photos.find((p) => p.id === id)?.orphaned))} busy={busy} error={err}
+            onAdd={(s) => void move(s)} onCreate={(n) => void move(n)} onClose={() => setSheet(null)}
+            onOrphan={async () => { setBusy(true); setErr(''); try { await api('/photos/orphan', { body: { photoIds: ids } }); done(`Took ${ids.length} out of their shoots`); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } }} />
         </Sheet>
       )}
       {sheet === 'comp' && <CompPicker ids={ids} onClose={() => setSheet(null)} onDone={done} />}
