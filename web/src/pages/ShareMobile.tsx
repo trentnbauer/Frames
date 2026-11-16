@@ -225,23 +225,21 @@ export function ShareMobile(p: Props) {
           </div>
         ) : (
           <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}<span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{d.owner ? `Shared by ${d.owner}` : 'Shared with you'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14 }}>
-              <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>{d.kind === 'photo' ? 'A PHOTOGRAPH' : `A PHOTOSHOOT · ${photos.length} ${photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}`}</span>
               <h1 style={{ font: `400 52px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
               {d.description && <p style={{ margin: '2px 0 0', font: `italic 400 21px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
-              {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}
               <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
-            {photos[0] && <button onClick={() => setLook(0)} aria-label="Open the cover photograph" style={{ display: 'block', width: '100%', aspectRatio: '1.5', borderRadius: 8, marginTop: 6, background: `url(${imgUrl(photos[0].id, 'preview', token)}) center/cover var(--surface)` }} />}
             {d.allowDownload && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)', overflow: 'hidden' }}>
+                {photos[0] && <div aria-hidden style={{ position: 'absolute', inset: -40, background: `url(${imgUrl(photos[0].id, 'thumb', token)}) center/cover`, filter: 'var(--home-review-image-filter)', opacity: 'var(--home-review-image-opacity)' as never }} />}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: `400 26px/1.05 ${serif}` }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)' }}>Full-size originals, one file after another. {owner === 'them' ? 'They allowed' : `${owner} allowed`} downloads on this link.</span></div>
                 </div>
-                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
-                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
+                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ position: 'relative', height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
+                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ position: 'relative', minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--hair)', padding: '14px 0 12px' }}>

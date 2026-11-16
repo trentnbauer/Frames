@@ -13,7 +13,7 @@ const props = (over: Record<string, unknown> = {}) => ({
 describe('the shared photoshoot on a phone', () => {
   it('shows the shoot, a download card, the filters and a progress bar when guests may rate and download', () => {
     const html = renderToStaticMarkup(<ShareMobile {...props()} />);
-    expect(html).toContain('A PHOTOSHOOT · 2 PHOTOGRAPHS');
+    for (const gone in { 'A PHOTOSHOOT': 1, 'Shared by': 1, 'Open a photograph': 1 }) expect(html).not.toContain(gone); // a plain header: title, description, expiry
     expect(html).toContain('Coastal Light');
     expect(html).toContain('Download all 2');
     expect(html).toContain('To rate');
