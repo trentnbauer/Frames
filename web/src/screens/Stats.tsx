@@ -5,7 +5,7 @@ import { useApi, imgUrl } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
 import ProtoMore from '../proto/ProtoMore';
 import { usePhoneWidth } from '../usePhoneWidth';
-import { MobileStats } from '../mobile/More';
+import { MobileStats } from '../mobile/Stats';
 
 type S = {
   year: string; years: string[]; photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;

@@ -1,6 +1,6 @@
 export type ReviewSettings = { sessions: number; intervals: string[]; adaptive: boolean };
 
-const DAYS: Record<string, number> = { '1 day': 1, '3 days': 3, '1 week': 7, '2 weeks': 14, '1 month': 30, '3 months': 90, '6 months': 182, '1 year': 365 };
+const DAYS: Record<string, number> = { Instant: 0, '1 day': 1, '3 days': 3, '1 week': 7, '2 weeks': 14, '1 month': 30, '3 months': 90, '6 months': 182, '1 year': 365 };
 export const INTERVAL_OPTIONS = Object.keys(DAYS);
 /** The length of an interval label, in days. */
 export const intervalDays = (label: string | undefined, fallback = 7) => DAYS[label ?? ''] ?? fallback;
@@ -15,6 +15,7 @@ export function nextIntervalDays(s: ReviewSettings, ratings: number[]): number |
   if (done >= s.sessions) return null;
   const label = s.intervals[Math.min(done - 1, s.intervals.length - 1)];
   let days = DAYS[label] ?? 30;
+  if (days === 0) return 0; // Instant: the next session can start straight away
   if (s.adaptive && done >= 2) {
     const last = ratings.slice(-3);
     const spread = Math.max(...last) - Math.min(...last);
