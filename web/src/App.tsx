@@ -37,6 +37,7 @@ import { usePhoneWidth } from './usePhoneWidth';
 import { TAB_PATHS } from './mobile/Chrome';
 import { MobileNotifications } from './mobile/Notifications';
 import { MobileReviewTab } from './mobile/ReviewTab';
+import { MobileOrganise } from './mobile/Organise';
 
 const PAGE_NAMES: Record<string, string> = {
   '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
@@ -99,6 +100,7 @@ function Shell() {
         <Route path="/library" element={<Library />} />
         <Route path="/notifications" element={<PhoneOnly><MobileNotifications /></PhoneOnly>} />
         <Route path="/reviews" element={<PhoneOnly><MobileReviewTab /></PhoneOnly>} />
+        <Route path="/organise" element={<PhoneOnly><MobileOrganise /></PhoneOnly>} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/imports" element={<Navigate to="/stats?tab=imports" replace />} />
         <Route path="/review-schedule" element={<ReviewSchedule />} />

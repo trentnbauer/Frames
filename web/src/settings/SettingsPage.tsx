@@ -1,3 +1,5 @@
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileSettings } from '../mobile/Settings';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loading } from '../components/bits';
@@ -8,7 +10,14 @@ import { LIB, SRV, type Ctx, type SectionDef, type TabDef } from './sections';
 
 const mono = "'IBM Plex Mono',monospace";
 
+/** On a phone, Settings is the short list from the design unless a deep link asks for a section; "All settings" opens the full page. */
 export function SettingsPage() {
+  const phone = usePhoneWidth();
+  const wants = new URLSearchParams(window.location.search);
+  return phone && !wants.get('section') && !wants.get('tab') ? <MobileSettings /> : <FullSettings />;
+}
+
+function FullSettings() {
   const { me, settings } = useStore();
   const isAdmin = me?.role === 'admin';
   const params = new URLSearchParams(window.location.search);

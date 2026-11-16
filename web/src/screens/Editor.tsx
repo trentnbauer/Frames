@@ -11,6 +11,8 @@ import { CompositionStage } from '../components/CompositionStage';
 import { isFull } from '../layout';
 import { CompositionVersions } from '../components/CompositionVersions';
 import { RoomBackground } from '../components/RoomBackground';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileComposition } from '../mobile/Composition';
 
 type Ranking = { weight: number; guests: number; items: { id: number; mine: number | null; mineN: number; guest: number | null; guestN: number; score: number }[] };
 type Link = { id: number; token: string; allowDownload: boolean; allowReview: boolean; allowSuggest: boolean; onlyWall: boolean; askName: boolean; pin: string; expiresAt: string | null; status: string };
@@ -41,6 +43,7 @@ export const centreOf = (ps: Print[]) => { if (!ps.length) return { x: 0, y: 0 }
 
 /** The composition editor (design: Proto Editor, host). Prints are saved as you place them. */
 export function Editor() {
+  const phone = usePhoneWidth();
   const [saving, setSaving] = useState(0);
   const [sharing, setSharing] = useState(false);
   const { id } = useParams();
@@ -112,6 +115,17 @@ export function Editor() {
   };
   const patchShare = async (body: object) => { if (link) { await api(`/shares/${link.id}`, { method: 'PATCH', body }); links.reload(); } };
 
+  if (phone) {
+    return (
+      <>
+        <MobileComposition c={c} prints={layoutPrints} byId={byId} order={order} readOnly={readOnly} library={lib.data.photos}
+          changes={changes.map((g) => ({ id: g.id, who: Array.isArray(g.who) ? g.who.join(', ') : String(g.who), what: g.what, approve: g.approve, deny: g.deny }))}
+          people={people.map((x) => ({ name: x.name, when: x.when, avg: x.avg }))}
+          saveLayout={saveLayout} setStage={async (stage) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { stage } })); }} onShare={() => setSharing(true)} reload={reload} />
+        {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => { setSharing(false); links.reload(); }} />}
+      </>
+    );
+  }
   return (
     <div className="page-shell">
 
