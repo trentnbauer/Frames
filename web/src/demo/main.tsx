@@ -17,6 +17,10 @@ import '@fontsource/ibm-plex-mono/500.css';
 import '../styles.css';
 import '../proto/hover.css';
 import './style.css';
+import room from './room.jpg';
+import { demoAssets } from './api';
+
+demoAssets.room = room;
 
 // The production fetch wrapper is read-only in demo mode. Also deny raw calls
 // from upload/sign-out flows so they cannot contact any API or auth service.
