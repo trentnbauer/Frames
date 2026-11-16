@@ -55,6 +55,10 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
       if (list.length) items.push({ key, title, detail, count: list.length, photoIds: list.slice(0, SAMPLE), ids: list.slice(0, 2000), link });
     };
 
+    // Photographs that are in no photoshoot yet (new imports arrive this way). Listed as a group so they can be put into a shoot together.
+    add('orphaned', 'Put photographs in a shoot', 'These are in no photoshoot yet. Choose some and move them into a new or existing shoot.',
+      ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND p.shoot_id IN (SELECT id FROM shoots WHERE unsorted = 1) ORDER BY COALESCE(p.captured_at, p.added_at), p.id'));
+
     // AI suggestions waiting for a yes or no: suggested tags and subjects, and a suggested description.
     const pendingTags = new Set(ids("SELECT DISTINCT p.id FROM photos p JOIN tags t ON t.photo_id = p.id WHERE p.missing = 0 AND t.source = 'ai' AND t.accepted = 0 ORDER BY p.id DESC"));
     const pendingDesc = (all("SELECT id, ai_json FROM photos WHERE missing = 0 AND ai_status = 'done' AND description = '' AND ai_json LIKE '%description%' ORDER BY id DESC") as Row[])

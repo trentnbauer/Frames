@@ -10,7 +10,7 @@ import { applyGear } from './gear.js';
 import exifr from 'exifr';
 import sharp from 'sharp';
 import { analyseLocal, dHash } from './analysis.js';
-import { pruneEmptyShoots, type DB } from './db.js';
+import { pruneEmptyShoots, unsortedShootId, type DB } from './db.js';
 import { rawInfo, rawToJpeg, type RawInfo } from './raw.js';
 import { findSidecar, readSidecar, type XmpData } from './xmp.js';
 
@@ -265,12 +265,9 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
 
   const now = new Date();
   if (files.length) {
-    const name = fmtDate(now);
-    const sourceLabel = `Library sync · ${cfg.libraries.map((l) => path.basename(l)).join(', ')}`;
-    const day = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const existing = db.prepare("SELECT id FROM shoots WHERE name = ? AND source LIKE 'Library sync%' AND substr(imported_at, 1, 10) IN (?, ?)").get(name, now.toISOString().slice(0, 10), day) as { id: number } | undefined;
-    const shootId = existing?.id ?? Number(db.prepare('INSERT INTO shoots(name, source, imported_at) VALUES(?, ?, ?)').run(name, sourceLabel, now.toISOString()).lastInsertRowid);
-    result.shootId = shootId;
+    // New photographs belong to no photoshoot until the person puts them in one (the To do list asks them to).
+    const name = 'No shoot';
+    result.shootId = unsortedShootId(db);
     result.shootName = name;
 
     const insert = db.prepare(`INSERT INTO photos(shoot_id, path, file, hash, title, w, h, file_type, size_bytes, mtime, has_derivs, added_at, next_review_at)
@@ -296,7 +293,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
         const ext = path.extname(f).toLowerCase();
         const st = fs.statSync(f);
         // The user may have moved/deleted every earlier import while metadata was being read.
-        if (!db.prepare('SELECT 1 FROM shoots WHERE id = ?').get(result.shootId)) result.shootId = Number(db.prepare('INSERT INTO shoots(name, source, imported_at) VALUES(?, ?, ?)').run(name, sourceLabel, now.toISOString()).lastInsertRowid);
+        result.shootId = unsortedShootId(db);
         const id = Number(insert.run({
           shoot_id: result.shootId, path: f, file: path.basename(f), hash, title: titleFromFile(f),
           file_type: ext.slice(1).toUpperCase().replace('JPEG', 'JPG'), size_bytes: st.size, mtime: Math.floor(st.mtimeMs), added_at: now.toISOString(), next_review_at: addDays(now, intervalDays(loadSettings(db).intervals[0])).toISOString(),

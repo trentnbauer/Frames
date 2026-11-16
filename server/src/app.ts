@@ -205,7 +205,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const ratings = agg ? [] : (db.prepare('SELECT rating FROM reviews WHERE photo_id = ?').all(p.id) as Row[]).map((r) => r.rating);
     const g = agg?.get(p.id);
     return {
-      id: p.id, title: p.title, file: p.file, shootId: p.shoot_id, w: p.w, h: p.h,
+      id: p.id, title: p.title, file: p.file, shootId: p.shoot_id, orphaned: p.shoot_id === (one('SELECT id FROM shoots WHERE unsorted = 1')?.id ?? 0), w: p.w, h: p.h,
       ar: p.w && p.h ? p.w / p.h : 1.5, hasImage: !!p.has_derivs,
       capturedAt: p.captured_at, addedAt: p.added_at, dateEdit: p.date_edit ?? null, camera: p.camera, lens: p.lens, exposure: p.exposure,
       iso: p.iso ?? null, aperture: p.aperture ?? null, shutter: p.shutter ?? '', focalMm: p.focal_mm ?? null, medium: p.medium ?? '', film: p.film ?? '',
@@ -363,7 +363,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   app.get('/api/photos/:id/preview', sendImage('preview'));
 
   // ---------- shoots ----------
-  app.get('/api/shoots', async () => (db.prepare('SELECT * FROM shoots ORDER BY imported_at DESC, id DESC').all() as Row[]).map(shootDto));
+  app.get('/api/shoots', async () => (db.prepare('SELECT * FROM shoots WHERE unsorted = 0 ORDER BY imported_at DESC, id DESC').all() as Row[]).map(shootDto));
 
   // ---------- reviews ----------
   type Session = { runId: string; queue: { id: number; ar: number }[]; index: number; ratings: Record<number, number>; notes: Record<number, string> };

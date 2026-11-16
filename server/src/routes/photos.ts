@@ -77,6 +77,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const args: unknown[] = [];
     // Archived only means "left out of review". It never hides a photograph from browsing or search.
     if (q.shoot) { where.push('p.shoot_id = ?'); args.push(num(q.shoot)); }
+    if (q.orphaned === '1') where.push('p.shoot_id IN (SELECT id FROM shoots WHERE unsorted = 1)'); // photographs in no photoshoot
     for (const s of String(q.subject ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push("EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.kind = 'subject' AND t.accepted = 1)"); args.push(s);
     }
