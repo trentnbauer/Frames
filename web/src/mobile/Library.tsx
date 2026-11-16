@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { AddPhotosModal } from '../components/AddPhotos';
 import { CompPicker } from '../components/AddToComposition';
+import { usePinchColumns } from '../thumbZoom';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { Sheet } from '../components/Sheet';
 import { RATINGS, type PhotoLite, type Shoot } from '../data';
@@ -14,6 +15,7 @@ const dueNow = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new Date(
 
 /** Library on a phone: Photos (by shoot, three across) and Shoots (a card each), with search, filters and a Select mode that rates, moves or adds to a composition. */
 export function MobileLibrary() {
+  const pinch = usePinchColumns(); // spread two fingers over the photographs to make them bigger
   const nav = useNavigate();
   const [sp, setSp] = useSearchParams();
   const view = sp.get('view') === 'shoots' ? 'shoots' : 'photos';
@@ -89,7 +91,7 @@ export function MobileLibrary() {
               </div>
               {selecting && <button onClick={() => setSel((c) => { const n = new Set(c); const all = ps.every((p) => n.has(p.id)); ps.forEach((p) => (all ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 12.5, color: 'var(--text2)', whiteSpace: 'nowrap', height: 32 }}>Select all</button>}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 2 }}>
+            <div {...pinch.handlers} style={{ display: 'grid', gridTemplateColumns: `repeat(${pinch.cols},minmax(0,1fr))`, gap: 2, ...pinch.style }}>
               {ps.map((p) => {
                 const on = sel.has(p.id);
                 return (
