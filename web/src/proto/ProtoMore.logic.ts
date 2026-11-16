@@ -53,7 +53,7 @@ export class Logic extends DCLogic {
       tCamMissing: cam.filter((x) => !x).length + ' of 6 missing', tRollHint: q[7].filter(Boolean).slice(0, 2).join(' · '), useRoll: () => this.setState({ cam: [...q[7]] }),
       tTags: chip(q[6], 'tagAcc'), tShootTags: q[2] + ', ' + (q[7][5] || 'digital'),
       tComps: COMPS.map(([name, why]) => { const on = (S.inComp || []).includes(name); return { name, why, tick: on ? '✓' : '', boxBg: on ? 'var(--text)' : 'transparent', boxRing: on ? 'none' : 'inset 0 0 0 1.5px color-mix(in srgb, var(--text) 30%, transparent)', go: () => this.setState((st) => ({ inComp: on ? (st.inComp || []).filter((x) => x !== name) : [...(st.inComp || []), name] })) }; }),
-      tAiLabel: aiBusy ? 'Analyzing…' : aiDone ? '✓ Analyzed' : '✦ Analyze with AI', tAiFg: aiBusy ? 'var(--text2)' : 'var(--text)',
+      tAiLabel: aiBusy ? 'Analysing…' : aiDone ? '✓ Analysed' : '✦ Analyse with AI', tAiFg: aiBusy ? 'var(--text2)' : 'var(--text)',
       tAiSpin: aiBusy ? React.createElement('i', { style: { width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--outline)', borderTopColor: 'var(--text)', animation: 'spin .8s linear infinite', display: 'inline-block', flex: 'none' } }) : null,
       tAnalyze: () => { if (aiBusy) return; this.setState({ tAi: 'busy' }); clearTimeout(this.aiT); this.aiT = setTimeout(() => { const hit = q[3]; this.setState({ tAi: 'done', place: hit, placeSet: true, pin: null, acc: [...q[4]], tagAcc: [...q[6]], desc: q[5], cam: q[7].map((x) => x || '') }); this.flash('Filled in by AI · check it, then save'); }, 1800); },
       onPlace: (e) => this.setState({ place: e.target.value, placeSet: false }), usePlace: () => this.setState({ place: q[3], placeSet: true }),

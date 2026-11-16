@@ -36,7 +36,7 @@ import { useStore } from './store';
 
 const PAGE_NAMES: Record<string, string> = {
   '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
-  '/': 'Today', '/library': 'Library', '/review': 'Review', '/removals': 'Removal review', '/shoots': 'Photoshoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
+  '/': 'Today', '/library': 'Library', '/review': 'Review', '/removals': 'Removal review', '/shoots': 'Shoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
   '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
