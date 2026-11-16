@@ -19,3 +19,13 @@ it('keeps the status slot visible and accessible while only active work pulses',
   expect(html.includes(' working')).toBe(!!status?.running);
  }
 });
+
+it('uses the active provider name and colour for the working icon', () => {
+ const status: AiStatus = { ...base, running: true, batchRunning: true, total: 48, done: 12, providers: [{ id: 'one', name: 'Ollama', color: '#e7b76d' }] };
+ const html = renderToStaticMarkup(<AiIndicatorView status={status} />);
+ expect(html).toContain('aria-label="Ollama is analysing photos"');
+ expect(html).toContain('--ai-active:#e7b76d');
+ expect(html).toContain('12 of 48 processed');
+ const idle = renderToStaticMarkup(<AiIndicatorView status={{ ...status, running: false }} />);
+ expect(idle).not.toContain('--ai-active:#e7b76d');
+});
