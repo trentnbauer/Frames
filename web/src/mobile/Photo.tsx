@@ -164,6 +164,7 @@ export function MobilePhoto() {
         <Sheet title={p.title || p.file} onClose={() => setSheet(null)}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {[
+              { label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } },
               { label: 'Move to shoot', act: () => setSheet('move') },
               { label: 'Compare with similar', meta: 'Full app ↗', act: () => nav('/compare') },
               { label: 'Download original', meta: p.file, act: () => { setSheet(null); window.location.assign(`/api/photos/${p.id}/original`); } },

@@ -29,7 +29,7 @@ export function MobileShoot() {
   const photos = list.data?.photos ?? [];
   const now = new Date().toISOString();
   const top = [...photos].sort((a, b) => b.avgRating - a.avgRating || a.id - b.id).slice(0, 3);
-  const covers = [top[0]?.id ?? s.coverId, top[1]?.id, top[2]?.id];
+  const covers = [s.coverId ?? top[0]?.id, ...top.filter((p) => p.id !== s.coverId).map((p) => p.id)].slice(0, 3);
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast(''), 2600); };
   const protect = async (on: boolean) => { setErr(''); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { protected: on } }); shoot.reload(); say(on ? 'Protected from deletion' : 'Protection turned off'); } catch (e) { setErr((e as Error).message); } };
   const rename = async () => { const v = name.trim(); if (!v) return; try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { name: v } }); setSheet(null); shoot.reload(); } catch (e) { setErr((e as Error).message); } };
@@ -82,6 +82,7 @@ export function MobileShoot() {
             {[
               { label: 'Share…', act: () => { setSheet(null); setSharing(true); } },
               ...(settings && settings.ai !== 'off' ? [{ label: 'Analyse photos with AI', act: async () => { setSheet(null); try { await api('/ai/run', { method: 'POST', body: { shootId: s.id } }); say('AI analysis started'); } catch (e) { setErr((e as Error).message); } } }] : []),
+              { label: 'Use the highest rated photograph as the cover', act: async () => { setSheet(null); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { coverId: null } }); shoot.reload(); say('The cover is the highest rated photograph'); } catch (e) { setErr((e as Error).message); } } },
               { label: s.protected ? 'Turn off protection' : 'Protect from deletion', act: () => { setSheet(null); void protect(!s.protected); } },
               { label: 'Delete shoot…', fg: s.protected ? 'var(--faint)' : 'var(--danger)', meta: s.protected ? 'Protected' : '', act: () => { if (s.protected) { setSheet(null); say('This shoot is protected. Turn off protection to delete it.'); } else setSheet('delete'); } },
             ].map((r) => <button key={r.label} onClick={r.act} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', color: (r as { fg?: string }).fg }}><span style={{ flex: 1, fontSize: 15 }}>{r.label}</span>{(r as { meta?: string }).meta && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{(r as { meta?: string }).meta}</span>}</button>)}

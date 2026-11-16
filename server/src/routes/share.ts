@@ -9,7 +9,7 @@ import type { Ctx, Row } from '../ctx.js';
 import { remoteOriginal } from '../cloud.js';
 import { loadAuth } from '../auth.js';
 import { displayNameOf } from './profile.js';
-import { getSetting, setSetting } from '../db.js';
+import { getSetting, setSetting, shootCoverId } from '../db.js';
 import { footer, sendMail, smtpHealthy } from '../email.js';
 import { notify } from '../notifications.js';
 import { queueMail } from '../mailEvents.js';
@@ -141,8 +141,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   app.delete('/api/shares/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
-    db.prepare('UPDATE shares SET revoked = 1 WHERE id = ?').run(id);
-    return shareDto(one('SELECT * FROM shares WHERE id = ?', id)!);
+    db.prepare('DELETE FROM shares WHERE id = ?').run(id); // comments, ratings and invites on it go with it
+    return { removed: 1 };
   });
   // The photographer's side: what guests wrote on one link, on a composition (all its links) or on one photograph (every link it is in).
   const commentRows = (where: string, ...args: unknown[]) => all(`SELECT c.id, c.reviewer, c.photo_id, c.body, c.ts, p.title FROM share_comments c LEFT JOIN photos p ON p.id = c.photo_id WHERE ${where} ORDER BY c.ts DESC LIMIT 500`, ...args)
@@ -365,7 +365,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     }
     const sh = one('SELECT name FROM shoots WHERE id = ?', s.target_id);
     const ids = all('SELECT id FROM photos WHERE shoot_id = ? AND missing = 0 ORDER BY COALESCE(captured_at, added_at), id', s.target_id);
-    return sh && ids.length ? { name: sh.name, count: ids.length, kind: 'photoshoot', photoId: ids[0].id } : null;
+    return sh && ids.length ? { name: sh.name, count: ids.length, kind: 'photoshoot', photoId: shootCoverId(db, s.target_id) ?? ids[0].id } : null;
   };
   let shell: { at: number; html: string } | null = null;
   const shellHtml = (): string | null => {
