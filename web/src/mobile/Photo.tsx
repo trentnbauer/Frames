@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { CompPicker } from '../components/AddToComposition';
+import { SharePanel } from '../components/SharePanel';
 import { Sheet } from '../components/Sheet';
 import { RATINGS, fmtDate, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
@@ -24,6 +25,7 @@ export function MobilePhoto() {
   const [draft, setDraft] = useState('');
   const [newTag, setNewTag] = useState('');
   const [sheet, setSheet] = useState<null | 'more' | 'move' | 'comp' | 'remove'>(null);
+  const [sharing, setSharing] = useState(false);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
   const p = photo.data;
@@ -91,7 +93,10 @@ export function MobilePhoto() {
             {RATINGS.map((r) => { const on = mine === r.value; return <button key={r.value} onClick={() => rate(r.value)} aria-pressed={on} style={{ height: 60, borderRadius: 14, background: on ? 'var(--btn-bg)' : 'var(--chip)', color: on ? 'var(--btn-fg)' : 'var(--text2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }}><span style={{ fontSize: 24, lineHeight: 1 }}>{r.emoji}</span><span style={{ fontSize: 11 }}>{r.label}</span></button>; })}
           </div>
         </div>
-        <button onClick={() => setSheet('comp')} style={{ height: 46, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, textAlign: 'center' }}>Add to composition</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setSheet('comp')} style={{ flex: 1, height: 46, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, textAlign: 'center' }}>Add to composition</button>
+          <button onClick={() => setSharing(true)} style={{ height: 46, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Share</button>
+        </div>
         <div role="tablist" style={{ display: 'flex', gap: 18, borderBottom: '1px solid var(--hair)' }}>
           {([['details', 'Details'], ['tags', `Tags${suggested.length || descSuggested ? ` · ✦ ${suggested.length + (descSuggested ? 1 : 0)}` : ''}`], ['history', 'History']] as [Tab, string][]).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => { setTab(k); setEdit(null); }} style={{ height: 44, fontSize: 14, color: tab === k ? 'var(--text)' : 'var(--muted)', boxShadow: tab === k ? 'inset 0 -2px 0 var(--text)' : 'none' }}>{l}</button>)}
         </div>
@@ -167,6 +172,7 @@ export function MobilePhoto() {
           </div>
         </Sheet>
       )}
+      {sharing && <SharePanel kind="photo" id={p.id} name={p.title || p.file} onClose={() => setSharing(false)} />}
       {sheet === 'move' && (
         <Sheet title="Move to a shoot" onClose={() => setSheet(null)}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>{(shoots.data ?? []).filter((s) => s.id !== p.shootId).map((s) => <button key={s.id} onClick={() => moveTo(s)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1, fontSize: 15 }}>{s.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{s.count}</span></button>)}</div>

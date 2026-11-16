@@ -31,6 +31,7 @@ export function removePhotos(db: DB, cfg: Cfg, ids: number[], originals: Origina
     db.transaction(() => {
       captureRemoval(db, id, cfg.dataDir);
       forget.run(p.hash, p.path, p.file, now);
+      db.prepare("DELETE FROM shares WHERE kind = 'photo' AND target_id = ?").run(id); // a link to a removed photograph stops
       db.prepare('UPDATE photos SET parent_id = NULL WHERE parent_id = ?').run(id); // an edit or crop of it stays, no longer linked
       for (const t of ['dismissed', 'feedback', 'xmp_conflicts', 'duplicates']) {
         try { db.prepare(t === 'duplicates' ? 'DELETE FROM duplicates WHERE hash = ?' : `DELETE FROM ${t} WHERE photo_id = ?`).run(t === 'duplicates' ? p.hash : id); } catch { /* a table an older library does not have */ }

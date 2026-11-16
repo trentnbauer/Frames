@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { api, useApi } from '../api';
 import { HumanCheck } from './HumanCheck';
 import { Mark } from './Shell';
+import { usePhoneWidth } from '../usePhoneWidth';
 
 export function PasswordSignIn({ serverName, siteKey, returnTo, onBack }: { serverName: string; siteKey?: string; returnTo: string; onBack: () => void }) {
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [token, setToken] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const phone = usePhoneWidth();
   return <main style={{ width: 'min(380px, calc(100vw - 32px))', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
     <div className="lockup" style={{ fontSize: 20 }}><Mark />{serverName}</div>
-    <h1 className="serif" style={{ fontSize: 44, lineHeight: 1, margin: 0 }}>Sign in with a password</h1>
+    <h1 className="serif" style={{ fontSize: 44, lineHeight: 1, margin: 0 }}>{phone ? 'Sign in' : 'Sign in with a password'}</h1>
+    {phone && <span style={{ fontSize: 13.5, color: 'var(--text2)', marginTop: -8 }}>to {serverName}</span>}
     <form style={{ display: 'flex', flexDirection: 'column', gap: 14 }} onSubmit={async (event) => {
       event.preventDefault(); if (busy) return; setBusy(true); setError('');
       try { const result = await api<{ returnTo: string }>('/public/auth/password', { body: { email, password, turnstile: token, returnTo } }); window.location.assign(result.returnTo); }

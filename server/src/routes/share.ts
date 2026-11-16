@@ -29,6 +29,7 @@ import { FRAME_COLOURS, parseLayout } from '../layout.js';
  */
 
 const TOKEN = '[A-Za-z0-9_-]{16,64}';
+const TABLE_OF = { shoot: 'shoots', collection: 'collections', photo: 'photos' } as const;
 
 /** The one 4-number PIN in Frames: an optional lock on a share link. Never four of a kind or a straight run (1234, 9876). */
 export const isWeakPin = (p: string) => /^(\d)\1{3}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p);
@@ -80,9 +81,9 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
 
   app.post('/api/shares', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
-    const kind = b.kind === 'shoot' ? 'shoot' : b.kind === 'collection' ? 'collection' : null;
-    if (!kind) return rep.code(400).send({ error: 'kind must be collection or shoot' });
-    if (!one(`SELECT 1 x FROM ${kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, num(b.id))) return notFound(rep);
+    const kind = b.kind === 'shoot' ? 'shoot' : b.kind === 'collection' ? 'collection' : b.kind === 'photo' ? 'photo' : null;
+    if (!kind) return rep.code(400).send({ error: 'kind must be collection, shoot or photo' });
+    if (!one(`SELECT 1 x FROM ${TABLE_OF[kind]} WHERE id = ?`, num(b.id))) return notFound(rep);
     if(b.versionId!==undefined&&b.versionId!==null){if(kind!=='collection'||!Number.isSafeInteger(b.versionId)||!one('SELECT 1 FROM collection_versions WHERE id=? AND collection_id=?',b.versionId,num(b.id)))return rep.code(400).send({error:'Choose an arrangement from this composition.'});}
     const pol = policyOf(x.sys);
     let expires: string | null = b.expiresAt === undefined && pol.shareExpireDays ? new Date(Date.now() + pol.shareExpireDays * 86_400_000).toISOString() : null;
@@ -133,7 +134,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   });
   app.get('/api/shares', async (req) => {
     const q = req.query as Row;
-    const rows = q.kind ? all('SELECT * FROM shares WHERE kind = ? AND target_id = ? ORDER BY id DESC', q.kind === 'shoot' ? 'shoot' : 'collection', num(q.id)) : all('SELECT * FROM shares ORDER BY id DESC');
+    const rows = q.kind ? all('SELECT * FROM shares WHERE kind = ? AND target_id = ? ORDER BY id DESC', q.kind === 'shoot' ? 'shoot' : q.kind === 'photo' ? 'photo' : 'collection', num(q.id)) : all('SELECT * FROM shares ORDER BY id DESC');
     return rows.map(shareDto);
   });
   // Revoking keeps the record (and anything guests said); the address simply stops working.
@@ -218,7 +219,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   const tell = (share: Row, who: string, kind: 'guest-rating' | 'guest-suggestion', what: string) => {
     try {
       const day = new Date().toISOString().slice(0, 10);
-      const target = share.kind === 'collection' ? `/collections/${share.target_id}?guests=${kind === 'guest-suggestion' ? 'suggestions' : 'ratings'}` : `/shoots/${share.target_id}`;
+      const target = share.kind === 'collection' ? `/collections/${share.target_id}?guests=${kind === 'guest-suggestion' ? 'suggestions' : 'ratings'}` : share.kind === 'photo' ? `/photo/${share.target_id}` : `/shoots/${share.target_id}`;
       const text = `${who} ${what}`;
       if (!notify(db, kind, text, { screen: target }, `${kind}:${share.id}:${who}:${day}`)) return;
       queueMail(x, x.tenant(), kind === 'guest-rating' ? 'guest-reply' : 'guest-suggestion', { type: 'guest', baseUrl: (loadAuth(x.sys).publicUrl || '').replace(/\/+$/, ''), params: { subject: text, preheader: text, eyebrow: 'Guest reply', title: text, body: 'Open it to see what they said and to approve or decline suggestions.', button_label: 'See it', button_url: `${(loadAuth(x.sys).publicUrl || '').replace(/\/+$/, '')}${target}`, fine_print: 'Turn these emails off in Settings, Notifications.', image_url: '', image_alt: '', note: '', note_from: '' } });
@@ -276,7 +277,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const emails = [...new Set((Array.isArray(b.emails) ? b.emails : []).map((e) => String(e).trim().toLowerCase()).filter((e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e)))].slice(0, 20);
     if (!emails.length) return rep.code(400).send({ error: 'Enter at least one email address.' });
     const base = (loadAuth(x.sys).publicUrl || x.baseUrl(req)).replace(/\/+$/, '');
-    const name = (one(`SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, s.target_id) ?? { name: 'a set of photographs' }).name as string;
+    const name = (one(s.kind === 'photo' ? 'SELECT title name FROM photos WHERE id = ?' : `SELECT name FROM ${s.kind === 'shoot' ? 'shoots' : 'collections'} WHERE id = ?`, s.target_id) ?? { name: 'a set of photographs' }).name as string;
     const owner = x.tenant().user;
     const first = one('SELECT photo_id FROM collection_photos WHERE collection_id = ? ORDER BY pos LIMIT 1', s.target_id);
     const hero = !s.pin && s.kind === 'collection' && first ? `${base}/api/s/${s.token}/photos/${first.photo_id}/thumb` : '';
@@ -305,6 +306,11 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       const t = one('SELECT target FROM collections WHERE id = ?', share.target_id);
       const wallOnly = !!share.only_wall;
       return { share, name: c.name, description: c.description, photoIds: rows.filter((r) => !wallOnly || r.chosen).map((r) => r.photo_id), chosenIds: rows.filter((r) => r.chosen).map((r) => r.photo_id), target: t?.target ? JSON.parse(t.target) : null, layout: x.collectionDto(one('SELECT * FROM collections WHERE id = ?', share.target_id)!).layout };
+    }
+    if (share.kind === 'photo') {
+      const p = one('SELECT id, title, file FROM photos WHERE id = ? AND missing = 0', share.target_id);
+      if (!p) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
+      return { share, name: p.title || p.file, description: '', photoIds: [p.id] };
     }
     const s = one('SELECT name, description FROM shoots WHERE id = ?', share.target_id);
     if (!s) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }

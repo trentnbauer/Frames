@@ -19,4 +19,12 @@
   /* a tab's own page: the shell's header above, the tab bar below */
   .ptab { padding: 8px 20px 130px; }
   .ptab.headless { padding-top: 28px; }
+  /* sign in, PIN and the pages before it: the design's phone sign-in */
+  html .auth-shell { place-items: start stretch; align-content: start; padding: 110px 28px 48px; background: var(--page); }
+  .auth-shell main, .auth-shell main > * { max-width: 100%; }
+  .auth-shell .dc-root { height: auto !important; display: block !important; }
+  .auth-shell .dc-root > main { width: 100% !important; }
+  .auth-shell .field-in { height: 50px; border-radius: 12px; font-size: 16px; }
+  .auth-shell .lockup { font-size: 30px; }
+  .auth-shell .btn.primary { height: 52px; border-radius: 999px; font-size: 15px; }
 }

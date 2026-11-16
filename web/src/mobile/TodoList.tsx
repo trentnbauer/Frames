@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { TASKS, buildTasks, type TaskKey } from '../todoTasks';
 import { BackPill, Eyebrow, Row } from './ui';
 
-const SUB: Record<TaskKey, string> = {
+export const SUB: Record<TaskKey, string> = {
   delete: 'Below your removal threshold', 'ai-tags': 'Accept or reject what the AI suggested', tags: 'Make photos findable', 'ai-desc': 'Use, edit or replace the AI’s words',
   desc: 'One sentence is enough', location: 'Pin them on the map', camera: 'Fill in what the metadata missed', time: 'No capture time recorded', light: 'No note about the light', mood: 'No note about the mood', composition: 'Not in any composition yet',
 };

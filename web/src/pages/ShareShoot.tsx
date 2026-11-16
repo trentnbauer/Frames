@@ -6,7 +6,7 @@ import { imgUrl } from '../api';
 type P = { id: number; title: string; ar: number; n: number };
 type Props = {
   token: string;
-  d: { name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; owner?: string; viewer?: { name: string } | null };
+  d: { kind?: string; name: string; description: string; allowReview: boolean; allowDownload: boolean; expiresAt: string | null; owner?: string; viewer?: { name: string } | null };
   photos: P[]; reviewer: string; setName: (n: string) => void;
   withName: (then: (name: string) => void) => void;
   dl: { done: number; total: number; ready: boolean } | null; download: () => void; cancelDl: () => void;
@@ -64,7 +64,7 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
         </header>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,380px),1fr))', gap: '40px 56px', alignItems: 'end', marginBottom: 52 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-            <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>A PHOTOSHOOT · {photos.length} {photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}</span>
+            <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>{d.kind === 'photo' ? 'A PHOTOGRAPH' : `A PHOTOSHOOT · ${photos.length} ${photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}`}</span>
             <h1 style={{ font: `400 76px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
             {d.description && <p style={{ margin: '4px 0 0', font: `italic 400 24px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
             <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text2)', maxWidth: 460, textWrap: 'pretty' as never }}>{canRate ? `Open a photograph to see it full size and give it a rating. ${d.owner ? `${d.owner} sees` : 'They see'} your ratings and your name, never your email.` : 'Open a photograph to see it full size.'}</p>

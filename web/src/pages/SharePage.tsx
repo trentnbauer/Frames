@@ -14,7 +14,7 @@ import { PinGate } from './Auth';
 import { GuestEditor } from '../screens/GuestEditor';
 
 type G = { id: number; title: string; w: number; h: number; ar: number; n: number };
-type Shared = { askName?: boolean; emailCode?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
+type Shared = { askName?: boolean; emailCode?: boolean; owner?: string; allowSuggest?: boolean; kind: 'collection' | 'shoot' | 'photo'; chosenIds?: number[]; target?: Target | null; layout?: Layout | null; name: string; description: string; allowDownload: boolean; allowReview: boolean; expiresAt: string | null; photos: G[]; viewer?: { name: string; role: string } | null; signIn?: { id: string; name: string }[] };
 
 /** "3 × A3 · 1.6 × 0.6 m": what the wall is made of and how much room it takes. */
 const spanText = (ps: Print[]) => {
@@ -182,10 +182,10 @@ export function SharePage() {
   }
 
   // A shared photoshoot has its own page in the design: hero, grid, floating progress bar, viewer that rates.
-  if (d.kind === 'shoot') {
+  if (d.kind !== 'collection') {
     return (
       <>
-        <ShareShoot token={token} d={d} photos={photos} reviewer={reviewer} setName={setName} withName={withName} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }} />
+        <ShareShoot token={token} d={{ ...d, kind: d.kind }} photos={photos} reviewer={reviewer} setName={setName} withName={withName} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }} />
         {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </>
     );
