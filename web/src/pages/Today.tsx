@@ -178,7 +178,7 @@ export function Today() {
 
       <div className="home-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,2fr)', gap: 16, marginBottom: 16 }}>
         <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 260 }}>
-          <div className="spread" style={{ alignItems: 'center' }}><span className="mono faint" style={{ fontSize: 12, fontWeight: 500 }}>01 · UPLOAD</span><span className="mono" style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontSize: 12, display: 'grid', placeItems: 'center' }}>1</span></div>
+          <div className="spread" style={{ alignItems: 'center' }}><span className="mono faint" style={{ fontSize: 12, fontWeight: 500 }}>01 · SHOOTS</span></div>
           <h2 className="serif" style={{ fontSize: 32, lineHeight: 1.05 }}>Bring in a shoot</h2>
           <p className="t2" style={{ margin: 0, fontSize: 13.5 }}>{pending.data && pending.data.count > 0 ? `${pending.data.count} new file${pending.data.count === 1 ? '' : 's'} are waiting in your library folder.` : 'Upload from this computer or sync from the cloud.'}</p>
           {batches.data && batches.data.batches.length > 0 && (
@@ -189,13 +189,13 @@ export function Today() {
           )}
           <div style={{ marginTop: 'auto', display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             <AddPhotosButton onDone={() => { shoots.reload(); pending.reload(); batches.reload(); }} />
-            {pending.data && pending.data.count > 0 && <Link to="/shoots" className="muted" style={{ fontSize: 13 }}>Import {pending.data.count} →</Link>}
+            {pending.data && pending.data.count > 0 && <Link to="/shoots" className="muted" style={{ fontSize: 13 }}>Organise {pending.data.count} waiting →</Link>}
           </div>
         </div>
 
         <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="spread" style={{ alignItems: 'flex-start' }}>
-            <div><span className="mono faint" style={{ fontSize: 12, fontWeight: 500 }}>02 · COMPOSE &amp; EXPORT</span><h2 className="serif" style={{ fontSize: 32, lineHeight: 1.05, marginTop: 14 }}>Compositions</h2></div>
+            <div><span className="mono faint" style={{ fontSize: 12, fontWeight: 500 }}>02 · COMPOSITIONS</span><h2 className="serif" style={{ fontSize: 32, lineHeight: 1.05, marginTop: 14 }}>Compositions</h2></div>
             <Link to="/collections" className="muted" style={{ fontSize: 13 }}>All {comps.data?.length ?? ''} →</Link>
           </div>
           <div className="compose-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 24, flex: 1 }}>

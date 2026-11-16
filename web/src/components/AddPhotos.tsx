@@ -134,7 +134,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
           {(local || hasCloud) && (
             <>
               <div>
-                <div className="eyebrow" style={{ marginBottom: 8 }}>Photoshoot</div>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Shoot</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <select value={String(target)} onChange={(e) => setTarget(e.target.value === 'new' ? 'new' : Number(e.target.value))} aria-label="New or existing photoshoot" style={{ flex: 'none', maxWidth: 200 }}>
                     <option value="new">New photoshoot</option>

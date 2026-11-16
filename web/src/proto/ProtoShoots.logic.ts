@@ -144,7 +144,7 @@ export class Logic extends DCLogic {
       upThumbs: [], upPct: S.prog + '%', upStatus: uploading ? 'Uploading ' + Math.round((S.prog / 100) * nFiles) + ' of ' + nFiles + '…' : '✓ Ready',
       upModes: [['new', 'New shoot'], ['existing', 'Existing shoot']].map(([k, label]) => ({ label, bg: S.mode === k ? 'var(--text)' : 'transparent', fg: S.mode === k ? 'var(--bg)' : 'var(--text2)', go: () => this.setState({ mode: k }) })),
       upNamePh: (P.suggestName || today) ? (P.suggestName || today) + ' · or leave blank for ' + today : 'Name this shoot · or leave blank for ' + today,
-      upNameHint: name ? 'Shown on Photoshoots and in your Library' : P.suggestName ? '✦ Suggested: ' + P.suggestName + ', from the date of the photos. Blank uses it.' : 'Leave blank to name it with today’s date. You can rename it later.',
+      upNameHint: name ? 'Shown on Shoots and in your Library' : P.suggestName ? '✦ Suggested: ' + P.suggestName + ', from the date of the photos. Blank uses it.' : 'Leave blank to name it with today’s date. You can rename it later.',
       upIsNew: S.mode === 'new', upIsExisting: S.mode === 'existing', upName: S.name, upOnName: (e) => this.setState({ name: e.target.value }),
       upSplitHint: tog ? 'Makes one shoot per day' : 'If these span more than one day, keep them as one shoot or make one per day.', upSplitTog: () => this.setState({ split: !tog }),
       upSplitTrack: tog ? 'var(--text)' : 'color-mix(in srgb, var(--text) 14%, transparent)', upSplitKnob: tog ? '21px' : '3px', upSplitKnobBg: tog ? 'var(--bg)' : 'var(--text2)',
