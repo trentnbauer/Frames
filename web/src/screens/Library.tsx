@@ -1,7 +1,6 @@
-import { BulkJobs } from '../components/BulkJobs';
-import { SavedViews } from '../components/SavedViews';
+import { LibraryMore } from '../components/LibraryMore';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { BrowsePage } from '../components/BrowsePage';
@@ -45,6 +44,7 @@ export function Library() {
   const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
   const tags = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
   const gear = useApi<{ cameras: { name: string; n: number }[]; lenses: { name: string; n: number }[] }>('/gear');
+  const scores = useApi<Record<string, number>>('/photos/scores');
   const list = useApi<{ total: number; count: number; photos: PhotoLite[]; semantic: boolean }>(`/photos?${sp.toString()}`);
   // The library's own text search (file name, metadata, place, tags); typing waits a moment before it asks.
   const [qText, setQText] = useState(sp.get('q') ?? '');
@@ -63,8 +63,15 @@ export function Library() {
   const byId = new Map((list.data?.photos ?? []).map((p) => [p.id, p]));
   const shootById = new Map((shoots.data ?? []).map((s) => [s.id, s]));
 
-  const groupsFor = (by: 'shoot' | 'uploaded' | 'taken') => {
+  const groupsFor = (by: 'shoot' | 'uploaded' | 'taken' | 'score') => {
     const photos = list.data?.photos ?? [];
+    if (by === 'score') {
+      // A flat list by score (your ratings and your guests', pooled). Newest ▾ flips it to lowest first; unrated photographs always go last.
+      const rank = (id: number) => scores.data?.[id];
+      const rated = photos.filter((p) => rank(p.id) !== undefined).sort((a, b) => (newest ? rank(b.id)! - rank(a.id)! : rank(a.id)! - rank(b.id)!) || a.id - b.id);
+      const unrated = photos.filter((p) => rank(p.id) === undefined);
+      return [{ key: 'score', name: newest ? 'Best first' : 'Lowest first', meta: `${rated.length} rated`, ids: rated.map((p) => p.id) }, ...(unrated.length ? [{ key: 'unrated', name: 'Not rated yet', meta: `${unrated.length}`, ids: unrated.map((p) => p.id) }] : [])];
+    }
     if (by === 'taken') {
       const m = new Map<string, PhotoLite[]>();
       for (const p of photos) { const k = (p.capturedAt ?? '').slice(0, 7) || 'undated'; (m.get(k) ?? m.set(k, []).get(k)!).push(p); }
@@ -83,7 +90,7 @@ export function Library() {
   // What is currently filtering, as removable chips.
   const chips: { label: string; remove: () => void }[] = [];
   if (sp.get('q')) chips.push({ label: `“${sp.get('q')}”`, remove: () => set('q', null) });
-  if (sp.get('shoot')) chips.push({ label: `Photoshoot: ${shootById.get(Number(sp.get('shoot')))?.name ?? '…'}`, remove: () => set('shoot', null) });
+  if (sp.get('shoot')) chips.push({ label: `Shoot: ${shootById.get(Number(sp.get('shoot')))?.name ?? '…'}`, remove: () => set('shoot', null) });
   for (const k of multi(sp.get('missing'))) chips.push({ label: `No ${k}`, remove: () => toggle('missing', k) });
   for (const s of multi(sp.get('subject'))) chips.push({ label: `Subject: ${s}`, remove: () => toggle('subject', s) });
   for (const s of multi(sp.get('tag'))) chips.push({ label: `Tag: ${s}`, remove: () => toggle('tag', s) });
@@ -121,7 +128,7 @@ export function Library() {
   const filtersPanel = filtersOpen ? (
     <MenuState.Provider value={{ open, setOpen }}>
       <div className="filters" style={{ marginBottom: 16 }}>
-        <Menu id="shoot" label="Photoshoot">{(shoots.data ?? []).map((s) => <Item key={s.id} on={sp.get('shoot') === String(s.id)} onClick={() => { set('shoot', String(s.id)); setOpen(null); }}>{s.name}</Item>)}</Menu>
+        <Menu id="shoot" label="Shoot">{(shoots.data ?? []).map((s) => <Item key={s.id} on={sp.get('shoot') === String(s.id)} onClick={() => { set('shoot', String(s.id)); setOpen(null); }}>{s.name}</Item>)}</Menu>
         <Menu id="subject" label="Subject">
           {(subjects.data ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
           {(subjects.data ?? []).map((t) => <Item key={t.name} on={multi(sp.get('subject')).includes(t.name)} onClick={() => toggle('subject', t.name)}>{t.name} <span className="faint">{t.n}</span></Item>)}
@@ -165,16 +172,14 @@ export function Library() {
   void v;
   return (
     <BrowsePage>
-      <div className="workflow-shortcuts"><Link to="/activity">Recently removed & Undo →</Link><Link to="/review-schedule">Review schedule →</Link><Link to="/imports">Import history →</Link></div>
-      <SavedViews><BulkJobs /></SavedViews>
       <ProtoLibrary
-        groupsFor={(by: 'shoot' | 'uploaded' | 'taken') => (flat ? flatGroups() : groupsFor(by))}
+        groupsFor={(by: 'shoot' | 'uploaded' | 'taken' | 'score') => (flat ? flatGroups() : groupsFor(by))}
         photoOf={(id: number) => { const p = byId.get(id); const n = inComps.get(id) ?? 0; return { src: imgUrl(id, 'thumb'), ar: p?.ar ?? 1, badge: n ? `In ${n}` : '' }; }}
         countLabel={list.data ? `${count.toLocaleString()}${count !== list.data.total ? ` of ${list.data.total.toLocaleString()}` : ''}` : ''}
         canAdd={!status.data || status.data.storage.local || status.data.storage.cloud} onAddPhotos={() => nav('/shoots?upload=1')}
         searchVal={qText} onSearch={onSearch} searchPh="Search file names, cameras, places and tags"
         chips={chips} onClear={clear} onToggleFilters={() => setFiltersOpen(!filtersOpen)} filtersPanel={filtersPanel}
-        orderLabel={newest ? 'Newest' : 'Oldest'} toggleOrder={() => set('order', newest ? 'oldest' : null)}
+        orderLabel={newest ? 'Newest' : 'Oldest'} orderLabelFor={(by: string) => (by === 'score' ? (newest ? 'Best first' : 'Lowest first') : newest ? 'Newest' : 'Oldest')} moreMenu={<LibraryMore />} toggleOrder={() => set('order', newest ? 'oldest' : null)}
         years={years.map((y) => ({ label: y, go: () => { const n = new URLSearchParams(sp); n.set('from', `${y}-01-01`); n.set('to', `${y}-12-31`); setSp(n, { replace: true }); } }))}
         shoots={(shoots.data ?? []).map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos · ${s.dates}`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
         fromLabel={(ids: number[]) => [...new Set(ids.map((id) => shootById.get(byId.get(id)?.shootId ?? -1)?.name).filter(Boolean))].join(', ')}
@@ -191,7 +196,7 @@ export function Library() {
         renderCompPicker={(ids: number[], onClose: () => void, onDone: (m: string) => void) => <CompPicker ids={ids} onClose={onClose} onDone={onDone} />}
       />
       {list.error && <p role="alert" className="muted" style={{ textAlign: 'center' }}>Something went wrong: {list.error}</p>}
-      {list.data && count === 0 && <div className="empty">{chips.length ? 'No photographs match.' : 'No photographs yet. Add some on the Photoshoots page.'}</div>}
+      {list.data && count === 0 && <div className="empty">{chips.length ? 'No photographs match.' : 'No photographs yet. Add some on the Shoots page.'}</div>}
       {editIds && <BulkEdit ids={editIds} onClose={() => setEditIds(null)} onDone={reload} />}
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
     </BrowsePage>

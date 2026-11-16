@@ -100,6 +100,17 @@ describe('recoverable changes', () => {
     expect(row(ids[0]).camera).toBe(before.camera);
   });
 });
+describe('library score ordering', () => {
+  it('pools your ratings with guests ratings and leaves unrated photographs out', async () => {
+    const now = new Date().toISOString();
+    env.db.prepare("INSERT INTO reviews(photo_id,session,run_id,date,rating)VALUES(?,1,'score-test',?,4)").run(ids[0], now);
+    const share = env.db.prepare('INSERT INTO shares(token,kind,target_id,created_at) VALUES(?,?,?,?)').run('score-test-share-0001', 'shoot', 1, now);
+    env.db.prepare("INSERT INTO share_reviews(share_id,photo_id,reviewer,rating,ts)VALUES(?,?,'Guest',2,?)").run(share.lastInsertRowid, ids[0], now);
+    const scores = (await a.get('/api/photos/scores')).body;
+    expect(scores[ids[0]]).toBe(3);
+    expect(scores[ids[1]]).toBeUndefined();
+  });
+});
 describe('batch edits and owned aliases', () => {
   it('lets a bulk edit accept a previously rejected tag or subject', async () => {
     env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkrej','tag','ai',-1)").run(ids[0]);
