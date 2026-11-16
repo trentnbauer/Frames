@@ -48,7 +48,7 @@ const photos: PhotoFull[] = titles.map((title,i) => {
   };
 });
 const shoots: Shoot[] = shootsBase.map(s => ({
-  id:s.id,name:s.name,source:'upload',place:s.place,description:'Sample photoshoot',
+  id:s.id,name:s.name,protected:false,source:'upload',place:s.place,description:'Sample photoshoot',
   dateFrom:s.date,dateTo:s.date,dates:new Date(s.date+'T12:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),
   importedAt:now,count:6,coverId:1+(s.id-1)*6,reviewPct:83,dueCount:0,waitingCount:5,
   duePhotoIds:[],sessions:1,subjects:[],tags:s.tags,
