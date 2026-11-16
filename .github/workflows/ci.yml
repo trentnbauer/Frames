@@ -49,6 +49,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - if: matrix.package == 'web'
+        run: npx vite build --config vite.demo.config.ts
       - run: npm audit --omit=dev --audit-level=high
 
   image-plan:

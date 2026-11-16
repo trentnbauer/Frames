@@ -1,0 +1,50 @@
+name: Publish Frames demo
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/demo-pages.yml'
+  schedule:
+    # 07:00 AEDT (UTC+11) every day. This is 06:00 during AEST.
+    - cron: '0 20 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: demo-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Build standalone read-only demo
+        run: npx vite build --config vite.demo.config.ts
+        working-directory: web
+      - name: Serve the demo at the Pages root
+        run: |
+          mv web/dist-demo/demo.html web/dist-demo/index.html
+          touch web/dist-demo/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: web/dist-demo
+      - id: deployment
+        uses: actions/deploy-pages@v4
