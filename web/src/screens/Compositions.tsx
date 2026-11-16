@@ -7,6 +7,8 @@ import { useUi } from '../ui';
 import { chosenCount, printsSummary, slotsOf } from './walls';
 import ProtoCompositions from '../proto/ProtoCompositions';
 import { CompositionPreview } from '../components/CompositionPreview';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileCompositions } from '../mobile/Compositions';
 
 type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
@@ -29,6 +31,10 @@ async function downloadOriginals(ids: number[]) {
 
 /** Compositions: Progress, Review and Done, from the design. */
 export function Compositions() {
+  return usePhoneWidth() ? <MobileCompositions /> : <DesktopCompositions />;
+}
+
+function DesktopCompositions() {
   const nav = useNavigate();
   const location = useLocation();
   const filter = new URLSearchParams(location.search).get('filter');

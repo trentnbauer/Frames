@@ -9,6 +9,8 @@ import { BulkEdit } from '../components/BulkEdit';
 import { useUi } from '../ui';
 import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileLibrary } from '../mobile/Library';
 import { reviewUrl } from '../reviewScope';
 
 const REVIEW_OPTIONS = [['', 'All review states'], ['due', 'Due now'], ['unrated', 'Unrated'], ['waiting', 'Waiting for next review'], ['complete', 'Review complete'], ['excluded', 'Left out of review']];
@@ -31,6 +33,10 @@ const Item = ({ on, onClick, children }: { on?: boolean; onClick: () => void; ch
 
 /** Library: the design's screen, driven by the real photographs, shoots and filters (all filters live in the address). */
 export function Library() {
+  return usePhoneWidth() ? <MobileLibrary /> : <DesktopLibrary />;
+}
+
+function DesktopLibrary() {
   const [sp, setSp] = useSearchParams();
   const nav = useNavigate();
   const { openSearch } = useUi();

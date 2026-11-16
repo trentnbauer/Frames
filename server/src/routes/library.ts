@@ -104,7 +104,9 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   // Take a photoshoot, and every photograph in it, out of Frames. Files in library folders are never touched (see remove.ts).
   app.delete('/api/shoots/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
-    if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    const target = one('SELECT protected FROM shoots WHERE id = ?', id);
+    if (!target) return notFound(rep);
+    if (target.protected) return rep.code(409).send({ error: 'This photoshoot is protected from deletion. Turn protection off first.' });
     return removeShoot(db, cfg, id);
   });
   app.patch('/api/shoots/:id', async (req, rep) => {
@@ -114,6 +116,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     if ('photoDate' in b && (typeof b.photoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.photoDate) || !Number.isFinite(Date.parse(b.photoDate)) || new Date(b.photoDate).toISOString().slice(0, 10) !== b.photoDate)) return rep.code(400).send({ error: 'Choose a valid photoshoot date.' });
 
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
+    if (typeof b.protected === 'boolean') db.prepare('UPDATE shoots SET protected = ? WHERE id = ?').run(b.protected ? 1 : 0, id);
     const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
     const everyPhoto = b.overwrite === true; // the person chose to change every photograph in the shoot, even ones with their own value
     if (typeof b.place === 'string' && (b.place.slice(0, 120) !== before.place || everyPhoto)) {

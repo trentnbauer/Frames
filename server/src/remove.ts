@@ -60,6 +60,7 @@ export function deleteSuggestions(db: DB, sessions: number, below: number, limit
     WHERE p.missing = 0
       AND NOT EXISTS (SELECT 1 FROM collection_photos cp WHERE cp.photo_id = p.id)
       AND NOT EXISTS (SELECT 1 FROM version_photos vp WHERE vp.photo_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM shoots ps WHERE ps.id = p.shoot_id AND ps.protected = 1)
       AND NOT EXISTS (SELECT 1 FROM shares sh WHERE sh.kind = 'shoot' AND sh.target_id = p.shoot_id AND sh.revoked = 0 AND (sh.expires_at IS NULL OR sh.expires_at > ?))${onlyId === undefined ? '' : ' AND p.id = ?'}
     GROUP BY p.id HAVING COUNT(r.id) >= ? AND AVG(r.rating) < ? AND (k.photo_id IS NULL OR k.review_count != COUNT(r.id) OR k.rating_sum != SUM(r.rating))
     ORDER BY AVG(r.rating), p.id LIMIT ?`).all(new Date().toISOString(), ...(onlyId === undefined ? [] : [onlyId]), Math.max(1, sessions), below, limit) as { id: number; title: string; file: string; shootId: number; avg: number; reviews: number }[];
@@ -74,6 +75,7 @@ export function removeIfBinned(db: DB, cfg: Cfg, photoId: number): boolean {
   if (!need) return false;
   const votes = (db.prepare('SELECT COUNT(*) n FROM reviews WHERE photo_id = ? AND bin = 1').get(photoId) as { n: number }).n;
   if (votes < need) return false;
+  if (db.prepare('SELECT 1 x FROM photos p JOIN shoots s ON s.id = p.shoot_id WHERE p.id = ? AND s.protected = 1').get(photoId)) return false; // a protected photoshoot keeps its photographs
   return db.transaction(() => {
     removePhotos(db, cfg, [photoId], 'keep');
     const session = getSetting<{ queue: { id: number }[]; index: number } | null>(db, 'reviewSession', null);

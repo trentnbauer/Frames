@@ -146,9 +146,11 @@ export function ShareMobile(p: Props) {
   );
   const [filter, setFilter] = useState<'all' | 'todo' | 'rated'>('all');
   const [note, setNote] = useState(''); // the note for the person who shared this
+  const [sentAll, setSentAll] = useState(false); // ratings are saved as they are made; Send tells the person they are in
   const ratedCount = photos.filter((x) => ratings[x.id] !== undefined).length;
   const tiles = photos.filter((x) => filter === 'all' || (filter === 'rated' ? ratings[x.id] !== undefined : ratings[x.id] === undefined));
-  const expiry = d.expiresAt ? `Link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}` : 'This link doesn’t expire';
+  const daysLeft = d.expiresAt ? Math.max(0, Math.ceil((new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000)) : null;
+  const expiry = daysLeft === null ? 'This link doesn’t expire' : `Link expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`;
   const lockup = <span style={{ display: 'flex', alignItems: 'center', gap: 8, font: `italic 400 20px/1 ${serif}` }}><Mark />Frames</span>;
   const sendNote = () => { if (!note.trim()) return; sendText(null, note, () => { setNote(''); flash(`Sent to ${owner}`); }); };
   const spanLabel = f ? `${[...wallPrints.reduce((m, q) => m.set(q.size, (m.get(q.size) || 0) + 1), new Map<string, number>())].map(([k, n]) => (n > 1 ? `${n} × ${k}` : k)).join(', ')} · ${metres(f.w)} × ${metres(f.h)} m` : '';
@@ -163,7 +165,6 @@ export function ShareMobile(p: Props) {
               <h1 style={{ font: `400 40px/1 ${serif}`, margin: 0, textWrap: 'balance' as never }}>{d.name}</h1>
               <span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{spanLabel}</span>
               {d.description && <p style={{ fontSize: 14, color: 'var(--text2)', margin: '4px 0 0' }}>{d.description}</p>}
-              <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
             <div aria-label="The wall" style={{ position: 'relative', width: '100%', height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--wall-bg)', backgroundImage: 'linear-gradient(var(--wall-grid) 1px,transparent 1px),linear-gradient(90deg,var(--wall-grid) 1px,transparent 1px)', backgroundSize: '20px 20px', display: 'grid', placeItems: 'center' }}>
               <div style={{ position: 'relative', height: '100%', maxWidth: '100%', aspectRatio: String(f.W / f.H) }}>
@@ -213,6 +214,7 @@ export function ShareMobile(p: Props) {
                 );
               })}
             </div>
+            {d.allowDownload && <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ alignSelf: 'flex-start', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>}
             {canReview && d.layout && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button onClick={() => withName(() => p.openLayout())} style={{ height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a different layout…'}</button>
@@ -231,7 +233,7 @@ export function ShareMobile(p: Props) {
               {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}
               <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
-            {photos[0] && <button onClick={() => setLook(0)} aria-label="Open the cover photograph" style={{ display: 'block', width: '100%', aspectRatio: String(Math.min(1.5, Math.max(0.8, photos[0].ar))), borderRadius: 8, marginTop: 6, background: `url(${imgUrl(photos[0].id, 'preview', token)}) center/cover var(--surface)` }} />}
+            {photos[0] && <button onClick={() => setLook(0)} aria-label="Open the cover photograph" style={{ display: 'block', width: '100%', aspectRatio: '1.5', borderRadius: 8, marginTop: 6, background: `url(${imgUrl(photos[0].id, 'preview', token)}) center/cover var(--surface)` }} />}
             {d.allowDownload && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -280,7 +282,7 @@ export function ShareMobile(p: Props) {
         )}
       </div>
 
-      {f ? (
+      {f ? ((p.dirty || p.sendNote || p.dl) && (
         <div className="sm-bar" style={{ position: 'fixed', bottom: 0, right: 0, zIndex: 5, background: 'var(--page)', boxShadow: '0 -1px 0 var(--hair)', padding: '12px 16px max(16px, env(safe-area-inset-bottom))' }}>
           {p.dl && (
             <div role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: 'var(--text2)', marginBottom: 10 }}>
@@ -295,24 +297,15 @@ export function ShareMobile(p: Props) {
               {p.sendNote && <span style={{ flex: '1 1 100%' }}>{p.sendNote.text}</span>}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {canReview && <button onClick={() => withName(() => { setLook(unrated >= 0 ? unrated : 0); setLookText(''); })} style={{ flex: 1, height: 50, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>{rated === 0 ? 'Review these' : unrated >= 0 ? `Keep reviewing · ${rated} of ${order.length}` : 'Review again'}</button>}
-            {d.allowDownload && <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ flex: canReview ? '0 0 auto' : 1, height: 50, borderRadius: 999, padding: '0 20px', fontSize: 15, fontWeight: 500, background: canReview ? 'transparent' : 'var(--btn-bg)', color: canReview ? 'var(--text)' : 'var(--btn-fg)', boxShadow: canReview ? ring : 'none' }}>Download</button>}
-          </div>
-          {canReview && reviewer.trim() && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
-              as {reviewer.trim()}{!d.viewer && <> · <button onClick={p.changeName} style={{ color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>change</button></>}
-            </div>
-          )}
         </div>
-      ) : canReview && look === null && (
+      )) : canReview && look === null && (
         <div className="sm-bar" style={{ position: 'fixed', left: 12, right: 12, bottom: 24, zIndex: 38, borderRadius: 22, background: 'var(--raised2)', boxShadow: 'var(--float)', padding: '10px 10px 10px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 14 }}>{ratedCount} of {photos.length} rated</span>
             <span style={{ height: 3, borderRadius: 2, background: 'var(--hair)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${Math.round((ratedCount / Math.max(1, photos.length)) * 100)}%`, background: 'var(--text)' }} /></span>
           </div>
-          {ratedCount > 0 ? <span role="status" style={{ height: 44, display: 'inline-flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, color: 'var(--ok)' }}>✓ Sent as you rate</span>
-            : <button onClick={() => withName(() => { setLook(0); setLookText(''); })} style={{ height: 44, padding: '0 18px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14 }}>Start rating</button>}
+          {sentAll ? <span role="status" style={{ height: 44, display: 'inline-flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, color: 'var(--ok)' }}>✓ Sent</span>
+            : <button onClick={() => { if (!ratedCount) { flash('Rate a photograph first'); return; } withName(() => { setSentAll(true); flash(`Sent to ${owner} · thank you`); }); }} style={{ height: 44, padding: '0 18px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14 }}>Send to {owner}</button>}
         </div>
       )}
 
@@ -363,7 +356,7 @@ export function ShareMobile(p: Props) {
                     {RATINGS.map((r) => {
                       const on = ratings[lp.id] === r.value;
                       return (
-                        <button key={r.value} onClick={() => { rate(lp.id, r.value); if (!f && look < order.length - 1) setTimeout(() => go(1), 280); }} aria-pressed={on} aria-label={`Rate ${r.label}`}
+                        <button key={r.value} onClick={() => { setSentAll(false); rate(lp.id, r.value); if (!f && look < order.length - 1) setTimeout(() => go(1), 280); }} aria-pressed={on} aria-label={`Rate ${r.label}`}
                           style={{ flex: 1, height: 64, borderRadius: 18, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, background: on ? '#efede8' : 'transparent', color: on ? '#0d0d0d' : '#a8a59f' }}>
                           <span style={{ fontSize: 24, lineHeight: 1 }}>{r.emoji}</span><span style={{ fontSize: 11 }}>{r.label}</span>
                         </button>

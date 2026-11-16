@@ -6,6 +6,8 @@ import { api, openPortfolio, useApi } from '../api';
 import { GearBlacklist } from '../components/GearBlacklist';
 import { GearSystems } from '../components/GearSystems';
 import ProtoGear from '../proto/ProtoGear';
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobileGear } from '../mobile/Gear';
 
 type Item = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; serial: string; year: number | null; why: string; link: string; price: number | null; rank: number; used?: number };
 type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; systems?: string[]; currency?: string } };
@@ -15,6 +17,10 @@ const TO_API: Record<string, string> = { Body: 'camera', Lens: 'lens', Film: 'fi
 
 /** Gear & wishlist (design: Proto Gear). It follows the portfolio's Gear page. Text edits are saved a moment after you stop typing. */
 export function Gear() {
+  return usePhoneWidth() ? <MobileGear /> : <DesktopGear />;
+}
+
+function DesktopGear() {
   const g = useApi<Data>('/gear/items');
   useEffect(() => { const changed = () => g.reload(); window.addEventListener('frames:gear-changed', changed); return () => window.removeEventListener('frames:gear-changed', changed); }, [g.reload]);
   const [blocklisting, setBlocklisting] = useState<string | null>(null);
