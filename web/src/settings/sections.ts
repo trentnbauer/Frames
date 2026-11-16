@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { Me } from '../store';
 import type { Section } from './ui';
 import { useAccountProfile, useAccountSecurity, useAccountNotifications, useAppSettingsPage, useReviewSchedule, useReviewCommunity, useReviewCleanup, usePhotoTags, usePhotoXmp, usePhotoAi, usePortfolioPage, useStorageTab, useDataTab } from './lib3';
-import { useSignin, useMembers, useFolders, useBackup, useSrvAi, useNetwork, useEmail, useProcessing, useServer, usePolicies } from './srv';
+import { useAccessSignin, useAccessSecurity, useAccessMembers, useSharingGuests, useSharingPortfolios, useSharingPolicies, useStorageLocal, useStorageCloud, useStoragePreviews, useBackup, useNetworkTunnel, useNetworkEmail, useSrvAi, useSystemUpdates, useSystemProcessing, useSystemEnvironment } from './srv4';
 
 export type Ctx = { toast: (m: string) => void; modal: (n: ReactNode) => void; goto: (tab: 'lib' | 'srv', key: string, sub?: string) => void; me: Me | null; isAdmin: boolean };
 /** One page of a section that opens with the segmented tabs. Only the tab on show runs its hook. */
@@ -34,14 +34,30 @@ export const LIB: SectionDef[] = [
   ] },
 ];
 export const SRV: SectionDef[] = [
-  { tab: 'srv', key: 'signin', name: 'Sign-in & access', use: useSignin },
-  { tab: 'srv', key: 'people', name: 'Members', use: useMembers },
-  { tab: 'srv', key: 'folders', name: 'Storage', use: useFolders },
-  { tab: 'srv', key: 'backup', name: 'Backup', use: useBackup },
-  { tab: 'srv', key: 'srvai', name: 'AI', use: useSrvAi },
-  { tab: 'srv', key: 'network', name: 'Cloudflare tunnel', use: useNetwork },
-  { tab: 'srv', key: 'email', name: 'Email', use: useEmail },
-  { tab: 'srv', key: 'policies', name: 'Policies', use: usePolicies },
-  { tab: 'srv', key: 'processing', name: 'Cache & processing', use: useProcessing },
-  { tab: 'srv', key: 'server', name: 'Updates & system', use: useServer },
+  { tab: 'srv', key: 'access', name: 'Access', sub: 'Sign-in · Security · Members', tabs: [
+    { key: 'signin', label: 'Sign-in', use: useAccessSignin },
+    { key: 'security', label: 'Security', use: useAccessSecurity },
+    { key: 'members', label: 'Members', use: useAccessMembers },
+  ] },
+  { tab: 'srv', key: 'sharing', name: 'Sharing', sub: 'Guest links · Portfolios · Policies', tabs: [
+    { key: 'guest-links', label: 'Guest links', use: useSharingGuests },
+    { key: 'portfolios', label: 'Portfolios', use: useSharingPortfolios },
+    { key: 'policies', label: 'Policies', use: useSharingPolicies },
+  ] },
+  { tab: 'srv', key: 'folders', name: 'Storage', sub: 'Local · Cloud · Previews & cache', tabs: [
+    { key: 'local', label: 'Local', use: useStorageLocal },
+    { key: 'cloud', label: 'Cloud', use: useStorageCloud },
+    { key: 'previews', label: 'Previews & cache', use: useStoragePreviews },
+  ] },
+  { tab: 'srv', key: 'backup', name: 'Backup', sub: 'Schedule · History', use: useBackup },
+  { tab: 'srv', key: 'network', name: 'Network & email', sub: 'Cloudflare tunnel · Email', tabs: [
+    { key: 'tunnel', label: 'Cloudflare tunnel', use: useNetworkTunnel },
+    { key: 'email', label: 'Email', use: useNetworkEmail },
+  ] },
+  { tab: 'srv', key: 'srvai', name: 'AI', sub: 'Shared AI · Rules', use: useSrvAi },
+  { tab: 'srv', key: 'system', name: 'System', sub: 'Updates · Processing · Environment', tabs: [
+    { key: 'updates', label: 'Updates', use: useSystemUpdates },
+    { key: 'processing', label: 'Processing', use: useSystemProcessing },
+    { key: 'environment', label: 'Environment', use: useSystemEnvironment },
+  ] },
 ];
