@@ -147,7 +147,9 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
 }
 
 function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
-  const { me } = useStore();
+  const { me, summary } = useStore();
+  const health = useApi<{ version: string }>(open ? '/health' : null);
+  const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
   const nav = useNavigate();
   const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
   const close = () => setOpen(false);
@@ -171,36 +173,8 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
               <div style={{ minWidth: 0, flex: 1 }}><b>{name}</b><span className="em">{me?.user?.email || (me?.mode === 'password' ? 'Signed in with the shared password' : '')}</span></div>
               {me?.role === 'admin' && <span className="eyebrow pillish">Admin</span>}
             </div>
-            {item('Settings', go('/settings'), '⌘ ,')}
-            {item('View my portfolio', () => { close(); void openPortfolio(); }, '↗')}
-            {me?.user && <div className="msep" />}
-            {me?.user && item('Sign out', signOut)}
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
-/** Tools and help that are not about your account: the ☰ menu. */
-function MoreMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
-  const { summary } = useStore();
-  const nav = useNavigate();
-  const health = useApi<{ version: string }>(open ? '/health' : null);
-  const ver = health.data?.version ? (/^v?\d/.test(health.data.version) ? `v${health.data.version.replace(/^v/, '')}` : health.data.version) : '';
-  const close = () => setOpen(false);
-  const go = (to: string) => () => { close(); nav(to); };
-  const item = (label: string, onClick: (e: React.MouseEvent) => void, meta?: string) => <button key={label} className="mi" onClick={onClick}><span>{label}</span>{meta && <span className="meta">{meta}</span>}</button>;
-  return (
-    <>
-      <button className="iconbtn" title="Menu" aria-label="Menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" /></svg>
-      </button>
-      {open && (
-        <>
-          <div className="pop-scrim" onClick={close} />
-          <div className="popover" role="menu" aria-label="Menu" style={{ right: 98 }}>
-            <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>Your library</div>
+            <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>You</div>
+            {item('Portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
             {item('Stats & imports', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
             <div className="msep" />
@@ -209,6 +183,9 @@ function MoreMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('What’s new', () => { close(); window.dispatchEvent(new Event('frames:whatsnew')); }, ver)}
             {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
             {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
+            <div className="msep" />
+            {item('Settings', go('/settings'), '⌘ ,')}
+            {me?.user && item('Sign out', signOut)}
           </div>
         </>
       )}
@@ -219,7 +196,7 @@ function MoreMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
 export function Header({ right }: { right?: ReactNode }) {
   const loc = useLocation();
   const ui = useUi();
-  const [menu, setMenu] = useState<'user' | 'bell' | 'more' | null>(null);
+  const [menu, setMenu] = useState<'user' | 'bell' | null>(null);
   useEffect(() => setMenu(null), [loc.pathname]);
   return (
     <header className="shell-head">
@@ -231,7 +208,6 @@ export function Header({ right }: { right?: ReactNode }) {
         <button type="button" className="iconbtn phone-only" aria-label="Search" onClick={ui.openSearch}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg></button>
         <ThemeToggle />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
-        <span className="no-phone"><MoreMenu open={menu === 'more'} setOpen={(b) => setMenu(b ? 'more' : null)} /></span>
         <UserMenu open={menu === 'user'} setOpen={(b) => setMenu(b ? 'user' : null)} />
       </div>
     </header>
