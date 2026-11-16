@@ -425,6 +425,12 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // The photograph the photographer chose as a shoot's cover; null means the highest rated one.
   (db) => { addColumn(db, 'shoots', 'cover_id', 'INTEGER'); },
+  // The default review schedule changed to seven sessions; a library that already has photographs and never chose its own keeps the old one.
+  (db) => {
+    const saved = getSetting<Record<string, unknown>>(db, 'settings', {});
+    if (!db.prepare('SELECT 1 FROM photos LIMIT 1').get()) return;
+    setSetting(db, 'settings', { sessions: 4, intervals: ['1 week', '1 week', '1 week', '1 week'], ...saved });
+  },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

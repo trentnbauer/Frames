@@ -46,9 +46,9 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  // A photograph is reviewed four times in about a month: a week between each session.
-  sessions: 4,
-  intervals: ['1 week', '1 week', '1 week', '1 week'],
+  // A photograph is reviewed seven times, at widening gaps, over about eight months.
+  sessions: 7,
+  intervals: ['Instant', '1 day', '3 days', '1 week', '1 week', '1 month', '6 months'],
   adaptive: true,
   archiveSuggest: false,
   autoRemove: false,

@@ -4,7 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { openDb } from './db.js';
+import { openDb, setSetting } from './db.js';
 import { api, cleanup, makeEnv } from './testutil.js';
 
 let tmp: string, lib: string, app: ReturnType<typeof buildApp>, appDb: ReturnType<typeof openDb>;
@@ -23,6 +23,7 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(lib, 'dup.jpg'), fs.readFileSync(path.join(lib, 'a.jpg'))); // same bytes as a.jpg
   fs.writeFileSync(path.join(lib, 'notes.txt'), 'ignored');
   appDb = openDb(path.join(tmp, 'data'));
+  setSetting(appDb, 'settings', { sessions: 4, intervals: ['1 week'] }); // these tests were written for a week between sessions
   app = buildApp(appDb, { libraries: [path.join(tmp, 'library')], dataDir: path.join(tmp, 'data') });
 });
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
