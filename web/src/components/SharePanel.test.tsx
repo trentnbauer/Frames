@@ -26,9 +26,10 @@ describe('the shared photoshoot and composition dialog', () => {
     vi.stubGlobal('window', { location: { origin: 'https://example.test' } });
     data.links = [{ id: 2, token: 'test-link', status: 'active', expiresAt: null, pin: '', askName: true, allowReview: true }];
     const html = renderToStaticMarkup(<SharePanel kind="shoot" id={1} name="Coastal Light" onClose={() => {}} />);
-    for (const label of ['Share Coastal Light', 'Copy link', 'New link', 'Stop this link', 'Preview as guest', 'Never expires', 'Done']) expect(html).toContain(label);
+    for (const label of ['Share Coastal Light', 'Copy link', 'New link', 'Stop this link', 'Replace address', 'Preview as guest', 'Never expires', 'Done']) expect(html).toContain(label);
     expect(html).not.toContain('Create link');
-    expect(html.indexOf('Guests can')).toBeLessThan(html.indexOf('Copy link'));
+    expect(html.indexOf('Copy link')).toBeLessThan(html.indexOf('Guests can'));
+    expect(html.indexOf('Replace address')).toBeGreaterThan(html.indexOf('Guests can'));
   });
   it('lists all links with independent labels and status, including inactive links', () => {
     vi.stubGlobal('window', { location: { origin: 'https://example.test' } });

@@ -96,6 +96,18 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
       <label className="share-name">Link name<input className="field-in" aria-label="Link name" maxLength={80} placeholder="e.g. Client review" defaultValue={link?.label ?? draft.label} onChange={(event) => { if (!link) setDraft((value) => ({ ...value, label: event.target.value })); }} onBlur={(event) => { if (link && event.target.value !== link.label) void patch({ label: event.target.value }); }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
       {kind === 'collection' && <label>Arrangement<select className="field-in" aria-label="Shared arrangement" value={settings.versionId ?? ''} onChange={event => patch({ versionId: event.target.value ? Number(event.target.value) : null })}><option value="">Live editor</option>{(Array.isArray(versions.data) ? versions.data : []).map(version => <option key={version.id} value={version.id}>{version.name}</option>)}</select><small className="muted">Saved arrangements stay fixed when you edit the wall.</small>{versions.error && <p role="alert">{versions.error}</p>}</label>}
       {link && link.status !== 'active' && <div className="share-inactive"><p className="muted">This link is {link.status === 'revoked' ? 'stopped' : 'expired'}. Its address cannot be opened by guests.{link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? ' Reactivating sets a new expiry in 3 weeks.' : ''}</p><button className="btn outline" onClick={() => void run(() => api(`/shares/${link.id}`, { method: 'PATCH', body: { on: true, ...(link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now() ? { expiresAt: inDays(21) } : {}) } }))}>Reactivate this link</button></div>}
+          {link && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="mono" style={{ flex: 1, height: 42, borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', transition: 'background .3s', background: fresh ? 'var(--chip)' : 'var(--bg)' }}>{urlOf(link.token).replace(/^https?:\/\//, '')}</span>
+                <button className="btn primary" style={{ height: 42, flex: 'none' }} onClick={() => copy(urlOf(link.token), 'link')}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button>
+                <a className={'btn outline' + (link.status === 'active' ? '' : ' disabled')} style={{ height: 42, flex: 'none' }} aria-disabled={link.status !== 'active'} href={link.status === 'active' ? urlOf(link.token) : undefined} target="_blank" rel="noopener noreferrer">Preview as guest</a>
+              </div>
+              <div className="spread" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                <span>{settings.expiresAt ? `Expires ${new Date(settings.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'Never expires'}{settings.pin ? ' · PIN on' : ''}{fresh ? ' · New link made, the old one stops working' : ''}</span>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="eyebrow">Guests can</span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -120,18 +132,6 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
               </div>
             </Row>
           </div>
-          {link && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span className="mono" style={{ flex: 1, height: 42, borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', transition: 'background .3s', background: fresh ? 'var(--chip)' : 'var(--bg)' }}>{urlOf(link.token).replace(/^https?:\/\//, '')}</span>
-                <button className="btn primary" style={{ height: 42, flex: 'none' }} onClick={() => copy(urlOf(link.token), 'link')}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button>
-              </div>
-              <div className="spread" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                <span>{settings.expiresAt ? `Expires ${new Date(settings.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}` : 'Never expires'}{settings.pin ? ' · PIN on' : ''}{fresh ? ' · New link made, the old one stops working' : ''}</span>
-                <button style={{ color: 'var(--text2)' }} onClick={regen}>Replace address</button>
-              </div>
-            </div>
-          )}
           {link?.status === 'active' && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="eyebrow">Send by email</span>
             {inv.data && !inv.data.canEmail ? <p className="muted" style={{ fontSize: 13, margin: 0 }}>This server can’t send email, so copy the link instead.</p> : (
@@ -152,7 +152,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy }: { kind: 'col
             )}
           </div>}
       <div className="share-editor-actions">
-        {link ? <><button className="share-stop" disabled={link.status !== 'active'} onClick={stop}>Stop this link</button><a className={'btn outline' + (link.status === 'active' ? '' : ' disabled')} aria-disabled={link.status !== 'active'} href={link.status === 'active' ? urlOf(link.token) : undefined} target="_blank" rel="noopener noreferrer">Preview as guest</a></> : <button className="btn primary" onClick={start}>Create link</button>}
+        {link ? <><button className="btn outline" disabled={link.status !== 'active'} onClick={regen}>Replace address…</button><button className="share-stop" disabled={link.status !== 'active'} onClick={stop}>Stop this link</button></> : <button className="btn primary" onClick={start}>Create link</button>}
       </div>
     </fieldset>
   </div>;
