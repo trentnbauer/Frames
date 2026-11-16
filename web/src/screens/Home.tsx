@@ -1,4 +1,5 @@
 import { HomeWishlist } from '../components/HomeWishlist';
+import { HomeNotes } from '../components/HomeNotes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -128,6 +129,7 @@ export function Home() {
 
       <ProtoHome v={v} cloudOn={v.cloudOn} />
       <HomeWishlist />
+      <HomeNotes />
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); shoots.reload(); pending.reload(); batches.reload(); }} />}
     </div>
   );

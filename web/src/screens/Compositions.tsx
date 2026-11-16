@@ -76,7 +76,7 @@ export function Compositions() {
 
       <ProtoCompositions key={initialTab} initialTab={initialTab}
         prog={prog} review={review} ready={ready}
-        sortLabel={() => byName ? 'Name' : 'Last edited'} onToggleSort={() => setByName(!byName)}
+        sortLabel={() => byName ? 'By name' : 'Last edited first'} onToggleSort={() => setByName(!byName)}
         q={q} onQ={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
         onOpen={(id: number) => nav(`/collections/${id}`)} onNew={() => openNew()}
         onExport={async (id: number) => { const c = all.find((x) => x.id === id)!; const ids = c.layout.prints.flatMap((p) => [p.photoId, p.stack ? p.photoId2 : null]).filter((x): x is number => x != null); await downloadOriginals(ids); }}

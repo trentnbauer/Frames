@@ -72,6 +72,15 @@ export function registerSystem(app: FastifyInstance, x: Ctx) {
   };
   app.get('/api/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(db, 'uiPrefs', {}) }));
   app.put('/api/prefs', async (req, rep) => putPrefs(db, 'uiPrefs', req.body, rep));
+
+  // The free-text notes block at the bottom of Home: one per person, kept in their library.
+  app.get('/api/home/notes', async () => ({ text: getSetting<string>(db, 'homeNotes', '') }));
+  app.put('/api/home/notes', async (req, rep) => {
+    const text = (req.body as Row)?.text;
+    if (typeof text !== 'string' || text.length > 5000) return rep.code(400).send({ error: 'Notes are text, up to 5000 characters.' });
+    setSetting(db, 'homeNotes', text);
+    return { text };
+  });
   app.get('/api/admin/prefs', async () => ({ prefs: getSetting<Record<string, unknown>>(sys, 'serverPrefs', {}) }));
   app.put('/api/admin/prefs', async (req, rep) => putPrefs(sys, 'serverPrefs', req.body, rep));
 

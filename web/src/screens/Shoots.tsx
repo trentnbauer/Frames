@@ -41,7 +41,7 @@ function send(files: File[], onProgress: (pct: number) => void) {
   });
 }
 
-/** Photoshoots (the list) and a shoot (the view), from the design. One screen: /shoots and /shoots/:id. */
+/** Shoots (the list) and a shoot (the view), from the design. One screen: /shoots and /shoots/:id. */
 export function Shoots() {
   const { id } = useParams();
   const sid = id ? Number(id) : null;
@@ -80,7 +80,7 @@ export function Shoots() {
   const shootOf = new Map((lib.data?.photos ?? []).map((p) => [p.id, p.shootId]));
   const compsPerShoot = new Map<number, Set<number>>();
   for (const c of colls.data ?? []) for (const pid of c.photoIds) { const s = shootOf.get(pid); if (s != null) (compsPerShoot.get(s) ?? compsPerShoot.set(s, new Set()).get(s)!).add(c.id); }
-  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.dueCount > 0 ? { tag: 'Needs review', tagColor: 'var(--text)' } : s.waitingCount > 0 ? { tag: '', tagColor: 'var(--muted)' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: 'var(--text2)' } : { tag: 'Not composed', tagColor: 'var(--text)' }; };
+  const tagFor = (s: Shoot) => { const n = compsPerShoot.get(s.id)?.size ?? 0; return s.dueCount > 0 ? { tag: 'Due for review', tagColor: 'var(--text)' } : s.waitingCount > 0 ? { tag: '', tagColor: 'var(--muted)' } : n ? { tag: `In ${n} composition${n === 1 ? '' : 's'}`, tagColor: 'var(--text2)' } : { tag: 'Not composed', tagColor: 'var(--text)' }; };
   const all = [...(shoots.data ?? [])].sort((a, b) => (a.dateFrom ?? a.importedAt).localeCompare(b.dateFrom ?? b.importedAt) * (newest ? -1 : 1));
   const needle = q.trim().toLowerCase();
   const shown = all.filter((s) => (!needle || [s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle)) && (filter === '' || (filter === 'uncomposed' ? !(compsPerShoot.get(s.id)?.size) : s.dueCount > 0)));
@@ -144,8 +144,8 @@ export function Shoots() {
         pendingN={pending.data?.count ?? 0} importLabel={importing ? 'Importing…' : `Import ${pending.data?.count ?? 0}`}
         importPending={async () => { setImporting(true); try { await waitScan(); } finally { setImporting(false); reloadAll(); } }}
         sugg={s0 && !dismissed ? { name: s0.name ?? s0.groups[0]?.name ?? 'A shoot', n: s0.groups.length, accept: async () => { for (const g of s0.groups) await api('/shoots', { body: { name: g.name, photoIds: g.photoIds } }); reloadAll(); }, dismiss: () => setDismissed(true) } : null}
-        q={q} onQ={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)} orderLabel={newest ? 'Newest' : 'Oldest'} toggleOrder={() => setNewest(!newest)}
-        chips={[{ label: `Not in a composition · ${nUncomposed}`, on: filter === 'uncomposed', go: () => setFilter(filter === 'uncomposed' ? '' : 'uncomposed') }, { label: `Needs review · ${nReview}`, on: filter === 'review', go: () => setFilter(filter === 'review' ? '' : 'review') }]}
+        q={q} onQ={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)} orderLabel={newest ? 'Newest first' : 'Oldest first'} toggleOrder={() => setNewest(!newest)}
+        chips={[{ label: `Not in a composition · ${nUncomposed}`, on: filter === 'uncomposed', go: () => setFilter(filter === 'uncomposed' ? '' : 'uncomposed') }, { label: `Due for review · ${nReview}`, on: filter === 'review', go: () => setFilter(filter === 'review' ? '' : 'review') }]}
         yearLabel={years[0] ?? ''} yearMeta={`${all.length} shoots${years.length > 1 ? ' · ' + years.slice(1, 5).join(' · ') + (years.length > 5 ? ' · earlier' : '') : ''}`}
         onOpenShoot={(i: number) => nav(`/shoots/${i}`)} onCloseShoot={() => nav('/shoots')}
         shoot={view} shootPhotos={viewPhotos} onOpenPhoto={(pid: number) => nav(`/photo/${pid}`)}
@@ -161,7 +161,7 @@ export function Shoots() {
         onRemovePlaceFull={async () => { if ((await confirmAction(`Remove the location from all ${ph.length} photos in this shoot?`))) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { place: '', overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onCamera={async (camera: string) => { if (await askAll('camera', camera)) { await api(`/shoots/${sid}`, { method: 'PATCH', body: { gear: { camera, lens: sh?.gear?.lens ?? '', medium: sh?.gear?.medium ?? '', film: sh?.gear?.film ?? '' }, overwrite: true } }); shoots.reload(); shootPhotos.reload(); } }}
         onRename={async (name: string) => { await api(`/shoots/${sid}`, { method: 'PATCH', body: { name } }); shoots.reload(); }}
-        shootActions={sh && <ShootActions key={sh.id} name={sh.name} count={ph.length} aiOn={!!settings && settings.ai !== 'off'} onAnalyse={async () => { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; }} onDelete={async () => { await api(`/shoots/${sid}`, { method: 'DELETE' }); reloadAll(); nav('/shoots'); }} />}
+        shootActions={sh && <ShootActions key={sh.id} onAddPhotos={local || cloudOn ? () => setReq((r) => r + 1) : undefined} name={sh.name} count={ph.length} aiOn={!!settings && settings.ai !== 'off'} onAnalyse={async () => { await api('/ai/run', { method: 'POST', body: {} }); return 'Analysis started · suggestions arrive in To do'; }} onDelete={async () => { await api(`/shoots/${sid}`, { method: 'DELETE' }); reloadAll(); nav('/shoots'); }} />}
         onStartReview={() => { if (sh?.dueCount) nav(reviewUrl(sh.duePhotoIds)); }}
         onCompose={() => openNew({ name: sh?.name, photoIds: ph.map((p) => p.id) })}
       />
