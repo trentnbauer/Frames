@@ -575,6 +575,9 @@ main.auth.terms { width: 640px; }
 .pp select.psel { min-width: 90px; }
 
 /* Screens built from the design: gutters follow the breakpoints (56 / 32 / 16px), content at most 1440px. */
+.app-footer { text-align: center; margin-top: -72px; padding: 0 16px 110px; position: relative; font-size: 12.5px; color: var(--faint); }
+.app-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.app-footer a:hover { color: var(--text); }
 .page-shell { padding: 32px 56px 120px; min-height: 100vh; max-width: 1440px; margin: 0 auto; }
 .dc-root { background: transparent; }
 @media (max-width: 1199px) { .page-shell { padding: 24px 32px 120px; } }

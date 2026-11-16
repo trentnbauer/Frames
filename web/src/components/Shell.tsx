@@ -215,6 +215,15 @@ export function Header({ right }: { right?: ReactNode }) {
 }
 
 /** The floating bar from the design: Home, Shoots, Library, Compositions, then Search and To do with its count. Desktop and tablet only. */
+/** The line at the foot of every page: who designed and built Frames, and where the code lives. */
+export function Footer() {
+  return (
+    <footer className="app-footer">
+      Designed by <a href="https://trentbauer.com" target="_blank" rel="noopener noreferrer">Trent Bauer</a>, built by <a href="https://claude.com" target="_blank" rel="noopener noreferrer">Claude</a> <span aria-hidden>|</span> <a href="https://github.com/trentnbauer/Frames" target="_blank" rel="noopener noreferrer">Source Code</a>
+    </footer>
+  );
+}
+
 export function BottomNav() {
   const { todo, removals, todoItems } = useStore();
   const ui = useUi();

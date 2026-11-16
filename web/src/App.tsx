@@ -8,7 +8,7 @@ import { LayoutPreferencesProvider } from './layoutPreferences';
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useKey } from './components/bits';
-import { Header, BottomNav, EnvBanner, ShellModals, TabBar } from './components/Shell';
+import { Header, BottomNav, EnvBanner, ShellModals, TabBar, Footer } from './components/Shell';
 import { Search } from './components/Search';
 import { ShortcutHelp } from './components/shortcuts';
 import { NewComposition } from './components/NewComposition';
@@ -123,6 +123,7 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Home />} />
       </Routes></div>
+      {!inReview && <Footer />}
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />
