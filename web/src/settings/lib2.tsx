@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { api, imgUrl, openPortfolio, useApi } from '../api';
 import { Modal, Spinner } from '../components/Modal';
 import { CloudSettings } from '../pages/CloudSettings';
-import { AiSettings } from '../pages/AiSettings';
 import { YourData } from '../pages/YourData';
 import { Profile } from '../pages/Profile';
 import { PortfolioSelection } from '../components/PortfolioSelection';
@@ -17,7 +16,7 @@ const close = (ctx: Ctx) => () => ctx.modal(null);
 const act = async (ctx: Ctx, fn: () => Promise<unknown>, ok = 'Saved') => { try { await fn(); ctx.toast(ok); } catch (e) { ctx.toast(msg(e)); } };
 
 /* ---------------------------------------------------------------------- AI */
-type Src = { id: string; type: string; name: string; model: string; color?: string; shared?: boolean; ready: boolean; why: string };
+type Src = { id: string; type: string; name: string; model: string; color?: string; shared?: boolean; ready: boolean; why: string; endpoint?: string; embedModel?: string; ack?: boolean; hasKey?: boolean };
 type Type = { id: string; label: string; local: boolean; needsKey: boolean; endpoint: string; model: string };
 type JobCfg = { on: boolean; order: string[]; skip: string[] };
 const JOBS: [string, string, string][] = [['search', 'Search by description', 'Runs often, so a local model first keeps costs down.'], ['describe', 'Describe and tag photos', 'Titles, captions, alt text and tags for Analyze with AI.'], ['sensitive', 'Flag sensitive photos', 'Suggests nudity, violence or adult tags for you to confirm.'], ['ideas', 'Composition ideas on Home', 'Groups photos by tags and colour.']];
@@ -78,6 +77,54 @@ export function AddAi({ ctx, shared, reload }: { ctx: Ctx; shared: boolean; relo
   );
 }
 
+/** Edit one provider directly, without the nested all-providers management screen. */
+function EditAi({ ctx, source, reload }: { ctx: Ctx; source: Src; reload: () => void }) {
+  const [f, setF] = useState({ name: source.name, endpoint: source.endpoint ?? '', model: source.model ?? '', embedModel: source.embedModel ?? '', key: '', ack: !!source.ack });
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const cloud = source.type !== 'ollama';
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api(`/ai/sources/${source.id}`, { method: 'PUT', body: {
+        name: f.name, endpoint: f.endpoint, model: f.model, embedModel: f.embedModel,
+        ...(f.key ? { key: f.key } : {}), ack: f.ack,
+      } });
+      ctx.toast('Provider saved'); ctx.modal(null); reload();
+    } catch (e) { setResult({ ok: false, detail: msg(e) }); }
+    finally { setBusy(false); }
+  };
+  const test = async () => {
+    setBusy(true); setResult(null);
+    try { setResult(await api<{ ok: boolean; detail: string }>(`/ai/sources/${source.id}/test`, { method: 'POST', body: {} })); }
+    catch (e) { setResult({ ok: false, detail: msg(e) }); }
+    finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!(await confirmAction(`Remove ${source.name}?`))) return;
+    setBusy(true);
+    try { await api(`/ai/sources/${source.id}`, { method: 'DELETE' }); ctx.toast('Provider removed'); ctx.modal(null); reload(); }
+    catch (e) { setResult({ ok: false, detail: msg(e) }); setBusy(false); }
+  };
+  return <Modal title={`Manage ${source.name}`} sub="Connection, model and credentials" width={560} onClose={close(ctx)}
+    foot={<><button className="btn outline" disabled={busy} onClick={() => void remove()}>Remove</button><span className="grow" /><button className="btn outline" disabled={busy} onClick={() => void test()}>{busy ? 'Working…' : 'Test connection'}</button><button className="btn primary" disabled={busy || !f.name.trim()} onClick={() => void save()}>Save changes</button></>}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+      <label className="fld">Provider name<input className="field-in" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+      <label className="fld">API address<input className="field-in" value={f.endpoint} placeholder="Provider endpoint" onChange={(e) => setF({ ...f, endpoint: e.target.value })} /></label>
+      <label className="fld">Vision model<input className="field-in" value={f.model} onChange={(e) => setF({ ...f, model: e.target.value })} /></label>
+      <label className="fld">Embedding model<input className="field-in" value={f.embedModel} placeholder="Optional" onChange={(e) => setF({ ...f, embedModel: e.target.value })} /></label>
+      <label className="fld">API key<input className="field-in" type="password" autoComplete="new-password" value={f.key}
+        placeholder={source.hasKey ? 'Saved — enter a new key to replace' : 'Enter API key (if required)'} onChange={(e) => setF({ ...f, key: e.target.value })} />
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>Existing keys are not displayed. Leave blank to keep the saved key.</span></label>
+      {cloud && <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13 }}>
+        <input type="checkbox" checked={f.ack} onChange={(e) => setF({ ...f, ack: e.target.checked })} />
+        <span>I understand previews may be sent to this third-party provider.</span>
+      </label>}
+      {result && <div role="status" style={{ fontSize: 13, color: result.ok ? 'var(--ok)' : 'var(--danger)' }}>{result.detail}</div>}
+    </div>
+  </Modal>;
+}
+
 function OrderModal({ ctx, job, title, jobs, src, put }: { ctx: Ctx; job: string; title: string; jobs: Record<string, JobCfg>; src: Src[]; put: (job: string, body: object) => void }) {
   const cfg = jobs[job];
   const name = (id: string) => { const s = src.find((x) => x.id === id); return s ? s.name + (s.model ? ` · ${s.model}` : '') : id; };
@@ -111,7 +158,7 @@ export function useAi(ctx: Ctx): Section {
   const sources = d.data?.sources ?? [];
   const nameOf = (id: string) => { const s = sources.find((x) => x.id === id); return s ? s.name : id; };
   const put = (job: string, body: object) => { void api(`/ai/jobs/${job}`, { method: 'PUT', body }).then(() => j.reload()).catch((e) => ctx.toast(msg(e))); };
-  const manage = () => ctx.modal(<Modal title="AI providers" sub="Keys, models, addresses, tests and removal." width={680} onClose={() => { ctx.modal(null); d.reload(); j.reload(); }}><AiSettings /></Modal>);
+  const manage = (s: Src) => ctx.modal(<EditAi ctx={ctx} source={s} reload={() => { d.reload(); j.reload(); }} />);
   const openOrder = (job: string, title: string) => { if (j.data) ctx.modal(<OrderModal ctx={ctx} job={job} title={title} jobs={j.data.jobs} src={sources} put={(a, b) => { put(a, b); ctx.modal(null); setTimeout(() => ctx.toast('Saved'), 0); }} />); };
   return {
     key: 'ai', name: 'AI', hint: 'Connect one or more providers, then set the order each job tries them in.',
@@ -120,7 +167,7 @@ export function useAi(ctx: Ctx): Section {
       { title: 'Providers', rows: sources.map((s) => ({
         id: `ai-${s.id}`, t: 'link' as const, icon: initials(s.name || s.type), label: s.name || s.type,
         hint: s.shared ? `Shared by this server · ${s.model || 'no model yet'}` : `${s.ready ? 'Connected' : s.why || 'Not ready'} · ${s.model || 'no model yet'}`,
-        meta: s.shared ? 'Shared' : 'Manage', act: s.shared ? () => ctx.toast('Shared AI is managed by an admin in Server → AI') : manage,
+        meta: s.shared ? 'Shared' : 'Manage', act: s.shared ? () => ctx.toast('Shared AI is managed by an admin in Server → AI') : () => manage(s),
         aiColour: { value: s.color ?? '', readonly: !!s.shared, set: (color: string) => {
           void api(`/ai/sources/${s.id}`, { method: 'PUT', body: { color } })
             .then(() => { d.reload(); ctx.toast('Provider colour saved'); })
