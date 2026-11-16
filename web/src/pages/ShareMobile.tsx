@@ -230,7 +230,6 @@ export function ShareMobile(p: Props) {
               <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>{d.kind === 'photo' ? 'A PHOTOGRAPH' : `A PHOTOSHOOT · ${photos.length} ${photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}`}</span>
               <h1 style={{ font: `400 52px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
               {d.description && <p style={{ margin: '2px 0 0', font: `italic 400 21px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
-              {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}
               <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
             {d.allowDownload && (
