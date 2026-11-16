@@ -112,7 +112,7 @@ export function Photo() {
           { label: 'Export XMP', run: () => { window.location.assign(`/api/photos/${p.id}/xmp`); }, toast: 'XMP sidecar written' },
           { label: 'Review again', sep: true, run: async () => { await patch({ reviewAgain: true }); refreshSummary(); }, toast: 'Added back to the review queue' },
           { label: p.archived ? 'Include in review' : 'Leave out of review', run: async () => { await patch({ archived: !p.archived }); }, toast: p.archived ? 'Back in review' : 'Won’t come back for review' },
-          { label: 'Delete photo…', sep: true, danger: true },
+          { label: 'Remove photo from Frames…', sep: true, danger: true },
         ]}
         inComps={inComps.map((c) => ({ name: c.name, state: stateOf(c), open: () => nav(`/collections/${c.id}`) }))}
         renderCompPicker={(close: () => void, done: (m: string) => void) => <CompPicker ids={[p.id]} from={p.title || p.file} onClose={close} onDone={(m) => { colls.reload(); done(m); }} />}
