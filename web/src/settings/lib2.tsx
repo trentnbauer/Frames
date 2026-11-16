@@ -188,7 +188,6 @@ export function useAi(ctx: Ctx): Section {
         return [{ id: `ord-${k}`, t: 'order' as const, label, hint, tog: c.on, togSet: (v: boolean) => put(k, { on: v }), order: { first: act[0] ? nameOf(act[0]) : '—', more: Math.max(0, act.length - 1), open: () => openOrder(k, label) } }];
       }) },
       { title: 'Limits & privacy', rows: [
-        { id: 'aiLimit', t: 'select', label: 'Monthly limit across paid providers', hint: 'When it’s reached, jobs move to a free provider or wait.', opts: ['$5', '$10', '$25', 'No limit'], value: prefs.get('aiLimit', '$10'), set: (v) => { prefs.set('aiLimit', v); ctx.toast('Saved'); } },
         { id: 'aiPrivate', t: 'toggle', label: 'Skip photos with hidden tags', hint: 'They’re never sent to any provider.', value: prefs.get('aiPrivate', true), set: (v) => { prefs.set('aiPrivate', v); ctx.toast('Saved'); } },
         { id: 'aiLocalOnly', t: 'toggle', label: 'Keep private shoots on local AI only', hint: 'Shoots marked private never leave this server.', value: prefs.get('aiLocalOnly', true), set: (v) => { prefs.set('aiLocalOnly', v); ctx.toast('Saved'); } },
       ] },
