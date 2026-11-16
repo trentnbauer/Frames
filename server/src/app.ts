@@ -282,7 +282,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   const ratingAgg = () => new Map(all('SELECT photo_id, COUNT(*) n, AVG(rating) a, MAX(date) d FROM reviews GROUP BY photo_id').map((r) => [r.photo_id as number, { n: r.n as number, a: r.a as number, d: r.d as string }]));
   // Photographs are analysed in the background once AI is on. Errors are retried a few times and never block anything else.
   const ai = tenantProxy(() => tenants.current().ai);
-  const kickAi = (t: Tenant = tenants.current()) => { if (aiConfig(t.db)) void t.ai.run().catch((e) => console.error('AI run failed', e)); };
+  const kickAi = (t: Tenant = tenants.current()) => { if (loadSettings(t.db).aiAutoAnalyse && aiConfig(t.db)) void t.ai.run({ automatic: true }).catch((e) => console.error('AI run failed', e)); };
 
   // ---------- health / settings ----------
   app.get('/api/health', async () => ({ ok: true, version: cfg.version ?? 'dev' }));

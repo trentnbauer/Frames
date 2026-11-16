@@ -26,6 +26,8 @@ export type Settings = {
   gear: Gear;
   /** The id of the AI source in use (Settings, AI), or '' for AI off. */
   aiActive: string;
+  /** Automatically analyse waiting photos after imports and startup; manual actions remain available. */
+  aiAutoAnalyse: boolean;
   /** Worked out from the active source, never stored: 'off', or whether analysis stays on your network. */
   ai: 'off' | 'local' | 'external';
   /** Write approved metadata to .xmp sidecars next to the originals (needs the library mounted writable). */
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   todoReasons: TODO_DEFAULT,
   gear: { ...NO_GEAR },
   aiActive: '',
+  aiAutoAnalyse: true,
   ai: 'off',
   xmpWriteBack: false,
   reviewSize: 12,
@@ -98,6 +101,7 @@ export function saveSettings(db: DB, patch: Partial<Settings>): Settings {
   if (patch.deleteBelow !== undefined) { const n = Number(patch.deleteBelow); next.deleteBelow = Number.isFinite(n) ? Math.min(4.5, Math.max(0, Math.round(n * 2) / 2)) : cur.deleteBelow; }
   if (patch.gear !== undefined) next.gear = cleanGear(patch.gear);
   if (Array.isArray(patch.todoReasons)) next.todoReasons = TODO_REASONS.filter((r) => (patch.todoReasons as unknown[]).includes(r));
+  if (patch.aiAutoAnalyse !== undefined) { if (typeof patch.aiAutoAnalyse !== 'boolean') throw new BadSetting('Choose whether new photos are analysed automatically.'); next.aiAutoAnalyse = patch.aiAutoAnalyse; }
   if (typeof patch.aiActive === 'string') {
     if (patch.aiActive === '') next.aiActive = '';
     else {

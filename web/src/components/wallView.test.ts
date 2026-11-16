@@ -41,7 +41,7 @@ describe('composition wall view', () => {
       const logic = new Logic();
       const print = { id: 1, x: 0, y: 0, size: 'A3', or: 'P', photo: null, framed: false };
       logic.props = { prints: [print], onPrints: vi.fn() };
-      logic.setState({ view: { zoom: 2, x: 80, y: 0 } });
+      logic.setState({ view: { zoom: 2, x: 80, y: 0 }, sel: 1 });
       logic.startDrag({ button: 0, stopPropagation: vi.fn(), clientX: 100, clientY: 100 }, print);
       (logic as unknown as { mv: (e: { clientX: number; clientY: number }) => void }).mv({ clientX: 100 + logic.scale() * 10, clientY: 100 });
       expect(logic.pr()[0].x).toBe(10);
@@ -52,4 +52,30 @@ describe('composition wall view', () => {
       expect(logic.props.onPrints).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
   });
+  it('selects before moving and ignores small pointer movements at every zoom', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    try {
+      for (const zoom of [.5, 1, 4]) {
+        const logic = new Logic() as Logic & { mv?: (event: { clientX: number; clientY: number }) => void; up?: () => void };
+        const print = { id: 1, x: 0, y: 0, size: 'A3', or: 'P', photo: null, framed: false };
+        logic.props = { prints: [print], onPrints: vi.fn() };
+        logic.setState({ view: { zoom, x: 0, y: 0 } });
+        const down = { button: 0, stopPropagation: vi.fn(), clientX: 100, clientY: 100 };
+        logic.startDrag(down, print);
+        expect(logic.state.sel).toBe(1);
+        expect(logic.mv).toBeUndefined();
+        logic.startDrag(down, print);
+        logic.mv!({ clientX: 103, clientY: 102 });
+        logic.up!();
+        expect(logic.pr()).toEqual([print]);
+        expect(logic.props.onPrints).not.toHaveBeenCalled();
+        logic.startDrag(down, print);
+        logic.mv!({ clientX: 130, clientY: 100 });
+        logic.up!();
+        expect(logic.pr()[0].x).not.toBe(0);
+        expect(logic.props.onPrints).toHaveBeenCalledOnce();
+      }
+    } finally { vi.unstubAllGlobals(); }
+  });
+
 });

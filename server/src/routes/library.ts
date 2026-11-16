@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
-import { aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
+import { aiActivity, aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
 import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
@@ -392,7 +392,11 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
 
 
   // ---------- AI ----------
-  const aiStatus = () => ({ enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, sharedUsage: sharedUsage(db) });
+  const aiStatus = () => {
+    const jobs = Object.entries(aiActivity(db).jobs).filter(([, count]) => count! > 0).map(([job]) => job);
+    return { enabled: !!aiConfig(db), ...aiCounts(db), ...x.ai.state, batchRunning: x.ai.state.running,
+      running: x.ai.state.running || jobs.length > 0, jobs, sharedUsage: sharedUsage(db) };
+  };
   app.get('/api/ai/status', async () => aiStatus());
   app.post('/api/ai/run', async (req, rep) => {
     if (!aiConfig(db)) return rep.code(400).send({ error: 'AI is off or not fully set up' });

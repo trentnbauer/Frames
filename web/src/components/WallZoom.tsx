@@ -16,6 +16,7 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
     let pan: { id: number; x: number; y: number; view: WallView } | null = null;
     let pinch: { distance: number; x: number; y: number; view: WallView } | null = null;
     let pinching = false;
+    let space = false;
     const control = (target: EventTarget | null) => target instanceof Element && !!target.closest('[data-wall-control]');
     const point = (x: number, y: number) => {
       const r = wall.getBoundingClientRect();
@@ -33,7 +34,8 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
       latest.current.onView(zoomAt(v, wheelZoom(v.zoom, e.deltaY, e.deltaMode, wall.clientHeight), point(e.clientX, e.clientY)));
     };
     const down = (e: PointerEvent) => {
-      if (control(e.target) || e.button !== 0) return;
+      if (control(e.target) || (e.button !== 0 && e.button !== 1)) return;
+      const navigation = space || e.button === 1;
       if (e.pointerType === 'touch') {
         points.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (points.size >= 2) {
@@ -44,9 +46,11 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
           return;
         }
       }
-      if (e.target instanceof Element && e.target.closest('[data-wall-print]')) return;
+      if (!navigation && e.target instanceof Element && e.target.closest('[data-wall-print]')) return;
+      if (navigation) latest.current.onPinchStart();
+      wall.classList.add('wall-pan-active');
       pan = { id: e.pointerId, x: e.clientX, y: e.clientY, view: latest.current.view };
-      latest.current.onBackground();
+      if (!navigation) latest.current.onBackground();
       e.preventDefault(); e.stopPropagation();
     };
     const move = (e: PointerEvent) => {
@@ -65,13 +69,21 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
     };
     const up = (e: PointerEvent) => {
       points.delete(e.pointerId);
-      if (pan?.id === e.pointerId) pan = null;
+      if (pan?.id === e.pointerId) { pan = null; wall.classList.remove('wall-pan-active'); }
       if (pinching) {
         e.stopImmediatePropagation();
         if (!points.size) { pinching = false; pinch = null; }
       }
     };
-    const clear = () => { points.clear(); pan = null; pinch = null; pinching = false; };
+    const clear = () => { points.clear(); pan = null; pinch = null; pinching = false; space = false; wall.classList.remove('wall-pan-ready', 'wall-pan-active'); };
+    const keyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('input,textarea,select,button,a,[contenteditable="true"],[role="dialog"]')) return;
+      event.preventDefault(); space = true; wall.classList.add('wall-pan-ready');
+    };
+    const keyUp = (event: KeyboardEvent) => { if (event.code === 'Space') { space = false; wall.classList.remove('wall-pan-ready'); } };
+    window.addEventListener('keydown', keyDown);
+    window.addEventListener('keyup', keyUp);
     wall.addEventListener('wheel', wheel, { passive: false });
     wall.addEventListener('pointerdown', down, true);
     window.addEventListener('pointermove', move, { capture: true, passive: false });
@@ -85,6 +97,9 @@ export function WallZoom({ wallRef, view, onView, onPinchStart, onBackground }: 
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
       window.removeEventListener('blur', clear);
+      window.removeEventListener('keydown', keyDown);
+      window.removeEventListener('keyup', keyUp);
+      clear();
     };
   }, [wallRef]);
   return <div data-wall-control="" role="group" aria-label="Wall zoom" onPointerDown={(e) => e.stopPropagation()}

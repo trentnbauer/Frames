@@ -1,3 +1,4 @@
+import { AiIndicator } from './AiIndicator';
 import { TodoNav } from './TodoNav';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -220,6 +221,7 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
+        <AiIndicator />
         <ThemeToggle />
         <Bell open={menu === 'bell'} setOpen={(b) => setMenu(b ? 'bell' : null)} />
         <MoreMenu open={menu === 'more'} setOpen={(b) => setMenu(b ? 'more' : null)} />
