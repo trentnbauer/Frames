@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Imports } from './Imports';
 import { useApi, imgUrl } from '../api';
 import { RATINGS, type PhotoLite } from '../data';
 import ProtoMore from '../proto/ProtoMore';
@@ -18,6 +19,9 @@ const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'O
 /** Stats (design: Proto More, page "stats"): the view model comes straight from the numbers. */
 export function Stats() {
   const nav = useNavigate();
+  // Overview, Community and Imports are tabs of one page; the address keeps the one on show (?tab=imports).
+  const [sp, setSp] = useSearchParams();
+  const statsTab = (['overview', 'community', 'imports'] as const).find((t) => t === sp.get('tab')) ?? 'overview';
   const [year, setYear] = useState('');
   const st = useApi<S>(`/stats${year ? `?year=${year}` : ''}`);
   const cm = useApi<C>('/community/stats');
@@ -29,6 +33,8 @@ export function Stats() {
   const trend = d?.trend ?? [];
   const pts = trend.map((t, i) => `${32 + (trend.length > 1 ? (i / (trend.length - 1)) * 668 : 334)},${140 - ((t.avg - 1) / 4) * 120}`).join(' ');
   const v = d ? {
+    statsTab, importsView: <Imports embedded />,
+    statTabs: (['overview', 'community', 'imports'] as const).map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: statsTab === t, bg: statsTab === t ? 'var(--hair)' : 'transparent', fg: statsTab === t ? 'var(--text)' : 'var(--text2)', go: () => setSp(t === 'overview' ? {} : { tab: t }, { replace: true }) })),
     isStats: true, isTodo: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     ranges: ['', ...d.years.slice(0, 2)].map((y) => ({ label: y || 'All time', bg: year === y ? 'var(--text)' : 'transparent', fg: year === y ? 'var(--bg)' : 'var(--text2)', go: () => setYear(y) })),
     big: [[fmt(d.photos), 'photographs'], [size(d.bytes), 'storage'], [`${d.completePct}%`, 'finished all reviews'], [d.avgRating ? d.avgRating.toFixed(1) : '–', 'average rating'], [fmt(d.inCollections), 'in compositions']].map(([v2, l]) => ({ v: v2, l })),

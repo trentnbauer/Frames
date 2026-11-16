@@ -178,7 +178,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
         </>
       )}
       {phase === 'working' && <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '28px 0', fontSize: 14 }}><Spinner size={18} />{msg}</div>}
-      {phase === 'review' && <><Review res={res} cloud={source === 'cloud'} name={finalName} /><p><Link to="/imports" onClick={onClose}>View per-file import history →</Link></p></>}
+      {phase === 'review' && <><Review res={res} cloud={source === 'cloud'} name={finalName} /><p><Link to="/stats?tab=imports" onClick={onClose}>View per-file import history →</Link></p></>}
     </Modal>
   );
 }
