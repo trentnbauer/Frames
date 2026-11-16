@@ -5,6 +5,7 @@ import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
 import { useStore } from '../store';
+import { getPhotoWalk } from '../photoWalk';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
 import { PhotoColourVariants } from '../components/PhotoColourVariants';
@@ -45,11 +46,12 @@ export function Photo() {
   const here = Number(id);
   const libList = all.data?.photos ?? [];
   const walk = todoKey ? (snapshot.current ?? []).filter((x) => x === here || !live || live.includes(x)) : null;
-  // Stepping through photographs stays inside the photograph's shoot, unless it was opened from the Library (then it follows the Library).
-  const fromLibrary = qs.get('in') === 'library';
-  const stepIds = walk ?? (fromLibrary ? libList : libList.filter((x) => x.shootId === p.shootId)).map((x) => x.id);
+  // Stepping through photographs stays inside the photograph's shoot, unless it was opened from a list (search results, or the Library with its filters): then it steps through exactly that list.
+  const listed = qs.get('in') === 'list' ? getPhotoWalk() : null;
+  const fromList = !!listed && listed.includes(here);
+  const stepIds = walk ?? (fromList ? listed! : libList.filter((x) => x.shootId === p.shootId).map((x) => x.id));
   const idx = stepIds.indexOf(here);
-  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromLibrary ? '?in=library' : ''}`); };
+  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromList ? '?in=list' : ''}`); };
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
   const mates = libList.filter((x) => x.shootId === p.shootId);
   const back = () => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); };
