@@ -475,6 +475,13 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (x.ai.state.running) return rep.code(409).send({ error: 'Analysis is already running. Wait for it to finish, then start it again.' });
       db.prepare('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE has_derivs = 1 AND missing = 0').run();
     }
+    // Chosen photographs (from the selection bar): they go back to waiting, then the run picks them up like any others.
+    const chosen = ((req.body ?? {}) as Row).photoIds;
+    if (Array.isArray(chosen)) {
+      const ids = chosen.filter((v): v is number => Number.isInteger(v)).slice(0, 5000);
+      const mark = db.prepare('UPDATE photos SET ai_status = NULL, ai_attempts = 0 WHERE id = ? AND has_derivs = 1 AND missing = 0');
+      db.transaction(() => { for (const id of ids) mark.run(id); })();
+    }
     const p = x.ai.run();
     if ((req.query as Row).wait === '1') { await p; return aiStatus(); }
     return rep.code(202).send({ started: true });

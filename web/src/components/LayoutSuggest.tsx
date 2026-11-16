@@ -34,7 +34,7 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
     setBusy(false);
     if (r.ok) onSent(); else setErr((await r.json().catch(() => ({}))).error ?? 'Could not send that');
   };
-  const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? 'var(--text)' : 'transparent', color: on ? '#0d0d0d' : 'var(--text)', boxShadow: ring });
+  const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text)', boxShadow: ring });
   return (
     <div className="lay-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <section className="lay-box" role="dialog" aria-label="Suggest a change" style={{ background: 'var(--surface)', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>

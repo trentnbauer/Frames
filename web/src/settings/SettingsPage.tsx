@@ -81,7 +81,7 @@ function FullSettings() {
           <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', fontSize: 13.5 }}>
             {([['lib', <>Your library</>], ['srv', <>Server <span style={{ color: 'var(--muted)' }}>· admin</span></>]] as [Tab, ReactNode][]).map(([k, label]) => (
               <span key={k} role="tab" aria-selected={shownTab === k} tabIndex={0} onClick={() => { setQ(''); setTab(k); }} onKeyDown={(e) => { if (e.key === 'Enter') { setQ(''); setTab(k); } }}
-                style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'var(--chip)' : 'transparent', color: shownTab === k ? 'var(--text)' : 'var(--text2)' }}>{label}</span>
+                style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'var(--btn-bg)' : 'transparent', color: shownTab === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: shownTab === k ? 500 : 400 }}>{label}</span>
             ))}
           </div>
         )}

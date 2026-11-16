@@ -209,6 +209,13 @@ describe('local provider', () => {
     expect(again.done).toBe(2);
     expect((await photos()).every((p) => p.aiStatus === 'done')).toBe(true);
   });
+  it('looks again at just the photographs it is given', async () => {
+    const before = (await photos()).find((p) => p.file === 'harbour.jpg');
+    seen.failNext = 0;
+    const r = (await A.raw('POST', '/api/ai/run?wait=1', { photoIds: [before.id, 'x', null] })).body;
+    expect(r.done).toBe(1); // only the chosen photograph went back to waiting
+    expect((await photos()).every((p) => p.aiStatus === 'done')).toBe(true);
+  });
   it('can be asked to look at the whole library again, which keeps what was accepted', async () => {
     const all = (await photos()) as any[];
     expect(all.every((p) => p.aiStatus === 'done')).toBe(true);

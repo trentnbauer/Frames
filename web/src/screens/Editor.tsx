@@ -1,7 +1,7 @@
 import { confirmAction } from '../components/dialogs';
 import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, imgUrl, useApi } from '../api';
+import { api, imgUrl, roomUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { arrange, dims, FRAMES, type Print } from '../layout';
 import ProtoEditor from '../proto/ProtoEditor';
@@ -136,7 +136,7 @@ export function Editor() {
         onOpenShare={() => setSharing(true)}
         nameControl={readOnly ? <span title={c.name} style={{ font: "400 40px/1 'Instrument Serif',Georgia,serif", whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span> : <EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
         roomControl={<><CompositionVersions id={c.id} readOnly={readOnly} disabled={saving > 0} onChanged={() => { origin.current = null; reload(); }} /><RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} /></>}
-        roomImage={c.background ? { url: `/api/collections/${c.id}/background?v=${c.background.v}`, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
+        roomImage={c.background ? { url: roomUrl(c.id, c.background.v), x: -origin.current.x / 10, y: -origin.current.y / 10, w: c.background.w * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10, h: c.background.h * (c.layout.bg?.mmPerPx ?? Math.max(3300 / c.background.w, 1800 / c.background.h)) / 10 } : null}
         name={c.name} printsKey={JSON.stringify(c.layout.prints)} prints={toDesign(layoutPrints, origin.current)}
         onPrints={(ds: DPrint[]) => saveLayout(fromDesign(ds, layoutPrints, origin.current!))}
         photoMeta={(pid: number) => [title(pid), '', rk.get(pid)?.score ?? 0]} photoDims={(pid: number) => { const p = byId.get(pid); return [p?.w ?? 6000, p?.h ?? 4000]; }} photoUrl={(pid: number) => imgUrl(pid, 'preview')} photoThumb={(pid: number) => imgUrl(pid, 'thumb')}

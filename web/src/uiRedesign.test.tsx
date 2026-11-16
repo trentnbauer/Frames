@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { Footer } from './components/Shell';
+import { MoveToShoot } from './components/MoveToShoot';
 import { isUntitled } from './desktop/LibraryPage';
 import { DeleteShootDialog } from './desktop/parts';
 import { buildTasks } from './todoTasks';
@@ -53,5 +54,11 @@ describe('the redesigned screens', () => {
     const html = renderToStaticMarkup(<Footer />);
     for (const href of ['https://trentbauer.com', 'https://claude.com', 'https://github.com/trentnbauer/Frames']) expect(html).toContain(`href="${href}"`);
     expect(html).toContain('Designed by');
+  });
+  it('moves photographs in one view: search or name a shoot, tick one and Add, or Create', () => {
+    const shoots = [{ id: 1, name: 'Blue Mountains', place: 'Katoomba', dates: '2 Nov 2026', count: 12, coverId: 5, importedAt: '2026-11-05' }, { id: 2, name: 'Bondi', place: '', dates: '19 Oct 2026', count: 8, coverId: null, importedAt: '2026-10-19' }] as unknown as Shoot[];
+    const html = renderToStaticMarkup(<MoveToShoot count={3} shoots={shoots} canOrphan busy={false} onAdd={() => undefined} onCreate={() => undefined} onOrphan={() => undefined} onClose={() => undefined} />);
+    for (const text of ['Recent shoots', 'Blue Mountains', 'Katoomba · 2 Nov 2026', 'Find a shoot, or type a name for a new one', 'No shoot', 'Cancel', 'Add']) expect(html).toContain(text);
+    expect(html).not.toContain('Create');
   });
 });

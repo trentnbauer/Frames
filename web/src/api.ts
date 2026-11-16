@@ -1,4 +1,4 @@
-import { demoApi, demoImage } from './demo/api';
+import { demoApi, demoAssets, demoImage } from './demo/api';
 import { useCallback, useEffect, useState } from 'react';
 
 export async function api<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
@@ -41,6 +41,9 @@ export function useApi<T>(path: string | null) {
  */
 const IMG_REV = 2;
 export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoImage(id, kind) : `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;
+
+/** The room picture behind a composition's wall. */
+export const roomUrl = (id: number, v: number) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoAssets.room : `/api/collections/${id}/background?v=${v}`;
 
 /** Opens the person's own portfolio in a new tab: their own web address if they set one, else their /name/, else /portfolio/. The tab opens first so a pop-up blocker allows it. */
 export async function openPortfolio() {

@@ -280,7 +280,7 @@ function ShareLinkEditor({ kind, targetId, link, onSaved, onBusy, phone, startNe
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderTop: '1px solid var(--hair)' }}>
         <span style={{ fontSize: 14 }}>Expires</span>
         <div role="group" aria-label="Link expires" style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
-          {EXPIRY.map(([l, n]) => { const on = expiryLabel(settings.expiresAt) === l; return <button key={l} aria-pressed={on} disabled={busy} onClick={() => patch({ expiresAt: n === null ? null : inDays(n) })} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 13, background: on ? 'var(--raised2)' : 'transparent', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
+          {EXPIRY.map(([l, n]) => { const on = expiryLabel(settings.expiresAt) === l; return <button key={l} aria-pressed={on} disabled={busy} onClick={() => patch({ expiresAt: n === null ? null : inDays(n) })} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 13, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: on ? 500 : 400 }}>{l}</button>; })}
         </div>
       </div>
       <button onClick={() => { setErr(''); setSheet('invite'); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>

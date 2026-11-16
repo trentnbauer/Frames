@@ -3,7 +3,7 @@
  */
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Settings, Me, Summary } from '../store';
-import { arrange, nextUp, type Mode, type Orientation, type Print } from '../layout';
+import { arrange, bounds, nextUp, type Mode, type Orientation, type Print } from '../layout';
 
 // Stable public sample photographs (not private Frames content). The same ID
 // maps to the same picture everywhere: Library, Photoshoots, detail and walls.
@@ -14,6 +14,9 @@ const sampleIds = [
   71, 75, 83, 89, 96, 101,
   103, 104, 106, 119, 122, 124,
 ];
+/** A sample room picture (2000 × 1400 px) behind the first composition. Set by demo/main.tsx so only the demo build ships it. */
+export const demoAssets = { room: '' };
+
 // These sample photographs are portrait, so the demo has some for portrait prints.
 const portraitIds = new Set([4, 11, 17]);
 export function demoImage(id: number, kind: 'thumb' | 'preview' = 'thumb'): string {
@@ -61,11 +64,19 @@ const framed = (n:number,photoId:number,size:string,orientation:Orientation,colo
   ({id:n,size,orientation,frame:{size:nextUp(size),mat:'white',color},photoId,stack:false,photoId2:null,x:0,y:0});
 const makeCollection = (id:number,name:string,ids:number[],stage:'progress'|'review'|'done',mode:Mode,prints:Print[]):Collection => ({
   id,name,stage,updatedAt:now,description:'An example composition',theme:'',target:null,photoIds:ids,
-  chosenIds:prints.map(p=>p.photoId!),printedAt:null,layout:{mode,prints:arrange(prints,mode),ppi:300},layoutSaved:true
+  chosenIds:prints.map(p=>p.photoId!),printedAt:null,layout:{mode,prints:mode==='free'?prints:arrange(prints,mode),ppi:300},layoutSaved:true
 });
+// The room picture is 4.2 m across at this scale; its sofa is centred 2.24 m from the left with its back 1.74 m down.
+const ROOM_MM_PER_PX=2.1;
+/** Lays the prints out as a feature wall, then hangs the group centred above the sofa, 20 cm clear of its back. */
+function overSofa(prints:Print[]):Print[]{
+  const laid=arrange(prints,'feature'),b=bounds(laid),dx=2240-(b.x0+b.w/2),dy=1540-(b.y0+b.h);
+  return laid.map(p=>({...p,x:Math.round(p.x+dx),y:Math.round(p.y+dy)}));
+}
+const roomWall=makeCollection(1,'Places & spaces',[1,2,3,4,11,14,15],'progress','free',
+  overSofa([framed(1,1,'A3','landscape','black'),framed(2,4,'A5','portrait','black'),framed(3,11,'A5','portrait','black')]));
 let collections:Collection[] = [
-  makeCollection(1,'Places & spaces',[1,2,3,4,11,14,15],'progress','feature',
-    [framed(1,1,'A3','landscape','black'),framed(2,4,'A5','portrait','black'),framed(3,11,'A5','portrait','black')]),
+  {...roomWall,background:{w:2000,h:1400,v:1},layout:{...roomWall.layout,bg:{mmPerPx:ROOM_MM_PER_PX}}},
   makeCollection(2,'Summer colours',[7,8,9,10],'review','row',[framed(1,7,'8×10″','landscape','oak')]),
   makeCollection(3,'City geometry',[13,14,16,17],'done','row',[framed(1,17,'A3','portrait','black')])
 ];

@@ -113,9 +113,8 @@ export function Review() {
       onLeaveOut={async () => { if (cur) { await api(`/photos/${cur.id}`, { method: 'PATCH', body: { archived: true } }).catch(() => undefined); await move(s.index + 1); } }}
       onUndo={async () => { if (s.index > 0) await move(s.index - 1); }}
       delSub={`${s.shootName ?? 'This photo'} · photo ${s.index + 1} of ${s.queue.length}`}
-      delWarn={`${inComps ? `It’s in ${inComps} composition${inComps === 1 ? '' : 's'}. ` : ''}It will be removed from all of them, along with its ratings and tags.`}
-      trashHint="The original file and its XMP sidecar, if Frames holds them"
-      onDelete={async (mode: 'frames' | 'trash') => { if (!cur) return; try { await api('/photos/remove', { body: { ids: [cur.id], originals: mode === 'trash' ? 'trash' : 'keep' } }); refreshSummary(); await move(s.index + 1); } catch (e) { setSaveErr(`Not deleted (${(e as Error).message}).`); } }}
+      delWarn={inComps ? `It will be taken out of ${inComps} composition${inComps === 1 ? '' : 's'}, along with its ratings and tags.` : 'Its ratings and tags go with it.'}
+      onDelete={async () => { if (!cur) return; try { await api('/photos/remove', { body: { ids: [cur.id], originals: 'keep' } }); refreshSummary(); await move(s.index + 1); } catch (e) { setSaveErr(`Not deleted (${(e as Error).message}).`); } }}
       error={saveErr}
     />
     {favModal}

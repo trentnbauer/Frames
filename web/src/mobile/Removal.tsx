@@ -66,7 +66,7 @@ export function MobileRemoval({ onChanged, onLeave }: { onChanged: () => void; o
         </div>
       )}
       {asking && (
-        <Sheet title="Remove this photo from Frames?" sub="Its reviews, tags and composition places go with it. The original file is kept." onClose={() => setAsking(false)}>
+        <Sheet title="Remove this photo from Frames?" sub="Its reviews, tags and composition places go with it. The original isn’t touched and won’t be imported again." onClose={() => setAsking(false)}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => setAsking(false)} style={{ height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Cancel</button>
             <button disabled={busy} onClick={() => act('delete')} style={{ ...primaryBtn, height: 46, padding: '0 22px', fontSize: 14.5, background: 'var(--danger)', color: '#0d0d0d' }}>Remove</button>
