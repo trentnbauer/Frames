@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { CompPicker } from '../components/AddToComposition';
 import { SharePanel } from '../components/SharePanel';
+import { MoveToShoot } from '../components/MoveToShoot';
 import { Sheet } from '../components/Sheet';
 import { RATINGS, fmtDate, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
@@ -177,7 +178,9 @@ export function MobilePhoto() {
       {sharing && <SharePanel kind="photo" id={p.id} name={p.title || p.file} onClose={() => setSharing(false)} />}
       {sheet === 'move' && (
         <Sheet title="Move to a shoot" onClose={() => setSheet(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>{(shoots.data ?? []).filter((s) => s.id !== p.shootId).map((s) => <button key={s.id} onClick={() => moveTo(s)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left' }}><span style={{ flex: 1, fontSize: 15 }}>{s.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{s.count}</span></button>)}</div>
+          <MoveToShoot phone count={1} shoots={(shoots.data ?? []).filter((s) => s.id !== p.shootId)} canOrphan={!p.orphaned} busy={false} error={err} onAdd={(s) => void moveTo(s)} onClose={() => setSheet(null)}
+            onCreate={async (name) => { try { await api('/shoots', { body: { name, photoIds: [p.id] } }); setSheet(null); photo.reload(); say(`Moved to “${name}”`); } catch (e) { setErr((e as Error).message); } }}
+            onOrphan={async () => { try { await api('/photos/orphan', { body: { photoIds: [p.id] } }); setSheet(null); photo.reload(); say('Now in no shoot'); } catch (e) { setErr((e as Error).message); } }} />
         </Sheet>
       )}
       {sheet === 'comp' && <CompPicker ids={[p.id]} onClose={() => setSheet(null)} onDone={(m) => { setSheet(null); say(m); }} />}
