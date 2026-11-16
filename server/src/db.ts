@@ -400,6 +400,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'reviews', 'bin', 'INTEGER NOT NULL DEFAULT 0');
   },
+  // A protected shoot cannot be removed manually or by low-rating cleanup.
+  (db) => { addColumn(db, 'shoots', 'protected', 'INTEGER NOT NULL DEFAULT 0'); },
 ];
 
 export function migrate(db: DB) {

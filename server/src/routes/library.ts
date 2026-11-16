@@ -105,6 +105,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.delete('/api/shoots/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);
+    if (one('SELECT protected FROM shoots WHERE id = ?', id)?.protected) return rep.code(409).send({ error: 'Unprotect this shoot before removing it.' });
     return removeShoot(db, cfg, id);
   });
   app.patch('/api/shoots/:id', async (req, rep) => {
@@ -113,6 +114,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     if ('photoDate' in b && (typeof b.photoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.photoDate) || !Number.isFinite(Date.parse(b.photoDate)) || new Date(b.photoDate).toISOString().slice(0, 10) !== b.photoDate)) return rep.code(400).send({ error: 'Choose a valid photoshoot date.' });
 
+    if ('protected' in b) {
+      if (typeof b.protected !== 'boolean') return rep.code(400).send({ error: 'protected must be true or false' });
+      db.prepare('UPDATE shoots SET protected = ? WHERE id = ?').run(b.protected ? 1 : 0, id);
+    }
     if (typeof b.name === 'string' && b.name.trim()) db.prepare('UPDATE shoots SET name = ? WHERE id = ?').run(b.name.trim().slice(0, 120), id);
     const before = one('SELECT * FROM shoots WHERE id = ?', id)!;
     const everyPhoto = b.overwrite === true; // the person chose to change every photograph in the shoot, even ones with their own value

@@ -21,11 +21,13 @@ export function removePhotos(db: DB, cfg: Cfg, ids: number[], originals: Origina
   pruneRecovery(db);
   originals = 'keep'; // Recoverable removal never deletes or moves an original.
   const pick = db.prepare('SELECT id, path, file, hash FROM photos WHERE id = ?');
+  const protectedPhoto = db.prepare('SELECT 1 FROM photos p JOIN shoots s ON s.id = p.shoot_id WHERE p.id = ? AND s.protected = 1');
   const forget = db.prepare('INSERT OR REPLACE INTO removed(hash, path, file, removed_at) VALUES(?, ?, ?, ?)');
   const now = new Date().toISOString();
   for (const id of [...new Set(ids)].filter((n) => Number.isInteger(n))) {
     const p = pick.get(id) as { id: number; path: string; file: string; hash: string } | undefined;
     if (!p) continue;
+    if (protectedPhoto.get(id)) { res.kept++; continue; }
     db.transaction(() => {
       captureRemoval(db, id, cfg.dataDir);
       forget.run(p.hash, p.path, p.file, now);
@@ -44,6 +46,7 @@ export function removePhotos(db: DB, cfg: Cfg, ids: number[], originals: Origina
 
 /** A photoshoot and every photograph in it. */
 export function removeShoot(db: DB, cfg: Cfg, id: number): RemoveResult {
+  if ((db.prepare('SELECT protected FROM shoots WHERE id = ?').get(id) as { protected?: number } | undefined)?.protected) throw new Error('Unprotect this shoot before removing it.');
   const ids = (db.prepare('SELECT id FROM photos WHERE shoot_id = ?').all(id) as { id: number }[]).map((r) => r.id);
   const res = removePhotos(db, cfg, ids);
   db.prepare("DELETE FROM shares WHERE kind = 'shoot' AND target_id = ?").run(id);
@@ -58,6 +61,7 @@ export function deleteSuggestions(db: DB, sessions: number, below: number, limit
     SELECT p.id, p.title, p.file, p.shoot_id shootId, ROUND(AVG(r.rating), 2) avg, COUNT(r.id) reviews
     FROM photos p JOIN reviews r ON r.photo_id = p.id LEFT JOIN removal_kept k ON k.photo_id = p.id
     WHERE p.missing = 0
+      AND NOT EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND s.protected = 1)
       AND NOT EXISTS (SELECT 1 FROM collection_photos cp WHERE cp.photo_id = p.id)
       AND NOT EXISTS (SELECT 1 FROM version_photos vp WHERE vp.photo_id = p.id)
       AND NOT EXISTS (SELECT 1 FROM shares sh WHERE sh.kind = 'shoot' AND sh.target_id = p.shoot_id AND sh.revoked = 0 AND (sh.expires_at IS NULL OR sh.expires_at > ?))${onlyId === undefined ? '' : ' AND p.id = ?'}
