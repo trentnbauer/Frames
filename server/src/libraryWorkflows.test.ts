@@ -100,6 +100,15 @@ describe('recoverable changes', () => {
     expect(row(ids[0]).camera).toBe(before.camera);
   });
 });
+describe('light and mood notes', () => {
+  it('writes them into the analysis so To do stops asking, and keeps the rest of it', async () => {
+    env.db.prepare("UPDATE photos SET ai_status='done', ai_json=? WHERE id=?").run(JSON.stringify({ description: 'A harbour', lighting: '', mood: '' }), ids[0]);
+    expect(((await a.get('/api/todo')).body.items as any[]).find((i) => i.key === 'light')).toBeUndefined();
+    const resp = await a.patch(`/api/photos/${ids[0]}`, { lighting: 'Soft side light', mood: 'Calm' });
+    expect(resp.status).toBe(200);
+    expect(JSON.parse(row(ids[0]).ai_json)).toEqual({ description: 'A harbour', lighting: 'Soft side light', mood: 'Calm' });
+  });
+});
 describe('library score ordering', () => {
   it('pools your ratings with guests ratings and leaves unrated photographs out', async () => {
     const now = new Date().toISOString();
