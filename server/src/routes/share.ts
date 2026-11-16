@@ -124,7 +124,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       else if (typeof b.pin === 'string' && /^\d{4}$/.test(b.pin) && !isWeakPin(b.pin)) pin = b.pin;
       else return rep.code(400).send({ error: PIN_ERR });
       sets.push('pin = ?'); args.push(pin);
-      for (const k of [...pinFails.keys()]) if (k.startsWith(`${id}|`)) pinFails.delete(k); // a new PIN gives everyone a fresh start
+      for (const k of [...pinFails.keys()]) if (k.startsWith(`${x.tenant().user.id}|${id}|`)) pinFails.delete(k); // a new PIN gives everyone a fresh start
     }
     if(b.versionId!==undefined){sets.push('version_id=?');args.push(b.versionId);}
     if (typeof b.label === 'string') { sets.push('label = ?'); args.push(b.label.slice(0, 80)); }
@@ -229,7 +229,10 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   // A device is a cookie we hand out; five wrong PINs lock the link on that device for 15 minutes. The cookie that says "PIN passed" is signed,
   // names the link and the PIN it was for, so changing the PIN signs everyone out.
   const shareKey = (): string => { let k = getSetting<string>(x.sys, 'shareKey', ''); if (!k) { k = crypto.randomBytes(32).toString('hex'); setSetting(x.sys, 'shareKey', k); } return k; };
-  const pinSig = (share: Row) => crypto.createHmac('sha256', shareKey()).update(`${share.id}|${share.pin}`).digest('base64url');
+  // The signature covers the owning library, the link id, its token and the PIN, so a cookie from another library's link (same id, same PIN) is never accepted.
+  const linkKey = (share: Row) => `${x.tenant().user.id}|${share.id}|${share.token}`;
+  const pinCookie = (share: Row) => `frames_pin_${crypto.createHash('sha256').update(linkKey(share)).digest('base64url').slice(0, 16)}`;
+  const pinSig = (share: Row) => crypto.createHmac('sha256', shareKey()).update(`${linkKey(share)}|${share.pin}`).digest('base64url');
   const cookieOf = (req: any, name: string) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(String(req.headers.cookie ?? ''))?.[1];
   const deviceOf = (req: any, cookies: string[]) => {
     let d = cookieOf(req, 'frames_dev');
@@ -241,12 +244,12 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
   };
   const pinPassed = (share: Row, req: any) => {
     if (!share.pin) return true;
-    const c = cookieOf(req, `frames_pin_${share.id}`) ?? '';
+    const c = cookieOf(req, pinCookie(share)) ?? '';
     const want = pinSig(share);
     return c.length === want.length && crypto.timingSafeEqual(Buffer.from(c), Buffer.from(want));
   };
   const canSuggest = (share: Row) => (share.allow_suggest === null || share.allow_suggest === undefined ? !!share.allow_review : !!share.allow_suggest);
-  const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${share.id}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
+  const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${linkKey(share)}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
 
   app.post('/api/shares/:id/regenerate', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -415,7 +418,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!share.pin) return { ok: true };
     const cookies: string[] = [];
     const dev = deviceOf(req, cookies);
-    const key = `${share.id}|${dev}`;
+    const key = `${linkKey(share)}|${dev}`;
     const reply = (code: number, body: Row) => { if (cookies.length) rep.header('Set-Cookie', cookies); return rep.code(code).send(body); };
     const wait = lockOf(share, dev);
     if (wait) return reply(429, { error: 'Too many wrong PINs. This link is locked on this device for a while.', lockedFor: wait });
@@ -423,7 +426,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const a = Buffer.from(given.padEnd(8).slice(0, 8)), b = Buffer.from(String(share.pin).padEnd(8).slice(0, 8));
     if (/^\d{4}$/.test(given) && crypto.timingSafeEqual(a, b)) {
       pinFails.delete(key);
-      cookies.push(`frames_pin_${share.id}=${pinSig(share)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
+      cookies.push(`${pinCookie(share)}=${pinSig(share)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
       return reply(200, { ok: true });
     }
     const f = pinFails.get(key) ?? { n: 0, until: 0 };

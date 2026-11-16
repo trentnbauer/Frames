@@ -68,6 +68,20 @@ describe('recoverable changes', () => {
     expect((await a.get('/api/recovery')).body).toEqual([]);
     expect((await a.post(`/api/recovery/${recovery.id}/restore`)).status).toBe(410);
   });
+  it('answers 409, keeps the snapshot and restores after reconnecting when the original is unreadable', async () => {
+    const file = row(ids[1]).path,
+      bytes = fs.readFileSync(file);
+    await a.del(`/api/photos/${ids[1]}`);
+    const recovery = (await a.get('/api/recovery')).body[0];
+    fs.unlinkSync(file);
+    fs.mkdirSync(file); // a directory where the file was: hashing fails with EISDIR
+    const blocked = await a.post(`/api/recovery/${recovery.id}/restore`);
+    expect(blocked.status).toBe(409);
+    expect((await a.get('/api/recovery')).body.map((r: any) => r.id)).toContain(recovery.id);
+    fs.rmdirSync(file);
+    fs.writeFileSync(file, bytes);
+    expect((await a.post(`/api/recovery/${recovery.id}/restore`)).status).toBe(200);
+  });
   it('undoes manual edits and refuses to overwrite subsequent changes', async () => {
     const original = row(ids[0]).camera;
     const first = await a.patch(`/api/photos/${ids[0]}`, { camera: 'Minolta XD' });
@@ -87,6 +101,22 @@ describe('recoverable changes', () => {
   });
 });
 describe('batch edits and owned aliases', () => {
+  it('lets a bulk edit accept a previously rejected tag or subject', async () => {
+    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkrej','tag','ai',-1)").run(ids[0]);
+    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkrejs','subject','ai',-1)").run(ids[0]);
+    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkok','tag','ai',1)").run(ids[0]);
+    const body = { ids: [ids[0]], patch: { tags: ['bulkrej', 'bulkok'], subjects: ['bulkrejs'] } };
+    const preview = (await a.post('/api/photos/bulk-preview', body)).body;
+    expect(preview.counts).toMatchObject({ tags: 1, subjects: 1 });
+    const applied = await a.post('/api/photos/bulk-apply', { ...body, versions: preview.versions });
+    expect(applied.status).toBe(200);
+    const acc = (name: string) => (env.db.prepare('SELECT accepted,source FROM tags WHERE photo_id=? AND name=?').get(ids[0], name) as any);
+    expect(acc('bulkrej')).toEqual({ accepted: 1, source: 'user' });
+    expect(acc('bulkrejs')).toEqual({ accepted: 1, source: 'user' });
+    expect(acc('bulkok').source).toBe('ai');
+    expect((await a.post(`/api/changes/${applied.body.operationId}/undo`)).status).toBe(200);
+    expect(acc('bulkrej').accepted).toBe(-1);
+  });
   it('previews fill-blanks changes, applies once and undoes the whole batch', async () => {
     await a.patch(`/api/photos/${ids[0]}`, { camera: 'Keep me' });
     const body = { ids, patch: { camera: 'Minolta XD', lens: 'MD 50mm', tags: ['car'] }, fillBlanks: true };

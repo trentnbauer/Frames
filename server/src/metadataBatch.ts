@@ -86,7 +86,7 @@ export function metadataBatch(db: DB, body: Row, apply: boolean) {
       for (const [field, value] of Object.entries(patch)) {
         if (field === 'tags' || field === 'subjects') {
           const kind = field === 'tags' ? 'tag' : 'subject';
-          const absent = (value as string[]).filter((name) => !tags.some((t) => t.name === name && t.kind === kind && t.accepted));
+          const absent = (value as string[]).filter((name) => !tags.some((t) => t.name === name && t.kind === kind && t.accepted === 1));
           if (absent.length) {
             tagChanges = true;
             counts[field] = (counts[field] ?? 0) + 1;
