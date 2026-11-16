@@ -11,6 +11,7 @@ import { CompPicker } from './CompPicker';
 import ProtoLibrary from '../proto/ProtoLibrary';
 import { usePhoneWidth } from '../usePhoneWidth';
 import { MobileLibrary } from '../mobile/Library';
+import { LibraryPage } from '../desktop/LibraryPage';
 import { reviewUrl } from '../reviewScope';
 
 const REVIEW_OPTIONS = [['', 'All review states'], ['due', 'Due now'], ['unrated', 'Unrated'], ['waiting', 'Waiting for next review'], ['complete', 'Review complete'], ['excluded', 'Left out of review']];
@@ -33,7 +34,17 @@ const Item = ({ on, onClick, children }: { on?: boolean; onClick: () => void; ch
 
 /** Library: the design's screen, driven by the real photographs, shoots and filters (all filters live in the address). */
 export function Library() {
-  return usePhoneWidth() ? <MobileLibrary /> : <DesktopLibrary />;
+  const phone = usePhoneWidth();
+  const [sp, setSp] = useSearchParams();
+  if (phone) return <MobileLibrary />;
+  // The design's Library (Shoots and Photos views); the full set of filters, grouping and bulk edits stays one click away.
+  if (!sp.get('adv')) return <LibraryPage moreFilters={() => { const n = new URLSearchParams(sp); n.set('adv', '1'); n.set('view', 'photos'); setSp(n); }} />;
+  return (
+    <>
+      <div style={{ padding: '20px 56px 0' }}><button className="btn outline" onClick={() => { const n = new URLSearchParams(); n.set('view', 'photos'); setSp(n); }}>← Simple library view</button></div>
+      <DesktopLibrary />
+    </>
+  );
 }
 
 function DesktopLibrary() {

@@ -5,6 +5,7 @@ import { Fit, Img, Mark, useKey } from '../components/bits';
 import { PrintModal, Wall } from '../components/CompositionWall';
 import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, usePhone } from './ShareMobile';
+import { ShareShoot } from './ShareShoot';
 import { HumanCheck } from '../components/HumanCheck';
 import { FRAMES, WALL_BG, arrange, bounds, metres, newPrintId, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
@@ -175,6 +176,16 @@ export function SharePage() {
           mine={mine} frames={frames} others={viewOthers} swap={swap} setFrame={setFrame} changes={changes} dirty={dirty} sending={sending} sendNote={sendNote} sendBack={sendBack} discard={discard} sugErr={sugErr} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }}
           openLayout={() => setRelayout(true)} layoutSent={relayoutSent} />
         {relayout && d.layout && <LayoutSuggest token={token} start={wallPrints} mode={d.layout.mode === 'free' ? 'free' : d.layout.mode} photos={wallPhotos} photoPrints={viewPrints} candidates={viewOthers} pick={dropOn} undo={(i) => { const o = photosOf(wallPrints[i])[0]; if (o !== undefined) swap(o, null); }} isSwapped={(i) => { const o = photosOf(wallPrints[i])[0]; return o !== undefined && mine[o] !== undefined; }} error={sugErr} reviewer={reviewer} onClose={() => setRelayout(false)} onSent={() => { setRelayout(false); setRelayoutSent(true); }} />}
+        {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
+      </>
+    );
+  }
+
+  // A shared photoshoot has its own page in the design: hero, grid, floating progress bar, viewer that rates.
+  if (d.kind === 'shoot') {
+    return (
+      <>
+        <ShareShoot token={token} d={d} photos={photos} reviewer={reviewer} setName={setName} withName={withName} dl={dl} download={download} cancelDl={() => { cancelled.current = true; }} />
         {asking && <NameBox initial={reviewer} token={token} title={d.name} owner={d.owner} signIn={d.signIn ?? []} emailCode={!!d.emailCode} onCancel={() => setAsking(null)} onDone={(n) => { setName(n); const go = asking; setAsking(null); go(n); }} />}
       </>
     );

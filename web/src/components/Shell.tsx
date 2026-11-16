@@ -242,10 +242,14 @@ export function Header({ right }: { right?: ReactNode }) {
 export function BottomNav() {
   const { todo, removals, todoItems } = useStore();
   const ui = useUi();
+  const here = useLocation().pathname;
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
-      {item('/', 'Home')}{item('/shoots', 'Shoots')}{item('/library', 'Library')}{item('/collections', 'Compositions')}
+      {item('/', 'Home')}
+      {/* One Library item: its Shoots and Photos views, a shoot and a photograph all belong to it. */}
+      <NavLink to="/library" className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>
+      {item('/collections', 'Compositions')}
       <i className="bdiv" />
       <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
       <TodoNav total={todo} removals={removals} items={todoItems} />

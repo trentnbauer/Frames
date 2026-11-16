@@ -1,0 +1,126 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { imgUrl, useApi } from '../api';
+import { AddPhotosModal } from '../components/AddPhotos';
+import type { PhotoLite, Shoot } from '../data';
+import { JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
+
+const mono = "'IBM Plex Mono',monospace";
+const SHOOT_CHIPS: [string, string][] = [['due', 'Has photos due'], ['prot', 'Protected'], ['untitled', 'Untitled']];
+const PHOTO_CHIPS: [string, string][] = [['due', 'Due for review'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location']];
+/** A shoot nobody has named keeps the date (or nothing) it was given. */
+export const isUntitled = (s: Shoot) => !s.name.trim() || /^\d{1,2} [A-Za-z]{3} \d{4}$/.test(s.name.trim());
+
+/** Library on a wide screen (the design): one page with Shoots and Photos views, a search, chips, and a Select mode for the photos. */
+export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
+  const nav = useNavigate();
+  const [sp, setSp] = useSearchParams();
+  const view = sp.get('view') === 'photos' ? 'photos' : 'shoots';
+  const [q, setQ] = useState('');
+  const [chip, setChip] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [adding, setAdding] = useState(sp.get('add') === '1');
+  const shoots = useApi<Shoot[]>('/shoots');
+  const photos = useApi<{ total: number; photos: PhotoLite[] }>('/photos');
+  const pending = useApi<{ count: number }>('/library/pending');
+  const toast = useToast();
+  const all = shoots.data ?? [];
+  const list = photos.data?.photos ?? [];
+  const needle = q.trim().toLowerCase();
+  const setView = (v: string) => { const n = new URLSearchParams(sp); if (v === 'photos') n.set('view', 'photos'); else n.delete('view'); n.delete('add'); setSp(n, { replace: true }); setChip(null); setSelecting(false); setPicked(new Set()); };
+  const reload = () => { shoots.reload(); photos.reload(); };
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('input,textarea,select,[role=dialog]') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() === 's' && view === 'photos') setSelecting((s) => { if (s) setPicked(new Set()); return !s; });
+      else if (e.key.toLowerCase() === 'a') setAdding(true);
+      else if (e.key === 'Escape' && selecting) { setSelecting(false); setPicked(new Set()); }
+    };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, [view, selecting]);
+
+  const shootCards = all.filter((s) => {
+    if (needle && ![s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle)) return false;
+    if (chip === 'due') return s.dueCount > 0;
+    if (chip === 'prot') return !!s.protected;
+    if (chip === 'untitled') return isUntitled(s);
+    return true;
+  });
+  const shootName = new Map(all.map((s) => [s.id, s]));
+  const match = (p: PhotoLite) => (!needle || [p.title, p.file, p.place, p.camera, shootName.get(p.shootId)?.name ?? ''].join(' ').toLowerCase().includes(needle))
+    && (!chip || (chip === 'due' && isDue(p)) || (chip === 'unrated' && p.reviewCount === 0) || (chip === 'loved' && p.avgRating >= 4.5) || (chip === 'noplace' && !p.place && p.lat === null));
+  const groups = useMemo(() => all.map((s) => ({ s, ps: list.filter((p) => p.shootId === s.id && match(p)) })).filter((g) => g.ps.length), [all, list, needle, chip]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = photos.data?.total ?? list.length;
+  const year = all[0]?.importedAt?.slice(0, 4) ?? String(new Date().getFullYear());
+  const flip = (id: number) => setPicked((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const chips = view === 'shoots' ? SHOOT_CHIPS : PHOTO_CHIPS;
+
+  return (
+    <div className="page-shell" data-screen-label="Library">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Library</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{total.toLocaleString()} photographs · {all.length} shoots</span></div>
+        <button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>Add photos<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>A</span></button>
+      </div>
+      {(pending.data?.count ?? 0) > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 14 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)' }} /><span style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{pending.data!.count} new files</b> <span style={{ color: 'var(--text2)' }}>in your library folder</span></span>
+          <button className="btn outline" onClick={() => setAdding(true)}>Import {pending.data!.count}</button>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
+        <div role="tablist" aria-label="Show" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}>
+          {([['shoots', 'Shoots', all.length], ['photos', 'Photos', total]] as const).map(([k, l, n]) => <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 16px', borderRadius: 999, fontSize: 13.5, background: view === k ? 'var(--raised2)' : 'transparent', color: view === k ? 'var(--text)' : 'var(--text2)' }}>{l}<span style={{ font: `400 11px ${mono}`, color: 'var(--faint)' }}>{n}</span></button>)}
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={view === 'shoots' ? 'Find a shoot, place or year' : 'Search titles, places, cameras, tags'} aria-label="Search the library" style={{ flex: 1, minWidth: 220, height: 40, borderRadius: 999, background: 'var(--surface)', border: 0, outline: 'none', padding: '0 18px', color: 'var(--text)', fontSize: 14 }} />
+        {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} aria-pressed={selecting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 14, whiteSpace: 'nowrap', background: selecting ? 'var(--btn-bg)' : 'transparent', color: selecting ? 'var(--btn-fg)' : 'var(--text)', boxShadow: selecting ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{selecting ? 'Done' : 'Select'}<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>S</span></button>}
+        {chips.map(([k, l]) => { const on = chip === k; return <button key={k} aria-pressed={on} onClick={() => setChip(on ? null : k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: on ? 'var(--chip)' : 'var(--hover)', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
+        {view === 'photos' && <button onClick={moreFilters} style={{ fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>More filters</button>}
+      </div>
+
+      {view === 'shoots' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16, borderBottom: '1px solid var(--hair)', paddingBottom: 8 }}><span style={{ font: `400 22px ${serif}` }}>{year}</span><span style={{ fontSize: 12.5, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{all.length} shoots · {total} photographs</span></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: '28px 16px' }}>
+            {shootCards.map((s) => (
+              <button key={s.id} onClick={() => nav(`/shoots/${s.id}`)} style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', minWidth: 0 }}>
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '1.6', borderRadius: 8, marginBottom: 10, background: `${s.coverId ? `url(${imgUrl(s.coverId, 'thumb')}) center/cover ` : ''}var(--surface)` }}>
+                  {s.dueCount > 0 && <span style={{ position: 'absolute', left: 8, bottom: 8, fontSize: 11.5, background: 'rgba(0,0,0,.62)', padding: '3px 8px', borderRadius: 999, color: '#efede8' }}>{s.dueCount} due</span>}
+                  {s.protected && <span title="Protected from deletion" style={{ position: 'absolute', right: 8, top: 8, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, background: 'rgba(0,0,0,.62)', padding: '3px 9px 3px 7px', borderRadius: 999, color: '#efede8' }}><Lock size={12} />Protected</span>}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}><span style={{ font: `400 20px ${serif}`, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name.trim() || 'Untitled shoot'}</span><span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>{s.count}</span></div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.place || 'No place'} · {s.dates}</div>
+              </button>
+            ))}
+          </div>
+          {shoots.data && shootCards.length === 0 && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>{all.length === 0 ? 'No photoshoots yet. Add photos to start one.' : 'No shoots match that.'}</div>}
+        </>
+      )}
+
+      {view === 'photos' && (
+        <>
+          {groups.map(({ s, ps }) => (
+            <div key={s.id} style={{ marginBottom: 36 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
+                  <button onClick={() => nav(`/shoots/${s.id}`)} style={{ font: `400 24px/1 ${serif}`, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)' }}>{s.name.trim() || 'Untitled shoot'}</button>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{s.dates} · {ps.length} photos</span>
+                  {s.protected && <span aria-label="Protected from deletion" style={{ color: 'var(--text2)' }}><Lock size={13} /></span>}
+                </div>
+                {selecting ? <button onClick={() => setPicked((c) => { const n = new Set(c); const every = ps.every((p) => n.has(p.id)); ps.forEach((p) => (every ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>{ps.every((p) => picked.has(p.id)) ? 'Clear' : 'Select all'}</button>
+                  : <button onClick={() => nav(`/shoots/${s.id}`)} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>Open shoot →</button>}
+              </div>
+              <JustifiedGrid photos={ps} selecting={selecting} picked={picked} due={isDue} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}?in=library`))} />
+            </div>
+          ))}
+          {photos.data && groups.length === 0 && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>No photographs match that.</div>}
+        </>
+      )}
+
+      {selecting && <PickedBar ids={[...picked]} photos={list} shoots={all} onClear={() => setPicked(new Set())} onChanged={reload} say={toast.say} />}
+      {adding && <AddPhotosModal onClose={() => { setAdding(false); if (sp.get('add')) { const n = new URLSearchParams(sp); n.delete('add'); setSp(n, { replace: true }); } }} onDone={reload} />}
+      {toast.node}
+    </div>
+  );
+}

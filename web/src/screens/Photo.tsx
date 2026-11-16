@@ -1,3 +1,5 @@
+import { usePhoneWidth } from '../usePhoneWidth';
+import { MobilePhoto } from '../mobile/Photo';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -18,6 +20,10 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** One photograph (design: Proto Photo): rate, name, date and season, place, tags, print size, compositions. */
 export function Photo() {
+  return usePhoneWidth() ? <MobilePhoto /> : <DesktopPhoto />;
+}
+
+function DesktopPhoto() {
   const { id } = useParams();
   const nav = useNavigate();
   const { settings, refreshSummary } = useStore();
