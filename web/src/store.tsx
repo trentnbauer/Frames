@@ -3,7 +3,7 @@ import type { MfaStatus } from './components/TwoFactor';
 import { api } from './api';
 
 export type Settings = {
-  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; autoRemove: boolean; autoRemoveBelow: number; autoRemoveAfter: number; deleteBelow: number; todoReasons: string[]; gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
+  sessions: number; intervals: string[]; adaptive: boolean; archiveSuggest: boolean; autoRemove: boolean; autoRemoveBelow: number; autoRemoveAfter: number; binVotes: number; deleteBelow: number; todoReasons: string[]; gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
   ai: 'off' | 'local' | 'external'; aiActive: string; aiAutoAnalyse: boolean;
   xmpWriteBack: boolean;
   reviewSize: number; ratingStyle: 'emoji' | 'stars'; newShootsFirst: boolean;

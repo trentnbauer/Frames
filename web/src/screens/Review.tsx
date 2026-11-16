@@ -35,6 +35,15 @@ export function Review() {
   const move = async (index: number) => { if (s) setS(await api<Session>('/review/session', { method: 'PUT', body: { index } })); };
   const bestFit = (photoId: number) => [...(colls.data ?? [])].filter((c) => !c.printedAt && !c.photoIds.includes(photoId)).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id)[0] ?? null;
   // Moves on at once and saves in the background, so quick key presses never land on the same photo. If a rating can't be saved, you are put back on it.
+  // A vote to delete: the lowest rating. After enough of them (Settings, Reviews, Clean-up) the photograph leaves Frames; its original stays.
+  const bin = () => {
+    if (!s || !cur) return;
+    const before = s;
+    setSaveErr('');
+    setS({ ...s, ratings: { ...s.ratings, [cur.id]: 1 }, index: s.index + 1 });
+    setOffer(null);
+    api('/review/rate', { body: { photoId: cur.id, bin: true, note: s.notes[cur.id] } }).then(() => { refreshSummary(); void checkRemovals(); }).catch((e: Error) => { setS(before); setSaveErr(`That vote was not saved (${e.message}). Try it again.`); });
+  };
   const rate = (n: number) => {
     if (!s || !cur) return;
     const before = s;
@@ -65,7 +74,7 @@ export function Review() {
   return (
     <ProtoReview
       total={s.queue.length} index={s.index} shootName={s.shootName} photoSrc={cur ? imgUrl(cur.id, 'preview') : ''} rating={cur ? s.ratings[cur.id] : undefined}
-      onRate={rate} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
+      onRate={rate} onBin={bin} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
       note={cur ? s.notes[cur.id] : ''}
       onNote={async (note: string) => { if (!cur) return; if (s.ratings[cur.id] !== undefined) setS(await api<Session>('/review/note', { body: { photoId: cur.id, note } })); else setS({ ...s, notes: { ...s.notes, [cur.id]: note } }); }}
       offer={offer ? { name: offer.comp.name } : null}

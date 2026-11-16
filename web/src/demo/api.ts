@@ -66,7 +66,7 @@ let collections:Collection[] = [
 ];
 const settings:Settings = {
   sessions:3,intervals:['1d','7d','30d'],adaptive:false,archiveSuggest:false,autoRemove:false,
-  autoRemoveBelow:1,autoRemoveAfter:90,deleteBelow:1,todoReasons:[],
+  autoRemoveBelow:1,autoRemoveAfter:90,binVotes:3,deleteBelow:1,todoReasons:[],
   ai:'off',aiActive:'',aiAutoAnalyse:false,xmpWriteBack:false,reviewSize:10,
   ratingStyle:'stars',newShootsFirst:true
 };

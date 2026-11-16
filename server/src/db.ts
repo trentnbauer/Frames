@@ -396,6 +396,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => {
     addColumn(db, 'tags', 'ai_source_id', "TEXT NOT NULL DEFAULT ''");
   },
+  // A vote to delete (the bin) is the lowest rating: it counts as a 1 and is also marked, so enough of them can remove the photograph.
+  (db) => {
+    addColumn(db, 'reviews', 'bin', 'INTEGER NOT NULL DEFAULT 0');
+  },
 ];
 
 export function migrate(db: DB) {

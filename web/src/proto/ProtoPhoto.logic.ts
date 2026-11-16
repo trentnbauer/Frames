@@ -47,7 +47,7 @@ export class Logic extends DCLogic {
       rateBtnLabel: S.mine ? 'Rated ' + R[S.mine - 1][0] : 'Rate now', rateBtnBg: 'transparent',
       rateTitle: S.mine ? 'Rated ' + R[S.mine - 1][1] : 'How does it hold up?', rateSub: P.rateSub || '',
       rateResult: S.mine ? P.rateResult(S.mine) : '',
-      rateOpts: R.map(([emoji, label], i) => ({ emoji, label, key: String(i + 1), bg: S.mine === i + 1 ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: S.mine === i + 1 ? 'var(--text)' : 'var(--text2)', op: S.mine && S.mine !== i + 1 ? 0.45 : 1, pick: async () => { this.setState({ mine: i + 1 }); await P.onRate(i + 1, S.note); } })),
+      rateOpts: [...(P.onBin ? [{ emoji: '🗑️', label: 'bin', key: '0', bg: 'transparent', fg: 'oklch(0.75 0.14 28)', op: 1, pick: async () => { await P.onBin(); } }] : []), ...R.map(([emoji, label], i) => ({ emoji, label, key: String(i + 1), bg: S.mine === i + 1 ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: S.mine === i + 1 ? 'var(--text)' : 'var(--text2)', op: S.mine && S.mine !== i + 1 ? 0.45 : 1, pick: async () => { this.setState({ mine: i + 1 }); await P.onRate(i + 1, S.note); } }))],
       toggleRate: () => this.setState({ rateOpen: !S.rateOpen }), stop: (e) => e.stopPropagation(), undoRate: () => this.setState({ mine: null, note: '' }), doneRate: () => { if (S.mine && S.note) P.onRate(S.mine, S.note); this.setState({ rateOpen: false }); },
       onNote: (e) => this.setState({ note: e.target.value }),
       printLine: P.printLine, printSub: P.printSub,
