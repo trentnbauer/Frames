@@ -107,7 +107,7 @@ export class Logic extends DCLogic {
     return {
       popShow: !this.props.readOnly && isFull && !!sp, popLeft, popTop, stopDown: (e) => e.stopPropagation(), deselect: () => this.setState({ sel: null }),
       view: S.view, onView: (view) => this.setState({ view }), onPinchStart: () => this.cancelDrag(),
-      gridPosition: `${W / 2 + S.view.x}px ${H / 2 + S.view.y}px`,
+      gridPosition: `${Math.round(W / 2 + S.view.x + (this.props.roomImage?.x ?? 0) * s)}px ${Math.round(H / 2 + S.view.y + (this.props.roomImage?.y ?? 0) * s)}px`,
       prints, allowDrop: (e) => e.preventDefault(), wallRef: this.wallRef, roomControl: this.props.roomControl,
       wallBackground: this.props.roomImage ? `url(${this.props.roomImage.url})` : 'linear-gradient(var(--wall-grid) 1px,transparent 1px),linear-gradient(90deg,var(--wall-grid) 1px,transparent 1px)',
       wallRepeat: this.props.roomImage ? 'no-repeat' : 'repeat', gridSize: this.props.roomImage ? px(this.props.roomImage.w) + ' ' + px(this.props.roomImage.h) : px(10) + ' ' + px(10),

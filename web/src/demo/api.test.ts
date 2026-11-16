@@ -41,6 +41,11 @@ describe('GitHub Pages demo API', () => {
     type P = { size: string; orientation: string; frame: { size: string; mat: string } | null; photoId: number };
     const all = await demoApi<{ layout: { prints: P[] } }[]>('/collections');
     expect(all.map(c => c.layout.prints.length)).toEqual([3, 1, 1]);
+    const room = all[0] as unknown as { background: { w: number }; layout: { mode: string; bg: { mmPerPx: number } } };
+    expect(room.background.w).toBe(2000);
+    expect(room.layout.mode).toBe('free'); // kept where it was hung, above the sofa
+    const right = Math.max(...all[0].layout.prints.map(p => (p as unknown as { x: number }).x));
+    expect(right).toBeLessThan(2000 * room.layout.bg.mmPerPx);
     expect(all[1].layout.prints[0].orientation).toBe('landscape');
     expect(all[2].layout.prints[0].orientation).toBe('portrait');
     for (const p of all.flatMap(c => c.layout.prints)) {

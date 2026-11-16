@@ -32,4 +32,11 @@ describe('composition previews and room pictures', () => {
     expect(Math.abs(parseFloat(after.gridSize) - parseFloat(before.gridSize) * 2)).toBeLessThanOrEqual(1);
     expect(after.gridPosition).not.toBe(before.gridPosition);
   });
+  it('pins the room picture to the layout origin, not to the middle of the prints', () => {
+    const at = (x: number, y: number) => { const l = new Logic(); l.props = { prints: [], roomImage: { url: '/room.jpg', x, y, w: 300, h: 200 } }; return l.wallVals().gridPosition.split(' ').map(parseFloat); };
+    const [x0, y0] = at(0, 0), [x1, y1] = at(-100, -50);
+    expect(x1).toBeLessThan(x0);
+    expect(y1).toBeLessThan(y0);
+    expect((x0 - x1) / (y0 - y1)).toBeCloseTo(2, 1);
+  });
 });

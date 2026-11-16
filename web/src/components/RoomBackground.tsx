@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { api } from '../api';
+import { api, roomUrl } from '../api';
 import { WallButton } from './WallButton';
 
 type Bg = { w: number; h: number; v: number };
@@ -66,7 +66,7 @@ function ScaleBox({ id, bg, onClose, onSave }: { id: number; bg: Bg; onClose: ()
         <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>Click both ends of something whose real width you know, such as a couch, a door or a window. Then type how wide it is.</p>
         <div onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const p = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; setPts((cur) => (cur.length >= 2 ? [p] : [...cur, p])); }}
           style={{ position: 'relative', cursor: 'crosshair', lineHeight: 0 }}>
-          <img src={`/api/collections/${id}/background?v=${bg.v}`} alt="Your room" draggable={false} style={{ width: '100%', display: 'block', borderRadius: 6 }} />
+          <img src={roomUrl(id, bg.v)} alt="Your room" draggable={false} style={{ width: '100%', display: 'block', borderRadius: 6 }} />
           {pts.length === 2 && <svg viewBox="0 0 1 1" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}><line x1={pts[0].x} y1={pts[0].y} x2={pts[1].x} y2={pts[1].y} stroke="#e5533d" strokeWidth="0.004" vectorEffect="non-scaling-stroke" style={{ strokeWidth: 2 }} /></svg>}
           {pts.map((p, i) => <span key={i} style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 12, height: 12, margin: '-6px 0 0 -6px', borderRadius: '50%', background: '#e5533d', boxShadow: '0 0 0 2px #fff', pointerEvents: 'none' }} />)}
         </div>
