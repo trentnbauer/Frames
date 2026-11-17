@@ -537,6 +537,15 @@ describe('proxies and the public address', () => {
       expect(new URL(r.headers.location as string).searchParams.get('redirect_uri')).toBe('http://frames.test/auth/callback/fake');
     } finally { cleanup(e); }
   });
+  it('trusts only the one address its proxy added, not forwarded entries the visitor sent', async () => {
+    const e = makeEnv({ trustProxy: true });
+    try {
+      e.app.get('/api/health-ip', async (req) => ({ ip: req.ip }));
+      // The proxy (127.0.0.1) appended the real visitor, 198.51.100.7, after a forged entry.
+      const r = await e.app.inject({ method: 'GET', url: '/api/health-ip', remoteAddress: '127.0.0.1', headers: { 'x-forwarded-for': '203.0.113.9, 198.51.100.7' } });
+      expect(r.json().ip).toBe('198.51.100.7');
+    } finally { cleanup(e); }
+  });
   it('rejects a public address that is not http(s)', async () => {
     expect((await put({ publicUrl: 'javascript:alert(1)' }, sess)).statusCode).toBe(400);
   });

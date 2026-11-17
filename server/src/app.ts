@@ -72,10 +72,10 @@ const GUEST_OK = /^\/api\/(me|guest\/links)$/;
 const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
-  // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
+  // trustProxy: behind one reverse proxy or tunnel, take the visitor's address from the one X-Forwarded-For entry it added (needed for per-visitor rate limits). Entries the visitor sent themselves are ignored.
   // A person's portfolio can live at /handle/ (answered as /portfolio/ for them). The system database is opened below, so the rewrite looks it up when called.
   let handleRewrite: (raw: { url?: string }) => string = (raw) => raw.url ?? '';
-  const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy, rewriteUrl: (raw) => handleRewrite(raw) });
+  const app = Fastify({ logger: false, trustProxy: baseCfg.trustProxy ? (_addr: string, hop: number) => hop < 1 : false, rewriteUrl: (raw) => handleRewrite(raw) });
   // A ceiling per visitor on everything, high enough that a grid of thousands of thumbnails never meets it, low enough to stop a flood.
   // (The sign-in, password and share-link routes have their own, much stricter limits.)
   void app.register(rateLimit, { global: false, max: 6000, timeWindow: '1 minute', allowList: (req) => req.url === '/api/health' });
