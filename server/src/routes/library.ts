@@ -329,9 +329,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
       // Storage per person: a member at their limit cannot add more (administrators are not limited).
       const limitGb = policyOf(x.sys).userQuotaGb;
-      if (limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin') {
-        const used = (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n;
-        if (used >= limitGb * 1073741824) return rep.code(413).send({ error: `You have used the ${limitGb >= 1 ? `${limitGb} GB` : `${Math.round(limitGb * 1024)} MB`} of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
+      const quota = limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin' ? limitGb * 1073741824 : 0; // 0: no limit
+      let used = quota ? (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n : 0;
+      if (quota) {
+        if (used >= quota) return rep.code(413).send({ error: `You have used the ${limitGb >= 1 ? `${limitGb} GB` : `${Math.round(limitGb * 1024)} MB`} of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
       }
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
@@ -342,6 +343,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         // Only the base name is used, so a crafted name cannot write outside the folder.
         const base = path.basename(String(part.filename ?? '')).replace(/[^\w. -]/g, '_');
         if (!base || base.startsWith('.') || !IMAGE_EXT.has(path.extname(base).toLowerCase())) { rejected.push({ file: base || '(unnamed)', reason: 'Not a supported photo type' }); part.file.resume(); continue; }
+        if (quota && used >= quota) { rejected.push({ file: base, reason: 'Over your storage limit' }); part.file.resume(); continue; } // the limit holds within one upload too
         const tmp = path.join(dir, `.upload-${crypto.randomBytes(8).toString('hex')}`);
         try {
           await pipeline(part.file, fs.createWriteStream(tmp));
@@ -355,6 +357,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
           fs.rmSync(tmp, { force: true });
           const smaller = await shrinkUpload(db, path.join(dir, name)); // unless original quality is stored
           if (smaller) { name = smaller.name; shrunk++; db.prepare('INSERT OR REPLACE INTO shrunk_uploads(file, orig_w, orig_h) VALUES (?, ?, ?)').run(name, smaller.w, smaller.h); }
+          if (quota) used += fs.statSync(path.join(dir, name)).size;
           saved.push(name);
         } catch (e) {
           fs.rmSync(tmp, { force: true });
