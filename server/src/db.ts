@@ -441,6 +441,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     try { v = JSON.parse(r.value); } catch { return; }
     if (Array.isArray(v.todoReasons) && !v.todoReasons.includes('shoot')) db.prepare("UPDATE settings SET value = ? WHERE key = 'settings'").run(JSON.stringify({ ...v, todoReasons: ['shoot', ...v.todoReasons] }));
   },
+  // A photograph can be turned by quarter turns in Frames (rotation, in degrees clockwise); only its previews are turned, never the original.
+  (db) => { addColumn(db, 'photos', 'rotation', 'INTEGER NOT NULL DEFAULT 0'); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

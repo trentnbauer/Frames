@@ -12,6 +12,7 @@ import { applyGear, syncGearTags } from '../gear.js';
 import { hemisphere, monthsOf, type Season, type Seasons } from '../seasons.js';
 import { getSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
+import { processPhoto } from '../ingest.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
 
@@ -323,6 +324,19 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   // Forget what was taken out: the next scan imports again whatever files are still in the library folders.
   app.post('/api/removed/restore', async () => { const n = db.prepare('DELETE FROM removed').run().changes; return { cleared: n }; });
 
+  // Turn a photograph that came in the wrong way round. Only its previews are made again, turned; the original file is never changed.
+  app.post('/api/photos/:id/rotate', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const by = ((req.body ?? {}) as Row).by;
+    if (by !== 90 && by !== -90 && by !== 180) return rep.code(400).send({ error: 'by must be 90, -90 or 180' });
+    const p = one('SELECT path, rotation, missing FROM photos WHERE id = ?', id);
+    if (!p) return notFound(rep);
+    if (p.missing) return rep.code(409).send({ error: 'The original file is missing, so it cannot be turned.' });
+    const rotation = (((p.rotation as number) + by) % 360 + 360) % 360;
+    db.prepare(`UPDATE photos SET rotation = ?${by === 180 ? '' : ', w = h, h = w'} WHERE id = ?`).run(rotation, id);
+    const ok = await processPhoto(db, x.cfg, id, String(p.path)).catch(() => false);
+    return ok ? { id, rotation } : rep.code(500).send({ error: 'The previews could not be made again.' });
+  });
   app.patch('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
     const p = one('SELECT * FROM photos WHERE id = ?', id);
