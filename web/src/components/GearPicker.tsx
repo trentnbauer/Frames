@@ -9,7 +9,7 @@ const load = async () => (cache ??= (await api<{ own: Item[] }>('/gear/items')).
  * A camera or lens box that searches what is in your Gear list as you type, and can add a new one to it.
  * `onCommit` gets the final text (a gear name, or whatever was typed) when you pick, press Enter, or leave the box.
  */
-export function GearPicker({ value, kind, placeholder, title, style, className, onCommit }: { value: string; kind: 'camera' | 'lens'; placeholder?: string; title?: string; style?: CSSProperties; className?: string; onCommit: (name: string) => void }) {
+export function GearPicker({ value, kind, placeholder, title, style, className, onCommit, live }: { value: string; kind: 'camera' | 'lens'; placeholder?: string; title?: string; style?: CSSProperties; className?: string; onCommit: (name: string) => void; /** Report every keystroke too (a form that saves later, not on each commit). */ live?: boolean }) {
   const [text, setText] = useState(value);
   const [items, setItems] = useState<Item[]>([]);
   const [open, setOpen] = useState(false);
@@ -34,7 +34,7 @@ export function GearPicker({ value, kind, placeholder, title, style, className, 
     <span style={{ position: 'relative', display: 'inline-block' }}>
       <input ref={input} value={text} placeholder={placeholder} title={title} className={className} size={Math.max(8, text.length || (placeholder?.length ?? 8))} style={style}
         onFocus={() => { setOpen(true); void load().then(setItems).catch(() => undefined); }}
-        onChange={(e) => { setText(e.target.value); setOpen(true); setHi(-1); }}
+        onChange={(e) => { setText(e.target.value); setOpen(true); setHi(-1); if (live) onCommit(e.target.value); }}
         onBlur={() => { if (open) { setOpen(false); if (text.trim() !== value) onCommit(text.trim()); } }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setHi((h) => Math.min(h + 1, options.length - 1)); }

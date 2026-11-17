@@ -152,6 +152,7 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
                   kind={key}
                   value={value}
                   onCommit={(next) => change(key, next)}
+                  live
                   placeholder={key === 'camera' ? 'Camera body' : 'Lens'}
                   title="Owned and discovered gear, or free text"
                   className="field-in"
