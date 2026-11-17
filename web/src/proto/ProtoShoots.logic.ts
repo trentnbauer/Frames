@@ -39,7 +39,8 @@ export class Logic extends DCLogic {
       selBtnLabel: sel ? 'Done' : 'Select', selBtnBg: sel ? 'var(--text)' : 'transparent', selBtnFg: sel ? 'var(--bg)' : 'var(--text)', selBtnRing: sel ? 'none' : 'inset 0 0 0 1px var(--outline)',
       toggleSel: () => this.setState({ selMode: !sel, picked: sel ? [] : S.picked }),
       hasPicked: n > 0, pickedLabel: n + ' selected', clearPicked: () => this.setState({ picked: [] }),
-      openMv: () => this.setState({ mv: { mode: 'new', name: '', q: '', target: null } }),
+      // The app's own move window when the page gives one (onOpenMove); the design's otherwise.
+      openMv: () => (P.onOpenMove ? P.onOpenMove(S.picked, () => this.setState({ picked: [], selMode: false })) : this.setState({ mv: { mode: 'new', name: '', q: '', target: null } })),
       mvOpen: !!S.mv, closeMv: () => this.setState({ mv: null }), stopMv: (e) => e.stopPropagation(),
       mvThumbs: ids.slice(0, 3).map((id) => P.thumb(id)), mvTitle: 'Move ' + n + (n === 1 ? ' photo' : ' photos'), mvSub: 'From ' + (fromName || 'the shoot'),
       mvModes: [['new', 'New shoot'], ['existing', 'Existing shoot']].map(([k, label]) => ({ label, bg: M.mode === k ? 'var(--text)' : 'transparent', fg: M.mode === k ? 'var(--bg)' : 'var(--text2)', go: () => set({ mode: k }) })),
