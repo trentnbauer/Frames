@@ -52,4 +52,4 @@ jobs:
         with:
           path: web/dist-demo
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
