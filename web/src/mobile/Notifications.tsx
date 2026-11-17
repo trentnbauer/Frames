@@ -4,7 +4,7 @@ import { api } from '../api';
 import { ICON, ago, type Notif } from '../components/Shell';
 import { BackPill } from './ui';
 
-/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear and Blacklist. */
+/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear and Dismiss. */
 export function MobileNotifications() {
   const nav = useNavigate();
   const [items, setItems] = useState<Notif[] | null>(null);
@@ -19,7 +19,7 @@ export function MobileNotifications() {
     api('/notifications/read', { body: { id: n.id } }).catch(() => undefined);
     nav(n.target.screen + (n.target.anchor ? `#${n.target.anchor}` : ''));
   };
-  const act = async (n: Notif, action: 'dismiss' | 'add' | 'blacklist') => {
+  const act = async (n: Notif, action: 'dismiss' | 'add') => {
     if (busy !== null) return;
     setBusy(n.id); setErr('');
     try {
@@ -54,7 +54,7 @@ export function MobileNotifications() {
               {n.gear?.state === 'new' && (
                 <div style={{ display: 'flex', gap: 8, padding: '0 0 14px 44px' }}>
                   <button onClick={() => act(n, 'add')} disabled={busy !== null} style={{ height: 38, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>Add to gear</button>
-                  <button onClick={() => act(n, 'blacklist')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Blacklist</button>
+                  <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Dismiss</button>
                 </div>
               )}
             </div>
