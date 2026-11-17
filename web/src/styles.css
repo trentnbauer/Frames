@@ -968,7 +968,6 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .pickrow input:focus-visible + .cbox { outline: 2px solid var(--text); outline-offset: 2px; }
 @media (max-width: 767px) { .fpick { grid-template-columns: 1fr !important; } .fpick > div:first-child > div:last-child { height: auto !important; max-height: 50vh; } }
 /* Segmented controls: the chosen option's pill slides between options (SegSlider). */
-.has-seg-slider { position: relative; }
 .has-seg-slider > :not(.seg-slider) { position: relative; z-index: 1; }
 .has-seg-slider > [aria-selected="true"], .has-seg-slider > [aria-pressed="true"], .has-seg-slider > [aria-checked="true"], .has-seg-slider > .on { background: transparent !important; transition: color .25s ease; }
 .seg-slider { position: absolute; left: 0; top: 0; border-radius: 999px; background: var(--btn-bg); pointer-events: none; opacity: 0; }
