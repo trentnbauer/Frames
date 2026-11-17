@@ -121,7 +121,7 @@ function TodoTasks() {
   if (r === 'delete') return frame(<RemovalReview onChanged={reload} />);
 
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--text2)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
+  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--ai-active)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--ai-active) 55%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
   // "Accept all": every ✦ suggestion of this kind becomes the photograph's own, in one click.
   const acceptAll = (kind: 'subject' | 'tag') => {
     const waiting = (p?.tags ?? []).filter((t) => t.kind === kind && t.source === 'ai' && !t.accepted);
@@ -149,7 +149,7 @@ function TodoTasks() {
   const meta = taskMeta(r!)!;
   const v = {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
-    tEyebrow: r!.startsWith('ai-') ? '✦ Waiting on you' : 'Missing', tReasonTitle: meta.title, tWhy: WHY[r!](p, { camMissing, tags: (p?.tags ?? []).filter((t) => t.source === 'ai' && !t.accepted).length }),
+    tEyebrow: r!.startsWith('ai-') ? '✦ Waiting on you' : 'Missing', tEyebrowFg: r!.startsWith('ai-') ? 'var(--ai-active)' : 'var(--faint)', tReasonTitle: meta.title, tWhy: WHY[r!](p, { camMissing, tags: (p?.tags ?? []).filter((t) => t.source === 'ai' && !t.accepted).length }),
     tLater: later.length ? `This photo comes back later for ${later.join(' and ')}.` : '',
     tShowCamera: r === 'camera', tShowLocation: r === 'location', tShowSubjects: r === 'ai-tags' || r === 'tags', tShowTags: r === 'ai-tags' || r === 'tags', tShowDesc: r === 'desc' || r === 'ai-desc',
     tNotes: ([['light', 'Light', 'Soft, low side light'], ['mood', 'Mood', 'Calm']] as const).filter(([k]) => r === k).map(([k, label, ph]) => ({ label, ph, value: notes[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNotes((n) => ({ ...n, [k]: e.target.value })) })),
@@ -160,7 +160,7 @@ function TodoTasks() {
     tGearHints: <SameShootGear camera={cam[0] === suggestedGear.camera ? '' : suggestedGear.camera} lens={cam[1] === suggestedGear.lens ? '' : suggestedGear.lens} onUse={(field, value) => setCam((current) => current.map((item, index) => index === (field === 'camera' ? 0 : 1) ? value : item))} />,
     tTags: chip('tag'), tSubjects: chip('subject'), tAcceptTags: acceptAll('tag'), tAcceptSubjects: acceptAll('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
     tComps: [], tCompPicker: p ? <AddToComposition key={p.id} ids={[p.id]} label="Add to composition" onDone={() => { colls.reload(); reload(); }} /> : null,
-    tAiLabel: busy ? 'Analysing…' : '✦ Analyse with AI', tAiFg: busy ? 'var(--text2)' : 'var(--text)', tAiSpin: null,
+    tAiLabel: busy ? 'Analysing…' : '✦ Analyse with AI', tAiFg: busy ? 'var(--text2)' : 'var(--ai-active)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const sg = p?.aiSuggestion?.description; if (sg) setDesc(sg); },
