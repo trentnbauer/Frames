@@ -7,6 +7,7 @@ import { activeConfig, type AiCfg } from './aisources.js';
 import { orderFor, type Job } from './aiJobs.js';
 import { loadSettings } from './settings.js';
 import { policyOf } from './policy.js';
+import { aiHiddenFilter, privateShootsLocalOnly } from './privacyPrefs.js';
 
 /**
  * Optional AI analysis, through whichever source is active (see aisources.ts). Three ways of talking to one:
@@ -46,7 +47,7 @@ export function aiActivity(db: DB): Activity {
 }
 
 /** Runs `fn` with the first AI for the job; if it errors, the next one takes over. Null when no AI is set up for the job; throws the last error if all fail. */
-export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>): Promise<T | null> {
+export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>, allow?: (c: AiCfg) => boolean): Promise<T | null> {
   const list = aiConfigsFor(db, job);
   const activity = aiActivity(db);
   if (list.length) activity.jobs[job] = (activity.jobs[job] ?? 0) + 1;
@@ -57,6 +58,8 @@ export async function tryEach<T>(db: DB, job: Job, fn: (c: AiCfg) => Promise<T>)
       const running = activity.providers[activityId];
       activity.providers[activityId] = { id: activityId, name: c.name, color: c.color ?? '', count: (running?.count ?? 0) + 1 };
       try {
+      // A photograph from a private shoot is never sent to an AI outside this network; the next (local) one in the order takes over.
+      if (allow && !allow(c)) { last = new Error('This photograph is in a private shoot, so only an AI on your own network may look at it. Add a local AI to analyse it.'); continue; }
       // A paid shared AI stops after the monthly number of requests the administrator allows each person; the next AI in the order takes over.
       if (c.shared && !c.local && sharedOverLimit(db)) { last = new Error('The monthly limit for the shared AI has been reached.'); continue; }
       try { const r = await fn(c); if (c.shared && !c.local) countShared(db); return r; } catch (e) { if (c.shared && !c.local) countShared(db); last = e; }
@@ -199,9 +202,10 @@ export type AiState = { running: boolean; done: number; total: number; failed: n
 const MAX_ATTEMPTS = 3;
 
 export function aiCounts(db: DB) {
-  const n = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+  const n = (sql: string, ...args: string[]) => (db.prepare(sql).get(...args) as { n: number }).n;
+  const hide = aiHiddenFilter(db);
   return {
-    pending: n(`SELECT COUNT(*) n FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR (ai_status = 'error' AND ai_attempts < ${MAX_ATTEMPTS}))`),
+    pending: n(`SELECT COUNT(*) n FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR (ai_status = 'error' AND ai_attempts < ${MAX_ATTEMPTS}))${hide.sql}`, ...hide.args),
     done: n("SELECT COUNT(*) n FROM photos WHERE ai_status = 'done'"),
     failed: n(`SELECT COUNT(*) n FROM photos WHERE ai_status = 'error' AND ai_attempts >= ${MAX_ATTEMPTS}`),
   };
@@ -243,12 +247,13 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     if (!c) return state;
     state.running = true; state.done = 0; state.failed = 0; state.lastError = null;
     try {
-      const ids = (db.prepare(`SELECT id FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR (ai_status = 'error' AND ai_attempts < ${MAX_ATTEMPTS})) ORDER BY id`).all() as { id: number }[]).map((r) => r.id);
+      const hide = aiHiddenFilter(db); // photographs with a hidden tag are never sent
+      const ids = (db.prepare(`SELECT id FROM photos WHERE has_derivs = 1 AND missing = 0 AND (ai_status IS NULL OR (ai_status = 'error' AND ai_attempts < ${MAX_ATTEMPTS}))${hide.sql} ORDER BY id`).all(...hide.args) as { id: number }[]).map((r) => r.id);
       state.total = ids.length;
       for (const id of ids) {
         await waitIdle(db); // "Heavy jobs run: when idle"
         if (!aiConfig(db) || (automatic && !loadSettings(db).aiAutoAnalyse)) break; // Finish the in-flight request, then honour an automatic-analysis opt-out.
-        try { if ((await tryEach(db, 'describe', (cc) => one(cc, id))) === null) break; } catch (e) {
+        try { if ((await tryEach(db, 'describe', (cc) => one(cc, id), allowFor(id))) === null) break; } catch (e) {
           state.failed++;
           state.lastError = e instanceof Error ? e.message : String(e);
           db.prepare("UPDATE photos SET ai_status = 'error', ai_attempts = ai_attempts + 1 WHERE id = ?").run(id);
@@ -258,14 +263,18 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     } finally { state.running = false; }
     return state;
   }
+  /** Only local AIs for a photograph in a private shoot, when the person keeps those local. */
+  const allowFor = (id: number) => privateShootsLocalOnly(db) && db.prepare('SELECT 1 FROM photos p JOIN shoots s ON s.id = p.shoot_id WHERE p.id = ? AND s.private = 1').get(id) ? (cc: AiCfg) => cc.local : undefined;
   /** Looks at one photograph now (not in the background) and says which suggestions are new. */
   async function analyse(id: number): Promise<{ ai: boolean; added: string[]; descriptionChanged: boolean; error?: string }> {
     const c = aiConfig(db);
     if (!c) return { ai: false, added: [], descriptionChanged: false };
+    const hide = aiHiddenFilter(db);
+    if (hide.sql && !db.prepare(`SELECT 1 FROM photos WHERE id = ?${hide.sql}`).get(id, ...hide.args)) return { ai: true, added: [], descriptionChanged: false, error: 'This photograph has a hidden tag, so it is never sent to an AI.' };
     const sugg = () => new Set((db.prepare("SELECT name FROM tags WHERE photo_id = ? AND accepted = 0 AND source = 'ai'").all(id) as { name: string }[]).map((r) => r.name));
     const desc = () => { try { return String(JSON.parse((db.prepare('SELECT ai_json FROM photos WHERE id = ?').get(id) as { ai_json: string | null }).ai_json ?? '{}').description ?? ''); } catch { return ''; } };
     const before = sugg(), was = desc();
-    try { await tryEach(db, 'describe', (cc) => one(cc, id)); } catch (e) { return { ai: true, added: [], descriptionChanged: false, error: e instanceof Error ? e.message : 'The AI could not look at this photograph' }; }
+    try { await tryEach(db, 'describe', (cc) => one(cc, id), allowFor(id)); } catch (e) { return { ai: true, added: [], descriptionChanged: false, error: e instanceof Error ? e.message : 'The AI could not look at this photograph' }; }
     return { ai: true, added: [...sugg()].filter((n) => !before.has(n)), descriptionChanged: desc() !== was };
   }
   return { state, run, analyse };

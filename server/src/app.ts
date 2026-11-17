@@ -246,7 +246,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     // Dates the user typed win; otherwise they come from the photographs' capture times, then the import date.
     const from = s.date_from ?? st.a, to = s.date_to ?? st.b;
     const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
-    return { id: s.id, name: s.name, protected: !!s.protected, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: shootCoverId(db, s.id), dueCount: duePhotoIds.length, waitingCount, duePhotoIds: duePhotoIds.slice(0, 500), reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
+    return { id: s.id, name: s.name, protected: !!s.protected, private: !!s.private, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: shootCoverId(db, s.id), dueCount: duePhotoIds.length, waitingCount, duePhotoIds: duePhotoIds.slice(0, 500), reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
   /** The layout stored for a composition, or null (older compositions have none until they are edited). */
   const storedLayout = (c: Row, members: Set<number>): Layout | null => { if (!c.layout) return null; try { return parseLayout(JSON.parse(c.layout), members); } catch { return null; } };

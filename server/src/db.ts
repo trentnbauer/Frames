@@ -431,6 +431,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     if (!db.prepare('SELECT 1 FROM photos LIMIT 1').get()) return;
     setSetting(db, 'settings', { sessions: 4, intervals: ['1 week', '1 week', '1 week', '1 week'], ...saved });
   },
+  // A private shoot's photographs are only ever sent to an AI on this server's network (Settings, AI, Keep private shoots on local AI only).
+  (db) => { addColumn(db, 'shoots', 'private', 'INTEGER NOT NULL DEFAULT 0'); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

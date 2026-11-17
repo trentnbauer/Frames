@@ -11,6 +11,8 @@ import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
 import { serveDerivative } from './imageServe.js';
 import { avatarPath, displayNameOf } from './routes/profile.js';
+import { SENSITIVE } from './routes/community.js';
+import { flaggedOffPortfolio } from './privacyPrefs.js';
 
 /**
  * The public portfolio website, served by Frames from a collection you choose.
@@ -139,13 +141,14 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   const MEMBER = `p.has_derivs = 1 AND p.missing = 0 AND p.id NOT IN (SELECT photo_id FROM portfolio_marks WHERE out = 1) AND (
       p.id IN (SELECT photo_id FROM collection_photos WHERE collection_id = :col)
       OR p.id IN (SELECT photo_id FROM portfolio_marks WHERE favourite = 1)
-      OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))`;
+      OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))
+    AND (:sens = 0 OR NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND g.accepted != -1 AND lower(g.name) IN (${SENSITIVE.map((n) => `'${n}'`).join(',')})))`; // "Keep flagged photos off my portfolio"
   const photos = (c: PortfolioCfg): Row[] => {
     const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'score' ? 'COALESCE((SELECT AVG(rating) FROM reviews r WHERE r.photo_id = p.id), 0) DESC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos IS NULL, cp.pos ASC, p.id ASC';
     return db.prepare(`SELECT p.* FROM photos p LEFT JOIN collection_photos cp ON cp.collection_id = :col AND cp.photo_id = p.id WHERE ${MEMBER} ORDER BY ${order}`)
-      .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold }) as Row[];
+      .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold, sens: flaggedOffPortfolio(db) ? 1 : 0 }) as Row[];
   };
-  const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold });
+  const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold, sens: flaggedOffPortfolio(db) ? 1 : 0 });
 
   /**
    * The picture the portfolio shows: at most 2400 px, no camera data. A preview that is already that small (and has none: Frames

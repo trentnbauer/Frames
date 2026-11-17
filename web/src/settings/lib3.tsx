@@ -18,13 +18,11 @@ export function useAccountNotifications(ctx: Ctx): Section {
 export function useAppSettingsPage(ctx: Ctx): Section {
   const a = useAppSettings(ctx);
   const r = useReviews(ctx);
-  const saved = { hint: undefined };
   return section('app', 'App settings', 'Appearance and everyday preferences for your library.', [
     { title: 'Display', rows: pick(a, ['fullWidth', 'theme']) },
-    { title: 'While reviewing', rows: pick(r, ['scale', 'blind']) },
+    { title: 'While reviewing', rows: pick(r, ['scale']) },
     { title: 'Home', rows: pick(r, ['commHome']) },
     { title: 'To do list', rows: pick(r, ['todo'], { todo: { label: 'Flag photos missing', hint: 'Each photo counts once, however many details it needs.' } }) },
-    { title: 'Preferences', meta: 'Saved, but not used everywhere yet', rows: pick(a, ['start', 'units', 'dateFmt'], { start: saved, units: saved, dateFmt: saved }) },
     { title: 'Troubleshooting', rows: pick(a, ['clearSiteData']) },
   ]);
 }
@@ -68,8 +66,8 @@ export function useReviewCleanup(ctx: Ctx): Section {
 /* ------------------------------------------------------------ Photo details */
 export function usePhotoTags(ctx: Ctx): Section {
   const t = useTags(ctx);
-  // The portfolio switch lives on the Portfolio page; the AI that flags photos is set in the AI tab.
-  const groups = without(t, ['sensAiLink', 'sensPf']).map((g) => ({ ...g, rows: g.rows.map((r) => (r.id === 'sensList' ? { ...r, hint: 'Never shown in community review. The AI that flags them is set in the AI tab.' } : r)) }));
+  // The portfolio switch lives on the Portfolio page.
+  const groups = without(t, ['sensAiLink', 'sensPf']).map((g) => ({ ...g, rows: g.rows.map((r) => (r.id === 'sensList' ? { ...r, hint: 'Photos you tag Nudity, Violence or Adult on the photo page. Never shown in community review.' } : r)) }));
   return { ...t, groups };
 }
 export function usePhotoXmp(ctx: Ctx): Section {
