@@ -1,4 +1,5 @@
 import { usePhoneWidth } from '../usePhoneWidth';
+import { SegSlider } from '../components/SegSlider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Loading } from '../components/bits';
@@ -79,7 +80,7 @@ export function SettingsPage() {
           <span role="status" aria-live="polite" style={{ fontSize: 13, color: 'var(--text2)', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>
         </div>
         {isAdmin && (
-          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', fontSize: 13.5 }}>
+          <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', fontSize: 13.5 }}><SegSlider />
             {([['lib', <>Your library</>], ['srv', <>Server <span style={{ color: 'var(--muted)' }}>· admin</span></>]] as [Tab, ReactNode][]).map(([k, label]) => (
               <span key={k} role="tab" aria-selected={shownTab === k} tabIndex={0} onClick={() => { setQ(''); setTab(k); }} onKeyDown={(e) => { if (e.key === 'Enter') { setQ(''); setTab(k); } }}
                 style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'var(--btn-bg)' : 'transparent', color: shownTab === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: shownTab === k ? 500 : 400 }}>{label}</span>
@@ -144,7 +145,7 @@ function SectionBody({ use, def, tabDef, onSub, ctx, filter, onJump }: { use: (c
         {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: 'var(--text)', color: 'var(--bg)', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
       </div>
       {def.tabs && (
-        <div role="tablist" aria-label={`${def.name} tabs`} className="seg" style={{ alignSelf: 'flex-start' }}>
+        <div role="tablist" aria-label={`${def.name} tabs`} className="seg" style={{ alignSelf: 'flex-start' }}><SegSlider />
           {def.tabs.map((t) => <button key={t.key} role="tab" aria-selected={t.key === tabDef!.key} className={t.key === tabDef!.key ? 'on' : ''} onClick={() => onSub?.(t.key)}>{t.label}</button>)}
         </div>
       )}

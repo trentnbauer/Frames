@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { SegSlider } from './SegSlider';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
 import type { Shoot } from '../data';
@@ -124,7 +125,7 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
       {phase === 'pick' && (
         <>
           {local && hasCloud && (
-            <div className="seg" role="tablist">
+            <div className="seg" role="tablist"><SegSlider />
               <button role="tab" aria-selected={source === 'upload'} className={source === 'upload' ? 'on' : ''} onClick={() => setTab('upload')}>Upload from this computer</button>
               <button role="tab" aria-selected={source === 'cloud'} className={source === 'cloud' ? 'on' : ''} onClick={() => setTab('cloud')}>Sync from the cloud</button>
             </div>

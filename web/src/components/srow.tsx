@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SegSlider } from './SegSlider';
 
 /** The building blocks of the Server settings pages: a card of rows, each with a title, a hint and one control on the right. */
 export function Notice() {
@@ -25,7 +26,7 @@ export function PSelect<T extends string | number>({ value, set, options, label,
   );
 }
 export function PSeg<T extends string | number>({ value, set, options, label }: { value: T; set: (v: T) => void; options: [T, string][]; label: string }) {
-  return <div className="seg" role="group" aria-label={label} style={{ alignSelf: 'auto' }}>{options.map(([k, l]) => <button key={String(k)} aria-pressed={value === k} className={value === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>;
+  return <div className="seg" role="group" aria-label={label} style={{ alignSelf: 'auto' }}><SegSlider />{options.map(([k, l]) => <button key={String(k)} aria-pressed={value === k} className={value === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>;
 }
 export function PStepper({ value, set, min, max, label }: { value: number; set: (n: number) => void; min: number; max: number; label: string }) {
   return <div className="stepper" role="group" aria-label={label}><button aria-label={`Fewer ${label}`} onClick={() => set(Math.max(min, value - 1))}>−</button><b>{value}</b><button aria-label={`More ${label}`} onClick={() => set(Math.min(max, value + 1))}>+</button></div>;

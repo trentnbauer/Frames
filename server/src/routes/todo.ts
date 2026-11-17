@@ -56,7 +56,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     };
 
     // Photographs that are in no photoshoot yet (new imports arrive this way). Listed as a group so they can be put into a shoot together.
-    add('orphaned', 'Put photographs in a shoot', 'These are in no photoshoot yet. Choose some and move them into a new or existing shoot.',
+    if (on.has('shoot')) add('orphaned', 'Put photographs in a shoot', 'These are in no photoshoot yet. Choose some and move them into a new or existing shoot.',
       ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND p.shoot_id IN (SELECT id FROM shoots WHERE unsorted = 1) ORDER BY COALESCE(p.captured_at, p.added_at), p.id'));
 
     // AI suggestions waiting for a yes or no: suggested tags and subjects, and a suggested description.

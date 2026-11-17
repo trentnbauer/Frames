@@ -1,4 +1,5 @@
 import { confirmAction } from '../components/dialogs';
+import { SegSlider } from '../components/SegSlider';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -75,7 +76,7 @@ function DesktopActivity() {
         </button>
         <small className="muted">Change history is available for 30 days.</small>
       </div>
-      <div className="seg">
+      <div className="seg"><SegSlider />
         <button className={tab === 'removed' ? 'on' : ''} onClick={() => setTab('removed')}>
           Removed photos
         </button>

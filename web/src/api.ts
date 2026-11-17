@@ -40,7 +40,10 @@ export function useApi<T>(path: string | null) {
  * makes every browser fetch fresh ones once (the server now checks them every time, so it is only needed for pictures kept before that).
  */
 const IMG_REV = 2;
-export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoImage(id, kind) : `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}`;
+/** Photographs turned in this tab: their pictures get a new address so the browser does not keep showing the old way round. */
+const turned = new Map<number, number>();
+export const imageChanged = (id: number) => { turned.set(id, Date.now()); };
+export const imgUrl = (id: number, kind: 'thumb' | 'preview', share?: string) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoImage(id, kind) : `${share ? `/api/s/${share}/photos/${id}/${kind}` : `/api/photos/${id}/${kind}`}?r=${IMG_REV}${turned.has(id) ? `&t=${turned.get(id)}` : ''}`;
 
 /** The room picture behind a composition's wall. */
 export const roomUrl = (id: number, v: number) => import.meta.env.VITE_FRAMES_DEMO === 'true' ? demoAssets.room : `/api/collections/${id}/background?v=${v}`;

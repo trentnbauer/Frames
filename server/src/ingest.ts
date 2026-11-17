@@ -150,7 +150,9 @@ async function makeDerivatives(db: DB, cfg: Cfg, id: number, file: string, isRaw
       input = Buffer.from(t);
     }
   }
-  const base = sharp(input, { failOn: 'none' }).rotate();
+  // Upright from the camera's orientation first, then any quarter turns set in Frames (sharp takes one rotation per pipeline).
+  const turn = ((db.prepare('SELECT rotation FROM photos WHERE id = ?').get(id) as { rotation?: number } | undefined)?.rotation ?? 0) % 360;
+  const base = turn ? sharp(await sharp(input, { failOn: 'none' }).rotate().toBuffer()).rotate(turn) : sharp(input, { failOn: 'none' }).rotate();
   const meta = await base.clone().metadata();
   await base.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80, mozjpeg: true }).toFile(derivPath(cfg, id, 'thumb'));
   const { px, quality } = previewSpec(db); // this person's choice, never above the server's limits
@@ -193,6 +195,8 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
   let h = rot ? meta.width : meta.height;
   const orig = isRaw ? null : cloudOriginalSize(db, cfg, file, w ?? 0, h ?? 0); // a smaller copy of a cloud photograph: the original's size
   if (orig) { w = orig.w; h = orig.h; }
+  const turn = ((db.prepare('SELECT rotation FROM photos WHERE id = ?').get(id) as { rotation?: number } | undefined)?.rotation ?? 0) % 180;
+  if (turn) [w, h] = [h, w]; // turned a quarter in Frames: the picture is the other way round
   // For RAW the JPEG is a preview, smaller than the real picture, so its size says nothing about the real pixels:
   // keep the size from the file's own header when there is one.
   const keepExif = isRaw && !!(info?.w || opts.exifW);

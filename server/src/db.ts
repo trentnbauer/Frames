@@ -433,6 +433,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // A private shoot's photographs are only ever sent to an AI on this server's network (Settings, AI, Keep private shoots on local AI only).
   (db) => { addColumn(db, 'shoots', 'private', 'INTEGER NOT NULL DEFAULT 0'); },
+  // To do gained a "Shoot" reason (photographs in no photoshoot), which was always on before: keep it on for anyone who already chose their reasons.
+  (db) => {
+    const r = db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string } | undefined;
+    if (!r) return;
+    let v: { todoReasons?: unknown };
+    try { v = JSON.parse(r.value); } catch { return; }
+    if (Array.isArray(v.todoReasons) && !v.todoReasons.includes('shoot')) db.prepare("UPDATE settings SET value = ? WHERE key = 'settings'").run(JSON.stringify({ ...v, todoReasons: ['shoot', ...v.todoReasons] }));
+  },
+  // A photograph can be turned by quarter turns in Frames (rotation, in degrees clockwise); only its previews are turned, never the original.
+  (db) => { addColumn(db, 'photos', 'rotation', 'INTEGER NOT NULL DEFAULT 0'); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

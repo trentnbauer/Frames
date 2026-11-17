@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { SharePanel } from '../components/SharePanel';
+import { EditShoot } from '../components/EditShoot';
 import type { PhotoLite, Shoot } from '../data';
 import { reviewUrl } from '../reviewScope';
 import { useStore } from '../store';
@@ -16,7 +17,6 @@ const key = { font: `400 11px ${mono}`, opacity: 0.55 } as const;
 export function ShootPage() {
   const { id } = useParams();
   const nav = useNavigate();
-  const [, setSp] = useSearchParams();
   const { openNew } = useUi();
   const { refreshSummary } = useStore();
   const shoot = useApi<Shoot>(`/shoots/${id}`);
@@ -27,8 +27,7 @@ export function ShootPage() {
   const [confirm, setConfirm] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState('');
+  const [editing, setEditing] = useState(false);
   const [err, setErr] = useState('');
   const toast = useToast();
   const s = shoot.data;
@@ -54,17 +53,12 @@ export function ShootPage() {
   const loved = photos.filter((p) => p.avgRating >= 4.5).length;
   const protect = async (on: boolean) => { setErr(''); setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { protected: on } }); shoot.reload(); toast.say(on ? `“${title}” is protected from deletion` : 'Protection turned off'); } catch (e) { setErr((e as Error).message); } };
   const makePrivate = async (on: boolean) => { setErr(''); setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { private: on } }); shoot.reload(); toast.say(on ? `“${title}” is private: only an AI on your own network looks at its photographs` : `“${title}” is no longer private`); } catch (e) { setErr((e as Error).message); } };
-  const saveName = async () => { const v = name.trim(); setRenaming(false); if (!v || v === s.name) return; try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { name: v } }); shoot.reload(); } catch (e) { setErr((e as Error).message); } };
   const remove = async (photos: 'orphan' | 'delete') => { setConfirm(false); try { await api(`/shoots/${s.id}${photos === 'orphan' ? '?photos=orphan' : ''}`, { method: 'DELETE' }); refreshSummary(); nav('/library', { replace: true }); } catch (e) { setErr((e as Error).message); } };
   const flip = (pid: number) => setPicked((c) => { const n = new Set(c); if (n.has(pid)) n.delete(pid); else n.add(pid); return n; });
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, whiteSpace: 'nowrap' } as const;
   const menuItems: { label: string; sub?: string; fg?: string; sep?: boolean; go: () => void }[] = [
-    { label: 'Share…', go: () => { setMenu(false); setSharing(true); } },
     ...(picked.size === 1 ? [{ label: 'Make the selected photograph the cover', go: async () => { setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { coverId: [...picked][0] } }); shoot.reload(); toast.say('Cover changed'); } catch (e) { setErr((e as Error).message); } } }] : []),
     { label: 'Use the highest rated photograph as the cover', go: async () => { setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { coverId: null } }); shoot.reload(); toast.say('The cover is the highest rated photograph'); } catch (e) { setErr((e as Error).message); } } },
-    { label: 'Rename shoot', go: () => { setMenu(false); setName(s.name); setRenaming(true); } },
-    { label: 'Edit place, dates and camera…', go: () => { setMenu(false); setSp({ adv: '1' }); } },
-    { label: s.protected ? 'Turn off protection' : 'Protect from deletion', go: () => protect(!s.protected) },
     { label: s.private ? 'Make not private' : 'Make private', sub: s.private ? 'Private: only an AI on your own network sees its photographs.' : 'Only an AI on your own network will see its photographs.', go: () => makePrivate(!s.private) },
     { sep: true, label: 'Delete shoot…', sub: s.protected ? 'Protected. Turn off protection to delete it.' : 'Keep its photographs, or delete them with it.', fg: s.protected ? 'var(--faint)' : 'var(--danger)', go: () => { setMenu(false); if (s.protected) toast.say('This shoot is protected. Turn off protection to delete it.'); else setConfirm(true); } },
   ];
@@ -75,9 +69,7 @@ export function ShootPage() {
       <div><button onClick={() => nav('/library')} style={{ display: 'inline-flex', alignItems: 'center', height: 32, padding: '0 12px', borderRadius: 999, color: 'var(--text2)', fontSize: 13.5, background: 'var(--hover)' }}>← Library</button></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px 32px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-          {renaming
-            ? <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') void saveName(); if (e.key === 'Escape') setRenaming(false); }} aria-label="Shoot name" maxLength={120} style={{ font: `400 48px/1.05 ${serif}`, background: 'transparent', border: 0, borderBottom: '1px solid var(--outline)', outline: 'none', color: 'var(--text)', minWidth: 320 }} />
-            : <h1 onClick={() => { setName(s.name); setRenaming(true); }} title="Click to rename" style={{ font: `400 48px/1.05 ${serif}`, margin: 0, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)', cursor: 'text', overflowWrap: 'anywhere' }}>{title}</h1>}
+          <h1 style={{ font: `400 48px/1.05 ${serif}`, margin: 0, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)', overflowWrap: 'anywhere' }}>{title}</h1>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, fontSize: 13.5, color: 'var(--muted)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
             <span style={{ color: 'var(--text2)' }}>{s.place || 'Add a location'}</span><span>· {s.dates}{cam ? ' ·' : ''}</span>
@@ -86,6 +78,7 @@ export function ShootPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => protect(!s.protected)} aria-pressed={!!s.protected} title={s.protected ? 'Protected from deletion · click to turn off' : 'Stop this shoot and its photos from being deleted'} style={{ ...pill, padding: '0 16px 0 14px', background: s.protected ? 'var(--chip)' : 'transparent', boxShadow: s.protected ? 'none' : 'inset 0 0 0 1px var(--outline)' }}><Lock open={!s.protected} />{s.protected ? 'Protected' : 'Protect'}</button>
+          <button onClick={() => setEditing(true)} style={pill}>Edit shoot</button>
           <button onClick={() => setSharing(true)} style={pill}>Share</button>
           <button onClick={() => ref.current.review()} disabled={!due.length} style={{ ...pill, opacity: due.length ? 1 : 0.5 }}>{due.length ? `Review · ${due.length} due` : 'Nothing due'}<span style={{ ...key, color: 'var(--faint)' }}>R</span></button>
           <button onClick={() => ref.current.compose()} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, whiteSpace: 'nowrap' }}>Compose from this shoot<span style={key}>C</span></button>
@@ -123,6 +116,7 @@ export function ShootPage() {
       <JustifiedGrid photos={photos} selecting={selecting} picked={picked} due={isDue} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}`))} />
 
       {selecting && <PickedBar ids={[...picked]} photos={photos} shoots={all.data ?? []} onClear={() => setPicked(new Set())} onChanged={() => { list.reload(); shoot.reload(); all.reload(); }} say={toast.say} />}
+      {editing && <EditShoot shoot={s} onClose={() => setEditing(false)} onSaved={(m) => { setEditing(false); shoot.reload(); list.reload(); all.reload(); toast.say(m); }} />}
       {sharing && <SharePanel kind="shoot" id={s.id} name={title} onClose={() => setSharing(false)} />}
       {confirm && <DeleteShootDialog title={`Delete “${title}”?`} count={photos.length} onKeep={() => remove('orphan')} onDelete={() => remove('delete')} onClose={() => setConfirm(false)} />}
       {toast.node}

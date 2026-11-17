@@ -39,8 +39,8 @@ describe('the default schedule', () => {
     const fresh = new Database(':memory:');
     migrate(fresh);
     expect(loadSettings(fresh).sessions).toBe(7);
-    // The schedule migration is the second from last; the one after it (a private-shoot column) is safe to run again.
-    const rerunLast = (db: Database.Database) => { db.pragma(`user_version = ${Number(db.pragma('user_version', { simple: true })) - 2}`); migrate(db); };
+    // The schedule migration is the fourth from last; the three after it (private shoots, To do's Shoot reason, photo rotation) are safe to run again.
+    const rerunLast = (db: Database.Database) => { db.pragma(`user_version = ${Number(db.pragma('user_version', { simple: true })) - 4}`); migrate(db); };
     const old = new Database(':memory:');
     migrate(old);
     old.prepare("INSERT INTO shoots(id, name, imported_at) VALUES(1, 's', '2026-01-01')").run();

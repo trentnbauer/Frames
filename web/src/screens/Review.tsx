@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RotateButton } from '../components/RotateButton';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
@@ -110,6 +111,7 @@ export function Review() {
       onChooseOffer={() => { if (offer) { setPickFor(offer.id); setOffer(null); } }}
       renderCompPicker={(close: () => void, d: (m: string) => void) => <CompPicker ids={[pickFor ?? cur?.id ?? 0]} from="The photo you just rated" onClose={() => { setPickFor(null); close(); }} onDone={(m) => { setPickFor(null); colls.reload(); d(m); }} />}
       onOpenPhoto={() => cur && nav(`/photo/${cur.id}`)}
+      rotateBtn={cur ? <RotateButton id={cur.id} onDone={() => setS({ ...s })} /> : null}
       onLeaveOut={async () => { if (cur) { await api(`/photos/${cur.id}`, { method: 'PATCH', body: { archived: true } }).catch(() => undefined); await move(s.index + 1); } }}
       onUndo={async () => { if (s.index > 0) await move(s.index - 1); }}
       delSub={`${s.shootName ?? 'This photo'} · photo ${s.index + 1} of ${s.queue.length}`}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { SegSlider } from './SegSlider';
 import { api, useApi } from '../api';
 import type { Collection } from '../data';
 import { useUi } from '../ui';
@@ -52,7 +53,7 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
       foot={tab === 'existing'
         ? <><span className="grow">{err ? <span className="reason" style={{ margin: 0 }}>{err}</span> : changes.length ? `${changes.length} change${changes.length === 1 ? '' : 's'}` : ''}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={apply} disabled={!changes.length || busy}>Apply</button></>
         : <><span className="grow" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={!name.trim()}>Create and continue</button></>}>
-      <div className="seg" role="tablist">
+      <div className="seg" role="tablist"><SegSlider />
         <button role="tab" aria-selected={tab === 'existing'} className={tab === 'existing' ? 'on' : ''} onClick={() => setTab('existing')}>Existing composition</button>
         <button role="tab" aria-selected={tab === 'new'} className={tab === 'new' ? 'on' : ''} onClick={() => setTab('new')}>New composition</button>
       </div>

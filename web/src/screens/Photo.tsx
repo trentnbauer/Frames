@@ -1,4 +1,5 @@
 import { usePhoneWidth } from '../usePhoneWidth';
+import { RotateButton } from '../components/RotateButton';
 import { MobilePhoto } from '../mobile/Photo';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -109,7 +110,7 @@ function DesktopPhoto() {
       <ProtoPhoto
         colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}
         photoSrc={imgUrl(p.id, 'preview')} idx={idx >= 0 ? idx + 1 : 1} total={stepIds.length || 1} shootName={shoot?.name ?? 'Library'} onBack={back}
-        onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)}
+        onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)} rotateBtn={<RotateButton id={p.id} onDone={() => photo.reload()} />}
         mates={mates.map((m) => ({ id: m.id, src: imgUrl(m.id, 'thumb'), ar: m.ar, current: m.id === p.id }))} onOpenMate={(mid: number) => nav(`/photo/${mid}`)}
         pfOn={inPf.data?.state === 'in' || inPf.data?.state === 'auto'} pfLabel={inPf.data?.state === 'in' ? 'In portfolio' : inPf.data?.state === 'auto' ? `Auto · score ${inPf.data.score?.toFixed(1)}` : 'Add to portfolio'}
         pfTitle={inPf.data?.state === 'auto' ? 'Added by your score rule. Click to keep it out.' : 'Show this photograph in your public portfolio'}
