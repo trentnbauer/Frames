@@ -70,11 +70,11 @@ export const isPortfolioPath = (url: string): boolean => {
   return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|avatar\.jpg|css\/style\.css|js\/(app|theme)\.js|images\/manifest\.json|gear\.json|fonts\/[\w.-]{1,60}\.woff2|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
 };
 
-/** "2026-Autumn-KonicaAutoS2-FujiC200-R01-0024" gives camera "Konica Auto S 2" and film "Fuji C 200". Same rule as the old build. */
-const humanise = (t: string) => t.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2').replace(/(\d)([A-Za-z])/g, '$1 $2').trim();
-export function parseFilenameMeta(file: string): { camera?: string; film?: string } {
-  const tokens = path.parse(file).name.split('-');
-  return tokens.length < 4 ? {} : { camera: humanise(tokens[2]), film: humanise(tokens[3]) };
+/** What Frames knows about how a photograph was taken, as one caption line: "1/250s · f/2.8 · 35mm · ISO 400". */
+export function exposureLine(p: Row): string {
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? +v.toFixed(1) : null);
+  const sh = String(p.shutter ?? '').trim(), f = n(p.aperture), mm = n(p.focal_mm), iso = n(p.iso);
+  return [sh && `${sh.replace(/s$/, '')}s`, f && `f/${f}`, mm && `${mm}mm`, iso && `ISO ${Math.round(iso)}`].filter(Boolean).join(' · ');
 }
 
 /** First path segments a handle may never take: the app's own pages, routes and files. */
@@ -219,10 +219,12 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   });
   app.get('/portfolio/images/manifest.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
-    // Only what the page needs: a title, the date, the size, and (if allowed) the camera and film. No place, notes, file path or location.
+    // Only what the page needs: a title, the date, the size, and (if captions are on) the place name and how it was taken, as recorded in Frames.
+    // Never coordinates, notes or the file path. A place set to show only its suburb or city is left out: Frames keeps no coarser name to show instead.
     return open(rep).send(photos(c).map((p) => {
       const scale = Math.min(1, MAX_DIM / Math.max(p.w || 1, p.h || 1));
-      const meta = c.captions ? { ...parseFilenameMeta(p.file), ...(parseFilenameMeta(p.file).camera ? {} : p.camera ? { camera: String(p.camera) } : {}) } : {};
+      const text = (v: unknown) => String(v ?? '').trim() || undefined;
+      const meta = c.captions ? { place: (p.place_precision ?? 'exact') === 'exact' ? text(p.place) : undefined, camera: text(p.camera), lens: text(p.lens), film: text(p.film), exposure: exposureLine(p) || undefined } : {};
       return {
         file: `images/${p.id}.jpg`,
         ...(c.fullSize === 'original' && originalsAllowed() ? { original: `images/${p.id}-full` } : {}),

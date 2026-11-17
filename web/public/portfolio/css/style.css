@@ -64,7 +64,7 @@ html[data-theme=light] .lightbox { background: rgba(5,5,5,.92); }
 .lightbox-img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; display: block; }
 .lightbox-img.is-loading { filter: blur(6px); opacity: .85; }
 .lightbox-close { position: absolute; top: 12px; right: 18px; font-size: 32px; width: 44px; height: 44px; color: #efede8; }
-.lightbox-caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font: 500 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.lightbox-caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font: 500 12px var(--mono); letter-spacing: .04em; white-space: pre-line; text-align: center; line-height: 1.7; width: max-content; max-width: calc(100vw - 32px); }
 .lightbox-spinner { position: absolute; width: 22px; height: 22px; border: 2px solid rgba(239,237,232,.3); border-top-color: #efede8; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 1199px) { .hero-avatar { width: 200px; height: 200px; } .hero-row { gap: 36px; } .gallery { padding: 0 24px 48px; } }

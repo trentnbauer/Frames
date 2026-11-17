@@ -216,7 +216,8 @@
         spinner.hidden = false;
       }
 
-      const captionText = [entry.camera, entry.film].filter(Boolean).join(' · ');
+      // Where it was taken, then how: the details recorded in Frames.
+      const captionText = [entry.place, [entry.camera, entry.lens, entry.film, entry.exposure].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
       caption.textContent = captionText;
       caption.hidden = !captionText;
 
