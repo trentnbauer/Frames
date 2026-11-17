@@ -268,7 +268,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!one('SELECT 1 x FROM shares WHERE id = ?', id)) return notFound(rep);
     return { invites: all('SELECT email, status, error, at FROM share_invites WHERE share_id = ? ORDER BY id DESC LIMIT 100', id), canEmail: smtpHealthy(x.sys) };
   });
-  app.post('/api/shares/:id/invites', async (req, rep) => {
+  app.post('/api/shares/:id/invites', { config: { rateLimit: { max: 6, timeWindow: '1 hour' } } }, async (req, rep) => {
     const id = num((req.params as Row).id);
     const s = one('SELECT * FROM shares WHERE id = ?', id);
     if (!s) return notFound(rep);
@@ -388,7 +388,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
       ...(p ? [['og:image', `${base}/s/${token}/preview.jpg`], ['og:image:width', '1600']] : []),
       ['twitter:card', p ? 'summary_large_image' : 'summary'], ['twitter:title', title], ['twitter:description', text],
     ].map(([k, v]) => `<meta ${k.startsWith('og:') ? 'property' : 'name'}="${k}" content="${esc(v)}">`).join('\n    ');
-    return rep.type('text/html').send(html.replace('<title>Frames</title>', `<title>${esc(title)} · Frames</title>\n    ${tags}`));
+    return rep.type('text/html').send(html.replace('<title>Frames</title>', () => `<title>${esc(title)} · Frames</title>\n    ${tags}`));
   });
   app.get('/s/:token/preview.jpg', async (req, rep) => {
     if (limited(req, rep, 'image')) return;
