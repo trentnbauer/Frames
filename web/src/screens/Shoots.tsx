@@ -14,6 +14,8 @@ import { useUi } from '../ui';
 import ProtoShoots from '../proto/ProtoShoots';
 import { reviewUrl } from '../reviewScope';
 import { SharePanel } from '../components/SharePanel';
+import { MoveToShoot } from '../components/MoveToShoot';
+import { Modal } from '../components/Modal';
 import { ShootDate } from '../components/ShootDate';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
@@ -72,6 +74,8 @@ function DesktopShoots() {
   const cloud = useApi<{ connections: Conn[] }>(status.data?.storage.cloud || status.data?.cloudProviders.length ? '/cloud' : null);
   const shootPhotos = useApi<{ photos: PhotoLite[] }>(sid ? `/photos?shoot=${sid}&order=oldest` : null);
   const [shareId, setShareId] = useState<number | null>(null);
+  const [moving, setMoving] = useState<{ ids: number[]; done: () => void } | null>(null);
+  const [moveErr, setMoveErr] = useState('');
   const [q, setQ] = useState('');
   const [newest, setNewest] = useState(true);
   const [filter, setFilter] = useState<'' | 'uncomposed' | 'review'>('');
@@ -136,6 +140,15 @@ function DesktopShoots() {
   return (
     <BrowsePage>
       <input ref={input} type="file" multiple hidden accept="image/*,.heic,.tif,.tiff,.raw,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2" onChange={(e) => { setFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+      {moving && (
+        <Modal title="Move to a shoot" sub={`${moving.ids.length} ${moving.ids.length === 1 ? 'photograph' : 'photographs'} selected`} width={560} onClose={() => setMoving(null)}>
+          <MoveToShoot count={moving.ids.length} shoots={all} canOrphan busy={false} error={moveErr}
+            onAdd={async (to) => { try { await api(`/shoots/${to.id}/move`, { body: { photoIds: moving.ids } }); moving.done(); setMoving(null); reloadAll(); } catch (e) { setMoveErr((e as Error).message); } }}
+            onCreate={async (name) => { try { await api('/shoots', { body: { name, photoIds: moving.ids } }); moving.done(); setMoving(null); reloadAll(); } catch (e) { setMoveErr((e as Error).message); } }}
+            onOrphan={async () => { try { await api('/photos/orphan', { body: { photoIds: moving.ids } }); moving.done(); setMoving(null); reloadAll(); } catch (e) { setMoveErr((e as Error).message); } }}
+            onClose={() => setMoving(null)} />
+        </Modal>
+      )}
       {shareId !== null && <SharePanel kind="shoot" id={shareId} name={all.find((s) => s.id === shareId)?.name} onClose={() => setShareId(null)} />}
       <ProtoShoots
         shareControl={sid !== null ? <button className="btn outline" onClick={() => setShareId(sid)}>Share</button> : null}
@@ -165,6 +178,7 @@ function DesktopShoots() {
         onOpenShoot={(i: number) => nav(`/shoots/${i}`)} onCloseShoot={() => nav('/shoots')}
         shoot={view} shootPhotos={viewPhotos} onOpenPhoto={(pid: number) => nav(`/photo/${pid}`)}
         moveTargets={all.map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos · ${s.dates}`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
+        onOpenMove={(ids: number[], done: () => void) => { setMoveErr(''); setMoving({ ids, done }); }}
         onMove={async (ids: number[], m: { mode: string; name: string; shootId: number | null }) => {
           let dest = '';
           if (m.mode === 'new') { const s = await api<Shoot>('/shoots', { body: { name: m.name || todayName(), photoIds: ids } }); dest = s.name; } else { await api(`/shoots/${m.shootId}/move`, { body: { photoIds: ids } }); dest = all.find((s) => s.id === m.shootId)?.name ?? ''; }

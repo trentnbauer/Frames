@@ -44,7 +44,8 @@ export function MobileLibrary() {
   const photos = (list.data?.photos ?? []).filter((p) => (filter === 'ai' ? aiIds.has(p.id) : filter === 'noplace' ? p.lat === null && !p.place : filter === 'noshoot' ? p.orphaned : true));
   const shootName = (id: number) => shoots.data?.find((s) => s.id === id)?.name ?? 'Photos';
   const orphans = photos.filter((p) => p.orphaned);
-  const groups = [...(orphans.length ? [{ s: { id: 0, name: 'No shoot', dates: '' } as Shoot, ps: orphans }] : []), ...(shoots.data ?? []).map((s) => ({ s, ps: photos.filter((p) => p.shootId === s.id) })).filter((g) => g.ps.length)];
+  // A search shows every match together, not split by shoot.
+  const groups = q ? (photos.length ? [{ s: { id: 0, name: `Results for “${q}”`, dates: '' } as Shoot, ps: [...orphans, ...(shoots.data ?? []).flatMap((s) => photos.filter((p) => p.shootId === s.id))] }] : []) : [...(orphans.length ? [{ s: { id: 0, name: 'No shoot', dates: '' } as Shoot, ps: orphans }] : []), ...(shoots.data ?? []).map((s) => ({ s, ps: photos.filter((p) => p.shootId === s.id) })).filter((g) => g.ps.length)];
   const flip = (id: number) => setSel((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const ids = [...sel];
   const done = (msg: string) => { setSheet(null); setSelecting(false); setSel(new Set()); setNote(msg); list.reload(); shoots.reload(); refreshSummary(); window.setTimeout(() => setNote(''), 2600); };

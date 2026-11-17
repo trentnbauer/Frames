@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { imgUrl, useApi } from '../api';
 import { AddPhotosModal } from '../components/AddPhotos';
+import { LibraryMore } from '../components/LibraryMore';
+import { useLibraryFilters } from '../components/LibraryFilters';
 import type { PhotoLite, Shoot } from '../data';
 import { JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
 
@@ -12,23 +14,28 @@ const PHOTO_CHIPS: [string, string][] = [['due', 'Due for review'], ['unrated', 
 export const isUntitled = (s: Shoot) => !s.name.trim() || /^\d{1,2} [A-Za-z]{3} \d{4}$/.test(s.name.trim());
 
 /** Library on a wide screen (the design): one page with Shoots and Photos views, a search, chips, and a Select mode for the photos. */
-export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
+export function LibraryPage() {
   const nav = useNavigate();
   const [sp, setSp] = useSearchParams();
-  const view = sp.get('view') === 'photos' ? 'photos' : 'shoots';
+  // Every filter in the address (from the Filters menus, Search, Stats or "Find similar") goes to the server; the view's own keys do not.
+  const asked = new URLSearchParams(sp); for (const k of ['view', 'add', 'adv', 'select', 'f']) asked.delete(k);
+  const filtered = asked.toString() !== '';
+  const photos = useApi<{ total: number; photos: PhotoLite[] }>(`/photos${filtered ? `?${asked}` : ''}`);
+  // A link with filters (from Search, Stats or "Find similar") opens the Photos view.
+  const view = sp.get('view') === 'photos' || (filtered && sp.get('view') !== 'shoots') ? 'photos' : 'shoots';
   const [q, setQ] = useState('');
   const [chip, setChip] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(sp.get('add') === '1');
   const shoots = useApi<Shoot[]>('/shoots');
-  const photos = useApi<{ total: number; photos: PhotoLite[] }>('/photos');
+  const filters = useLibraryFilters(shoots.data ?? []);
   const pending = useApi<{ count: number }>('/library/pending');
   const toast = useToast();
   const all = shoots.data ?? [];
   const list = photos.data?.photos ?? [];
   const needle = q.trim().toLowerCase();
-  const setView = (v: string) => { const n = new URLSearchParams(sp); if (v === 'photos') n.set('view', 'photos'); else n.delete('view'); n.delete('add'); setSp(n, { replace: true }); setChip(null); setSelecting(false); setPicked(new Set()); };
+  const setView = (v: string) => { const n = new URLSearchParams(sp); n.set('view', v); n.delete('add'); setSp(n, { replace: true }); setChip(null); setSelecting(false); setPicked(new Set()); };
   const reload = () => { shoots.reload(); photos.reload(); };
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -77,8 +84,16 @@ export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={view === 'shoots' ? 'Find a shoot, place or year' : 'Search titles, places, cameras, tags'} aria-label="Search the library" style={{ flex: 1, minWidth: 220, height: 40, borderRadius: 999, background: 'var(--surface)', border: 0, outline: 'none', padding: '0 18px', color: 'var(--text)', fontSize: 14 }} />
         {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} aria-pressed={selecting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 14, whiteSpace: 'nowrap', background: selecting ? 'var(--btn-bg)' : 'transparent', color: selecting ? 'var(--btn-fg)' : 'var(--text)', boxShadow: selecting ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{selecting ? 'Done' : 'Select'}<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>S</span></button>}
         {chips.map(([k, l]) => { const on = chip === k; return <button key={k} aria-pressed={on} onClick={() => setChip(on ? null : k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: on ? 'var(--chip)' : 'var(--hover)', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
-        {view === 'photos' && <button onClick={moreFilters} style={{ fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>More filters</button>}
+        {view === 'photos' && <button onClick={() => filters.setFiltersOpen(!filters.filtersOpen)} aria-expanded={filters.filtersOpen} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)', color: filters.filtersOpen ? 'var(--text)' : 'var(--text2)' }}>Filters{filters.chips.length ? ` · ${filters.chips.length}` : ''} {filters.filtersOpen ? '▴' : '▾'}</button>}
+        {view === 'photos' && <span className="library-more"><LibraryMore /></span>}
       </div>
+      {view === 'photos' && filters.panel}
+      {view === 'photos' && filters.chips.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '-12px 0 24px' }}>
+          {filters.chips.map((c) => <button key={c.label} onClick={c.remove} aria-label={`Remove filter ${c.label}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{c.label} <span aria-hidden style={{ color: 'var(--muted)' }}>×</span></button>)}
+          <button onClick={filters.clear} style={{ fontSize: 13, color: 'var(--text2)', marginLeft: 4 }}>Clear all</button>
+        </div>
+      )}
 
       {view === 'shoots' && (
         <>
@@ -99,7 +114,23 @@ export function LibraryPage({ moreFilters }: { moreFilters: () => void }) {
         </>
       )}
 
-      {view === 'photos' && (
+      {view === 'photos' && (needle || filtered) && (() => {
+        // A search or a filter shows every match together, in the server's order (most similar first, for one), not split by shoot.
+        const hits = list.filter(match);
+        const title = needle ? `Results for “${q.trim()}”` : 'Matching photos';
+        return (
+          <div style={{ marginBottom: 36 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}><span style={{ font: `400 24px/1 ${serif}` }}>{title}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{hits.length} {hits.length === 1 ? 'photo' : 'photos'}</span></div>
+              {selecting && hits.length > 0 && <button onClick={() => setPicked((c) => { const n = new Set(c); const every = hits.every((p) => n.has(p.id)); hits.forEach((p) => (every ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>{hits.every((p) => picked.has(p.id)) ? 'Clear' : 'Select all'}</button>}
+            </div>
+            {hits.length > 0
+              ? <JustifiedGrid photos={hits} selecting={selecting} picked={picked} due={isDue} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}?in=library`))} />
+              : photos.data && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>No photographs match.</div>}
+          </div>
+        );
+      })()}
+      {view === 'photos' && !needle && !filtered && (
         <>
           {orphans.length > 0 && (
             <div style={{ marginBottom: 36 }}>

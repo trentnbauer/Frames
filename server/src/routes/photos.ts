@@ -81,8 +81,10 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     for (const s of String(q.subject ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push("EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.kind = 'subject' AND t.accepted = 1)"); args.push(s);
     }
-    // ?missing=subject or ?missing=tag: photographs with none yet.
+    // ?missing=subject, tag, camera, lens, film or place: photographs with none yet.
     for (const k of String(q.missing ?? '').split(',')) {
+      if (k === 'camera' || k === 'lens' || k === 'film') where.push(`COALESCE(p.${k}, '') = ''`);
+      if (k === 'place') where.push("COALESCE(p.place, '') = '' AND p.lat IS NULL AND NOT EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND s.place != '')");
       if (k === 'subject' || k === 'tag') where.push(`NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = '${k}' AND t.accepted = 1${k === 'tag' ? " AND t.source <> 'gear'" : ''})`); // tags made from camera details do not count as tagged
     }
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
