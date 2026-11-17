@@ -135,7 +135,7 @@ describe('the one-at-a-time list', () => {
 
   it('leaves out a reason that is switched off, lists opt-in reasons only when on, and lists poorly reviewed photographs', async () => {
     const photos = (await A.get('/api/photos')).body.photos as any[];
-    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['location', 'subjects', 'tags', 'description']);
+    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['shoot', 'location', 'subjects', 'tags', 'description']);
     expect(await kinds()).not.toContain('camera');
     await A.put('/api/settings', { todoReasons: ['camera', 'nonsense'] });
     expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['camera']); // unknown reasons are dropped

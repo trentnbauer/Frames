@@ -21,6 +21,12 @@ describe('photographs in no photoshoot', () => {
     expect(await photos('?orphaned=1')).toHaveLength(4);
     const item = ((await a.get('/api/todo')).body.items as any[]).find((i) => i.key === 'orphaned');
     expect(item.count).toBe(4);
+    // Unticking "Shoot" under To do keeps them off the list; ticking it brings them back.
+    const reasons = (await a.get('/api/settings')).body.settings.todoReasons as string[];
+    await a.put('/api/settings', { todoReasons: reasons.filter((r) => r !== 'shoot') });
+    expect(((await a.get('/api/todo')).body.items as any[]).some((i) => i.key === 'orphaned')).toBe(false);
+    await a.put('/api/settings', { todoReasons: reasons });
+    expect(((await a.get('/api/todo')).body.items as any[]).some((i) => i.key === 'orphaned')).toBe(true);
   });
   it('cannot be treated as a photoshoot: not found, not editable, not deletable, not shareable', async () => {
     const hidden = (await photos())[0].shootId;
