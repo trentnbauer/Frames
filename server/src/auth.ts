@@ -273,22 +273,17 @@ export function createAuth(db: DB, cfg: AppCfg) {
   }
 
   // ---------- the gate ----------
-  // The shared password is checked with scrypt (a slow, salted hash), and a header that has been checked once is remembered in memory, so a
-  // signed-in script does not pay for it on every request. Wrong attempts are limited below.
-  const salt = crypto.randomBytes(16);
-  const slow = (s: string) => crypto.scryptSync(s, salt, 32, { N: 16384 });
-  const expected = cfg.authPassword ? slow(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`) : null;
-  const accepted = new Set<string>();
+  // The shared password is only ever in memory (from the environment), so there is no stored hash to protect with a slow one: a slow hash
+  // would only let wrong guesses from many addresses tie up the server. Both sides are run through a keyed hash to compare in constant time.
+  const key = crypto.randomBytes(32);
+  const mac = (s: string) => crypto.createHmac('sha256', key).update(s).digest();
+  const expected = cfg.authPassword ? mac(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`) : null;
   const passwordOk = (req: FastifyRequest) => {
     if (!expected) return false;
-    const h = req.headers.authorization ?? '';
-    if (accepted.has(h)) return true;
-    const m = /^Basic (.+)$/.exec(h);
+    const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
     if (!m) return false;
     const [u = '', ...rest] = Buffer.from(m[1], 'base64').toString().split(':');
-    const ok = crypto.timingSafeEqual(slow(`${u}:${rest.join(':')}`), expected);
-    if (ok) { if (accepted.size >= 50) accepted.clear(); accepted.add(h); }
-    return ok;
+    return crypto.timingSafeEqual(mac(`${u}:${rest.join(':')}`), expected);
   };
   // Wrong shared-password attempts are counted per address: after 10 in a minute, even the right password is refused until the minute is up.
   const wrong = new Map<string, { n: number; reset: number }>();

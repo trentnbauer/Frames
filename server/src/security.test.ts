@@ -1,8 +1,9 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { openDb } from './db.js';
 import { buildXmp, readSidecar } from './xmp.js';
@@ -56,6 +57,14 @@ describe('guessing the shared password', () => {
     expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.0.0.1') })).statusCode).toBe(429);
     // Someone else is not affected.
     expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.0.0.2') })).statusCode).toBe(200);
+  });
+  it('does no slow hashing for a wrong guess, so guesses from many addresses cannot stall the server', async () => {
+    const spy = vi.spyOn(crypto, 'scryptSync');
+    try {
+      for (let i = 0; i < 50; i++) expect((await app2.inject({ url: '/api/photos', headers: { authorization: basic('me', `guess${i}`) }, ...ip(`10.1.0.${i}`) })).statusCode).toBe(401);
+      expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.1.1.1') })).statusCode).toBe(200);
+      expect(spy).not.toHaveBeenCalled();
+    } finally { spy.mockRestore(); }
   });
   it('is the same limit on /auth/password, so that page cannot be used to guess for free', async () => {
     const bad = { authorization: basic('me', 'nope') };
