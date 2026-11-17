@@ -53,6 +53,7 @@ export function ShootPage() {
   const reviewed = photos.filter((p) => p.reviewCount > 0 && !isDue(p)).length;
   const loved = photos.filter((p) => p.avgRating >= 4.5).length;
   const protect = async (on: boolean) => { setErr(''); setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { protected: on } }); shoot.reload(); toast.say(on ? `“${title}” is protected from deletion` : 'Protection turned off'); } catch (e) { setErr((e as Error).message); } };
+  const makePrivate = async (on: boolean) => { setErr(''); setMenu(false); try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { private: on } }); shoot.reload(); toast.say(on ? `“${title}” is private: only an AI on your own network looks at its photographs` : `“${title}” is no longer private`); } catch (e) { setErr((e as Error).message); } };
   const saveName = async () => { const v = name.trim(); setRenaming(false); if (!v || v === s.name) return; try { await api(`/shoots/${s.id}`, { method: 'PATCH', body: { name: v } }); shoot.reload(); } catch (e) { setErr((e as Error).message); } };
   const remove = async (photos: 'orphan' | 'delete') => { setConfirm(false); try { await api(`/shoots/${s.id}${photos === 'orphan' ? '?photos=orphan' : ''}`, { method: 'DELETE' }); refreshSummary(); nav('/library', { replace: true }); } catch (e) { setErr((e as Error).message); } };
   const flip = (pid: number) => setPicked((c) => { const n = new Set(c); if (n.has(pid)) n.delete(pid); else n.add(pid); return n; });
@@ -64,6 +65,7 @@ export function ShootPage() {
     { label: 'Rename shoot', go: () => { setMenu(false); setName(s.name); setRenaming(true); } },
     { label: 'Edit place, dates and camera…', go: () => { setMenu(false); setSp({ adv: '1' }); } },
     { label: s.protected ? 'Turn off protection' : 'Protect from deletion', go: () => protect(!s.protected) },
+    { label: s.private ? 'Make not private' : 'Make private', sub: s.private ? 'Private: only an AI on your own network sees its photographs.' : 'Only an AI on your own network will see its photographs.', go: () => makePrivate(!s.private) },
     { sep: true, label: 'Delete shoot…', sub: s.protected ? 'Protected. Turn off protection to delete it.' : 'Keep its photographs, or delete them with it.', fg: s.protected ? 'var(--faint)' : 'var(--danger)', go: () => { setMenu(false); if (s.protected) toast.say('This shoot is protected. Turn off protection to delete it.'); else setConfirm(true); } },
   ];
   const cam = s.gear?.camera || photos.find((p) => p.camera)?.camera || '';

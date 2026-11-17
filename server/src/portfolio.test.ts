@@ -120,6 +120,17 @@ describe('the public site', () => {
     expect(m.every((e) => !('camera' in e) && !('film' in e))).toBe(true);
     await A.put('/api/portfolio', { captions: true });
   });
+  it('leaves out photographs tagged nudity, violence or adult while "Keep flagged photos off my portfolio" is on', async () => {
+    const id = ids['third.png'];
+    const listed = async () => ((await get('/portfolio/images/manifest.json')).json() as any[]).map((e) => e.file);
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'Adult', 'user', 1, 'tag')").run(id);
+    expect(await listed()).toContain(`images/${id}.jpg`); // off by default
+    await A.put('/api/prefs', { sensPf: true });
+    expect(await listed()).not.toContain(`images/${id}.jpg`);
+    expect((await get(`/portfolio/images/${id}.jpg`)).statusCode).toBe(404);
+    await A.put('/api/prefs', { sensPf: false });
+    env.db.prepare("DELETE FROM tags WHERE photo_id = ? AND name = 'Adult'").run(id);
+  });
   it('serves a resized progressive JPEG with no camera data, even from a file that has GPS', async () => {
     const r = await get(`/portfolio/images/${ids['2026-Autumn-KonicaAutoS2-FujiC200-R01-0024.jpg']}.jpg`);
     expect(r.statusCode).toBe(200);
