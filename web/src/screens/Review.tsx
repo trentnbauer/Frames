@@ -95,6 +95,7 @@ export function Review() {
         onAddOffer={async () => { if (!offer) return; await api(`/collections/${offer.comp.id}/photos/${offer.id}`, { method: 'PUT' }); setOffer(null); colls.reload(); }}
         onChooseOffer={() => { if (offer) { setPickFor(offer.id); setOffer(null); } }}
         renderCompPicker={(close, d) => <CompPicker ids={[pickFor ?? cur.id]} from="The photo you just rated" onClose={() => { setPickFor(null); close(); }} onDone={(m) => { setPickFor(null); colls.reload(); d(m); }} />}
+        rotateBtn={<RotateButton id={cur.id} onDone={() => setS({ ...s })} style={{ width: 36, height: 36, background: 'rgba(255,255,255,.08)', color: '#efede8' }} />}
         error={saveErr}
       />
       {favModal}
