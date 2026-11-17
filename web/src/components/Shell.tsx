@@ -1,4 +1,5 @@
 import { AiIndicator } from './AiIndicator';
+import { SegSlider } from './SegSlider';
 import { TodoNav } from './TodoNav';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -276,7 +277,7 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn outline" onClick={() => setReset(true)}>Clear site data…</button>
       </div>
       {reset && <ClearSiteDataModal onClose={() => setReset(false)} />}
-      <div className="seg" role="tablist">{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+      <div className="seg" role="tablist"><SegSlider />{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
       <input className="field-in" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={KINDS.find((k) => k[0] === kind)![2]} aria-label="Title" />
       <textarea className="field-in" value={body} onChange={(e) => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" aria-label="Details" />
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--text2)', cursor: 'pointer' }}>

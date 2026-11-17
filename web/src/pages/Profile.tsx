@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { api, useApi } from '../api';
 import { useStore } from '../store';
 import { SignInMethods } from './SignInMethods';
@@ -75,7 +76,7 @@ export function Profile() {
       <div className="field">
         <h3>Seasons</h3>
         <p>Photos get a season chip from their date. Auto follows your country{p.data.seasons === 'auto' && p.data.hemisphere === 'none' ? ', and near the equator it shows no seasons' : ''}.</p>
-        <div className="seg">{([['auto', 'Auto (from country)'], ['north', 'Northern'], ['south', 'Southern'], ['off', 'Don’t show seasons']] as const).map(([k, l]) => <button key={k} className={p.data!.seasons === k ? 'on' : ''} onClick={() => run(() => api('/profile', { method: 'PUT', body: { seasons: k } }), 'Seasons saved.')}>{l}</button>)}</div>
+        <div className="seg"><SegSlider />{([['auto', 'Auto (from country)'], ['north', 'Northern'], ['south', 'Southern'], ['off', 'Don’t show seasons']] as const).map(([k, l]) => <button key={k} className={p.data!.seasons === k ? 'on' : ''} onClick={() => run(() => api('/profile', { method: 'PUT', body: { seasons: k } }), 'Seasons saved.')}>{l}</button>)}</div>
       </div>
       <div className="field">
         <h3>Time zone</h3>

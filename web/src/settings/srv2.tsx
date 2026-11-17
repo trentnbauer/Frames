@@ -1,4 +1,5 @@
 import { confirmAction } from '../components/dialogs';
+import { SegSlider } from '../components/SegSlider';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -133,7 +134,7 @@ function MailLog({ ctx }: { ctx: Ctx }) {
   return (
     <Modal title="Email log" sub={`Last 30 days · ${rows.length - failed} sent · ${failed} failed`} width={800} onClose={close(ctx)}
       foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer', opacity: failed ? 1 : 0.4 }} onClick={async () => { if (failed) { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); ctx.toast(`${r.sent} resent`); l.reload(); } }}>Retry failed</span><a className="btn outline" href="/api/admin/email/log.csv" download>Download CSV</a><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
-      <div className="seg" role="tablist" style={{ alignSelf: 'flex-start', margin: '12px 0' }}>{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
+      <div className="seg" role="tablist" style={{ alignSelf: 'flex-start', margin: '12px 0' }}><SegSlider />{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
       <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '2px 14px', maxHeight: 380, overflow: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--hair)', ...eyebrow }}><span>When</span><span>To</span><span>Subject</span><span>Type</span><span style={{ textAlign: 'right' }}>Status</span></div>
         {rows.slice(0, 80).map((r) => (

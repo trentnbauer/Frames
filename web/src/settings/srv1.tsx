@@ -1,4 +1,5 @@
 import { confirmAction } from '../components/dialogs';
+import { SegSlider } from '../components/SegSlider';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { parseMb, parseSize, showMb, showSize } from './size';
@@ -105,7 +106,7 @@ function Invite({ ctx, reload }: { ctx: Ctx; reload: () => void }) {
     <Modal title="Invite someone" sub="They are added to the allowed list and sent an email if email is set up." width={540} onClose={close(ctx)} foot={<><span className="grow" /><button className="btn primary" disabled={!ok} onClick={() => void send()}>Send invite</button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
         <input className="field-in" autoFocus value={email} placeholder="name@example.com" aria-label="Email address" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ok) void send(); }} />
-        <div className="seg" role="group" aria-label="Role" style={{ alignSelf: 'flex-start' }}>{ROLES.map((r) => <button key={r} className={role === r ? 'on' : ''} aria-pressed={role === r} onClick={() => setRole(r)}>{r}</button>)}</div>
+        <div className="seg" role="group" aria-label="Role" style={{ alignSelf: 'flex-start' }}><SegSlider />{ROLES.map((r) => <button key={r} className={role === r ? 'on' : ''} aria-pressed={role === r} onClick={() => setRole(r)}>{r}</button>)}</div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{{ Admin: 'Everything, including these server settings.', Member: 'Their own library, shoots and compositions.', 'Guest only': 'Only sees compositions shared with them. Can rate and suggest.' }[role]}</div>
         <textarea className="field-in" rows={3} value={note} placeholder="Add a note…" aria-label="A note" onChange={(e) => setNote(e.target.value)} />
         {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}

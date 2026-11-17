@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { api, useApi } from '../api';
 import { Modal, Spinner } from '../components/Modal';
 import { Eyebrow, PSelect, PSwitch, SCard, SRow } from '../components/srow';
@@ -54,7 +55,7 @@ export function NotificationSettings() {
       <div className="field">
         <h3>Review reminder</h3>
         <p>An email when photos are due. Weekly is Monday 09:00 your time, and only when something is due.</p>
-        <div className="seg">{(['off', 'daily', 'weekly'] as const).map((r) => <button key={r} className={p.reviewReminder === r ? 'on' : ''} onClick={() => put({ reviewReminder: r })} style={{ textTransform: 'capitalize' }} disabled={!emailOk}>{r}</button>)}</div>
+        <div className="seg"><SegSlider />{(['off', 'daily', 'weekly'] as const).map((r) => <button key={r} className={p.reviewReminder === r ? 'on' : ''} onClick={() => put({ reviewReminder: r })} style={{ textTransform: 'capitalize' }} disabled={!emailOk}>{r}</button>)}</div>
       </div>
       <div className="field">
         <h3>Quiet hours</h3>
@@ -144,7 +145,7 @@ export function EmailSettings() {
         {showLog && (
           <div className="sdetail">
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="seg">{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
+              <div className="seg"><SegSlider />{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
               <button className="ghost" onClick={() => run('retry', async () => { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); setMsg({ ok: true, t: `${r.sent} resent.` }); }, 'Retried.')} disabled={!log.data?.rows.some((r) => r.status === 'failed')}>Retry failed</button>
               <a className="ghost" href="/api/admin/email/log.csv" download>Download CSV</a>
             </div>
@@ -305,7 +306,7 @@ export function XmpLocationAdmin() {
     <div className="field">
       <h3>XMP sidecars</h3>
       <p>Where sidecar files with ratings and tags are written. It is a server-wide setting because it changes files on disk for everyone. Each person still chooses whether to write ratings and tags (Camera &amp; XMP).</p>
-      <Row title="Write sidecars"><div className="seg"><button className={r.data.location === 'next' ? 'on' : ''} onClick={() => set('next')}>Next to the photo</button><button className={r.data.location === 'folder' ? 'on' : ''} onClick={() => set('folder')}>In a Frames folder</button></div></Row>
+      <Row title="Write sidecars"><div className="seg"><SegSlider /><button className={r.data.location === 'next' ? 'on' : ''} onClick={() => set('next')}>Next to the photo</button><button className={r.data.location === 'folder' ? 'on' : ''} onClick={() => set('folder')}>In a Frames folder</button></div></Row>
     </div>
   );
 }

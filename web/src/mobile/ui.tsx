@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { useNavigate } from 'react-router-dom';
 
 /** Small pieces every phone page uses, so the pages stay close to the design without repeating its styles. */
@@ -28,7 +29,7 @@ export function Row({ label, sub, count, onClick, thumb, meta, chevron = '›', 
 /** A segmented control in a pill track; the chosen one is filled. */
 export function Seg<T extends string>({ options, value, onPick, label }: { options: [T, string][]; value: T; onPick: (v: T) => void; label: string }) {
   return (
-    <div role="group" aria-label={label} style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
+    <div role="group" aria-label={label} style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
       {options.map(([k, l]) => <button key={k} aria-pressed={value === k} onClick={() => onPick(k)} style={{ flex: 1, height: 38, borderRadius: 999, background: value === k ? 'var(--btn-bg)' : 'transparent', color: value === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 14, fontWeight: 500, textAlign: 'center' }}>{l}</button>)}
     </div>
   );

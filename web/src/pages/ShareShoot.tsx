@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { RATINGS } from '../data';
 import { Mark } from '../components/bits';
 import { imgUrl } from '../api';
@@ -84,7 +85,7 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderBottom: '1px solid var(--hair)', paddingBottom: 12, marginBottom: 16 }}>
           {canRate ? (
-            <div role="tablist" aria-label="Show" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}>
+            <div role="tablist" aria-label="Show" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
               {([['all', 'All', photos.length], ['todo', 'To rate', photos.length - rated], ['rated', 'Rated', rated]] as const).map(([k, l, n]) => (
                 <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 14px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: filter === k ? 'var(--btn-bg)' : 'transparent', color: filter === k ? 'var(--btn-fg)' : 'var(--text2)' }}>{l}<span style={{ font: `400 11px ${mono}`, color: filter === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: filter === k ? 0.6 : 1 }}>{n}</span></button>
               ))}
