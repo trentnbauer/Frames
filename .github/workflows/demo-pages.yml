@@ -47,7 +47,7 @@ jobs:
           mv web/dist-demo/demo.html web/dist-demo/index.html
           cp web/dist-demo/index.html web/dist-demo/404.html
           touch web/dist-demo/.nojekyll
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web/dist-demo
