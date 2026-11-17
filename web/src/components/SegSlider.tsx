@@ -10,6 +10,8 @@ export function SegSlider() {
     const pill = ref.current, box = pill?.parentElement;
     if (!pill || !box) return;
     box.classList.add('has-seg-slider');
+    // The pill is placed against the control; one already positioned (the fixed nav bar) keeps its own position.
+    if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
     const place = () => {
       const on = box.querySelector<HTMLElement>(':scope > [aria-selected="true"], :scope > [aria-pressed="true"], :scope > [aria-checked="true"], :scope > .on');
       if (!on) { pill.style.opacity = '0'; return; }
