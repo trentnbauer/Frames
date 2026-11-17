@@ -248,7 +248,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     if (!share.pin) return true;
     const c = cookieOf(req, pinCookie(share)) ?? '';
     const want = pinSig(share);
-    return c.length === want.length && crypto.timingSafeEqual(Buffer.from(c), Buffer.from(want));
+    const a = Buffer.from(c), b = Buffer.from(want); // compare bytes: a cookie can hold multi-byte characters
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   };
   const canSuggest = (share: Row) => (share.allow_suggest === null || share.allow_suggest === undefined ? !!share.allow_review : !!share.allow_suggest);
   const lockOf = (share: Row, dev: string) => { const f = pinFails.get(`${linkKey(share)}|${dev}`); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; };
@@ -315,7 +316,7 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     }
     const s = one('SELECT name, description FROM shoots WHERE id = ?', share.target_id);
     if (!s) { rep.code(410).send({ error: 'This link is no longer available' }); return null; }
-    return { share, name: s.name, description: s.description, photoIds: all('SELECT id FROM photos WHERE shoot_id = ? ORDER BY COALESCE(captured_at, added_at), id', share.target_id).map((r) => r.id) };
+    return { share, name: s.name, description: s.description, photoIds: all('SELECT id FROM photos WHERE shoot_id = ? AND missing = 0 ORDER BY COALESCE(captured_at, added_at), id', share.target_id).map((r) => r.id) };
   };
   const noindex = (rep: any) => rep.header('X-Robots-Tag', 'noindex, nofollow').header('Cache-Control', 'private, no-store');
 
@@ -325,7 +326,8 @@ export function registerShare(app: FastifyInstance, x: Ctx) {
     const r = resolve((req.params as Row).token, req, rep);
     if (!r) return;
     db.prepare('UPDATE shares SET views = views + 1 WHERE id = ?').run(r.share.id);
-    const photos = r.photoIds.map((id, i) => { const p = one('SELECT id, title, w, h FROM photos WHERE id = ?', id); return p ? { id: p.id, title: p.title, w: p.w ?? 0, h: p.h ?? 0, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
+    const byId = new Map(all('SELECT id, title, w, h FROM photos WHERE id IN (SELECT value FROM json_each(?))', JSON.stringify(r.photoIds)).map((p) => [p.id as number, p]));
+    const photos = r.photoIds.map((id, i) => { const p = byId.get(id); return p ? { id: p.id, title: p.title, w: p.w ?? 0, h: p.h ?? 0, ar: p.w && p.h ? p.w / p.h : 1.5, n: i + 1 } : null; }).filter(Boolean);
     return { kind: r.share.kind, name: r.name, description: r.description, chosenIds: r.chosenIds ?? [], target: r.target ?? null, layout: r.layout ?? null, allowDownload: !!r.share.allow_download, allowReview: !!r.share.allow_review, allowSuggest: canSuggest(r.share), askName: !!r.share.ask_name, owner: displayNameOf(db) || x.tenant().user.name.split(' ')[0] || '', expiresAt: r.share.expires_at, photos,
       // Who is looking, if they are signed in, and how a visitor could make an account (a guest one) instead of only giving a name.
       viewer: ((req as any).shareViewer as { name: string; role: string } | null) ? { name: (req as any).shareViewer.name, role: (req as any).shareViewer.role } : null,

@@ -376,11 +376,11 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
 
   app.get('/api/review/summary', async () => {
     const s = getSession();
-    const due = dueIds().length;
+    const ids = dueIds();
+    const due = ids.length;
     const resumable = !!s && s.index > 0 && s.index < s.queue.length;
     const left = s ? Math.max(0, s.queue.length - s.index) : 0;
     const count = resumable ? left : due;
-    const ids = dueIds();
     const nextId = resumable && s ? s.queue[s.index].id : ids[0] ?? null;
     const shootNames = ids.length
       ? (db.prepare(`SELECT DISTINCT sh.name FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id IN (${ids.slice(0, 500).join(',')}) LIMIT 2`).all() as Row[]).map((r) => r.name as string)

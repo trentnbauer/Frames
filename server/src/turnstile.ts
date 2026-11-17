@@ -67,5 +67,6 @@ export function isHuman(sys: DB, req: FastifyRequest): boolean {
   const [exp, sig] = (raw ?? '').split('.');
   if (!exp || !sig || !(Number(exp) > Date.now())) return false;
   const want = sign(sys, Number(exp));
-  return sig.length === want.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want));
+  const a = Buffer.from(sig), b = Buffer.from(want); // compare bytes: a cookie can hold multi-byte characters
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
