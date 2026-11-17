@@ -18,7 +18,7 @@ import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, rei
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, unsortedShootId } from '../db.js';
-import { applyGear, applyShootGear, cleanGear, syncGearTags } from '../gear.js';
+import { GEAR_FIELDS, applyGear, applyShootGear, cleanGear, parseGear, syncGearTags } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
 /**
@@ -83,8 +83,19 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (old) unapplyShoot(old, ids.filter((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id === from));
     }
     for (const i of ids) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(shootId, i);
+    // A photograph added to a shoot takes what the shoot says (its place and camera details), over what the photograph had.
+    const s = one('SELECT place, gear FROM shoots WHERE id = ?', shootId);
+    const set = GEAR_FIELDS.filter((f) => !!parseGear(s?.gear)[f]);
+    for (const i of ids) {
+      if (s?.place) db.prepare('UPDATE photos SET place = ? WHERE id = ?').run(s.place, i);
+      if (set.length) { // neither typed by hand nor read from its file any more: following the shoot (gear_src), so applyGear replaces them
+        const r = one('SELECT user_fields, gear_src FROM photos WHERE id = ?', i);
+        const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
+        db.prepare('UPDATE photos SET user_fields = ?, gear_src = ? WHERE id = ?').run(csv(r?.user_fields).filter((f) => !(set as string[]).includes(f)).join(','), [...new Set([...csv(r?.gear_src), ...set])].join(','), i);
+      }
+    }
     applyShoot(shootId, ids);
-    for (const i of ids) applyGear(db, i, false); // a photograph moved here takes this photoshoot's camera defaults
+    for (const i of ids) applyGear(db, i, false); // the shoot's camera details now win for the fields it sets
   };
 
   app.post('/api/shoots', async (req, rep) => {
