@@ -34,7 +34,8 @@ export function EditShoot({ shoot: s, onClose, onSaved }: { shoot: Shoot; onClos
     if (place) { body.place = place.name; body.placeInfo = { address: place.address, kind: place.kind, precision: place.precision, lat: place.lat, lon: place.lng }; }
     else if (clearPlace) body.place = '';
     const g = s.gear ?? { camera: '', lens: '', medium: '', film: '' };
-    if (cam.camera.trim() !== g.camera || cam.lens.trim() !== g.lens || cam.film.trim() !== g.film) body.gear = { ...g, camera: cam.camera.trim(), lens: cam.lens.trim(), film: cam.film.trim(), medium: cam.film.trim() ? 'film' : g.medium };
+    // Sent whenever the shoot has camera details (even unchanged), so saving puts them back on any photograph that has drifted.
+    if (cam.camera.trim() || cam.lens.trim() || cam.film.trim() || cam.camera.trim() !== g.camera || cam.lens.trim() !== g.lens || cam.film.trim() !== g.film) body.gear = { ...g, camera: cam.camera.trim(), lens: cam.lens.trim(), film: cam.film.trim(), medium: cam.film.trim() ? 'film' : g.medium };
     const addT = names(tags).filter((n) => !s.tags.includes(n)), addS = names(subjects).filter((n) => !s.subjects.includes(n));
     if (addT.length) body.tags = [...s.tags, ...addT];
     if (addS.length) body.subjects = [...s.subjects, ...addS];

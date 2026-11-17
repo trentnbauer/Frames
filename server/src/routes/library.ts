@@ -187,12 +187,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     }
     // The photoshoot's camera defaults: photographs in it with a blank take them, and follow a later change.
     if ('gear' in b) { db.prepare('UPDATE shoots SET gear = ? WHERE id = ?').run(JSON.stringify(cleanGear(b.gear)), id); applyShootGear(db, id);
-      const camera = cleanGear(b.gear).camera;
-      if (everyPhoto && camera) {
-        // Every photograph takes the shoot's camera, and goes on following it (it is no longer "typed by hand").
+      const g = cleanGear(b.gear);
+      const set = GEAR_FIELDS.filter((f) => !!g[f]);
+      if (everyPhoto && set.length) {
+        // Every photograph takes each camera detail the shoot sets, and goes on following it (no longer "typed by hand" or "from the file").
         const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
         for (const r of db.prepare('SELECT id, user_fields, gear_src FROM photos WHERE shoot_id = ?').all(id) as Row[]) {
-          db.prepare('UPDATE photos SET camera = ?, raw_camera = ?, user_fields = ?, gear_src = ? WHERE id = ?').run(camera, camera, csv(r.user_fields).filter((f) => f !== 'camera').join(','), [...new Set([...csv(r.gear_src), 'camera'])].join(','), r.id);
+          db.prepare(`UPDATE photos SET ${set.map((f) => `${f} = ?`).join(', ')}${set.includes('camera') ? ', raw_camera = ?' : ''}${set.includes('lens') ? ', raw_lens = ?' : ''}, user_fields = ?, gear_src = ? WHERE id = ?`)
+            .run(...set.map((f) => g[f]), ...(set.includes('camera') ? [g.camera] : []), ...(set.includes('lens') ? [g.lens] : []), csv(r.user_fields).filter((f) => !(set as string[]).includes(f)).join(','), [...new Set([...csv(r.gear_src), ...set])].join(','), r.id);
           syncGearTags(db, r.id);
         }
       }

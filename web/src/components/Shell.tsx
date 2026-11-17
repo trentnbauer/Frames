@@ -1,4 +1,5 @@
 import { AiIndicator } from './AiIndicator';
+import { ApplyStatus } from './ApplyStatus';
 import { SegSlider } from './SegSlider';
 import { TodoNav } from './TodoNav';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -205,6 +206,7 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
+        <ApplyStatus />
         <AiIndicator />
         <button type="button" className="iconbtn phone-only" aria-label="Search" onClick={ui.openSearch}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg></button>
         <ThemeToggle />

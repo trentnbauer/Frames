@@ -31,6 +31,12 @@ describe('editing a shoot', () => {
     }
     ids.shoot = s.id;
   });
+  it('puts the shoot’s camera and lens back on a photograph that was changed, when the shoot is saved again unchanged', async () => {
+    await A.patch(`/api/photos/${ids['a.jpg']}`, { camera: 'Leica M6', lens: '35mm' });
+    expect(await photo('a.jpg')).toMatchObject({ camera: 'Leica M6', lens: '35mm' });
+    await A.patch(`/api/shoots/${ids.shoot}`, { overwrite: true, gear: { camera: 'Pentax 67', lens: '105mm', medium: 'film', film: 'Portra 400' } });
+    expect(await photo('a.jpg')).toMatchObject({ camera: 'Pentax 67', lens: '105mm', film: 'Portra 400' });
+  });
   it('gives a photograph moved into it the shoot’s place and camera, over its own', async () => {
     await A.patch(`/api/photos/${ids['later.jpg']}`, { camera: 'Nikon F3', place: 'Perth' });
     await A.post(`/api/shoots/${ids.shoot}/move`, { photoIds: [ids['later.jpg']] });

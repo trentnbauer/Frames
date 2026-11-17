@@ -886,8 +886,8 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .workflow-row img { width:64px; height:48px; object-fit:cover; border-radius:5px; }
 .workflow-row .grow { flex:1; min-width:0; overflow-wrap:anywhere; }
 .workflow-row small { display:block; color:var(--muted); margin-top:6px; }
-.undo-notice { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:90; display:flex; gap:14px; align-items:center; padding:12px 18px; border:1px solid var(--outline); border-radius:12px; background:var(--raised); box-shadow:var(--float); max-width:calc(100vw - 32px); }
-@media(max-width:767px){.workflow-row{flex-wrap:wrap}.undo-notice{width:calc(100vw - 32px);font-size:12px}.workflow-list{padding:0 12px}}
+.undo-notice { position:fixed; left:50%; bottom:168px; transform:translateX(-50%); z-index:90; display:flex; gap:14px; align-items:center; padding:12px 18px; border:1px solid var(--outline); border-radius:12px; background:var(--raised); box-shadow:var(--float); max-width:calc(100vw - 32px); }
+@media(max-width:767px){.workflow-row{flex-wrap:wrap}.undo-notice{width:calc(100vw - 32px);font-size:12px;bottom:calc(150px + env(safe-area-inset-bottom))}.workflow-list{padding:0 12px}}
 .batch-edit-fields { border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0; }
 .batch-choice { display:flex;align-items:center;gap:10px;font-size:13px; }
 .batch-choice input { width:16px;height:16px; }
