@@ -273,17 +273,28 @@ export function createAuth(db: DB, cfg: AppCfg) {
   }
 
   // ---------- the gate ----------
-  // The shared password is only ever in memory (from the environment), so there is no stored hash to protect with a slow one: a slow hash
-  // would only let wrong guesses from many addresses tie up the server. Both sides are run through a keyed hash to compare in constant time.
-  const key = crypto.randomBytes(32);
-  const mac = (s: string) => crypto.createHmac('sha256', key).update(s).digest();
-  const expected = cfg.authPassword ? mac(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`) : null;
-  const passwordOk = (req: FastifyRequest) => {
+  // The shared password is checked with scrypt (a slow, salted hash) on the thread pool, never on the main thread, and at most two at a
+  // time, so guesses from many addresses cannot hold up other requests (more at once are refused as "too many"). A header that has passed
+  // is remembered in memory, so a signed-in browser or script never waits behind guessers. Wrong attempts are limited below.
+  const salt = crypto.randomBytes(16);
+  const SCRYPT = { N: 16384 };
+  const expected = cfg.authPassword ? crypto.scryptSync(`${cfg.authUser ?? 'frames'}:${cfg.authPassword}`, salt, 32, SCRYPT) : null; // once, at start
+  const slow = (s: string) => new Promise<Buffer>((res, rej) => crypto.scrypt(s, salt, 32, SCRYPT, (e, k) => (e ? rej(e) : res(k))));
+  const accepted = new Set<string>();
+  let hashing = 0;
+  const passwordOk = async (req: FastifyRequest): Promise<boolean | 'busy'> => {
     if (!expected) return false;
-    const m = /^Basic (.+)$/.exec(req.headers.authorization ?? '');
+    const h = req.headers.authorization ?? '';
+    if (accepted.has(h)) return true;
+    const m = /^Basic (.+)$/.exec(h);
     if (!m) return false;
+    if (hashing >= 2) return 'busy'; // two of the four pool threads at most: file reads and writes share the pool
     const [u = '', ...rest] = Buffer.from(m[1], 'base64').toString().split(':');
-    return crypto.timingSafeEqual(mac(`${u}:${rest.join(':')}`), expected);
+    hashing++;
+    let ok: boolean;
+    try { ok = crypto.timingSafeEqual(await slow(`${u}:${rest.join(':')}`), expected); } finally { hashing--; }
+    if (ok) { if (accepted.size >= 50) accepted.clear(); accepted.add(h); }
+    return ok;
   };
   // Wrong shared-password attempts are counted per address: after 10 in a minute, even the right password is refused until the minute is up.
   const wrong = new Map<string, { n: number; reset: number }>();
@@ -295,10 +306,12 @@ export function createAuth(db: DB, cfg: AppCfg) {
     b.n++;
   };
   /** The one place a shared password is checked. 'none' = no password offered (the browser's first try), which is not a wrong guess. */
-  const checkPassword = (req: FastifyRequest): 'ok' | 'none' | 'wrong' | 'limited' => {
+  const checkPassword = async (req: FastifyRequest): Promise<'ok' | 'none' | 'wrong' | 'limited'> => {
     if (!cfg.authPassword) return 'none';
     if (lockedOut(req.ip)) return 'limited';
-    if (passwordOk(req)) return 'ok';
+    const pass = await passwordOk(req);
+    if (pass === 'busy') return 'limited'; // not counted as a wrong guess: the person may try again in a moment
+    if (pass) return 'ok';
     if (!/^Basic /.test(req.headers.authorization ?? '')) return 'none';
     noteWrong(req.ip);
     return lockedOut(req.ip) ? 'limited' : 'wrong';
@@ -310,12 +323,12 @@ export function createAuth(db: DB, cfg: AppCfg) {
   /** Who is asking: the owner when nothing protects the instance or the shared password was used, otherwise the person whose session it is. */
   type Verdict = { ok: true; user: User; via: 'open' | 'session' | 'password' } | { ok: false; limited?: boolean };
   const owner = () => getUser(db, OWNER_ID)!;
-  function verify(req: FastifyRequest): Verdict {
+  async function verify(req: FastifyRequest): Promise<Verdict> {
     const signedIn = sessionUser(db, req);
     if (!cfg.authDisabled && signedIn?.provider === 'emergency') return { ok: true, user: signedIn, via: 'session' };
     if (!protectedNow()) return { ok: true, user: owner(), via: 'open' };
     if ((oauthOn() || mfaPolicy(db) !== 'off' || hasTotp(db, OWNER_ID)) && signedIn) return { ok: true, user: signedIn, via: 'session' };
-    const pw = checkPassword(req);
+    const pw = await checkPassword(req);
     if (pw === 'ok') return { ok: true, user: owner(), via: 'password' };
     return pw === 'limited' ? { ok: false, limited: true } : { ok: false };
   }

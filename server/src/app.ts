@@ -126,7 +126,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (pg.mode === 'allow') r.tenant = pg.tenant;
     else if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
       // Optional sign-in: OAuth providers (Settings, Sign-in & access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
-      const v = auth.verify(req);
+      const v = await auth.verify(req);
       if (!v.ok) return auth.deny(req, rep, v.limited);
       r.authUser = v.user;
       r.authVia = v.via;
@@ -627,7 +627,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerBackground(app, ctx);
   registerMap(app, ctx);
   registerShare(app, ctx);
-  registerPortfolio(app, ctx, (req) => { const v = auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
+  registerPortfolio(app, ctx, async (req) => { const v = await auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
   registerAuth(app, ctx, auth);
   registerMfa(app, ctx, auth);
   registerProfile(app, ctx);

@@ -58,13 +58,20 @@ describe('guessing the shared password', () => {
     // Someone else is not affected.
     expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.0.0.2') })).statusCode).toBe(200);
   });
-  it('does no slow hashing for a wrong guess, so guesses from many addresses cannot stall the server', async () => {
+  it('never hashes a guess on the main thread, runs two at a time, and lets a signed-in browser through during a flood', async () => {
+    expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.1.1.1') })).statusCode).toBe(200); // remembered from here on
     const spy = vi.spyOn(crypto, 'scryptSync');
     try {
-      for (let i = 0; i < 50; i++) expect((await app2.inject({ url: '/api/photos', headers: { authorization: basic('me', `guess${i}`) }, ...ip(`10.1.0.${i}`) })).statusCode).toBe(401);
-      expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.1.1.1') })).statusCode).toBe(200);
+      const flood = Array.from({ length: 30 }, (_, i) => app2.inject({ url: '/api/photos', headers: { authorization: basic('me', `guess${i}`) }, ...ip(`10.1.0.${i}`) }));
+      const mine = await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.1.1.1') });
+      const codes = (await Promise.all(flood)).map((r) => r.statusCode);
+      expect(mine.statusCode).toBe(200);
+      expect(codes.filter((c) => c === 401)).toHaveLength(2); // only two were hashed
+      expect(codes.filter((c) => c === 429)).toHaveLength(28); // the rest were told to wait, without hashing
       expect(spy).not.toHaveBeenCalled();
     } finally { spy.mockRestore(); }
+    // A refusal for being busy is not a wrong guess: that address can still sign in.
+    expect((await app2.inject({ url: '/api/photos', headers: auth, ...ip('10.1.0.29') })).statusCode).toBe(200);
   });
   it('is the same limit on /auth/password, so that page cannot be used to guess for free', async () => {
     const bad = { authorization: basic('me', 'nope') };

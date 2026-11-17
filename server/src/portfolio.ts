@@ -131,7 +131,7 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
 }
 
 import { gearJson, gearMarkdown } from './routes/gearitems.js';
-export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: FastifyRequest) => number | null) {
+export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: FastifyRequest) => Promise<number | null>) {
   const { db, cfg, num, one, all, notFound } = x;
 
   /**
@@ -187,7 +187,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   app.get('/portfolio/', async (req, rep) => pageFor(req, rep));
   app.get('/portfolio/config.json', async (req, rep) => {
     const c = live(rep); if (!c) return;
-    const own = viewerId(req) === x.tenant().user.id;
+    const own = (await viewerId(req)) === x.tenant().user.id;
     // A separate portfolio hostname cannot serve the app; use its configured public address.
     const dedicated = !!x.sys.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ?').get(hostOf(req));
     const appUrl = dedicated ? loadAuth(x.sys).publicUrl.replace(/\/+$/, '') : '';
