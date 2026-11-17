@@ -974,3 +974,4 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .seg-slider { position: absolute; left: 0; top: 0; border-radius: 999px; background: var(--btn-bg); pointer-events: none; opacity: 0; }
 .seg-slider.ready { transition: transform .28s cubic-bezier(.3,.7,.3,1), width .28s cubic-bezier(.3,.7,.3,1), opacity .2s ease; }
 @media (prefers-reduced-motion: reduce) { .seg-slider.ready { transition: none; } }
+.bnav > .seg-slider { background: var(--chip); }

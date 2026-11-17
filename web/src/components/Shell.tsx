@@ -232,6 +232,7 @@ export function BottomNav() {
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
+      <SegSlider />
       {item('/', 'Home')}
       {/* One Library item: its Shoots and Photos views, a shoot and a photograph all belong to it. */}
       <NavLink to="/library" className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>

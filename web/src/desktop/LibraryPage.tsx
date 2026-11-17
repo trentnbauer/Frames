@@ -31,7 +31,7 @@ export function LibraryPage() {
   const nav = useNavigate();
   const [sp, setSp] = useSearchParams();
   // Every filter in the address (from the Filters menus, Search, Stats or "Find similar") goes to the server; the view's own keys do not.
-  const asked = new URLSearchParams(sp); for (const k of ['view', 'add', 'adv', 'select', 'f', 'sort']) asked.delete(k);
+  const asked = new URLSearchParams(sp); for (const k of ['view', 'add', 'adv', 'select', 'f', 'sort', 'dir']) asked.delete(k);
   const filtered = asked.toString() !== '';
   const photos = useApi<{ total: number; photos: PhotoLite[] }>(`/photos${filtered ? `?${asked}` : ''}`);
   // A link with filters (from Search, Stats or "Find similar") opens the Photos view.
@@ -75,9 +75,11 @@ export function LibraryPage() {
   const year = all[0]?.importedAt?.slice(0, 4) ?? String(new Date().getFullYear());
   // Photos are one grid, sorted by the Sort by box (in the address); "Best match" keeps the server's order for Find similar and search by meaning.
   const byMeaning = !!(sp.get('similarTo') || sp.get('semantic'));
-  const SORTS: [string, string][] = [...(byMeaning ? [['match', 'Best match'] as [string, string]] : []), ['added', 'Uploaded · newest'], ['added-old', 'Uploaded · oldest'], ['taken', 'Taken · newest'], ['taken-old', 'Taken · oldest'], ['score', 'Score · highest'], ['score-low', 'Score · lowest']];
-  const sort = SORTS.some(([k]) => k === sp.get('sort')) ? sp.get('sort')! : byMeaning ? 'match' : 'added';
-  const setSort = (v: string) => { const n = new URLSearchParams(sp); n.set('sort', v); setSp(n, { replace: true }); };
+  const SORTS: [string, string][] = [...(byMeaning ? [['match', 'Best match'] as [string, string]] : []), ['added', 'Uploaded'], ['taken', 'Taken'], ['score', 'Score']];
+  const field = SORTS.some(([k]) => k === sp.get('sort')) ? sp.get('sort')! : byMeaning ? 'match' : 'added';
+  const asc = sp.get('dir') === 'asc'; // newest or highest first unless the arrow says otherwise
+  const sort = field === 'match' || !asc ? field : field === 'score' ? 'score-low' : `${field}-old`;
+  const setSort = (k: string, d = asc) => { const n = new URLSearchParams(sp); n.set('sort', k); if (d) n.set('dir', 'asc'); else n.delete('dir'); setSp(n, { replace: true }); };
   const sorted = (ps: PhotoLite[]) => sortPhotos(ps, sort);
   const flip = (id: number) => setPicked((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const chips = view === 'shoots' ? SHOOT_CHIPS : PHOTO_CHIPS;
@@ -101,11 +103,14 @@ export function LibraryPage() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={view === 'shoots' ? 'Find a shoot, place or year' : 'Search titles, places, cameras, tags'} aria-label="Search the library" style={{ flex: 1, minWidth: 220, height: 40, borderRadius: 999, background: 'var(--surface)', border: 0, outline: 'none', padding: '0 18px', color: 'var(--text)', fontSize: 14 }} />
         {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} aria-pressed={selecting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 14, whiteSpace: 'nowrap', background: selecting ? 'var(--btn-bg)' : 'transparent', color: selecting ? 'var(--btn-fg)' : 'var(--text)', boxShadow: selecting ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{selecting ? 'Done' : 'Select'}<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>S</span></button>}
         {view === 'photos' && (
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 6px 0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13.5, color: 'var(--text2)', whiteSpace: 'nowrap' }}>Sort by
-            <select aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value)} style={{ height: 32, border: 0, borderRadius: 999, background: 'var(--surface)', color: 'var(--text)', font: 'inherit', padding: '0 10px', outline: 'none' }}>
-              {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-          </label>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <div role="radiogroup" aria-label="Sort by" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
+              {SORTS.map(([k, l]) => <button key={k} role="radio" aria-checked={field === k} onClick={() => setSort(k)} style={{ height: 32, padding: '0 14px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: field === k ? 'var(--btn-bg)' : 'transparent', color: field === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: field === k ? 500 : 400 }}>{l}</button>)}
+            </div>
+            {field !== 'match' && <button onClick={() => setSort(field, !asc)} aria-label={asc ? (field === 'score' ? 'Lowest first: show highest first' : 'Oldest first: show newest first') : (field === 'score' ? 'Highest first: show lowest first' : 'Newest first: show oldest first')} title={asc ? (field === 'score' ? 'Lowest first' : 'Oldest first') : (field === 'score' ? 'Highest first' : 'Newest first')} style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)' }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ transform: asc ? 'rotate(180deg)' : 'none', transition: 'transform .25s ease' }}><path d="M8 2.5v11M3.5 9 8 13.5 12.5 9" /></svg>
+            </button>}
+          </div>
         )}
         {view === 'shoots' && chips.map(([k, l]) => { const on = chip === k; return <button key={k} aria-pressed={on} onClick={() => setChip(on ? null : k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: on ? 'var(--chip)' : 'var(--hover)', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
         {view === 'photos' && <button onClick={() => filters.setFiltersOpen(!filters.filtersOpen)} aria-expanded={filters.filtersOpen} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)', color: filters.filtersOpen ? 'var(--text)' : 'var(--text2)' }}>Filters{filters.chips.length + (chip ? 1 : 0) ? ` · ${filters.chips.length + (chip ? 1 : 0)}` : ''} {filters.filtersOpen ? '▴' : '▾'}</button>}
