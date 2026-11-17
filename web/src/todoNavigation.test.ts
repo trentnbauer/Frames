@@ -18,3 +18,9 @@ it('shows a photograph only for its most important task, and removal outranks th
   expect(t.queue('tags')).toEqual([3]);
   expect(t.rows.map((r) => `${r.key}:${r.n}`)).toEqual(['delete:1', 'ai-tags:1', 'tags:1', 'camera:1']);
 });
+
+it('treats AI tags left unaccepted on save as rejected, leaving accepted, user and gear tags alone', async () => {
+  const { unacceptedAiTags } = await import('./todoTasks');
+  const tags = [{ name: 'a', source: 'ai', accepted: false }, { name: 'b', source: 'ai', accepted: true }, { name: 'c', source: 'user', accepted: true }, { name: 'd', source: 'gear', accepted: false }];
+  expect(unacceptedAiTags(tags).map((t) => t.name)).toEqual(['a']);
+});

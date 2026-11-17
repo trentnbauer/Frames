@@ -10,7 +10,7 @@ import ProtoMore from '../proto/ProtoMore';
 import { AddToComposition } from '../components/AddToComposition';
 import { RemovalReview } from '../components/RemovalReview';
 import ProtoMapPicker from '../proto/ProtoMapPicker';
-import { TASKS, buildTasks, taskMeta, type TaskKey } from '../todoTasks';
+import { TASKS, buildTasks, taskMeta, unacceptedAiTags, type TaskKey } from '../todoTasks';
 import { usePhoneWidth } from '../usePhoneWidth';
 import { MobileTodoList } from '../mobile/TodoList';
 import { OrphanTodo } from '../desktop/OrphanTodo';
@@ -21,7 +21,7 @@ type MapHit = { name: string; address: string; kind?: string; suburb?: string; c
 /** Why a photograph is waiting, in one line, for the kind of task on show. */
 const WHY: Record<string, (p: PhotoFull | null, extra: { camMissing: number; tags: number }) => string> = {
   delete: () => 'Below your removal threshold after its review sessions.',
-  'ai-tags': (_p, x) => `AI suggested ${x.tags} tags for this photo. Accept the ones that fit, reject the rest.`,
+  'ai-tags': (_p, x) => `AI suggested ${x.tags} tags for this photo. Accept the ones that fit; saving rejects the rest.`,
   tags: () => 'This photo has no tags yet. Tags make it findable in Library and Search.',
   'ai-desc': () => 'AI wrote a description for this photo. Use it as is, edit it, or write your own.',
   desc: () => 'This photo has no description yet. One sentence is enough.',
@@ -141,6 +141,8 @@ function TodoTasks() {
     if (notes.light !== (p.aiSuggestion?.lighting ?? '')) body.lighting = notes.light;
     if (notes.mood !== (p.aiSuggestion?.mood ?? '')) body.mood = notes.mood;
     if (Object.keys(body).length) await api(`/photos/${p.id}`, { method: 'PATCH', body });
+    // Saving is the answer for the AI tags too: any not accepted are rejected, so the user only approves the ones they want.
+    if (r === 'ai-tags') for (const t of unacceptedAiTags(p.tags ?? [])) await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name: t.name, kind: t.kind, action: 'reject' } });
     setDone((d) => d + 1); skip(); reload();
   };
   const camMissing = cam.filter((x) => !x).length;
