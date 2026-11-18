@@ -117,12 +117,12 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
         </Modal>
       )}
       {canRate && cur === null && (
-        <div style={{ position: 'fixed', left: '50%', bottom: 26, transform: 'translateX(-50%)', zIndex: 20, display: 'flex', alignItems: 'center', gap: 14, padding: '8px 8px 8px 24px', borderRadius: 999, background: 'var(--raised2)', boxShadow: 'var(--float)', fontSize: 14, whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'fixed', left: '50%', bottom: 26, transform: 'translateX(-50%)', zIndex: 20, display: 'flex', alignItems: 'center', gap: 14, padding: '8px 8px 8px 24px', borderRadius: 999, background: 'var(--raised2)', boxShadow: 'var(--float)', fontSize: 15, whiteSpace: 'nowrap' }}>
           <b style={{ fontWeight: 500 }}>{rated} of {photos.length} rated</b>
           <span style={{ width: 120, height: 3, borderRadius: 2, background: 'var(--hair)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${Math.round((rated / Math.max(1, photos.length)) * 100)}%`, background: 'var(--text)' }} /></span>
           {!sent ? (
             <>
-              <span style={{ fontSize: 12.5, color: 'var(--ok)' }}>✓ Saved as you go</span>
+              <span style={{ fontSize: 14, color: 'var(--ok)' }}>✓ Saved as you go</span>
               <button onClick={() => { if (!d.viewer && !reviewer.trim()) setAskName(true); else send(); }} style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, opacity: rated ? 1 : 0.5 }}>Finish</button>
             </>
           ) : <span role="status" style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 16px', color: 'var(--ok)' }}>✓ Done · thanks{reviewer ? `, ${reviewer.split(' ')[0]}` : ''}</span>}

@@ -59,7 +59,7 @@ export function MobileOrganise() {
           );
         })}
         {data.data && batches.length === 0 && <div style={{ padding: '8px 0', fontSize: 13.5, color: 'var(--muted)' }}>Nothing to organise. Photos from a cloud account arrive here in batches.</div>}
-        <div style={{ padding: 14, borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' }}>To move single photographs between shoots, select them in Library and choose Move. Larger reorganising is easier in the full app.</div>
+        <div style={{ padding: 14, borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' }}>To move single photographs between shoots, select them in Library, then choose Add to… and A shoot. Larger reorganising is easier in the full app.</div>
       </div>
     </div>
   );

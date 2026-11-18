@@ -33,10 +33,10 @@ export function useToast() {
 }
 
 /** The design's confirm dialog: a serif title, a sentence, Cancel and a red action. */
-export function ConfirmDialog({ title, sub, cta, onGo, onClose }: { title: string; sub: string; cta: string; onGo: () => void; onClose: () => void }) {
+export function ConfirmDialog({ title, sub, cta, onGo, onClose, thumbs }: { title: string; sub: string; cta: string; onGo: () => void; onClose: () => void; thumbs?: string[] }) {
   return (
     <Modal title={title} sub={sub} width={480} onClose={onClose} foot={<><span className="grow" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn danger" onClick={onGo}><WarningIcon />{cta}</button></>}>
-      <span />
+      {thumbs && thumbs.length > 0 ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 142, overflowY: 'auto' }}>{thumbs.map((u, i) => <i key={i} style={{ width: 44, height: 44, borderRadius: 2, background: `url(${u}) center/cover var(--surface)` }} />)}</div> : <span />}
     </Modal>
   );
 }
@@ -115,7 +115,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
       )}
       {dlg === 'edit' && <BulkEdit ids={ids} onClose={() => setDlg(null)} onDone={onChanged} />}
       {dlg === 'comp' && <CompPicker ids={ids} onClose={() => setDlg(null)} onDone={(m) => { setDlg(null); onClear(); say(m); }} />}
-      {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photograph' : 'photographs'}?`} sub="They’re removed from Frames and go to Recently removed, where you can restore them. The original files stay where they are." cta={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}`} onGo={remove} onClose={() => setDlg(null)} />}
+      {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}?`} thumbs={picked.filter((p) => removable.includes(p.id)).map((p) => imgUrl(p.id, 'thumb'))} sub="They’re removed from Frames and go to Recently removed, where you can restore them. The original files stay where they are." cta={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}`} onGo={remove} onClose={() => setDlg(null)} />}
     </>
   );
 }

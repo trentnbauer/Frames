@@ -1,3 +1,4 @@
+import { keyClick } from './keyClick';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -39,7 +40,7 @@ export function LibraryMore() {
         style={{ width: 40, height: 40, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 18 }}>⋯</button>
       {open && (
         <>
-          <div className="pop-scrim" onClick={close} />
+          <div role="button" tabIndex={0} onKeyDown={keyClick} className="pop-scrim" onClick={close} />
           <div className="popover" role="menu" aria-label="More Library actions" style={{ right: 0, top: 'calc(100% + 6px)' }}>
             <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>Saved filters</div>
             {(views.data ?? []).map((v) => item(v.name, () => { setSelectedId(v.id); setSp(v.filters ?? '', { replace: true }); close(); }, undefined, v.id === selectedId))}

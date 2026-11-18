@@ -3,6 +3,8 @@ import { WALL_BG, arrange, printsSummary, sizeLabel, type Mode, type Print } fro
 import { PrintModal, Wall, type Pic } from './CompositionWall';
 import { usePhone } from '../pages/ShareMobile';
 import { imgUrl } from '../api';
+import { Modal } from './Modal';
+import { SegSlider } from './SegSlider';
 
 const ring = 'inset 0 0 0 1px var(--outline)';
 
@@ -36,15 +38,14 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
   };
   const pill = (on = false) => ({ padding: '6px 12px', borderRadius: 999, fontSize: 12.5, background: on ? 'var(--btn-bg)' : 'transparent', color: on ? 'var(--btn-fg)' : 'var(--text)', boxShadow: ring });
   return (
-    <div className="lay-root" onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <section className="lay-box" role="dialog" aria-label="Suggest a change" style={{ background: 'var(--surface)', borderRadius: 14, padding: 24, width: 880, maxWidth: '100%', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h2 style={{ font: "400 30px 'Instrument Serif',Georgia,serif", margin: '0 0 4px' }}>Suggest a change</h2>
-          <button className="t2" onClick={onClose}>Close</button>
-        </div>
-        <div role="group" aria-label="What to change" style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button aria-pressed={tab === 'photos'} onClick={() => { setTab('photos'); setEditing(false); }} style={pill(tab === 'photos')}>Change Photos</button>
-          <button aria-pressed={tab === 'layout'} onClick={() => { setTab('layout'); setEditing(true); }} style={pill(tab === 'layout')}>Change Layout</button>
+    <>
+      <Modal title="Suggest a change" width={880} onClose={onClose}
+        foot={tab === 'photos'
+          ? <><span className="grow" /><button className="btn primary" onClick={onClose}>Done</button></>
+          : <><span className="grow">{err ? <span className="reason" style={{ margin: 0 }}>{err}</span> : ''}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={send} disabled={busy}>Send suggestion</button></>}>
+        <div className="seg" role="group" aria-label="What to change" style={{ alignSelf: 'flex-start' }}><SegSlider />
+          <button aria-pressed={tab === 'photos'} className={tab === 'photos' ? 'on' : ''} onClick={() => { setTab('photos'); setEditing(false); }}>Change photos</button>
+          <button aria-pressed={tab === 'layout'} className={tab === 'layout' ? 'on' : ''} onClick={() => { setTab('layout'); setEditing(true); }}>Change layout</button>
         </div>
         {tab === 'photos' ? (
           <>
@@ -62,7 +63,6 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
               </div>
             )}
             {error && <div className="reason" role="alert" style={{ marginTop: 8 }}>{error}</div>}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 14 }}><button className="pill primary" onClick={onClose}>Done</button></div>
           </>
         ) : (
           <>
@@ -77,17 +77,12 @@ export function LayoutSuggest({ token, start, mode: startMode, photos, photoPrin
         </div>
         <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 12px' }}>Drag a print to move it, or press <b>Edit</b> on it for its size, orientation and frame. Drawn to scale.</p>
         <textarea aria-label="Note with your suggestion" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Say why (optional)" rows={2} style={{ width: '100%', marginBottom: 12 }} />
-        {err && <div className="reason" role="alert" style={{ marginBottom: 8 }}>{err}</div>}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button className="pill" onClick={onClose}>Cancel</button>
-          <button className="pill primary" onClick={send} disabled={busy}>Send suggestion</button>
-        </div>
           </>
         )}
-      </section>
+      </Modal>
       {open && <PrintModal prints={wall} index={sel} count={wall.length} onChange={edit}
         onApplyAll={() => { const f = wall[sel].frame; set(wall.map((p) => ({ ...p, frame: f ? { ...f, size: p.frame ? p.frame.size : f.size } : null }))); }}
         onDelete={() => { if (wall.length <= 1) return; setOpen(false); setSel(0); set(wall.filter((_, k) => k !== sel), mode === 'free' ? 'row' : mode); }} onClose={() => setOpen(false)} />}
-    </div>
+    </>
   );
 }

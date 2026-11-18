@@ -76,13 +76,13 @@ function TextBox({ value, ph, type, set, disabled, label }: { value: string; ph?
   if ((value ?? '') !== seen) { setSeen(value ?? ''); setV(value ?? ''); }
   const commit = () => { if (v !== (value ?? '')) set(v); };
   return <input value={v} placeholder={ph} type={type || 'text'} disabled={disabled} aria-label={label} autoComplete="off" onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="stext"
-    style={{ width: 300, height: 32, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: ringBtn, color: 'var(--text)', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", opacity: disabled ? 0.6 : 1 }} />;
+    style={{ width: 300, height: 32, borderRadius: 10, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: ringBtn, color: 'var(--text)', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", opacity: disabled ? 0.6 : 1 }} />;
 }
 
 /** A menu link on the portfolio: a full name, a short name (up to 4 characters, or one emoji) and where it goes. */
 export type LinkItem = { short: string; name: string; url: string };
 const linkOk = (l: LinkItem) => !!l.name.trim() && !!l.short.trim() && Array.from(l.short.trim()).length <= 4 && /^(https?:\/\/|mailto:)\S+/i.test(l.url.trim());
-const linkBox: CSSProperties = { height: 32, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: ringBtn, color: 'var(--text)', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", minWidth: 0 };
+const linkBox: CSSProperties = { height: 32, borderRadius: 10, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: ringBtn, color: 'var(--text)', padding: '0 14px', font: "400 13.5px 'IBM Plex Sans',sans-serif", minWidth: 0 };
 
 /** The rows of links: Add puts a blank row to fill in; a row is saved once it is complete and valid, and dropping it saves too. */
 function LinksRow({ r, last }: { r: R; last: boolean }) {

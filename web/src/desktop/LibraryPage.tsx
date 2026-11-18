@@ -94,7 +94,7 @@ export function LibraryPage() {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, flex: 'none' }}><button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, whiteSpace: 'nowrap' }}>Add photos</button><Kbd k="A" /></span>
       </div>
       {(pending.data?.count ?? 0) > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'linear-gradient(100deg, color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%, var(--surface) 65%)', marginBottom: 16, fontSize: 14 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)' }} /><span style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{pending.data!.count} new files</b> <span style={{ color: 'var(--text2)' }}>in your library folder</span></span>
           <button className="btn outline" style={{ height: 32 }} onClick={() => setAdding(true)}>Import {pending.data!.count} {pending.data!.count === 1 ? 'file' : 'files'}</button><Kbd k="I" />
         </div>

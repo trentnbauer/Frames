@@ -171,7 +171,7 @@ export function Today() {
       </div>
 
       {s && (s.due > 0 || s.resumable || s.early > 0) && <HomeReviewBanner
-        cover={s.nextId ? cover(s.nextId) : undefined} tag={s.due > 0 ? 'Review · Due now' : s.resumable ? 'Review · In progress' : 'Review · Anytime'}
+        cover={s.nextId ? cover(s.nextId) : undefined} tag={s.due > 0 ? 'DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}
         title={s.due > 0 ? `${s.due} ${s.due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review'}
         description={dueText} buttonLabel={s.resumable ? 'Resume review' : s.due === 0 ? 'Review anyway' : 'Begin review'} onBegin={begin}
       />}

@@ -27,7 +27,7 @@ function PinGatePhone({ owner, name, pin, lockedMsg }: { owner?: string; name?: 
       <h1 style={{ font: '400 40px/1 var(--serif)', margin: 0 }}>Enter the PIN</h1>
       <span style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text2)' }}>{owner ? `${owner} protected ${name ? `“${name}”` : 'this link'} with a 4-digit PIN.` : 'This link is locked with a 4-digit PIN.'} Ask {who} for it if you don’t have it.</span>
       <input value={val} onChange={(e) => { setVal(e.target.value.replace(/\D/g, '').slice(0, 4)); setErr(''); }} onKeyDown={(e) => { if (e.key === 'Enter') void go(); }} inputMode="numeric" autoComplete="off" autoFocus placeholder="····" aria-label="Link PIN"
-        style={{ height: 60, borderRadius: 999, border: 0, outline: 'none', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', textAlign: 'center', font: '400 30px var(--mono)', letterSpacing: '.5em', textIndent: '.5em', marginTop: 8 }} />
+        style={{ height: 60, borderRadius: 14, border: 0, outline: 'none', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', textAlign: 'center', font: '400 30px var(--mono)', letterSpacing: '.5em', textIndent: '.5em', marginTop: 8 }} />
       {shown && <span role="alert" style={{ fontSize: 13.5, color: 'var(--danger)' }}>{shown}</span>}
       <button onClick={go} disabled={busy || !!lockedMsg || val.length !== 4} style={{ height: 50, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center', opacity: val.length === 4 && !lockedMsg ? 1 : 0.5 }}>Open</button>
     </main>

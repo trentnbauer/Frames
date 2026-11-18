@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { Eyebrow, primaryBtn } from './ui';
 
 type Tab = 'details' | 'tags' | 'history';
-const circle = { position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'rgba(30,30,29,.82)', color: '#efede8', display: 'grid', placeItems: 'center' } as const;
+const circle = { position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'rgba(239,237,232,.14)', color: '#efede8', display: 'grid', placeItems: 'center' } as const;
 
 /** One photograph on a phone: the picture, your rating, add to a composition, and Details / Tags / History. */
 export function MobilePhoto() {
@@ -84,7 +84,7 @@ export function MobilePhoto() {
         <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: 'min(52vh, 380px)', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 14px' }}>
           {idx > 0 ? <button onClick={() => go(idx - 1)} aria-label="Previous photo" style={{ ...circle, position: 'static' }}>←</button> : <span style={{ width: 40 }} />}
-          <RotateButton id={p.id} onDone={() => photo.reload()} style={{ width: 40, height: 40, background: 'rgba(30,30,29,.82)', color: '#efede8', boxShadow: 'none' }} />
+          <RotateButton id={p.id} onDone={() => photo.reload()} style={{ width: 40, height: 40, background: 'rgba(239,237,232,.14)', color: '#efede8', boxShadow: 'none' }} />
           {idx >= 0 && idx < stepIds.length - 1 ? <button onClick={() => go(idx + 1)} aria-label="Next photo" style={{ ...circle, position: 'static' }}>→</button> : <span style={{ width: 40 }} />}
         </div>
       </div>
