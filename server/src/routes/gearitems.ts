@@ -2,7 +2,7 @@ import { rememberWish } from '../wishHistory.js';
 import { WorkflowError } from '../workflowCore.js';
 import { gearFields, valuesOf, journal } from '../workflowCore.js';
 import { syncGearTags } from '../gear.js';
-import { blacklistGear, blacklistedGear, foundGear, ownGear, syncGearDiscoveries, unblacklistGear } from '../gearDiscoveries.js';
+import { blacklistGear, blacklistedGear, foundGear, hideGear, hiddenGear, ownGear, syncGearDiscoveries, unblacklistGear, unhideGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -90,12 +90,21 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     for (const col of ['camera', 'lens']) for (const r of all(`SELECT ${col} n, COUNT(*) c FROM photos WHERE ${col} != '' AND missing = 0 GROUP BY ${col}`)) used.set(norm(String(r.n)), (used.get(norm(String(r.n))) ?? 0) + (r.c as number));
     syncGearDiscoveries(db);
     const found = foundGear(db).slice(0, 40);
-    return { own: own.map((g) => ({ ...g, used: used.get(norm(String(g.name))) ?? 0 })), want, found, blacklisted: blacklistedGear(db), prefs: prefs(), movedFromSettings: moved, totals: { want: want.reduce((a, g) => a + (g.price ?? 0), 0), next: want[0]?.price ?? null } };
+    return { own: own.map((g) => ({ ...g, used: used.get(norm(String(g.name))) ?? 0 })), want, found, blacklisted: blacklistedGear(db), hidden: hiddenGear(db), prefs: prefs(), movedFromSettings: moved, totals: { want: want.reduce((a, g) => a + (g.price ?? 0), 0), next: want[0]?.price ?? null } };
   });
   app.post('/api/gear/blacklist', async (req, rep) => {
     const name = clean(((req.body ?? {}) as Row).name, 120);
     if (!blacklistGear(db, name)) return rep.code(400).send({ error: 'Enter a camera or lens name.' });
     return { items: blacklistedGear(db) };
+  });
+  app.post('/api/gear/hide', async (req, rep) => {
+    const name = String(((req.body ?? {}) as Row).name ?? '');
+    if (!hideGear(db, name)) return rep.code(400).send({ error: 'Enter a camera or lens name.' });
+    return { items: hiddenGear(db) };
+  });
+  app.delete('/api/gear/hide/:key', async (req, rep) => {
+    if (!unhideGear(db, String((req.params as Row).key))) return notFound(rep);
+    return { items: hiddenGear(db) };
   });
   app.delete('/api/gear/blacklist/:id', async (req, rep) => {
     if (!unblacklistGear(db, num((req.params as Row).id))) return notFound(rep);

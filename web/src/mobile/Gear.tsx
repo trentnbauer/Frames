@@ -1,3 +1,4 @@
+import { confirmAction } from '../components/dialogs';
 import { TabAvatar } from './Chrome';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -6,7 +7,7 @@ import { Sheet } from '../components/Sheet';
 import { Eyebrow, Seg } from './ui';
 
 type Item = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; serial: string; year: number | null; why: string; link: string; price: number | null; rank: number };
-type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { currency?: string; systems?: string[] } };
+type Data = { blacklisted: { id: number; name: string; types: string[] }[]; hidden: { key: string; name: string }[]; own: Item[]; want: Item[]; found: { name: string; type: string; count: number }[]; prefs: { currency?: string; systems?: string[] } };
 type Draft = { id: number | 'new'; name: string; price: string; link: string; why: string };
 
 /** The design's gear icons: a camera body, or a lens as two rings. */
@@ -59,10 +60,11 @@ export function MobileGear() {
             <Eyebrow>FOUND IN YOUR PHOTOS</Eyebrow>
             {d.found.map((f) => (
               <div key={f.name} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><GearIcon type={f.type} /><span style={{ flex: 1, fontSize: 15, overflowWrap: 'anywhere' }}>{f.name}</span><span style={meta}>{f.count.toLocaleString()} photos</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><GearIcon type={f.type} /><span style={{ flex: 1, fontSize: 15, overflowWrap: 'anywhere' }}>{f.name}</span><span style={meta}>{f.count.toLocaleString()} {f.count === 1 ? 'photo' : 'photos'}</span></div>
                 <div style={{ display: 'flex', gap: 8, paddingLeft: 32 }}>
                   <button disabled={busy} onClick={() => run(() => api('/gear/items', { body: { kind: 'own', name: f.name, type: f.type } }))} style={{ height: 40, padding: '0 16px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 13.5 }}>Add to gear</button>
-                  <button disabled={busy} onClick={() => run(() => api('/gear/blacklist', { body: { name: f.name } }))} style={{ height: 40, padding: '0 12px', fontSize: 13.5, color: 'var(--text2)' }}>Not mine</button>
+                  <button disabled={busy} onClick={() => run(() => api('/gear/hide', { body: { name: f.name } }))} aria-label={`Hide ${f.name} from this list`} style={{ height: 40, padding: '0 12px', fontSize: 13.5, color: 'var(--text2)' }}>Hide</button>
+                  <button disabled={busy} onClick={async () => { if (await confirmAction(`Blacklist ${f.name}?\n\nIt is cleared from the camera details of your photos, now and when new ones arrive. Original files are not changed.`, { confirm: 'Blacklist', danger: true })) void run(() => api('/gear/blacklist', { body: { name: f.name } })); }} aria-label={`Blacklist ${f.name}`} style={{ height: 40, padding: '0 12px', fontSize: 13.5, color: 'var(--danger)' }}>Blacklist</button>
                 </div>
               </div>
             ))}
@@ -77,8 +79,14 @@ export function MobileGear() {
         {own.length === 0 && d.found.length === 0 && <div style={{ padding: '24px 0', fontSize: 13.5, color: 'var(--muted)' }}>No gear yet. Cameras and lenses found in your photos appear here to add.</div>}
         {d.blacklisted.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Eyebrow>MARKED NOT MINE</Eyebrow>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{d.blacklisted.map((b) => <span key={b.id} style={{ height: 32, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 4px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{b.name}<button aria-label={`Remove ${b.name} from blocked gear`} onClick={() => run(() => api(`/gear/blacklist/${b.id}`, { method: 'DELETE' }))} style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>×</button></span>)}</div>
+            <Eyebrow>BLACKLISTED</Eyebrow>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{d.blacklisted.map((b) => <span key={b.id} style={{ height: 32, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 4px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{b.name}<button aria-label={`Remove ${b.name} from the blacklist`} onClick={() => run(() => api(`/gear/blacklist/${b.id}`, { method: 'DELETE' }))} style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>×</button></span>)}</div>
+          </div>
+        )}
+        {d.hidden.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Eyebrow>HIDDEN FROM FOUND</Eyebrow>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{d.hidden.map((h) => <span key={h.key} style={{ height: 32, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 4px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{h.name}<button aria-label={`Show ${h.name} in Found again`} onClick={() => run(() => api(`/gear/hide/${h.key}`, { method: 'DELETE' }))} style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>×</button></span>)}</div>
           </div>
         )}
       </>}

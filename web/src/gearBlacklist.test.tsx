@@ -5,7 +5,7 @@ import { GearBlacklist } from './components/GearBlacklist';
 
 it('renders blacklist tags with individual removal actions and an entry field', () => {
   const html = renderToStaticMarkup(<GearBlacklist items={[{ id: 1, name: 'Scanner & lens', types: ['camera', 'lens'] }]} onChanged={() => {}} />);
-  expect(html).toContain('aria-label="Blocked gear"');
+  expect(html).toContain('aria-label="Blacklisted gear"');
   expect(html).toContain('aria-label="Add blocked gear"');
   expect(html).toContain('aria-label="Remove Scanner &amp; lens from blocked gear"');
   expect(html).toContain('Scanner &amp; lens');
@@ -20,10 +20,10 @@ it('keeps discovered gear and photo counts above owned blocks, with the blacklis
   expect(html).toContain('Found in your photos');
   expect(html).toContain('Discovered lens');
   expect(html).toContain('7 photos');
-  expect(html).toContain('aria-label="Blocklist Discovered lens"');
+  expect(html).toContain('aria-label="Blacklist Discovered lens"');
   expect(html).toContain('aria-label="Add Discovered lens to gear"');
   expect(html.indexOf('Discovered lens')).toBeLessThan(html.indexOf('Owned camera'));
-  expect(html.indexOf('Owned camera')).toBeLessThan(html.indexOf('aria-label="Blocked gear"'));
+  expect(html.indexOf('Owned camera')).toBeLessThan(html.indexOf('aria-label="Blacklisted gear"'));
   expect(html).toContain('Blocked scanner');
 });
 

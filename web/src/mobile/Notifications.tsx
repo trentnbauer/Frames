@@ -1,10 +1,11 @@
+import { confirmAction } from '../components/dialogs';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { ICON, ago, type Notif } from '../components/Shell';
 import { BackPill } from './ui';
 
-/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear and Not mine. */
+/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear, Hide and Blacklist. */
 export function MobileNotifications() {
   const nav = useNavigate();
   const [items, setItems] = useState<Notif[] | null>(null);
@@ -19,7 +20,7 @@ export function MobileNotifications() {
     api('/notifications/read', { body: { id: n.id } }).catch(() => undefined);
     nav(n.target.screen + (n.target.anchor ? `#${n.target.anchor}` : ''));
   };
-  const act = async (n: Notif, action: 'dismiss' | 'add') => {
+  const act = async (n: Notif, action: 'dismiss' | 'add' | 'hide' | 'blacklist') => {
     if (busy !== null) return;
     setBusy(n.id); setErr('');
     try {
@@ -54,7 +55,8 @@ export function MobileNotifications() {
               {n.gear?.state === 'new' && (
                 <div style={{ display: 'flex', gap: 8, padding: '0 0 14px 44px' }}>
                   <button onClick={() => act(n, 'add')} disabled={busy !== null} style={{ height: 38, padding: '0 14px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 13 }}>Add to gear</button>
-                  <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Not mine</button>
+                  <button onClick={() => act(n, 'hide')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Hide</button>
+                  <button onClick={async () => { if (await confirmAction(`Blacklist ${n.gear?.name ?? 'this gear'}?\n\nIt is cleared from the camera details of your photos, now and when new ones arrive. Original files are not changed.`, { confirm: 'Blacklist', danger: true })) void act(n, 'blacklist'); }} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--danger)' }}>Blacklist</button>
                 </div>
               )}
             </div>
