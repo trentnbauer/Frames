@@ -11,7 +11,8 @@ const BASE = { isStats: false, isTodo: false, isNew: false, isWelcome: false };
 export function Compare() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
-  const r = useApi<{ a: PhotoFull; b: PhotoFull; similarity: number }>(`/compare?a=${sp.get('a')}&b=${sp.get('b')}`);
+  const r = useApi<{ a: PhotoFull; b: PhotoFull; similarity: number }>(sp.get('a') && sp.get('b') ? `/compare?a=${sp.get('a')}&b=${sp.get('b')}` : null);
+  if (!sp.get('a') || !sp.get('b')) return <div className="page-shell"><p className="muted">Pick two photos to compare, from a photo's menu or the near-duplicates list.</p></div>;
   if (!r.data) return <div className="page-shell">{r.error && <p role="alert" className="muted">Something went wrong: {r.error}</p>}</div>;
   const { a, b, similarity } = r.data;
   const rows: [string, (p: PhotoFull) => string][] = [

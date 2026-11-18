@@ -39,6 +39,11 @@ describe('camera details are searched, not turned into tags', () => {
     expect(await found('q=telephoto')).not.toContain(id);
   });
 
+  it('search also finds a photograph by the name of its shoot', async () => {
+    const name = (env.db.prepare('SELECT s.name FROM shoots s JOIN photos p ON p.shoot_id = s.id WHERE p.id = ?').get(id) as { name: string }).name;
+    expect(((await A.get(`/api/photos?q=${encodeURIComponent(name)}`)).body.photos as { id: number }[]).map((p) => p.id)).toContain(id);
+  });
+
   it('are removed from photographs that had them by the migration', () => {
     env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'old', 'gear', 1, 'tag')").run(id);
     const last = MIGRATIONS[MIGRATIONS.length - 1];

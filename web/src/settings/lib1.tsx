@@ -194,15 +194,11 @@ export function useTags(ctx: Ctx): Section {
     groups: [
       { title: 'Tags', rows: [
         { id: 'subjects', t: 'button', label: 'Tags', hint: 'Create, search, rename, merge or delete in one list.', meta: 'Manage tags', act: manage },
+        { id: 'hidden', t: 'pills', label: 'Hidden tags', hint: 'Photos with these tags are never sent to an AI (see AI, Limits & privacy). Guests and the portfolio never see tags.', value: hidden, addAs: 'private', set: (v: string[]) => { prefs.set('hidden', v); ctx.toast('Saved'); } },
       ] },
       { title: 'Sensitive content', rows: [
         { id: 'sensPf', t: 'toggle', label: 'Keep flagged photos off my portfolio', value: prefs.get('sensPf', false), set: (v) => { prefs.set('sensPf', v); ctx.toast('Saved'); } },
         { id: 'sensList', t: 'link', label: 'Flagged photos', hint: 'Never shown in community review.', meta: 'See them', act: () => { window.location.assign('/library?tag=adult'); } },
-      ] },
-      { title: 'Tags', rows: [
-
-        { id: 'hidden', t: 'pills', label: 'Hidden tags', hint: 'Photos with these tags are never sent to an AI (see AI, Limits & privacy). Guests and the portfolio never see tags.', value: hidden, addAs: 'private', set: (v: string[]) => { prefs.set('hidden', v); ctx.toast('Saved'); } },
-
       ] },
     ],
   };
