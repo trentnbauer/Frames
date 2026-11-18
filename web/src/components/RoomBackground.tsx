@@ -1,3 +1,4 @@
+import { keyClick } from './keyClick';
 import { useRef, useState } from 'react';
 import { api, roomUrl } from '../api';
 import { WallButton } from './WallButton';
@@ -64,7 +65,7 @@ function ScaleBox({ id, bg, onClose, onSave }: { id: number; bg: Bg; onClose: ()
       <div role="dialog" aria-label="Set the scale" style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: 720, maxWidth: '100%', maxHeight: '95vh', overflow: 'auto', boxShadow: '0 0 0 1px var(--hair),0 12px 30px rgba(0,0,0,.5)' }}>
         <h2 style={{ font: "400 26px 'Instrument Serif',Georgia,serif", margin: '0 0 6px' }}>Set the scale</h2>
         <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>Click both ends of something whose real width you know, such as a couch, a door or a window. Then type how wide it is.</p>
-        <div onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const p = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; setPts((cur) => (cur.length >= 2 ? [p] : [...cur, p])); }}
+        <div role="button" tabIndex={0} onKeyDown={keyClick} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const p = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; setPts((cur) => (cur.length >= 2 ? [p] : [...cur, p])); }}
           style={{ position: 'relative', cursor: 'crosshair', lineHeight: 0 }}>
           <img src={roomUrl(id, bg.v)} alt="Your room" draggable={false} style={{ width: '100%', display: 'block', borderRadius: 6 }} />
           {pts.length === 2 && <svg viewBox="0 0 1 1" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}><line x1={pts[0].x} y1={pts[0].y} x2={pts[1].x} y2={pts[1].y} stroke="#e5533d" strokeWidth="0.004" vectorEffect="non-scaling-stroke" style={{ strokeWidth: 2 }} /></svg>}

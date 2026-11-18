@@ -383,7 +383,7 @@ function NameBox({ initial, token, title, owner, signIn, emailCode, onDone, onCa
   };
   const ask = async () => { if (em.includes('@') && (await post('send', {}))) setCode(''); };
   const check = async () => { if (code && (await post('verify', { code }))) window.location.assign(`/s/${token}`); };
-  const field = { width: '100%', height: 46, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 18px', font: "400 15px 'IBM Plex Sans',sans-serif", marginBottom: 12 } as const;
+  const field = { width: '100%', height: 46, borderRadius: 10, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 18px', font: "400 15px 'IBM Plex Sans',sans-serif", marginBottom: 12 } as const;
   const provider = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: 42, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, color: 'var(--text)' } as const;
   return (
     <Modal title={title} sub={owner ? `${owner} wants your opinion on` : 'Your opinion is wanted on'} width={420} onClose={onCancel}

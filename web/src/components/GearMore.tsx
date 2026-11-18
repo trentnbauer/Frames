@@ -1,3 +1,4 @@
+import { keyClick } from './keyClick';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GearAliases } from './GearAliases';
@@ -14,7 +15,7 @@ export function GearMore() {
         style={{ width: 40, height: 40, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 18 }}>⋯</button>
       {open && (
         <>
-          <div className="pop-scrim" onClick={() => setOpen(false)} />
+          <div role="button" tabIndex={0} onKeyDown={keyClick} className="pop-scrim" onClick={() => setOpen(false)} />
           <div className="popover" role="menu" aria-label="More Gear actions" style={{ right: 0, top: 'calc(100% + 6px)' }}>
             {item('Gear name aliases…', () => setAliases(true))}
             {item('Purchase & decision history', () => nav('/gear-history'))}

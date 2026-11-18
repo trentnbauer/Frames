@@ -1,3 +1,4 @@
+import { keyClick } from './keyClick';
 import { AiIndicator } from './AiIndicator';
 import { ApplyStatus } from './ApplyStatus';
 import { SegSlider } from './SegSlider';
@@ -113,7 +114,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
       </button>
       {open && !phone && (
         <>
-          <div className="pop-scrim" onClick={() => setOpen(false)} />
+          <div role="button" tabIndex={0} onKeyDown={keyClick} className="pop-scrim" onClick={() => setOpen(false)} />
           <div className="popover notifs" role="dialog" aria-label="Notifications">
             <div className="spread" style={{ padding: '14px 16px 10px' }}>
               <span className="serif" style={{ fontSize: 22, lineHeight: 1 }}>Notifications</span>
@@ -168,7 +169,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
       </button>
       {open && !phone && (
         <>
-          <div className="pop-scrim" onClick={close} />
+          <div role="button" tabIndex={0} onKeyDown={keyClick} className="pop-scrim" onClick={close} />
           <div className="popover" role="menu" aria-label="Your menu" style={{ right: 42 }}>
             <div className="mwho">
               <span className="avatar" style={{ width: 36, height: 36, ...(me?.hasAvatar ? { backgroundImage: 'url(/api/profile/avatar)' } : {}) }}>{!me?.hasAvatar && name.slice(0, 1).toUpperCase()}</span>
