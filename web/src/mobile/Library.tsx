@@ -74,9 +74,9 @@ export function MobileLibrary() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 16px', borderRadius: 999, background: 'var(--surface)' }}>
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg>
-          <input value={qText} onChange={(e) => { setQText(e.target.value); window.clearTimeout(timer.current); const v = e.target.value.trim(); timer.current = window.setTimeout(() => set('q', v || null), 250); }} placeholder="Search titles, places, cameras, tags" aria-label="Search the library" style={{ flex: 1, minWidth: 0, background: 'none', border: 0, outline: 'none', color: 'var(--text)', fontSize: 15 }} />
+          <input value={qText} onChange={(e) => { setQText(e.target.value); window.clearTimeout(timer.current); const v = e.target.value.trim(); timer.current = window.setTimeout(() => set('q', v || null), 250); }} placeholder={view === 'shoots' ? 'Find a shoot, place or year' : 'Search titles, places, cameras, tags'} aria-label="Search the library" style={{ flex: 1, minWidth: 0, background: 'none', border: 0, outline: 'none', color: 'var(--text)', fontSize: 15 }} />
         </div>
-        <Seg label="Library view" value={view} options={[['photos', 'Photos'], ['shoots', 'Shoots']]} onPick={(v) => { setSelecting(false); setSel(new Set()); set('view', v === 'shoots' ? 'shoots' : null); }} />
+        <Seg label="Library view" value={view} options={[['shoots', 'Shoots'], ['photos', 'Photos']]} onPick={(v) => { setSelecting(false); setSel(new Set()); set('view', v === 'shoots' ? 'shoots' : null); }} />
       </div>
 
       {view === 'photos' && <>
@@ -126,7 +126,7 @@ export function MobileLibrary() {
                   </div>
                   {s.dueCount > 0 && <span style={{ flexShrink: 0, height: 26, display: 'inline-flex', alignItems: 'center', padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}>{s.dueCount} due</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ flex: 1, height: 2, background: 'var(--hair)', borderRadius: 2 }}><div style={{ height: '100%', width: `${s.reviewPct}%`, background: 'var(--text2)', borderRadius: 2 }} /></div><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{Math.round(s.reviewPct)}% REVIEWED</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ flex: 1, height: 2, background: 'var(--hair)', borderRadius: 2 }}><div style={{ height: '100%', width: `${s.reviewPct}%`, background: 'var(--text2)', borderRadius: 2 }} /></div><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{Math.round(s.reviewPct)}% reviewed</span></div>
               </button>
             );
           })}

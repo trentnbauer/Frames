@@ -41,6 +41,7 @@ export function MobileOrganise() {
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <span style={{ display: 'flex', gap: 2, flexShrink: 0 }}>{b.covers.slice(0, 3).map((id) => <i key={id} style={{ width: 36, height: 46, borderRadius: 2, background: `url(${imgUrl(id, 'thumb')}) center/cover var(--hair)` }} />)}</span>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ fontSize: 12.5, color: 'var(--muted)' }}>Shoot name</label>
                       <input value={names[b.id] ?? ''} onChange={(e) => setNames((x) => ({ ...x, [b.id]: e.target.value }))} placeholder={b.name} aria-label="Shoot name" style={{ width: '100%', height: 36, boxSizing: 'border-box', border: 0, outline: 'none', borderRadius: 8, padding: '0 10px', background: 'var(--page)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15 }} />
                       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{b.count} photo{b.count === 1 ? '' : 's'} · {b.days} day{b.days === 1 ? '' : 's'}</span>
                     </div>
@@ -52,7 +53,7 @@ export function MobileOrganise() {
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 13.5, color: 'var(--text2)' }}><span>{sp ? `✓ Added “${nm}” as ${b.days} shoots` : `✓ Added “${nm}”`}</span><button onClick={() => undo(b)} style={{ height: 32, color: 'var(--text)' }}>Undo</button></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 13.5, color: 'var(--text2)' }}><span>{sp ? `✓ Added “${nm}” as ${b.days} shoots` : `✓ Added “${nm}”`}</span><button onClick={() => undo(b)} style={{ height: 44, padding: '0 8px', color: 'var(--text)' }}>Undo</button></div>
               )}
             </div>
           );

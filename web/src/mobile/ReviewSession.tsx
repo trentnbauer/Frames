@@ -22,15 +22,15 @@ export function MobileReviewSession(p: Props) {
   const when = ph ? fmtDate(ph.dateEdit ?? ph.capturedAt ?? ph.addedAt, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const btn = { height: 44, padding: '0 12px', fontSize: 13, color: '#a8a59f' } as const;
   return (
-    <div role="dialog" aria-label="Review" data-screen-label="Review session" style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#000', color: '#efede8' }}>
+    <div role="dialog" aria-label="Review" data-screen-label="Review session" style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--review)', color: '#efede8' }}>
       <div style={{ position: 'absolute', top: 'max(14px, env(safe-area-inset-top))', left: 16, right: 16, display: 'flex', gap: 2 }}>
-        {Array.from({ length: Math.min(p.total, 60) }, (_, i) => <i key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < p.index ? '#efede8' : i === p.index ? 'rgba(239,237,232,.55)' : 'rgba(239,237,232,.14)' }} />)}
+        {p.total > 60 ? <i style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(239,237,232,.14)', overflow: 'hidden' }}><b style={{ display: 'block', height: '100%', width: `${Math.min(100, p.index / p.total * 100)}%`, background: '#efede8' }} /></i> : Array.from({ length: p.total }, (_, i) => <i key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < p.index ? '#efede8' : i === p.index ? 'rgba(239,237,232,.55)' : 'rgba(239,237,232,.14)' }} />)}
       </div>
       <div style={{ position: 'absolute', top: 'max(28px, calc(env(safe-area-inset-top) + 14px))', left: 20, right: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ font: "italic 400 24px/1 'Instrument Serif',Georgia,serif" }}>{p.index + 1} <span style={{ color: '#6f6c67' }}>/ {p.total}</span></span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#8f8c86', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.shootName}</span>
         {p.rotateBtn}
-        <button onClick={p.onFinish} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: '#a8a59f', fontSize: 13 }}>Finish</button>
+        <button onClick={p.onFinish} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: '#a8a59f', fontSize: 13 }}>Done</button>
       </div>
       <div style={{ position: 'absolute', top: 84, bottom: 236, left: 12, right: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div role="img" aria-label={ph?.title || 'Photograph'} style={{ width: '100%', height: '100%', background: `url(${p.photoSrc}) center/contain no-repeat` }} />
@@ -79,9 +79,9 @@ export function MobileReviewSession(p: Props) {
 /** The end of a session on a phone. */
 export function MobileReviewDone({ empty, rated, skipped, mean, removals, onRemovals, onDone }: { empty: boolean; rated: number; skipped: number; mean: number; removals: number; onRemovals: () => void; onDone: () => void }) {
   return (
-    <div data-screen-label="Review session" style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#000', color: '#efede8', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 28px' }}>
+    <div data-screen-label="Review session" style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--review)', color: '#efede8', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 28px' }}>
       <span style={{ font: "500 11px 'IBM Plex Mono',monospace", letterSpacing: '.08em', color: '#6f6c67' }}>{empty ? 'NOTHING TO REVIEW' : 'SESSION COMPLETE'}</span>
-      <span style={{ font: "400 46px/1 'Instrument Serif',Georgia,serif" }}>{empty ? 'All caught up.' : 'All caught up.'}</span>
+      <span style={{ font: "400 46px/1 'Instrument Serif',Georgia,serif" }}>{empty ? 'Nothing to review.' : 'Session complete.'}</span>
       <span style={{ fontSize: 14, lineHeight: 1.5, color: '#a8a59f' }}>{empty ? 'Photographs come back here when they are due.' : `${rated} rated · ${skipped} skipped${rated ? ` · average ${mean.toFixed(1)}` : ''}`}</span>
       {removals > 0 && <button onClick={onRemovals} style={{ alignSelf: 'flex-start', height: 44, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.25)', fontSize: 14 }}>Review {removals} suggested {removals === 1 ? 'removal' : 'removals'}</button>}
       <button onClick={onDone} style={{ marginTop: 12, height: 50, borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>Done</button>

@@ -75,7 +75,7 @@ export function MobilePhoto() {
 
   return (
     <div className="ppage flush" data-screen-label="Photo" style={{ padding: 0 }}>
-      <div style={{ position: 'relative', height: 420, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', height: 420, background: 'var(--review)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
         <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: '100%', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
         <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', right: 14, bottom: 14, background: 'rgba(0,0,0,.55)', color: '#efede8', boxShadow: 'none' }} />
         <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(shoot ? `/shoots/${shoot.id}` : '/library'); }} aria-label="Back" style={{ ...circle, top: 52, left: 14, fontSize: 18 }}>‹</button>
@@ -97,7 +97,7 @@ export function MobilePhoto() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setSheet('comp')} style={{ flex: 1, height: 46, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, textAlign: 'center' }}>Add to composition</button>
+          <button onClick={() => setSheet('comp')} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14, textAlign: 'center' }}>Add to composition</button>
           <button onClick={() => setSharing(true)} style={{ height: 46, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Share</button>
         </div>
         <div role="tablist" style={{ display: 'flex', gap: 18, borderBottom: '1px solid var(--hair)' }}>
@@ -170,7 +170,7 @@ export function MobilePhoto() {
               { label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } },
               { label: p.orphaned ? 'Put in a shoot' : 'Move to shoot', act: () => setSheet('move') },
               ...(p.orphaned ? [] : [{ label: 'Take out of its shoot (no shoot)', act: async () => { setSheet(null); try { await api('/photos/orphan', { body: { photoIds: [p.id] } }); photo.reload(); say('Now in no shoot'); } catch (e) { setErr((e as Error).message); } } }]),
-              { label: 'Compare with similar', meta: 'Full app ↗', act: () => nav('/compare') },
+              { label: 'Compare with similar', act: () => nav('/compare') },
               { label: 'Download original', meta: p.file, act: () => { setSheet(null); window.location.assign(`/api/photos/${p.id}/original`); } },
               { label: 'Remove from Frames…', fg: protectedShoot ? 'var(--faint)' : 'var(--danger)', meta: protectedShoot ? 'Shoot protected' : '', act: () => { if (protectedShoot) say('This shoot is protected from deletion'); else setSheet('remove'); } },
             ].map((r) => <button key={r.label} onClick={r.act} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', color: r.fg }}><span style={{ flex: 1, fontSize: 15 }}>{r.label}</span>{r.meta && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{r.meta}</span>}</button>)}
