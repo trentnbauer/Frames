@@ -13,7 +13,7 @@ type Props = {
   library: PhotoLite[]; changes: GuestChange[]; people: { name: string; when: string; avg: string }[];
   saveLayout: (ps: Print[]) => Promise<void>; setStage: (s: Collection['stage']) => Promise<void>; onShare: () => void; reload: () => void;
 };
-const STAGES: [Collection['stage'], string, string][] = [['progress', 'Progress', '○'], ['review', 'Review', '◇'], ['done', 'Done', '□']];
+const STAGES: [Collection['stage'], string, string][] = [['progress', 'Progress', 'progress'], ['review', 'Review', 'review'], ['done', 'Done', 'done']];
 
 /** A composition on a phone: stage, the wall with the print you are working on, the prints, and the candidates to place. Arranging and room photos stay on a bigger screen. */
 export function MobileComposition({ c, prints, byId, order, readOnly, library, changes, people, saveLayout, setStage, onShare, reload }: Props) {
@@ -39,7 +39,7 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, gap: 8 }}>
           <button onClick={() => nav('/collections')} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Compositions</button>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setSheet('guests')} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}>Guests<span style={{ minWidth: 20, height: 20, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', font: '600 11px/20px var(--mono)', textAlign: 'center', padding: '0 4px' }}>{pending}</span></button>
+            <button onClick={() => setSheet('guests')} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}>Guests{pending > 0 && <span style={{ minWidth: 20, height: 20, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', font: '600 11px/20px var(--mono)', textAlign: 'center', padding: '0 4px' }}>{pending}</span>}</button>
             <button onClick={onShare} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>Share</button>
           </div>
         </div>
@@ -48,7 +48,7 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
           <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{printsSummary(c)}{f ? ` · ${metres(f.w)} × ${metres(f.h)} m` : ''}</span>
         </div>
         <div role="group" aria-label="Stage" style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
-          {STAGES.map(([k, l, shape]) => <button key={k} aria-pressed={c.stage === k} disabled={busy} onClick={() => run(() => setStage(k))} style={{ flex: 1, height: 38, borderRadius: 999, background: c.stage === k ? 'var(--btn-bg)' : 'transparent', color: c.stage === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><span aria-hidden style={{ fontSize: 12 }}>{shape}</span>{l}</button>)}
+          {STAGES.map(([k, l, shape]) => <button key={k} aria-pressed={c.stage === k} disabled={busy} onClick={() => run(() => setStage(k))} style={{ flex: 1, height: 38, borderRadius: 999, background: c.stage === k ? 'var(--btn-bg)' : 'transparent', color: c.stage === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><span aria-hidden className={`stage-shape ${shape}`} />{l}</button>)}
         </div>
         {err && <div role="alert" className="reason">{err}</div>}
         <div style={{ position: 'relative', height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--wall-bg)', backgroundImage: 'linear-gradient(var(--wall-grid) 1px,transparent 1px),linear-gradient(90deg,var(--wall-grid) 1px,transparent 1px)', backgroundSize: '20px 20px', display: 'grid', placeItems: 'center' }}>
@@ -72,10 +72,9 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8 }}><span style={{ font: '400 30px/1 var(--serif)' }}>Prints</span><span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{chosen} of {slots} chosen</span></div>
             {prints.map((p, i) => (
-              <button key={p.id} onClick={() => setSel(i)} aria-pressed={i === sel} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 64, padding: '0 4px', borderTop: '1px solid var(--hair)', background: i === sel ? 'var(--surface)' : 'transparent', borderRadius: i === sel ? 12 : 0, textAlign: 'left', margin: i === sel ? '0 -16px' : 0, paddingInline: i === sel ? 20 : 4 }}>
-                <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, background: p.photoId ? `url(${imgUrl(p.photoId, 'thumb')}) center/cover` : 'transparent', boxShadow: p.photoId ? 'none' : 'inset 0 0 0 1px var(--outline)' }} />
+              <button key={p.id} onClick={() => setSel(i)} aria-pressed={i === sel} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 64, padding: '0 4px', borderTop: '1px solid var(--hair)', background: i === sel ? 'var(--surface)' : 'transparent', borderRadius: 12, textAlign: 'left' }}>
+                <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, background: p.photoId ? `url(${imgUrl(p.photoId, 'thumb')}) center/cover` : 'transparent', boxShadow: i === sel ? '0 0 0 2px var(--accent)' : p.photoId ? 'none' : 'inset 0 0 0 1px var(--outline)' }} />
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 16 }}>Print {i + 1} · {p.size} {p.orientation}</span><span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{p.photoId ? title(p.photoId) : 'Empty'}</span></span>
-                {i === sel && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)', textTransform: 'uppercase' }}>Selected</span>}
               </button>
             ))}
           </div>
@@ -101,7 +100,8 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden style={{ flexShrink: 0 }}><rect x="2.5" y="4.5" width="13" height="9" rx="1.2" /></svg>
           Arranging, resizing and room photos open in the full app on a larger screen.
         </div>
-        {isFull(prints) && c.stage === 'progress' && <button onClick={() => run(() => setStage('review'))} style={primaryBtn}>Every print is filled · move to Review</button>}
+        {isFull(prints) && c.stage === 'progress' && <span style={{ fontSize: 13, color: 'var(--muted)' }}>Every print is filled</span>}
+        {isFull(prints) && c.stage === 'progress' && <button onClick={() => run(() => setStage('review'))} style={primaryBtn}>Move to Review</button>}
       </div>
 
       {sheet === 'guests' && (

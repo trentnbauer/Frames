@@ -62,10 +62,10 @@ export function MobileHome() {
         <div style={{ position: 'relative', borderRadius: 16, background: 'var(--surface)' }}>
           {s.nextId && <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 16 }}><div style={{ position: 'absolute', inset: -40, background: `url(${thumb(s.nextId)}) center/cover`, filter: 'var(--home-review-image-filter)', opacity: 'var(--home-review-image-opacity)' as never }} /></div>}
           <div style={{ position: 'relative', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Eyebrow>{due > 0 ? 'DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}</Eyebrow><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{due > 0 ? `about ${s.minutes} min` : ''}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Eyebrow>{due > 0 ? 'REVIEW · DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}</Eyebrow><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{due > 0 ? `about ${s.minutes} min` : ''}</span></div>
             {s.nextId && <div style={{ display: 'flex', gap: 4 }}><div style={{ width: 52, height: 64, borderRadius: 3, background: `url(${thumb(s.nextId)}) center/cover var(--hair)` }} /></div>}
-            <h2 style={{ font: '400 30px/1.05 var(--serif)', margin: 0, textWrap: 'pretty' as never }}>{due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is waiting to be seen again'}</h2>
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text2)', textWrap: 'pretty' as never }}>{due > 0 ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')} · ` : ''}ratings rank your compositions` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.'}</p>
+            <h2 style={{ font: '400 30px/1.05 var(--serif)', margin: 0, textWrap: 'pretty' as never }}>{due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review'}</h2>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text2)', textWrap: 'pretty' as never }}>{due > 0 ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}` : ''}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.'}</p>
             <button onClick={begin} style={primaryBtn}>{s.resumable ? 'Resume review' : due === 0 ? 'Review anyway' : 'Begin review'}</button>
           </div>
         </div>
@@ -93,7 +93,7 @@ export function MobileHome() {
               <p style={{ margin: 0, fontSize: 13, lineHeight: 1.45, color: 'var(--muted)', textWrap: 'pretty' as never }}>{idea.reason}</p>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 'auto' }}>
                 <button onClick={() => startIdea(idea)} style={{ height: 44, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Start composition</button>
-                <button onClick={() => notMe(idea)} style={{ height: 44, padding: '0 12px', fontSize: 13.5, color: 'var(--text2)' }}>Not for me</button>
+                <button onClick={() => notMe(idea)} style={{ height: 44, padding: '0 12px', fontSize: 13.5, color: 'var(--text2)' }}>Skip idea</button>
               </div>
             </div>
           ))}
@@ -115,8 +115,8 @@ export function MobileHome() {
           <button onClick={() => nav(`/collections/${wip.id}`)} style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left', background: 'var(--surface)', borderRadius: 14, padding: 14 }}>
             <MiniWall c={wip} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}><span style={{ font: '400 24px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>Finish {wip.name}</span><span style={{ fontSize: 13, color: 'var(--text2)' }}>{wip.chosenIds.length} of {wip.layout.prints.length} prints chosen · {printsSummary(wip)}</span></div>
-              <span style={{ flexShrink: 0, height: 40, display: 'inline-flex', alignItems: 'center', padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Continue</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}><span style={{ font: '400 24px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>{wip.name}</span><span style={{ fontSize: 13, color: 'var(--text2)' }}>{wip.chosenIds.length} of {wip.layout.prints.length} prints chosen · {printsSummary(wip)}</span></div>
+              <span style={{ flexShrink: 0, height: 40, display: 'inline-flex', alignItems: 'center', padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Continue ›</span>
             </div>
           </button>
         </div>

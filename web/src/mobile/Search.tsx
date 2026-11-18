@@ -87,7 +87,7 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
           <>
             {group('PHOTOS', photos?.total ?? ps.length, ps.slice(0, 5).map((p) => ({ key: p.id, thumb: imgUrl(p.id, 'thumb'), label: p.title || p.file, sub: [shoots.data?.find((s) => s.id === p.shootId)?.name, p.camera].filter(Boolean).join(' · '), to: `/photo/${p.id}` })), (photos?.total ?? 0) > 5 ? { label: `See all ${photos!.total} photos`, to: `/library?q=${encodeURIComponent(q.trim())}` } : undefined)}
             {group('SHOOTS', sh.length, sh.slice(0, 5).map((s) => ({ key: s.id, thumb: s.coverId ? imgUrl(s.coverId, 'thumb') : undefined, label: s.name || 'Untitled shoot', sub: `${s.place || 'No place'} · ${s.dates} · ${s.count} photos`, to: `/shoots/${s.id}` })))}
-            {group('COMPOSITIONS', cs.length, cs.slice(0, 5).map((c) => ({ key: c.id, thumb: c.photoIds[0] ? imgUrl(c.photoIds[0], 'thumb') : undefined, label: c.name, sub: c.stage, to: `/collections/${c.id}` })))}
+            {group('COMPOSITIONS', cs.length, cs.slice(0, 5).map((c) => ({ key: c.id, thumb: c.photoIds[0] ? imgUrl(c.photoIds[0], 'thumb') : undefined, label: c.name, sub: c.stage.charAt(0).toUpperCase() + c.stage.slice(1), to: `/collections/${c.id}` })))}
             {group('GEAR', gs.length, gs.slice(0, 5).map((g) => ({ key: `${g.sub}${g.id}`, label: g.name, sub: g.sub, to: g.sub === 'Wishlist' ? '/gear?view=wish' : '/gear' })))}
             {none && <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: 6 }}><span style={{ font: '400 28px/1.1 var(--serif)' }}>Nothing found</span><span style={{ fontSize: 13.5, color: 'var(--muted)' }}>Try a place, a camera, a tag or a shoot name.</span></div>}
           </>

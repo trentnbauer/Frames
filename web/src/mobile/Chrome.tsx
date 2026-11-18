@@ -31,7 +31,7 @@ export function PhoneTabBar() {
         return (
           <button key={k} onClick={() => nav(to)} aria-current={on ? 'page' : undefined} style={{ position: 'relative', flex: 1, borderRadius: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, background: on ? 'var(--chip)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)' }}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>{ICON[k]}</svg>
-            <span style={{ fontSize: 10, letterSpacing: '.01em' }}>{label}</span>
+            <span style={{ fontSize: 11, letterSpacing: '.01em' }}>{label}</span>
             {badge > 0 && <span aria-label={`${badge} due`} style={{ position: 'absolute', top: 5, left: '50%', marginLeft: 6, minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box', borderRadius: 999, background: 'var(--accent)', color: '#0d0d0d', font: '600 10px/16px var(--mono)', textAlign: 'center' }}>{badge > 99 ? '99+' : badge}</span>}
           </button>
         );
@@ -48,20 +48,20 @@ export function PhoneMeSheet({ name, onClose }: { name: string; onClose: () => v
   const removed = useApi<unknown[]>('/recovery');
   const go = (to: string) => () => { onClose(); nav(to); };
   const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
-  const rows: { label: string; sub?: string; meta?: string; act: () => void; fg?: string }[] = [
+  const rows: { label: string; sub?: string; meta?: string; act: () => void; fg?: string; gap?: boolean }[] = [
     { label: 'Add photos', sub: 'Upload from this phone or sync from the cloud', act: go('/library?add=1') },
     { label: 'Organise uploads', sub: 'Name new batches as shoots', meta: batches.data?.left ? String(batches.data.left) : '', act: go('/organise') },
-    { label: 'Stats', act: go('/stats') },
+    { label: 'Stats', act: go('/stats'), gap: true },
     { label: 'Recently removed', meta: Array.isArray(removed.data) && removed.data.length ? String(removed.data.length) : '', act: go('/activity') },
-    { label: 'Settings', act: go('/settings') },
-    { label: 'View my portfolio', meta: '↗', act: () => { onClose(); void openPortfolio(); } },
-    ...(me?.user ? [{ label: 'Sign out', fg: 'var(--text2)', act: () => { void signOut(); } }] : []),
+    { label: 'View portfolio', meta: '↗', act: () => { onClose(); void openPortfolio(); } },
+    { label: 'Settings', act: go('/settings'), gap: true },
+    ...(me?.user ? [{ label: 'Sign out', fg: 'var(--text2)', gap: true, act: () => { void signOut(); } }] : []),
   ];
   return (
     <Sheet title={name} sub={me?.role === 'admin' ? 'Admin' : undefined} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {rows.map((r) => (
-          <button key={r.label} onClick={r.act} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', color: r.fg ?? 'var(--text)' }}>
+          <button key={r.label} onClick={r.act} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', marginTop: r.gap ? 8 : 0, textAlign: 'left', color: r.fg ?? 'var(--text)' }}>
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>{r.label}</span>{r.sub && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{r.sub}</span>}</span>
             {r.meta && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{r.meta}</span>}
           </button>
