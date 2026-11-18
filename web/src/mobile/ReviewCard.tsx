@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { imgUrl } from '../api';
 import { useStore } from '../store';
 import { Eyebrow } from './ui';
 
 /** The compact review prompt shared by Home and To do: cover, state, a short title and one button (Begin, Resume or Review anyway). */
-export function ReviewCard() {
+export function ReviewCard({ children }: { children?: ReactNode }) {
   const nav = useNavigate();
   const { summary: s } = useStore();
   if (!s) return null;
@@ -24,6 +25,7 @@ export function ReviewCard() {
         </div>
         <button onClick={go} style={{ flexShrink: 0, height: 40, padding: '0 18px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14 }}>{label}</button>
       </div>
+      {children && <div style={{ position: 'relative', padding: '0 14px 4px' }}>{children}</div>}
     </div>
   );
 }

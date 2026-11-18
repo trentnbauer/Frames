@@ -44,12 +44,13 @@ export function MobileTodoList() {
     <div className="pscreen ptab headless" data-screen-label="To do" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>To do</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{total}</span><span style={{ flex: 1 }} /><TabAvatar /></div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <ReviewCard />
-        {dueShoots.length > 0 && <button onClick={() => setByShoot(!byShoot)} aria-expanded={byShoot} style={{ alignSelf: 'flex-start', minHeight: 44, fontSize: 13, color: 'var(--text2)' }}>By shoot {byShoot ? '⌄' : '›'}</button>}
-        {byShoot && dueShoots.map((x) => <Row key={x.id} label={x.name} thumb={x.coverId ? imgUrl(x.coverId, 'thumb') : ''} meta={`${x.dueCount} due`} onClick={() => nav(`/shoots/${x.id}`)} />)}
+        <ReviewCard>
         {removals > 0 && <Row label="Removal review" sub={`${removals} below your removal threshold`} count={removals} onClick={() => nav('/removals')} />}
         {community.data?.enabled && <Row label="Community review" sub={`${community.data.waiting} photos from other photographers`} onClick={() => nav('/community')} />}
         {due > 0 && <Row label="Review anyway" sub="The ones you haven’t seen for longest" onClick={() => nav('/review?early')} />}
+        {dueShoots.length > 0 && <button onClick={() => setByShoot(!byShoot)} aria-expanded={byShoot} style={{ alignSelf: 'flex-start', minHeight: 44, fontSize: 13, color: 'var(--text2)' }}>By shoot {byShoot ? '⌄' : '›'}</button>}
+        {byShoot && dueShoots.map((x) => <Row key={x.id} label={x.name} thumb={x.coverId ? imgUrl(x.coverId, 'thumb') : ''} meta={`${x.dueCount} due`} onClick={() => nav(`/shoots/${x.id}`)} />)}
+      </ReviewCard>
       </div>
       {shown.map((g) => (
         <div key={g.title} style={{ display: 'flex', flexDirection: 'column' }}>
