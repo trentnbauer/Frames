@@ -3,7 +3,7 @@ import { RotateButton } from '../components/RotateButton';
 import { MobilePhoto } from '../mobile/Photo';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, imgUrl, useApi } from '../api';
+import { api, imageChanged, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
@@ -119,7 +119,9 @@ function DesktopPhoto() {
         aiBusy={aiBusy || p.aiStatus === 'pending'} aiDone={p.aiStatus === 'done'}
         onRunAi={async () => { if (!ai) return 'AI is off. Turn it on in Settings.'; setAiBusy(true); try { await patch({ reanalyse: true }); return 'Analysing with AI…'; } catch (e) { return (e as Error).message; } finally { setAiBusy(false); } }}
         moreItems={[
-          { label: 'Download original', meta: `${mb} MB`, run: () => { window.location.assign(`/api/photos/${p.id}/original`); }, toast: `Downloading ${p.file}` },
+          { label: 'Find similar photos', run: () => nav(`/library?similarTo=${p.id}`) },
+          { label: 'Rotate a quarter turn', run: async () => { await api(`/photos/${p.id}/rotate`, { body: { by: 90 } }); imageChanged(p.id); photo.reload(); }, toast: 'Turned. The original file is not changed.' },
+          { label: 'Download original', sep: true, meta: `${mb} MB`, run: () => { window.location.assign(`/api/photos/${p.id}/original`); }, toast: `Downloading ${p.file}` },
           { label: 'Export XMP', run: () => { window.location.assign(`/api/photos/${p.id}/xmp`); }, toast: 'XMP sidecar written' },
           { label: 'Review again', sep: true, run: async () => { await patch({ reviewAgain: true }); refreshSummary(); }, toast: 'Added back to the review queue' },
           { label: p.archived ? 'Include in review' : 'Leave out of review', run: async () => { await patch({ archived: !p.archived }); }, toast: p.archived ? 'Back in review' : 'Won’t come back for review' },
