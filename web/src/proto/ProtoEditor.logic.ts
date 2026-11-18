@@ -93,7 +93,7 @@ export class Logic extends DCLogic {
         shadow: S.dragging === p.id ? '0 18px 40px rgba(0,0,0,.55)' : '0 6px 16px rgba(0,0,0,.4)', outline: on ? '2px solid var(--text)' : '2px solid transparent', cursor: this.props.readOnly ? 'default' : S.dragging === p.id ? 'grabbing' : on ? 'grab' : 'pointer', trans: 'box-shadow .15s',
         label: 'Print ' + (i + 1) + ' · ' + p.size + (p.or === 'L' ? ' landscape' : '') + (p.stack ? ' · two photos' : ''),
         sub: (p.framed ? p.frame + ' frame' : 'no frame') + (p.photo ? ' · ' : ''),
-        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: '⚠ ' + v + ' PPI', ppiFg: 'var(--warn)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
+        ...(() => { if (!p.photo) return { ppi: '', ppiFg: 'var(--muted)' }; const v = Math.min(...this.held(p).filter(Boolean).map((n) => this.ppiFor(n, p.size, p.or, p.zoom, p.stack))); return v >= 300 ? { ppi: v + ' PPI', ppiFg: 'var(--muted)' } : { ppi: v + ' PPI', ppiFg: 'var(--warn)' }; })(), labelFg: on ? 'var(--text)' : 'var(--text2)',
         down: (e) => this.startDrag(e, p), drop: (e) => { e.preventDefault(); const n = +e.dataTransfer.getData('text/plain'); if (n) this.place(n, p.id, p.stack ? this.slotAt(e, p) : 0); },
       };
     });
@@ -158,7 +158,7 @@ export class Logic extends DCLogic {
     const used = {}; this.pr().forEach((p, i) => { this.held(p).forEach((n) => { if (n) used[n] = i + 1; }); });
     return {
       candTabs: [['best', 'Best first'], ['fits', sel ? 'Fits ' + sel.size : 'Fits'], ['unrated', 'Unrated']].map(([k, l]) => ({ label: l + ' · ' + lists[k].length, bg: S.candTab === k ? 'color-mix(in srgb, var(--text) 10%, transparent)' : 'transparent', fg: S.candTab === k ? 'var(--text)' : 'var(--text2)', go: () => this.setState({ candTab: k }) })),
-      candHint: this.props.readOnly ? 'Candidates saved with this composition.' : sel ? 'Click a photo to put it in Print ' + (this.pr().indexOf(sel) + 1) + '. If it’s already on the wall, the two swap.' : 'Select a print on the wall, then click a photo to fill it.',
+      candHint: this.props.readOnly ? 'Candidates saved with this composition.' : sel ? 'Click a photo to put it in Print ' + (this.pr().indexOf(sel) + 1) + '. If it’s already on the wall, the two swap.' : '',
       cands: lists[S.candTab].map((n) => { const u = used[n]; const ok = fits(n); return { src: (this.props.photoThumb ?? this.props.photoUrl)(n), remove: !this.props.guest && !this.props.readOnly && this.props.onRemoveCandidate ? async () => { try { await this.props.onRemoveCandidate(n); } catch (e) { this.flash(e.message); } } : null, score: this.ph(n)[2].toFixed(1), name: this.ph(n)[0], tag: u ? 'Print ' + u : ok ? 'Fits' : 'Too small', tagBg: u ? 'var(--text)' : 'var(--wall-control-bg)', tagFg: u ? 'var(--bg)' : ok ? 'var(--text)' : 'var(--warn)', ring: u ? 'inset 0 0 0 1px var(--text)' : 'none', popRing: sel && this.held(sel).includes(n) ? '0 0 0 2px var(--raised),0 0 0 3px var(--text)' : 'none', popOp: ok ? 1 : 0.4, use: () => { if (sel) this.place(n, sel.id); else this.flash('Select a print first'); }, drag: (e) => { if (this.props.readOnly) { e.preventDefault(); return; } e.dataTransfer.setData('text/plain', String(n)); e.dataTransfer.effectAllowed = 'copy'; } }; }),
     };
   }

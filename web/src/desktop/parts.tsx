@@ -4,6 +4,7 @@ import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
 import { BulkEdit } from '../components/BulkEdit';
 import { WarningIcon } from '../components/WarningIcon';
+import { ToastSlot } from '../components/Toast';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { Modal } from '../components/Modal';
 import { useApi } from '../api';
@@ -24,9 +25,9 @@ export function useToast() {
   const [t, setT] = useState<{ text: string; undo?: () => void } | null>(null);
   useEffect(() => { if (!t) return; const id = window.setTimeout(() => setT(null), t.undo ? 5000 : 2600); return () => window.clearTimeout(id); }, [t]);
   const node = t && (
-    <div role="status" style={{ position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 95, display: 'flex', alignItems: 'center', gap: 14, padding: '9px 10px 9px 18px', borderRadius: 999, background: 'var(--raised2)', boxShadow: 'var(--float)', fontSize: 13.5, whiteSpace: 'nowrap' }}>
+    <ToastSlot>
       <span>{t.text}</span>{t.undo ? <button onClick={() => { const f = t.undo; setT(null); f?.(); }} style={{ height: 28, padding: '0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>Undo</button> : <span style={{ width: 8 }} />}
-    </div>
+    </ToastSlot>
   );
   return { say: (text: string, undo?: () => void) => setT({ text, undo }), node };
 }

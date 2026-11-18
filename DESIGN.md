@@ -65,3 +65,19 @@ Use shared themed in-app modals for every confirmation and typed confirmation; n
 The header reserves a stable slot immediately before the theme toggle for a small ✦ AI activity indicator. Use muted grey at rest and theme-aware amber while working, with a subtle opacity pulse disabled for reduced motion. Hover/focus reveals the task and batch progress where available; never shift the other header controls or show old batch progress for an interactive task.
 
 Composition frames require selection before dragging to move. Ignore pointer jitter below six screen pixels regardless of zoom. Space-drag and middle-button drag pan anywhere on the wall, including over frames, and never save a layout change. Keep these gestures available in Done and guest views; wall controls and text fields retain their own pointer/keyboard behaviour.
+
+## Deleting data in Frames
+
+Any option, button or menu item that deletes or removes data held in Frames (photos, shoots, compositions, gear, notifications, saved arrangements) uses red (`--danger`, with `--danger-fg` text on filled buttons) and shows the ⚠ warning symbol (16px, 1.4px stroke, with an aria-label of "Warning"). Use the `.btn.danger` class and the `WarningIcon` component; the confirm button carries the symbol before its label. Frames never deletes original files, so copy says what happens to the data instead: "goes to Recently removed", or "can't be undone" where nothing is recoverable. Only an action that trashes originals may be called "delete"; removals say "Remove".
+
+## Keyboard hints
+
+A shortcut's key cap (`.kbd`) sits beside its button, 12px after it, never inside. The dock's hints (⌘K, T) are plain faint mono with no outline.
+
+## One primary, one toast
+
+Each screen has one primary action. Toolbars use md (40px) controls, in-row and in-popover actions use sm (32px), and lg (48px) is only for a page's single primary. Every short message uses the one toast slot (`ToastSlot`): top centre, 24px below the header. Every dialog is a `Modal` (or a `Sheet` on a phone).
+
+## Composition header
+
+Guests and Share… sit together in one contained pill, after the stage switch and a hairline divider. When the header is narrow (under 1100px, by container query), the stage switch keeps the selected stage's label and shows the others as shapes only with accessible labels, and "← Compositions" becomes "←".

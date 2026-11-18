@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SegSlider } from '../components/SegSlider';
 import { RATINGS } from '../data';
 import { Mark } from '../components/bits';
+import { Modal } from '../components/Modal';
 import { imgUrl } from '../api';
 import { Who } from './ShareMobile';
 
@@ -24,13 +25,14 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
   const [gname, setGname] = useState(reviewer);
+  const [askName, setAskName] = useState(false);
   useEffect(() => { setGname(reviewer); }, [reviewer]);
   const owner = d.owner || 'them';
   const canRate = d.allowReview;
   const rated = photos.filter((p) => ratings[p.id] !== undefined).length;
   const tiles = photos.filter((p) => filter === 'all' || (filter === 'rated' ? ratings[p.id] !== undefined : ratings[p.id] === undefined));
   const days = d.expiresAt ? Math.max(0, Math.ceil((new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000)) : null;
-  const expiry = days === null ? 'This link doesn’t expire' : `Link expires in ${days} ${days === 1 ? 'day' : 'days'}`;
+  const expiry = days === null ? '' : `Link expires in ${days} ${days === 1 ? 'day' : 'days'}`;
   const post = (path: string, body: object) => (name: string) => fetch(`/api/s/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, reviewer: name }) }).then(async (r) => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Could not save that'); });
   const rate = (photoId: number, rating: number, advance = false) => withName(async (name) => {
     const was = ratings[photoId];
@@ -77,7 +79,7 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
                 <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
                 <div style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 3 }}><span style={{ font: `400 26px/1.05 ${serif}` }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)' }}>{dl ? (dl.ready ? `${dl.total} files sent to your downloads.` : `Downloading ${dl.done} of ${dl.total}…`) : `Full-size originals, one file after another. ${d.owner ? `${d.owner} allowed` : 'Downloads are allowed'} on this link.`}</span></div>
                 {dl && !dl.ready && <button onClick={cancelDl} style={{ fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
-                <button onClick={download} disabled={!!dl && !dl.ready} style={{ display: 'inline-flex', alignItems: 'center', height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, whiteSpace: 'nowrap' }}>Download originals</button>
+                <button onClick={download} disabled={!!dl && !dl.ready} style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 20px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, whiteSpace: 'nowrap' }}>Download</button>
               </div>
             )}
           </div>
@@ -108,28 +110,34 @@ export function ShareShoot({ token, d, photos, reviewer, setName, withName, dl, 
         {tiles.length === 0 && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>{filter === 'rated' ? 'Nothing rated yet.' : 'All rated. Send them to ' + owner + ' below.'}</div>}
       </div>
 
+      {askName && (
+        <Modal title="Who’s rating?" sub={`${owner} will see your name beside your ${rated} ${rated === 1 ? 'rating' : 'ratings'}.`} width={420} onClose={() => setAskName(false)}
+          foot={<><span className="grow" /><button className="btn" onClick={() => setAskName(false)}>Cancel</button><button className="btn primary" disabled={!gname.trim()} onClick={() => { setName(gname.trim()); setAskName(false); send(); }}>Finish</button></>}>
+          <label className="form">Your name<input className="field-in" autoFocus value={gname} maxLength={60} onChange={(e) => setGname(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && gname.trim()) { setName(gname.trim()); setAskName(false); send(); } }} /></label>
+        </Modal>
+      )}
       {canRate && cur === null && (
         <div style={{ position: 'fixed', left: '50%', bottom: 26, transform: 'translateX(-50%)', zIndex: 20, display: 'flex', alignItems: 'center', gap: 14, padding: '8px 8px 8px 24px', borderRadius: 999, background: 'var(--raised2)', boxShadow: 'var(--float)', fontSize: 14, whiteSpace: 'nowrap' }}>
           <b style={{ fontWeight: 500 }}>{rated} of {photos.length} rated</b>
           <span style={{ width: 120, height: 3, borderRadius: 2, background: 'var(--hair)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${Math.round((rated / Math.max(1, photos.length)) * 100)}%`, background: 'var(--text)' }} /></span>
           {!sent ? (
             <>
-              {!d.viewer && <input value={gname} onChange={(e) => setGname(e.target.value)} onBlur={() => { if (gname.trim() && gname.trim() !== reviewer) setName(gname.trim()); }} onKeyDown={(e) => { if (e.key === 'Enter') { if (gname.trim()) setName(gname.trim()); send(); } }} placeholder="Your name" aria-label="Your name" style={{ width: 180, height: 40, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 16px', fontSize: 14 }} />}
-              <button onClick={() => { if (gname.trim() && gname.trim() !== reviewer && !d.viewer) setName(gname.trim()); send(); }} style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, opacity: rated ? 1 : 0.5 }}>Send to {owner}</button>
+              <span style={{ fontSize: 12.5, color: 'var(--ok)' }}>✓ Saved as you go</span>
+              <button onClick={() => { if (!d.viewer && !reviewer.trim()) setAskName(true); else send(); }} style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, opacity: rated ? 1 : 0.5 }}>Finish</button>
             </>
-          ) : <span role="status" style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 16px', color: 'var(--ok)' }}>✓ Sent · thanks{reviewer ? `, ${reviewer.split(' ')[0]}` : ''}</span>}
+          ) : <span role="status" style={{ display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 16px', color: 'var(--ok)' }}>✓ Done · thanks{reviewer ? `, ${reviewer.split(' ')[0]}` : ''}</span>}
         </div>
       )}
 
       {cur && look !== null && (
-        <div role="dialog" aria-label="Photograph" style={{ position: 'fixed', inset: 0, zIndex: 80, background: '#000', color: '#efede8', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
+        <div role="dialog" aria-label="Photograph" style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'var(--review)', color: '#efede8', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px' }}>
           <div style={{ position: 'relative', minWidth: 0 }}>
             <span style={{ position: 'absolute', top: 22, left: 28, font: `italic 400 24px/1 ${serif}` }}>{look + 1} / {photos.length}</span>
             <div role="img" aria-label={cur.title} style={{ position: 'absolute', top: 64, bottom: 48, left: 80, right: 80, background: `url(${imgUrl(cur.id, 'preview', token)}) center/contain no-repeat` }} />
             <button onClick={() => setLook(Math.max(0, look - 1))} aria-label="Previous (←)" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', fontSize: 28, color: '#a8a59f', opacity: look > 0 ? 1 : 0.3 }}>‹</button>
             <button onClick={() => setLook(Math.min(photos.length - 1, look + 1))} aria-label="Next (→)" style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', width: 48, height: 48, borderRadius: '50%', fontSize: 28, color: '#a8a59f', opacity: look < photos.length - 1 ? 1 : 0.3 }}>›</button>
           </div>
-          <aside style={{ background: '#111110', boxShadow: 'inset 1px 0 0 rgba(255,255,255,.08)', padding: '22px 24px 28px', display: 'flex', flexDirection: 'column', gap: 22, overflowY: 'auto' }}>
+          <aside style={{ background: 'var(--review)', boxShadow: 'inset 1px 0 0 rgba(255,255,255,.12)', padding: '22px 24px 28px', display: 'flex', flexDirection: 'column', gap: 22, overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: '#6f6c67', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name.toUpperCase()}</span><button onClick={() => setLook(null)} aria-label="Close (Esc)" style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', color: '#8f8c86', flexShrink: 0 }}>✕</button></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><span style={{ font: `400 34px/1.05 ${serif}`, overflowWrap: 'anywhere' }}>{cur.title}</span></div>
             {canRate && (

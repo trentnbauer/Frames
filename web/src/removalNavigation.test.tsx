@@ -22,6 +22,6 @@ it('groups desktop tasks under To do and has no separate removal tab on phones',
 it('renders a dedicated immersive review view with an exit control', () => {
   const html = renderToStaticMarkup(<MemoryRouter><RemovalReviewScreen /></MemoryRouter>);
   expect(html).toContain('class="removal-screen"');
-  expect(html).toContain('>Back</button>');
+  expect(html).toContain('Done <');
   expect(html).toContain('Photo and personal rating history');
 });

@@ -16,6 +16,7 @@ export class Logic extends DCLogic {
       else if (e.key === '0' && P.onBin) P.onBin();
       else if ((e.key === 'a' || e.key === 'A') && P.offer) { e.preventDefault(); P.onAddOffer(); }
       else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); this.setState({ noting: true }); }
+      else if ((e.key === 'f' || e.key === 'F') && P.onFavourite) { e.preventDefault(); P.onFavourite().then((m) => m && this.flash(m)); }
       else if (e.key === 'ArrowLeft') P.onBack();
       else if (e.key === ' ') { e.preventDefault(); P.onSkip(); }
       else if (e.key === 'Escape') P.onFinish();
@@ -37,6 +38,7 @@ export class Logic extends DCLogic {
       revItems: [
         { label: 'Skip for now', key: 'Space', sep: 'none', fg: 'var(--text)', to: '', go: close('Skipped · it comes back next session', () => P.onSkip()) },
         { label: 'Add to composition…', key: 'A', sep: 'none', fg: 'var(--text)', to: '', go: () => this.setState({ more: false, pick: true }) },
+        { label: 'Add to favourites', key: 'F', sep: 'none', fg: 'var(--text)', to: '', go: close('', async () => { const m = P.onFavourite && (await P.onFavourite()); if (m) this.flash(m); }) },
         { label: 'Open photo page', key: 'O', sep: 'none', fg: 'var(--text)', to: '', go: () => { this.setState({ more: false }); P.onOpenPhoto(); } },
         { label: 'Leave out of review', key: '', sep: 'block', fg: 'var(--text)', to: '', go: close('Left out · it won’t come back for review', () => P.onLeaveOut()) },
         { label: 'Undo last rating', key: '', sep: 'none', fg: 'var(--text)', to: '', go: close('Last rating undone', () => P.onUndo()) },

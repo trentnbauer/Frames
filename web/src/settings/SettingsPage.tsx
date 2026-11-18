@@ -1,3 +1,4 @@
+import { ToastSlot } from '../components/Toast';
 import { usePhoneWidth } from '../usePhoneWidth';
 import { SegSlider } from '../components/SegSlider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -73,24 +74,25 @@ export function SettingsPage() {
   return (
     <div className="page settings-page" style={{ paddingBottom: 140 }}>
 
-      {phone && !listing && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}><button onClick={back} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Settings</button><span role="status" aria-live="polite" style={{ fontSize: 13, color: 'var(--text2)', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span></div>}
-      {!(phone && !listing) && <div className="settings-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12, maxWidth: 1028, marginInline: 'auto' }}>
+      {phone && !listing && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}><button onClick={back} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Settings</button>{toast && <ToastSlot>✓ {toast}</ToastSlot>}</div>}
+      {!(phone && !listing) && <div className="settings-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
           <h1 className="serif" style={{ fontSize: 48, lineHeight: 1, margin: 0 }}>Settings</h1>
           <span role="status" aria-live="polite" style={{ fontSize: 13, color: 'var(--text2)', opacity: toast ? 1 : 0, transition: 'opacity .25s ease' }}>✓ {toast || 'Saved'}</span>
         </div>
         {isAdmin && (
           <div role="tablist" aria-label="Scope" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'var(--surface)', fontSize: 13.5 }}><SegSlider />
-            {([['lib', <>Your library</>], ['srv', <>Server <span style={{ color: 'var(--muted)' }}>· admin</span></>]] as [Tab, ReactNode][]).map(([k, label]) => (
+            {([['lib', <>Your library</>], ['srv', <>Server</>]] as [Tab, ReactNode][]).map(([k, label]) => (
               <span key={k} role="tab" aria-selected={shownTab === k} tabIndex={0} onClick={() => { setQ(''); setTab(k); }} onKeyDown={(e) => { if (e.key === 'Enter') { setQ(''); setTab(k); } }}
                 style={{ padding: '8px 16px', borderRadius: 999, cursor: 'pointer', background: shownTab === k ? 'var(--btn-bg)' : 'transparent', color: shownTab === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: shownTab === k ? 500 : 400 }}>{label}</span>
             ))}
           </div>
         )}
       </div>}
-      <div className={'settings-wrap' + (phone ? ' settings-phone' : '')} style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 48, maxWidth: 1028, marginInline: 'auto' }}>
+      <div className={'settings-wrap' + (phone ? ' settings-phone' : '')} style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 48 }}>
         {!(phone && !listing) && <aside style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14, color: 'var(--text2)', alignSelf: 'start' }}>
-          <div style={{ height: 36, borderRadius: 999, background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', marginBottom: 12 }}>
+          <div style={{ height: 40, borderRadius: 999, background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', marginBottom: 12 }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" /></svg>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a setting" aria-label="Find a setting" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--text)', font: "400 13px 'IBM Plex Sans',sans-serif", boxShadow: 'none', padding: 0, borderRadius: 0 }} />
             {q && <span role="button" tabIndex={0} aria-label="Clear" onClick={() => setQ('')} style={{ color: 'var(--muted)', cursor: 'pointer' }}>✕</span>}
           </div>
@@ -141,15 +143,14 @@ function SectionBody({ use, def, tabDef, onSub, ctx, filter, onJump }: { use: (c
     <>
       {open && <div onClick={() => setOpen(null)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
-        <div><h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{def.tabs ? def.name : s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{s.hint}</p></div>
-        {s.action && <span role="button" tabIndex={0} onClick={s.action.act} onKeyDown={(e) => { if (e.key === 'Enter') s.action!.act(); }} className="sact" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 22px', borderRadius: 999, background: 'var(--text)', color: 'var(--bg)', fontWeight: 500, fontSize: 14.5, cursor: 'pointer', flex: 'none', boxShadow: '0 6px 18px rgba(0,0,0,.35)' }}>{s.action.label}</span>}
+        <div>{def.tab === 'srv' && <span className="eyebrow" style={{ display: 'block', marginBottom: 8 }}>Server · affects everyone</span>}<h2 className="serif" style={{ fontSize: 32, lineHeight: 1, margin: '0 0 6px', fontWeight: 400 }}>{def.tabs ? def.name : s.name}</h2><p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>{s.hint}</p></div>
+        {s.action && <button type="button" onClick={s.action.act} className="btn primary sact" style={{ flex: 'none' }}>{s.action.label}</button>}
       </div>
       {def.tabs && (
         <div role="tablist" aria-label={`${def.name} tabs`} className="seg" style={{ alignSelf: 'flex-start' }}><SegSlider />
           {def.tabs.map((t) => <button key={t.key} role="tab" aria-selected={t.key === tabDef!.key} className={t.key === tabDef!.key ? 'on' : ''} onClick={() => onSub?.(t.key)}>{t.label}</button>)}
         </div>
       )}
-      {def.tab === 'srv' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--chip)', fontSize: 13, color: 'var(--text2)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text)' }} />Changes here apply to everyone on this server.</div>}
       {s.notice && <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: 'var(--err-bg)', fontSize: 13, color: 'var(--err)' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--err)', flex: 'none', marginTop: 6 }} /><span>{s.notice}</span></div>}
       {s.groups.map((g, i) => <GroupView key={i} g={g} vis={vis} open={open} setOpen={setOpen} />)}
       {s.after}

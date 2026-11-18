@@ -112,6 +112,7 @@ export function Review() {
       rotateBtn={cur ? <RotateButton id={cur.id} onDone={() => setS({ ...s })} /> : null}
       onLeaveOut={async () => { if (cur) { await api(`/photos/${cur.id}`, { method: 'PATCH', body: { archived: true } }).catch(() => undefined); await move(s.index + 1); } }}
       onUndo={async () => { if (s.index > 0) await move(s.index - 1); }}
+      onFavourite={async () => { if (!cur) return ''; try { await api(`/portfolio/photos/${cur.id}`, { body: { favourite: true } }); return 'Added to your portfolio favourites'; } catch (e) { return `Not added to favourites (${(e as Error).message})`; } }}
       delSub={`${s.shootName ?? 'This photo'} · photo ${s.index + 1} of ${s.queue.length}`}
       delWarn={inComps ? `It will be taken out of ${inComps} composition${inComps === 1 ? '' : 's'}, along with its ratings and tags.` : 'Its ratings and tags go with it.'}
       onDelete={async () => { if (!cur) return; try { await api('/photos/remove', { body: { ids: [cur.id], originals: 'keep' } }); refreshSummary(); await move(s.index + 1); } catch (e) { setSaveErr(`Not deleted (${(e as Error).message}).`); } }}

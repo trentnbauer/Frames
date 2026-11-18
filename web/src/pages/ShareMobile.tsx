@@ -158,6 +158,7 @@ export function ShareMobile(p: Props) {
   );
   const [filter, setFilter] = useState<'all' | 'todo' | 'rated'>('all');
   const [note, setNote] = useState(''); // the note for the person who shared this
+  const [printSheet, setPrintSheet] = useState<number | null>(null); // a tapped print on the wall: swap photo, frame colour, put the original back
   const [sentAll, setSentAll] = useState(false); // ratings are saved as they are made; Send tells the person they are in
   const ratedCount = photos.filter((x) => ratings[x.id] !== undefined).length;
   const tiles = photos.filter((x) => filter === 'all' || (filter === 'rated' ? ratings[x.id] !== undefined : ratings[x.id] === undefined));
@@ -183,7 +184,7 @@ export function ShareMobile(p: Props) {
                 {rectsIn(shown, f).map((r, i) => {
                   const pr = shown[i], pid = photosOf(pr)[0], fr = pr.frame;
                   return (
-                    <button key={pr.id} onClick={() => openPrint(i)} aria-label={`Print ${i + 1}`} style={{ position: 'absolute', ...r, background: fr && fr.color !== 'none' ? SWATCH[fr.color] ?? '#151514' : 'transparent', padding: fr && fr.color !== 'none' ? 3 : 0, boxSizing: 'border-box', boxShadow: '0 4px 10px rgba(0,0,0,.35)' }}>
+                    <button key={pr.id} onClick={() => (canReview ? setPrintSheet(i) : openPrint(i))} aria-label={`Print ${i + 1}`} style={{ position: 'absolute', ...r, background: fr && fr.color !== 'none' ? SWATCH[fr.color] ?? '#151514' : 'transparent', padding: fr && fr.color !== 'none' ? 3 : 0, boxSizing: 'border-box', boxShadow: '0 4px 10px rgba(0,0,0,.35)' }}>
                       <span style={{ display: 'block', width: '100%', height: '100%', background: fr ? '#f4f1ea' : 'transparent', padding: fr ? '8%' : 0, boxSizing: 'border-box' }}>
                         <span style={{ display: 'block', width: '100%', height: '100%', background: pid !== undefined && byId.get(pid) ? `url(${imgUrl(pid, 'thumb', token)}) center/cover` : 'var(--wall-empty-bg)' }} />
                       </span>
@@ -192,45 +193,32 @@ export function ShareMobile(p: Props) {
                 })}
               </div>
             </div>
-            {canReview && hint(`Rate each print. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and suggestions, not your email.`)}
+            {canReview && d.layout && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button onClick={() => withName(() => p.openLayout())} style={{ height: 48, borderRadius: 999, fontSize: 14.5, boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a different layout…'}</button>
+                <span style={{ fontSize: 12.5, color: 'var(--muted)', textAlign: 'center' }}>{p.layoutSent ? 'Sent. Thank you.' : 'Tap a print to swap its photo or frame colour'}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {shown.map((pr, i) => {
-                const ids = photosOf(pr), origin = photosOf(wallPrints[i])[0], kept = origin !== undefined && p.mine[origin] !== undefined;
-                return ids.length === 0 ? (
-                  <section key={pr.id} aria-label={`Print ${i + 1}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: '1px solid var(--hair)' }}>
-                    <span style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 4, background: 'var(--surface)' }} />
-                    <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>Not chosen yet</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Print {i + 1} · {pr.size}</span></span>
-                  </section>
-                ) : (
-                  <section key={pr.id} aria-label={`Print ${i + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 0', borderTop: '1px solid var(--hair)' }}>
-                    {ids.map((pid) => {
-                      const ph = byId.get(pid);
-                      return (
-                        <div key={pid} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <button onClick={() => { const at = order.findIndex((x) => x.id === pid); if (at >= 0) { setLook(at); setLookText(''); } }} aria-label={ph ? `Look closer at ${ph.title}` : 'Empty print'} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
-                            <span style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 4, background: ph ? `url(${imgUrl(pid, 'thumb', token)}) center/cover` : 'var(--surface)' }} />
-                            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{ph?.title ?? `Print ${i + 1}`}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Print {i + 1} · {pr.size}</span></span>
-                          </button>
-                          {canReview && rateRow(pid, 46, 20)}
-                        </div>
-                      );
-                    })}
-                    {canReview && (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {origin !== undefined && others.length > 0 && <button onClick={() => setPicking(origin)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Swap photo…</button>}
-                        {pr.frame && <button onClick={() => setFraming(i)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Frame colour…</button>}
-                        {kept && <button onClick={() => p.swap(origin, null)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)', }}>Put original back</button>}
-                      </div>
-                    )}
-                  </section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 6 }}><span style={{ font: `400 28px/1 ${serif}` }}>Candidates</span><span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{ratedCount} of {photos.length} rated</span></div>
+              {canReview && hint(`Tap a photo to rate it. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and suggestions, not your email.`)}
+              {order.map((ph, k) => {
+                const at = shown.findIndex((pr) => photosOf(pr).includes(ph.id));
+                const r = ratings[ph.id];
+                return (
+                  <button key={ph.id} onClick={() => { setLook(k); setLookText(''); }} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 64, borderTop: '1px solid var(--hair)', textAlign: 'left', width: '100%' }}>
+                    <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, background: `url(${imgUrl(ph.id, 'thumb', token)}) center/cover var(--surface)` }} />
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{ph.title}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{at >= 0 ? `Print ${at + 1} · ${shown[at].size}` : 'Not on the wall'}</span></span>
+                    <span style={{ fontSize: 13, color: r === undefined ? 'var(--faint)' : 'var(--text2)' }}>{r === undefined ? 'Not rated' : `${RATINGS[r - 1].emoji} ${RATINGS[r - 1].label}`}</span>
+                    <span style={{ color: 'var(--faint)' }}>›</span>
+                  </button>
                 );
               })}
             </div>
-            {d.allowDownload && <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ alignSelf: 'flex-start', height: 44, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>}
-            {canReview && d.layout && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => withName(() => p.openLayout())} style={{ height: 44, padding: '0 16px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>{p.layoutSent ? 'Suggest a change again' : 'Suggest a different layout…'}</button>
-                {p.layoutSent && <span role="status" style={{ fontSize: 12, color: 'var(--muted)' }}>Sent. Thank you.</span>}
+            {d.allowDownload && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 14, background: 'var(--surface)' }}>
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15 }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Full-size originals'}</span></span>
+                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ height: 40, padding: '0 18px', borderRadius: 999, fontSize: 14, boxShadow: ring }}>Download</button>
               </div>
             )}
             {p.sugErr && <p className="reason" role="alert">{p.sugErr}</p>}
@@ -385,6 +373,16 @@ export function ShareMobile(p: Props) {
         </div>
       )}
 
+      {printSheet !== null && shown[printSheet] && (() => { const i = printSheet, pr = shown[i], origin = photosOf(wallPrints[i])[0], kept = origin !== undefined && p.mine[origin] !== undefined; const ph = byId.get(photosOf(pr)[0]); return (
+            <Sheet title={ph?.title ?? `Print ${i + 1}`} sub={`Print ${i + 1} · ${sizeLabel(pr)} ${pr.orientation}${pr.frame ? ` · ${pr.frame.color} frame` : ''}`} onClose={() => setPrintSheet(null)}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {origin !== undefined && others.length > 0 && <button onClick={() => { setPrintSheet(null); setPicking(origin); }} style={{ minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', fontSize: 15 }}>Swap photo…</button>}
+                {pr.frame && <button onClick={() => { setPrintSheet(null); setFraming(i); }} style={{ minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', fontSize: 15 }}>Frame colour…</button>}
+                {kept && <button onClick={() => { setPrintSheet(null); p.swap(origin, null); }} style={{ minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', fontSize: 15 }}>Put original back</button>}
+                <button onClick={() => { setPrintSheet(null); openPrint(i); }} style={{ minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', fontSize: 15, color: 'var(--text2)' }}>Look closer</button>
+              </div>
+            </Sheet>
+          ); })()}
       {picking !== null && (() => {
         const idx = wallPrints.findIndex((pr) => photosOf(pr).includes(picking)), pr = wallPrints[idx];
         return (

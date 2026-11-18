@@ -140,6 +140,8 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const SIZES = ['A5', 'A4', 'A3', 'A2', 'A1'];
   const chips = (['tag', 'colour'] as Kind[]).flatMap((k) => chosen(k).map((n) => ({ label: `${k === 'colour' ? 'Colour' : cap(k)}: ${n}`, remove: () => remove(k, n) })));
   const opts = optionsFor(count);
+  // Esc closes it wherever focus is (it used to work only inside the inner box).
+  useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const v = {
     isNew: true, isStats: false, isTodo: false, isCompare: false, isDupes: false, isWelcome: false,
     ncName: name, onNcName: (e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value),
@@ -150,14 +152,13 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Suggest with AI', aiSpin: null,
     ncChips: chips, ncChipHint: chips.length ? aiMsg : aiMsg || 'Type a name and Frames matches tags and colours you already have.',
     ncSummary: looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`,
-    ncCreate: create, ncClose: onClose,
+    ncCreate: create, ncClose: onClose, ncError: err,
   };
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'var(--scrim)', overflow: 'auto' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+      <div>
         <ProtoMore page="new" v={v} />
       </div>
-      {err && <p role="alert" style={{ position: 'fixed', bottom: 24, left: 0, right: 0, textAlign: 'center', color: 'var(--err)' }}>{err}</p>}
     </div>
   );
 }

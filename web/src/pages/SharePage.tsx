@@ -7,6 +7,7 @@ import { LayoutSuggest } from '../components/LayoutSuggest';
 import { ShareMobile, Who, usePhone } from './ShareMobile';
 import { ShareShoot } from './ShareShoot';
 import { HumanCheck } from '../components/HumanCheck';
+import { Modal } from '../components/Modal';
 import { FRAMES, WALL_BG, arrange, bounds, metres, newPrintId, photosOf, sizeLabel, type Layout, type Print } from '../layout';
 import type { Target } from '../target';
 import { imgUrl } from '../api';
@@ -208,11 +209,11 @@ export function SharePage() {
       {showPrints && d.allowReview && (
         <div className="guest-head" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="muted" style={{ fontSize: 13 }}>{d.owner ? `${d.owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
+            <div className="muted" style={{ fontSize: 13 }}>{d.owner ? `Shared by ${d.owner}` : 'Shared with you'}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 className="serif" style={{ fontSize: 44, lineHeight: 1 }}>{d.name}</h1><span className="faint" style={{ fontSize: 12.5, fontFamily: 'var(--mono)' }}>{spanText(viewPrints)}</span></div>
           </div>
           <nav className="steps" aria-label="Your steps" style={{ order: -1, width: '100%', justifyContent: 'center', marginBottom: 8 }}>
-            <span style={{ padding: '6px 12px' }}>✓ 1 Rate</span><span className="arrow">→</span><span className={dirty ? '' : 'on'} style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? undefined : 'var(--hover)', color: dirty ? undefined : 'var(--text)' }}>2 Try changes</span><span className="arrow">→</span><span style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? 'var(--hover)' : undefined, color: dirty ? 'var(--text)' : undefined }}>3 Send to {d.owner || 'them'}</span>
+            <span style={{ padding: '6px 12px' }}><span aria-hidden className="stage-shape progress" style={{ marginRight: 6 }} />Rate</span><span className="arrow">→</span><span className={dirty ? '' : 'on'} style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? undefined : 'var(--hover)', color: dirty ? undefined : 'var(--text)' }}><span aria-hidden className="stage-shape review" style={{ marginRight: 6 }} />Try changes</span><span className="arrow">→</span><span style={{ padding: '6px 12px', borderRadius: 999, background: dirty ? 'var(--hover)' : undefined, color: dirty ? 'var(--text)' : undefined }}>{'\u00a0'}<span aria-hidden className="stage-shape done" style={{ marginRight: 6 }} />Send to {d.owner || 'them'}</span>
           </nav>
           <button className="muted" style={{ opacity: dirty ? 1 : 0.5 }} onClick={discard} disabled={!dirty}>Undo my changes</button>
           <button className="btn primary lg" onClick={sendBack} disabled={!dirty || sending}>{sending ? 'Sending…' : `Send to ${d.owner || 'them'}${dirty ? ` · ${changes}` : ''}`}</button>
@@ -220,7 +221,7 @@ export function SharePage() {
       )}
       {!(showPrints && d.allowReview) && <h1 className="title" style={{ marginBottom: 8 }}>{d.name}</h1>}
       {d.description && <p className="t2" style={{ fontSize: 14, maxWidth: 620, margin: '0 0 8px' }}>{d.description}</p>}
-      <p className="muted" style={{ fontSize: 12.5, margin: '0 0 24px' }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · link works until ${fmtDate(d.expiresAt, { day: 'numeric', month: 'short', year: 'numeric' })}`}</p>
+      <p className="muted" style={{ fontSize: 12.5, margin: '0 0 24px' }}>{photos.length} {photos.length === 1 ? 'photograph' : 'photographs'} shared with you{d.expiresAt && ` · Link expires in ${Math.max(0, Math.ceil((new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000))} days`}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
         {d.allowReview && (
           <>
@@ -228,7 +229,7 @@ export function SharePage() {
             {reviewer.trim() && <span className="muted" style={{ fontSize: 13 }}>as {reviewer.trim()}{!d.viewer && <> · <button className="t2" style={{ textDecoration: 'underline' }} onClick={() => setAsking(() => () => undefined)}>change</button></>}</span>}
           </>
         )}
-        {d.allowDownload && <button className={'pill' + (d.allowReview ? '' : ' primary')} onClick={download} disabled={!!dl && !dl.ready}>Download files</button>}
+        {d.allowDownload && <button className={'pill' + (d.allowReview ? '' : ' primary')} onClick={download} disabled={!!dl && !dl.ready}>Download all</button>}
         {dl && <span className="muted" role="status" style={{ fontSize: 13 }}>{dl.ready ? `${dl.total} files sent to your downloads.` : `Downloading ${dl.done} of ${dl.total}…`} {!dl.ready && <button className="t2" onClick={() => { cancelled.current = true; }}>Cancel</button>}</span>}
       </div>
       {showPrints && (
@@ -239,11 +240,11 @@ export function SharePage() {
             <div className="editor-grid">
               <div>
                 <div ref={wallBox} style={{ position: fs ? 'fixed' : 'relative', inset: fs ? 0 : undefined, zIndex: fs ? 80 : undefined, background: WALL_BG, borderRadius: fs ? 0 : 8, padding: '28px 28px 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 420, backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
-                  <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} style={{ position: 'absolute', top: 14, left: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>{fs ? '✕ Exit' : '⤢ Fullscreen'}</button>
+                  <button onClick={toggleFs} aria-label={fs ? 'Exit fullscreen' : 'Fullscreen'} style={{ position: 'absolute', top: 14, left: 14, zIndex: 3, borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'var(--wall-control-bg)', color: 'var(--text)' }}>{fs ? '✕ Exit' : '⤢ Fullscreen'}</button>
                   {canEdit && (
                     <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 3, display: 'flex', gap: 8 }}>
-                      <button onClick={() => withName(addPrint)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>+ Print</button>
-                      <button onClick={() => withName(lineUp)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'rgba(13,13,13,.72)', color: '#efede8' }}>Line up</button>
+                      <button onClick={() => withName(addPrint)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'var(--wall-control-bg)', color: 'var(--text)' }}>+ Print</button>
+                      <button onClick={() => withName(lineUp)} style={{ borderRadius: 999, padding: '7px 14px', fontSize: 12.5, background: 'var(--wall-control-bg)', color: 'var(--text)' }}>Line up</button>
                     </div>
                   )}
                   <Wall prints={viewPrints} mode="free" editing={false} sel={selI} photos={wallPhotos} over={over} locked={!d.allowReview} share={token} onSelect={(i) => setSelPrint(i)} onEdit={(i) => setSelPrint(i)} onMoved={() => undefined} onOver={setOver} onDropPhoto={dropOn} />
@@ -385,18 +386,16 @@ function NameBox({ initial, token, title, owner, signIn, emailCode, onDone, onCa
   const field = { width: '100%', height: 46, borderRadius: 999, border: 0, outline: 'none', background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', padding: '0 18px', font: "400 15px 'IBM Plex Sans',sans-serif", marginBottom: 12 } as const;
   const provider = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: 42, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, color: 'var(--text)' } as const;
   return (
-    <div onMouseDown={(e) => e.target === e.currentTarget && onCancel()} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'color-mix(in srgb, var(--bg) 85%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <form role="dialog" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }} style={{ background: 'var(--surface)', borderRadius: 14, padding: '24px 28px', width: 420, maxWidth: '100%', boxShadow: '0 0 0 1px var(--hair), 0 12px 30px rgba(0,0,0,.5)' }}>
-        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>{owner ? `${owner} wants your opinion on` : 'Your opinion is wanted on'}</div>
-        <h2 style={{ font: "400 32px/1.05 'Instrument Serif',Georgia,serif", margin: '0 0 14px' }}>{title}</h2>
+    <Modal title={title} sub={owner ? `${owner} wants your opinion on` : 'Your opinion is wanted on'} width={420} onClose={onCancel}
+      foot={<><span className="grow" /><button type="button" className="btn" onClick={onCancel}>Cancel</button><button type="submit" form="namebox" className="btn primary" disabled={!ok}>Continue</button></>}>
+      <form id="namebox" aria-label="Your name" onSubmit={(e) => { e.preventDefault(); if (ok) onDone(n.trim().slice(0, 60)); }}>
         <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>Shown to {owner || 'whoever shared this'} next to what you rate and suggest. Remembered on this device.</p>
         <input autoFocus value={n} onChange={(e) => setN(e.target.value)} maxLength={60} placeholder="Your name" aria-label="Your name" style={field} />
-        <button className="btn primary" style={{ width: '100%', justifyContent: 'center', opacity: ok ? 1 : 0.4 }} disabled={!ok}>Start</button>
         {(signIn.length > 0 || emailCode) && (
           <div style={{ borderTop: '1px solid var(--hair)', marginTop: 16, paddingTop: 14 }}>
             {emailCode && (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Been here before?</div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Have a guest account?</div>
                 <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Get a code by email to open your guest account and keep this in your shared list.</p>
                 {code === null ? (
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -420,7 +419,7 @@ function NameBox({ initial, token, title, owner, signIn, emailCode, onDone, onCa
           </div>
         )}
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -475,7 +474,7 @@ function GuestReview({ token, photos, reviewer, onDone }: { token: string; photo
       <div className="review-screen" style={{ display: 'grid', placeItems: 'center', textAlign: 'center' }}>
         <div>
           <h1 className="serif" style={{ fontSize: 56, lineHeight: 1 }}>Thank you.</h1>
-          <p className="t2" style={{ margin: '16px 0 28px' }}>You rated {n} of {photos.length}. Your answers have been sent.</p>
+          <p className="t2" style={{ margin: '16px 0 28px' }}>You rated {n} of {photos.length}. Your ratings are saved.</p>
           <button className="pill primary" onClick={onDone}>Back to the photographs</button>
         </div>
       </div>
@@ -484,12 +483,12 @@ function GuestReview({ token, photos, reviewer, onDone }: { token: string; photo
   return (
     <div className="review-screen">
       <div className="counter">{i + 1} <span>/ {photos.length}</span></div>
-      <button className="esc" onClick={onDone}>Esc</button>
+      <button className="esc" onClick={onDone}>Done · Esc</button>
       <div className="photo"><Fit p={cur} /></div>
       <div className="scale" role="group" aria-label="Rate this photograph">
         {RATINGS.map((x) => (
           <button key={x.value} className={ratings[cur.id] === x.value ? 'sel' : ''} onClick={() => rate(x.value)} aria-label={`${x.value}, ${x.label}`}>
-            <span className="e">{x.emoji}</span><span className="n">{x.value}</span>
+            <span className="e">{x.emoji}</span><span style={{ fontSize: 12, color: ratings[cur.id] === x.value ? 'var(--text)' : 'var(--text2)' }}>{x.label}</span><span className="n">{x.value}</span>
           </button>
         ))}
       </div>

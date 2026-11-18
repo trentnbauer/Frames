@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
+import { GearIcon } from './Gear';
 import { Eyebrow } from './ui';
 
 const KEY = 'frames-recent-searches';
@@ -9,7 +10,7 @@ const TRIES = ['loved', 'no location', 'unrated', 'due'];
 const load = (): string[] => { try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); } catch { return []; } };
 const save = (l: string[]) => { try { localStorage.setItem(KEY, JSON.stringify(l.slice(0, 5))); } catch { /* recent searches are only a convenience */ } };
 
-type Gear = { own: { id: number; name: string; type: string }[]; want: { id: number; name: string }[] };
+type Gear = { own: { id: number; name: string; type: string }[]; want: { id: number; name: string; type: string }[] };
 
 /** Search on a phone: a full page with recent searches, things to try, and results grouped as Photos, Shoots, Compositions and Gear. */
 export function MobileSearch({ onClose }: { onClose: () => void }) {
@@ -36,15 +37,15 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
   const go = (to: string) => { remember(); onClose(); nav(to); };
   const sh = (shoots.data ?? []).filter((s) => [s.name, s.place, s.dates].join(' ').toLowerCase().includes(needle));
   const cs = (comps.data ?? []).filter((c) => c.name.toLowerCase().includes(needle));
-  const gs = [...(gear.data?.own ?? []).map((g) => ({ id: g.id, name: g.name, sub: 'Owned' })), ...(gear.data?.want ?? []).map((g) => ({ id: g.id, name: g.name, sub: 'Wishlist' }))].filter((g) => g.name.toLowerCase().includes(needle));
+  const gs = [...(gear.data?.own ?? []).map((g) => ({ id: g.id, name: g.name, type: g.type, sub: 'Owned' })), ...(gear.data?.want ?? []).map((g) => ({ id: g.id, name: g.name, type: g.type, sub: 'Wishlist' }))].filter((g) => g.name.toLowerCase().includes(needle));
   const ps = photos?.photos ?? [];
   const none = !!needle && photos !== null && ps.length + sh.length + cs.length + gs.length === 0;
-  const group = (title: string, count: number, rows: { key: string | number; thumb?: string; label: string; sub: string; to: string }[], more?: { label: string; to: string }) => rows.length > 0 && (
+  const group = (title: string, count: number, rows: { key: string | number; thumb?: string; icon?: ReactNode; label: string; sub: ReactNode; to: string }[], more?: { label: string; to: string }) => rows.length > 0 && (
     <div key={title} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 4 }}><Eyebrow>{title}</Eyebrow><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{count}</span></div>
       {rows.map((r) => (
         <button key={r.key} onClick={() => go(r.to)} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, borderTop: '1px solid var(--hair)', textAlign: 'left' }}>
-          <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, background: r.thumb ? `url(${r.thumb}) center/cover var(--surface)` : 'var(--surface)' }} />
+          <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, display: 'grid', placeItems: 'center', background: r.thumb ? `url(${r.thumb}) center/cover var(--surface)` : 'var(--surface)' }}>{r.icon}</span>
           <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span><span style={{ fontSize: 12.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sub}</span></span>
           <span style={{ color: 'var(--faint)' }}>›</span>
         </button>
@@ -87,8 +88,8 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
           <>
             {group('PHOTOS', photos?.total ?? ps.length, ps.slice(0, 5).map((p) => ({ key: p.id, thumb: imgUrl(p.id, 'thumb'), label: p.title || p.file, sub: [shoots.data?.find((s) => s.id === p.shootId)?.name, p.camera].filter(Boolean).join(' · '), to: `/photo/${p.id}` })), (photos?.total ?? 0) > 5 ? { label: `See all ${photos!.total} photos`, to: `/library?q=${encodeURIComponent(q.trim())}` } : undefined)}
             {group('SHOOTS', sh.length, sh.slice(0, 5).map((s) => ({ key: s.id, thumb: s.coverId ? imgUrl(s.coverId, 'thumb') : undefined, label: s.name || 'Untitled shoot', sub: `${s.place || 'No place'} · ${s.dates} · ${s.count} photos`, to: `/shoots/${s.id}` })))}
-            {group('COMPOSITIONS', cs.length, cs.slice(0, 5).map((c) => ({ key: c.id, thumb: c.photoIds[0] ? imgUrl(c.photoIds[0], 'thumb') : undefined, label: c.name, sub: c.stage.charAt(0).toUpperCase() + c.stage.slice(1), to: `/collections/${c.id}` })))}
-            {group('GEAR', gs.length, gs.slice(0, 5).map((g) => ({ key: `${g.sub}${g.id}`, label: g.name, sub: g.sub, to: g.sub === 'Wishlist' ? '/gear?view=wish' : '/gear' })))}
+            {group('COMPOSITIONS', cs.length, cs.slice(0, 5).map((c) => ({ key: c.id, thumb: c.photoIds[0] ? imgUrl(c.photoIds[0], 'thumb') : undefined, label: c.name, sub: <><span aria-hidden className={`stage-shape ${c.stage}`} style={{ marginRight: 6 }} />{c.stage.charAt(0).toUpperCase() + c.stage.slice(1)}</>, to: `/collections/${c.id}` })))}
+            {group('GEAR', gs.length, gs.slice(0, 5).map((g) => ({ key: `${g.sub}${g.id}`, icon: <GearIcon type={g.type} />, label: g.name, sub: g.sub, to: g.sub === 'Wishlist' ? '/gear?view=wish' : '/gear' })))}
             {none && <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: 6 }}><span style={{ font: '400 28px/1.1 var(--serif)' }}>Nothing found</span><span style={{ fontSize: 13.5, color: 'var(--muted)' }}>Try a place, a camera, a tag or a shoot name.</span></div>}
           </>
         )}

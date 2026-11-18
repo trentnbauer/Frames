@@ -27,8 +27,8 @@ it('keeps discovered gear and photo counts above owned blocks, with the blacklis
   expect(html).toContain('Blocked scanner');
 });
 
-it('keeps the discovered strip visible when there are no suggestions', () => {
+it('hides the discovered strip while nothing has been found', () => {
   const html = renderToStaticMarkup(<ProtoGear items={[]} wish={[]} found={[]} />);
-  expect(html).toContain('Found in your photos');
-  expect(html).toContain('No new gear found in your photos.');
+  expect(html).not.toContain('Found in your photos');
+  expect(html).not.toContain('No new gear found in your photos.');
 });
