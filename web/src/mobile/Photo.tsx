@@ -75,14 +75,18 @@ export function MobilePhoto() {
 
   return (
     <div className="ppage flush" data-screen-label="Photo" style={{ padding: 0 }}>
-      <div style={{ position: 'relative', height: 420, background: 'var(--review)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
-        <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: '100%', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
-        <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', left: '50%', marginLeft: -20, bottom: 14, width: 40, height: 40, background: 'rgba(30,30,29,.82)', color: '#efede8', boxShadow: 'none' }} />
-        <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(shoot ? `/shoots/${shoot.id}` : '/library'); }} aria-label="Back" style={{ ...circle, top: 52, left: 14, fontSize: 18 }}>‹</button>
-        {stepIds.length > 1 && <span style={{ position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)', font: 'italic 400 18px/1 var(--serif)', color: '#efede8' }}>{idx + 1} / {stepIds.length}</span>}
-        <button onClick={() => setSheet('more')} aria-label="More actions" style={{ ...circle, top: 52, right: 14 }}>⋯</button>
-        {idx > 0 && <button onClick={() => go(idx - 1)} aria-label="Previous photo" style={{ ...circle, left: 14, bottom: 14 }}>←</button>}
-        {idx >= 0 && idx < stepIds.length - 1 && <button onClick={() => go(idx + 1)} aria-label="Next photo" style={{ ...circle, right: 14, bottom: 14 }}>→</button>}
+      <div style={{ background: 'var(--review)', display: 'flex', flexDirection: 'column', paddingTop: 'max(44px, env(safe-area-inset-top))', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px' }}>
+          <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(shoot ? `/shoots/${shoot.id}` : '/library'); }} aria-label="Back" style={{ ...circle, position: 'static', fontSize: 18 }}>‹</button>
+          {stepIds.length > 1 && <span style={{ font: 'italic 400 20px/1 var(--serif)', color: '#efede8' }}>{idx + 1} / {stepIds.length}</span>}
+          <button onClick={() => setSheet('more')} aria-label="More actions" style={{ ...circle, position: 'static' }}>⋯</button>
+        </div>
+        <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: 'min(52vh, 380px)', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 14px' }}>
+          {idx > 0 ? <button onClick={() => go(idx - 1)} aria-label="Previous photo" style={{ ...circle, position: 'static' }}>←</button> : <span style={{ width: 40 }} />}
+          <RotateButton id={p.id} onDone={() => photo.reload()} style={{ width: 40, height: 40, background: 'rgba(30,30,29,.82)', color: '#efede8', boxShadow: 'none' }} />
+          {idx >= 0 && idx < stepIds.length - 1 ? <button onClick={() => go(idx + 1)} aria-label="Next photo" style={{ ...circle, position: 'static' }}>→</button> : <span style={{ width: 40 }} />}
+        </div>
       </div>
       <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -66,7 +66,7 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
               })}
             </div>
           )}
-          <span style={{ position: 'absolute', left: 14, bottom: 10, font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{prints.length} PRINT{prints.length === 1 ? '' : 'S'}</span>
+          <span style={{ position: 'absolute', left: 14, bottom: 10, font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{prints.length} {prints.length === 1 ? 'print' : 'prints'}</span>
         </div>
         {!none && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
