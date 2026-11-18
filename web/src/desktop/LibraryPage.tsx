@@ -1,3 +1,4 @@
+import { Kbd } from '../components/shortcuts';
 import { useEffect, useState } from 'react';
 import { SegSlider } from '../components/SegSlider';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -93,7 +94,7 @@ export function LibraryPage() {
       {(pending.data?.count ?? 0) > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 14 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)' }} /><span style={{ flex: 1 }}><b style={{ fontWeight: 500 }}>{pending.data!.count} new files</b> <span style={{ color: 'var(--text2)' }}>in your library folder</span></span>
-          <button className="btn outline" onClick={() => setAdding(true)}>Import {pending.data!.count}</button>
+          <button className="btn outline" onClick={() => setAdding(true)}>Import {pending.data!.count} {pending.data!.count === 1 ? 'file' : 'files'}</button>
         </div>
       )}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
@@ -101,7 +102,8 @@ export function LibraryPage() {
           {([['shoots', 'Shoots', all.length], ['photos', 'Photos', total]] as const).map(([k, l, n]) => <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 16px', borderRadius: 999, fontSize: 13.5, background: view === k ? 'var(--btn-bg)' : 'transparent', color: view === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: view === k ? 500 : 400 }}>{l}<span style={{ font: `400 11px ${mono}`, color: view === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: view === k ? 0.6 : 1 }}>{n}</span></button>)}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={view === 'shoots' ? 'Find a shoot, place or year' : 'Search titles, places, cameras, tags'} aria-label="Search the library" style={{ flex: 1, minWidth: 220, height: 40, borderRadius: 999, background: 'var(--surface)', border: 0, outline: 'none', padding: '0 18px', color: 'var(--text)', fontSize: 14 }} />
-        {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} aria-pressed={selecting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 14, whiteSpace: 'nowrap', background: selecting ? 'var(--btn-bg)' : 'transparent', color: selecting ? 'var(--btn-fg)' : 'var(--text)', boxShadow: selecting ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{selecting ? 'Done' : 'Select'}<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>S</span></button>}
+        {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setPicked(new Set()); }} aria-pressed={selecting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 14, whiteSpace: 'nowrap', background: selecting ? 'var(--btn-bg)' : 'transparent', color: selecting ? 'var(--btn-fg)' : 'var(--text)', boxShadow: selecting ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{selecting ? 'Done selecting' : 'Select'}</button>}
+        {view === 'photos' && <Kbd k="S" />}
         {view === 'photos' && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <div role="radiogroup" aria-label="Sort by" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
@@ -112,7 +114,7 @@ export function LibraryPage() {
             </button>}
           </div>
         )}
-        {view === 'shoots' && chips.map(([k, l]) => { const on = chip === k; return <button key={k} aria-pressed={on} onClick={() => setChip(on ? null : k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', background: on ? 'var(--chip)' : 'var(--hover)', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
+        {view === 'shoots' && chips.map(([k, l]) => { const on = chip === k; return <button key={k} aria-pressed={on} onClick={() => setChip(on ? null : k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, whiteSpace: 'nowrap', flex: 'none', background: on ? 'var(--chip)' : 'transparent', boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--outline)', color: on ? 'var(--text)' : 'var(--text2)' }}>{l}</button>; })}
         {view === 'photos' && <button onClick={() => filters.setFiltersOpen(!filters.filtersOpen)} aria-expanded={filters.filtersOpen} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 999, fontSize: 13, boxShadow: 'inset 0 0 0 1px var(--outline)', color: filters.filtersOpen ? 'var(--text)' : 'var(--text2)' }}>Filters{filters.chips.length + (chip ? 1 : 0) ? ` · ${filters.chips.length + (chip ? 1 : 0)}` : ''} {filters.filtersOpen ? '▴' : '▾'}</button>}
         {view === 'photos' && <span className="library-more"><LibraryMore /></span>}
       </div>
@@ -132,7 +134,6 @@ export function LibraryPage() {
 
       {view === 'shoots' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16, borderBottom: '1px solid var(--hair)', paddingBottom: 8 }}><span style={{ font: `400 22px ${serif}` }}>{year}</span><span style={{ fontSize: 12.5, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{all.length} shoots · {total} photographs</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: '28px 16px' }}>
             {shootCards.map((s) => (
               <button key={s.id} onClick={() => nav(`/shoots/${s.id}`)} style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', minWidth: 0 }}>
@@ -140,8 +141,8 @@ export function LibraryPage() {
                   {s.dueCount > 0 && <span style={{ position: 'absolute', left: 8, bottom: 8, fontSize: 11.5, background: 'rgba(0,0,0,.62)', padding: '3px 8px', borderRadius: 999, color: '#efede8' }}>{s.dueCount} due</span>}
                   {s.protected && <span title="Protected from deletion" style={{ position: 'absolute', right: 8, top: 8, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, background: 'rgba(0,0,0,.62)', padding: '3px 9px 3px 7px', borderRadius: 999, color: '#efede8' }}><Lock size={12} />Protected</span>}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}><span style={{ font: `400 20px ${serif}`, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name.trim() || 'Untitled shoot'}</span><span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>{s.count}</span></div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.place || 'No place'} · {s.dates}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}><span style={{ font: `400 20px ${serif}`, color: isUntitled(s) ? 'var(--text2)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name.trim() || 'Untitled shoot'}</span><span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>{s.count} {s.count === 1 ? 'photo' : 'photos'}</span></div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.place || 'Add a place'} · {s.dates}</div>
               </button>
             ))}
           </div>

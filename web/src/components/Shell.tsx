@@ -57,8 +57,8 @@ export function EnvBanner() {
     <button ref={banner} className="envbar" role="alert" onClick={() => nav('/settings?tab=srv&section=system&sub=environment&env=diff')}>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden style={{ flex: 'none' }}><path d="M12 3 2 21h20L12 3z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M12 10v5" stroke="#fff" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="18" r="1.2" fill="#fff" /></svg>
       <span style={{ fontWeight: 600 }}>Settings out of sync</span>
-      <span className="env-sub">{n} server setting{n === 1 ? '' : 's'} in the app differ{n === 1 ? 's' : ''} from the .env file. A restart would bring back the file’s values.</span>
-      <span className="env-go">Review and export .env →</span>
+      <span className="env-sub">{n} server setting{n === 1 ? '' : 's'} differ{n === 1 ? 's' : ''} from your .env file and will revert on restart.</span>
+      <span className="env-go">Review changes →</span>
       <span className="env-short">Review →</span>
     </button>
   );
@@ -117,7 +117,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
           <div className="popover notifs" role="dialog" aria-label="Notifications">
             <div className="spread" style={{ padding: '14px 16px 10px' }}>
               <span className="serif" style={{ fontSize: 22, lineHeight: 1 }}>Notifications</span>
-              <div style={{ display: 'flex', gap: 12 }}><button style={{ fontSize: 12.5, color: unread ? 'var(--text2)' : 'var(--faint)' }} onClick={readAll} disabled={!unread || clearing || acting !== null}>Mark all read</button><button type="button" aria-label="Clear notifications" style={{ fontSize: 12.5, color: 'var(--text2)' }} disabled={!items.length || clearing || acting !== null} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear'}</button></div>
+              <div style={{ display: 'flex', gap: 12 }}><button style={{ fontSize: 12.5, color: unread ? 'var(--text2)' : 'var(--faint)' }} onClick={readAll} disabled={!unread || clearing || acting !== null}>Mark all read</button><button type="button" aria-label="Clear all notifications" style={{ fontSize: 12.5, color: items.length ? 'var(--text2)' : 'var(--faint)' }} disabled={!items.length || clearing || acting !== null} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear all'}</button></div>
             </div>
             {clearError && <div role="alert" className="reason" style={{ margin: '0 16px 8px' }}>{clearError}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 6px 6px', maxHeight: '60vh', overflow: 'auto' }}>
@@ -125,7 +125,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
               {items.map((n) => (
                 <div key={n.id} className={'nrow' + (n.read ? '' : ' unread')} style={{ position: 'relative', display: 'block', padding: 0 }}>
                   <button className="notification-main" onClick={() => go(n)}>
-                    <span className="nic" aria-hidden>{ICON[n.kind] ?? '•'}</span>
+                    <span className="nic" aria-hidden>{n.kind === 'gear-found' ? <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round"><path d="M3 5.5h10l-.8 8H3.8L3 5.5z" /><path d="M5.5 5.5V4.5a2.5 2.5 0 0 1 5 0v1" /></svg> : ICON[n.kind] ?? '•'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, lineHeight: 1.4, color: n.read ? 'var(--text2)' : 'var(--text)' }}>{n.text}</div>
                       <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2 }}>{ago(n.createdAt)}</div>
@@ -134,8 +134,8 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
                   </button>
                   <button type="button" className="notification-dismiss" aria-label={`Dismiss ${n.text}`} title="Dismiss notification" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>×</button>
                   {n.gear?.state === 'new' && <div style={{ display: 'flex', gap: 8, padding: '0 34px 12px 46px', flexWrap: 'wrap' }}>
-                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
-                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>Dismiss</button>
+                    <button type="button" className="btn primary" style={{ height: 32 }} disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
+                    <button type="button" className="btn outline" style={{ height: 32 }} disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>Not mine</button>
                   </div>}
                 </div>
               ))}
@@ -178,7 +178,8 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>You</div>
             {item('Portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
-            {item('Stats & imports', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
+            {item('Stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
+            {item('Settings', go('/settings'))}
             <div className="msep" />
             <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>Help</div>
             {item('Welcome tour', go('/welcome'))}
@@ -186,7 +187,6 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             {item('Help & docs', () => { close(); window.open('https://github.com/trentnbauer/Frames#readme', '_blank', 'noopener'); }, '↗')}
             {item('Send feedback', () => { close(); window.dispatchEvent(new Event('frames:feedback')); }, 'GitHub')}
             <div className="msep" />
-            {item('Settings', go('/settings'), '⌘ ,')}
             {me?.user && item('Sign out', signOut)}
           </div>
         </>

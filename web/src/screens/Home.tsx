@@ -80,9 +80,9 @@ function DesktopHome() {
   const v = {
     greeting: `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}.` : ''}`,
     summaryLine: `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} shoots · ${comps.data?.length ?? 0} compositions`,
-    showReview: !!s && (s.due > 0 || s.resumable || s.early > 0), revCover: s?.nextId ? thumb(s.nextId) : '', revTag: due > 0 ? 'DUE NOW' : s?.resumable ? 'IN PROGRESS' : 'ANYTIME',
-    revTitle: due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is waiting to be seen again',
-    revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')} · ` : ''}about ${s!.minutes} ${s!.minutes === 1 ? 'minute' : 'minutes'} · ratings rank your compositions` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',
+    showReview: !!s && (s.due > 0 || s.resumable || s.early > 0), revCover: s?.nextId ? thumb(s.nextId) : '', revTag: due > 0 ? 'Review · Due now' : s?.resumable ? 'Review · In progress' : 'Review · Anytime',
+    revTitle: due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review',
+    revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')} · ` : ''}about ${s!.minutes} ${s!.minutes === 1 ? 'minute' : 'minutes'}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',
     revCta: s?.resumable ? 'Resume review' : due === 0 ? 'Review anyway' : 'Begin review', revThumbs: s?.nextId ? [thumb(s.nextId)] : [],
     begin: () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review'),
     pendingN: pn, pendingText: pn > 0 ? `${pn} new file${pn === 1 ? '' : 's'} are waiting in your library folder.` : 'Upload from this computer or sync from the cloud.',
@@ -93,7 +93,7 @@ function DesktopHome() {
       return {
         open: !isDone, done: isDone, op: isDone ? 0.7 : 1, name: names[b.id] ?? '', ph: b.name, meta: `${b.count} photo${b.count === 1 ? '' : 's'} · ${b.days} day${b.days === 1 ? '' : 's'}`, a: b.covers[0] ? thumb(b.covers[0]) : '', b: b.covers[1] ? thumb(b.covers[1]) : '',
         onName: (e: React.ChangeEvent<HTMLInputElement>) => setNames((x) => ({ ...x, [b.id]: e.target.value })),
-        canSplit: b.days > 1, splitBg: sp ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', splitFg: sp ? 'var(--text)' : 'var(--text2)', splitRing: sp ? 'none' : 'inset 0 0 0 1px var(--outline)', splitLabel: sp ? `✓ Split into ${b.days} shoots` : `Split by day (${b.days})`, splitTog: () => setSplits((x) => ({ ...x, [b.id]: !sp })),
+        canSplit: b.days > 1, splitBg: sp ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', splitFg: sp ? 'var(--text)' : 'var(--text2)', splitRing: sp ? 'none' : 'inset 0 0 0 1px var(--outline)', splitLabel: sp ? `Split by day (${b.days} shoots)` : `Split by day (${b.days})`, splitTog: () => setSplits((x) => ({ ...x, [b.id]: !sp })),
         addLabel: sp ? `Add ${b.days} shoots` : 'Add shoot',
         add: async () => {
           if ((names[b.id] ?? '').trim()) await api(`/shoots/${b.id}`, { method: 'PATCH', body: { name: names[b.id].trim() } });
@@ -118,7 +118,7 @@ function DesktopHome() {
     pause: () => { cw.pause(); ci.pause(); }, resume: () => { cw.resume(); ci.resume(); },
     fade: cw.fade, dots: wip.map((_, k) => ({ bg: k === cw.i ? 'var(--text)' : 'var(--outline)', go: () => cw.go(k) })), prev: () => cw.go(cw.i - 1), next: () => cw.go(cw.i + 1),
     wall: wall
-      ? { title: `Finish ${wall.name}`, status: `${wall.chosenIds.length} of ${wall.layout.prints.length} prints chosen · ${printsSummary(wall)}`, cta: 'Continue', gap: '14px', prints: miniWall(wall), count: `${cw.i + 1} of ${wip.length} in progress`, open: () => nav(`/collections/${wall.id}`) }
+      ? { title: wall.name, status: `${wall.chosenIds.length} of ${wall.layout.prints.length} prints chosen · ${printsSummary(wall)}`, cta: 'Continue', gap: '14px', prints: miniWall(wall), count: `${cw.i + 1} of ${wip.length} in progress`, open: () => nav(`/collections/${wall.id}`) }
       : { title: 'Nothing in progress', status: 'Start a composition from an idea, or from the Compositions page.', cta: 'Compositions', gap: '0', prints: [] as ReturnType<typeof miniWall>, count: '', open: () => nav('/collections') },
     showCommunity: !!community.data?.enabled && !!community.data.showOnHome, communityWaiting: community.data?.waiting ?? 0,
   };
@@ -126,7 +126,7 @@ function DesktopHome() {
   // Keyboard shortcuts shown on the buttons: A add photos, S start this composition, C continue one. (R, for the review, is in App.tsx.)
   useShortcuts([
     { key: 'a', label: 'Add photos', run: () => v.addPhotos(), off: !v.canAdd || adding },
-    { key: 's', label: 'Start this composition', run: () => void v.startIdea(), off: !idea },
+    { key: 's', label: 'Start composition', run: () => void v.startIdea(), off: !idea },
     { key: 'c', label: 'Continue composition', run: () => v.wall?.open(), off: !wall },
   ]);
 
