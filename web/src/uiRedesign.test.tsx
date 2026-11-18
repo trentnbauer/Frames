@@ -33,7 +33,7 @@ describe('the redesigned screens', () => {
         d={{ name: 'Coastal Light', description: '', allowReview: true, allowDownload: true, expiresAt: null, owner: 'Trent' }}
         photos={[{ id: 1, title: 'One', ar: 1.5, n: 1 }, { id: 2, title: 'Two', ar: 0.8, n: 2 }]} /></MemoryRouter>,
     );
-    for (const text of ['A PHOTOSHOOT · 2 PHOTOGRAPHS', 'Coastal Light', 'Download all 2', 'To rate', '0 of 2 rated', 'Send to Trent', 'This link doesn’t expire']) expect(html).toContain(text);
+    for (const text of ['A PHOTOSHOOT · 2 PHOTOGRAPHS', 'Coastal Light', 'Download all 2', 'To rate', '0 of 2 rated', 'Finish', 'Saved as you go']) expect(html).toContain(text);
   });
   it('leaves out ratings and downloads on a view-only link', () => {
     const html = renderToStaticMarkup(
