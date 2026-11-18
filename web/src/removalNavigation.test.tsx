@@ -16,7 +16,7 @@ it('groups desktop tasks under To do and has no separate removal tab on phones',
   state.removals = 2;
   const phone = renderToStaticMarkup(<MemoryRouter><PhoneTabBar /></MemoryRouter>);
   expect(phone).not.toContain('/removals');
-  for (const tab of ['Home', 'Library', 'Review', 'Compositions', 'Gear']) expect(phone).toContain(`>${tab}<`);
+  for (const tab of ['Home', 'Library', 'To do', 'Compositions', 'Gear']) expect(phone).toContain(`>${tab}<`);
   state.removals = 0;
 });
 it('renders a dedicated immersive review view with an exit control', () => {

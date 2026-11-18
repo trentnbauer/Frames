@@ -21,7 +21,7 @@ export function Who({ name }: { name: string }) {
   const n = name.trim();
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13.5, flex: 'none', marginLeft: 'auto' }}>
-      <span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: n ? 'oklch(0.7 0.13 45)' : 'var(--surface)', boxShadow: n ? undefined : 'inset 0 0 0 1px var(--outline)', color: n ? '#0d0d0d' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{n ? n[0].toUpperCase() : 'G'}</span>
+      <span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: n ? 'var(--accent)' : 'var(--surface)', boxShadow: n ? undefined : 'inset 0 0 0 1px var(--outline)', color: n ? '#0d0d0d' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{n ? n[0].toUpperCase() : 'G'}</span>
       {n ? n.split(/\s+/)[0] : 'Guest'}
     </span>
   );
@@ -162,7 +162,7 @@ export function ShareMobile(p: Props) {
   const ratedCount = photos.filter((x) => ratings[x.id] !== undefined).length;
   const tiles = photos.filter((x) => filter === 'all' || (filter === 'rated' ? ratings[x.id] !== undefined : ratings[x.id] === undefined));
   const daysLeft = d.expiresAt ? Math.max(0, Math.ceil((new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000)) : null;
-  const expiry = daysLeft === null ? 'This link doesn’t expire' : `Link expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`;
+  const expiry = daysLeft === null ? '' : `Link expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`;
   const lockup = <span style={{ display: 'flex', alignItems: 'center', gap: 8, font: `italic 400 20px/1 ${serif}` }}><Mark />Frames</span>;
   const sendNote = () => { if (!note.trim()) return; sendText(null, note, () => { setNote(''); flash(`Sent to ${owner}`); }); };
   const spanLabel = f ? `${[...wallPrints.reduce((m, q) => m.set(q.size, (m.get(q.size) || 0) + 1), new Map<string, number>())].map(([k, n]) => (n > 1 ? `${n} × ${k}` : k)).join(', ')} · ${metres(f.w)} × ${metres(f.h)} m` : '';
@@ -172,7 +172,7 @@ export function ShareMobile(p: Props) {
       <div className="sm-left" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {f ? (
           <div style={{ padding: '22px 20px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `${d.owner} shared a composition with you` : 'A composition was shared with you'}</span><Who name={reviewer} /></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `Shared by ${d.owner}` : 'A composition was shared with you'}</span><Who name={reviewer} /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <h1 style={{ font: `400 40px/1 ${serif}`, margin: 0, textWrap: 'balance' as never }}>{d.name}</h1>
               <span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{spanLabel}</span>
@@ -217,9 +217,9 @@ export function ShareMobile(p: Props) {
                     })}
                     {canReview && (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {origin !== undefined && others.length > 0 && <button onClick={() => setPicking(origin)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Suggest a different photo</button>}
-                        {pr.frame && <button onClick={() => setFraming(i)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Frame colour</button>}
-                        {kept && <button onClick={() => p.swap(origin, null)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Put the original back</button>}
+                        {origin !== undefined && others.length > 0 && <button onClick={() => setPicking(origin)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Swap photo…</button>}
+                        {pr.frame && <button onClick={() => setFraming(i)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)' }}>Frame colour…</button>}
+                        {kept && <button onClick={() => p.swap(origin, null)} style={{ minHeight: 36, fontSize: 13, color: 'var(--text2)', }}>Put original back</button>}
                       </div>
                     )}
                   </section>
@@ -285,9 +285,9 @@ export function ShareMobile(p: Props) {
         )}
         {canReview && (
           <div style={{ padding: '28px 20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ font: `500 11px ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>A NOTE FOR {owner.toUpperCase()}</span>
+            <span style={{ font: `500 11px ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>A note for {owner}</span>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={1000} placeholder="What do you think?" aria-label="Note" style={{ width: '100%', boxSizing: 'border-box', resize: 'none', border: 0, outline: 'none', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15, fontFamily: 'inherit' }} />
-            <button onClick={sendNote} disabled={!note.trim()} style={{ alignSelf: 'flex-end', height: 44, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14, opacity: note.trim() ? 1 : 0.45 }}>Send</button>
+            <button onClick={sendNote} disabled={!note.trim()} style={{ alignSelf: 'flex-end', height: 44, padding: '0 20px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, opacity: note.trim() ? 1 : 0.45 }}>Send</button>
           </div>
         )}
       </div>
@@ -303,7 +303,7 @@ export function ShareMobile(p: Props) {
           {canReview && (p.dirty || p.sendNote) && (
             <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5, color: p.sendNote && !p.sendNote.ok ? 'var(--danger)' : 'var(--text2)' }}>
               {p.dirty && <button onClick={p.sendBack} disabled={p.sending} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14.5 }}>{p.sending ? 'Sending…' : `Send to ${owner} · ${p.changes}`}</button>}
-              {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: 'var(--text2)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Discard</button>}
+              {p.dirty && <button onClick={p.discard} style={{ minHeight: 44, padding: '0 8px', color: 'var(--text2)', }}>Undo changes</button>}
               {p.sendNote && <span style={{ flex: '1 1 100%' }}>{p.sendNote.text}</span>}
             </div>
           )}
@@ -311,11 +311,11 @@ export function ShareMobile(p: Props) {
       )) : canReview && look === null && (
         <div className="sm-bar" style={{ position: 'fixed', left: 12, right: 12, bottom: 24, zIndex: 38, borderRadius: 22, background: 'var(--raised2)', boxShadow: 'var(--float)', padding: '10px 10px 10px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 14 }}>{ratedCount} of {photos.length} rated</span>
+            <span style={{ fontSize: 14 }}>{ratedCount} of {photos.length} rated <span style={{ color: 'var(--ok)', fontSize: 12.5 }}>✓ Saved</span></span>
             <span style={{ height: 3, borderRadius: 2, background: 'var(--hair)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${Math.round((ratedCount / Math.max(1, photos.length)) * 100)}%`, background: 'var(--text)' }} /></span>
           </div>
-          {sentAll ? <span role="status" style={{ height: 44, display: 'inline-flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, color: 'var(--ok)' }}>✓ Sent</span>
-            : <button onClick={() => { if (!ratedCount) { flash('Rate a photograph first'); return; } withName(() => { setSentAll(true); flash(`Sent to ${owner} · thank you`); }); }} style={{ height: 44, padding: '0 18px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14 }}>Send to {owner}</button>}
+          {sentAll ? <span role="status" style={{ height: 44, display: 'inline-flex', alignItems: 'center', padding: '0 14px', fontSize: 13.5, color: 'var(--ok)' }}>✓ Done</span>
+            : <button onClick={() => { if (!ratedCount) { flash('Rate a photograph first'); return; } withName(() => { setSentAll(true); flash(`Thank you, ${owner} has your ratings`); }); }} style={{ height: 44, padding: '0 18px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14 }}>Finish</button>}
         </div>
       )}
 
@@ -323,12 +323,12 @@ export function ShareMobile(p: Props) {
       {toast && <div role="status" style={{ position: 'fixed', left: '50%', top: 58, transform: 'translateX(-50%)', zIndex: 95, maxWidth: 'calc(100vw - 32px)', padding: '9px 16px', borderRadius: 999, background: 'var(--raised2)', boxShadow: 'var(--float)', fontSize: 13, color: 'var(--text)', textAlign: 'center' }}>{toast}</div>}
 
       {lp && look !== null && (
-        <div role="dialog" aria-label="Photograph" style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#000', color: '#efede8', display: 'flex', flexDirection: 'column' }}>
+        <div role="dialog" aria-label="Photograph" style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--review)', color: '#efede8', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'max(14px, env(safe-area-inset-top)) 14px 0' }}>
             <button onClick={() => setLook(null)} aria-label="Close" style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(239,237,232,.1)', display: 'grid', placeItems: 'center', fontSize: 15 }}>✕</button>
             <span style={{ font: `italic 400 20px/1 ${serif}` }}>{look + 1} / {order.length}</span>
             {d.allowDownload
-              ? <a href={`/api/s/${token}/photos/${lp.id}/original`} download aria-label="Download original" style={{ width: 40, height: 40, borderRadius: '50%', background: '#efede8', color: '#0d0d0d', display: 'grid', placeItems: 'center' }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></a>
+              ? <a href={`/api/s/${token}/photos/${lp.id}/original`} download aria-label="Download original" style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(239,237,232,.1)', color: '#efede8', display: 'grid', placeItems: 'center' }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></a>
               : <span style={{ width: 40 }} />}
           </div>
           <div className="sm-lb" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
@@ -349,13 +349,13 @@ export function ShareMobile(p: Props) {
               </div>
               {canReview && slot >= 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={() => setPicking(photosOf(wallPrints[slot])[0])} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Swap photo</button>
-                  {wallPrints[slot].frame && <button onClick={() => setFraming(slot)} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Frame colour</button>}
+                  <button onClick={() => setPicking(photosOf(wallPrints[slot])[0])} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Swap photo…</button>
+                  {wallPrints[slot].frame && <button onClick={() => setFraming(slot)} style={{ flexShrink: 0, height: 40, padding: '0 16px', borderRadius: 999, fontSize: 13.5, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.2)' }}>Frame colour…</button>}
                   {sugOf && (
                     <>
                       <img src={imgUrl(sugOf.id, 'thumb', token)} alt="" style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
                       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: '#a8a59f', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>In your version: {sugOf.title}</span>
-                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flexShrink: 0, minHeight: 44, fontSize: 13, color: '#a8a59f', textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</button>
+                      <button onClick={() => p.swap(photosOf(wallPrints[slot])[0], null)} style={{ flexShrink: 0, minHeight: 44, fontSize: 13, color: '#a8a59f', }}>Put original back</button>
                     </>
                   )}
                 </div>
@@ -388,7 +388,7 @@ export function ShareMobile(p: Props) {
       {picking !== null && (() => {
         const idx = wallPrints.findIndex((pr) => photosOf(pr).includes(picking)), pr = wallPrints[idx];
         return (
-          <Sheet title="Suggest a different photo" sub={`${pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}It goes on the wall here; it is only sent when you send it back.`} onClose={() => setPicking(null)}>
+          <Sheet title="Suggest a different photo" sub={`${pr ? `For print ${idx + 1}, ${sizeLabel(pr)} ${pr.orientation}. ` : ''}Shown on the wall now. Sent when you tap Send to ${owner}.`} onClose={() => setPicking(null)}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {others.filter((x) => p.mine[x.id] === undefined).map((x) => {
                 const wrong = !!pr && (pr.orientation === 'portrait') !== (x.ar < 1);
@@ -408,7 +408,7 @@ export function ShareMobile(p: Props) {
       {framing !== null && wallPrints[framing]?.frame && (() => {
         const pr = wallPrints[framing], cur = p.frames[pr.id] ?? pr.frame!.color;
         return (
-          <Sheet title={`Frame for print ${framing + 1}`} sub={`It is ${pr.frame!.color} now. Pick another colour to try it on the wall. It is only sent when you send it back.`} onClose={() => { if (p.frames[pr.id]) flash(`Changed print ${framing + 1} to a ${p.frames[pr.id]} frame. Send it back when you are ready.`); setFraming(null); }}>
+          <Sheet title={`Frame for print ${framing + 1}`} sub={`Now ${pr.frame!.color}. Try another colour on the wall.`} onClose={() => { if (p.frames[pr.id]) flash(`Changed print ${framing + 1} to a ${p.frames[pr.id]} frame. Send it back when you are ready.`); setFraming(null); }}>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {Object.keys(SWATCH).map((c) => (
                 <button key={c} onClick={() => p.setFrame(pr.id, c === pr.frame!.color ? null : c)} aria-pressed={cur === c} aria-label={c} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 48, fontSize: 12, color: cur === c ? 'var(--text)' : 'var(--text2)' }}>

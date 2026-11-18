@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
@@ -6,9 +6,9 @@ import { printsSummary } from '../screens/walls';
 import { greetingFor } from '../pages/Today';
 import { GearIcon } from '../components/GearSystems';
 import type { WishlistData } from '../components/HomeWishlist';
+import { HomeNotes } from '../components/HomeNotes';
 import { useStore } from '../store';
-import { buildTasks } from '../todoTasks';
-import { SUB } from './TodoList';
+import { ReviewCard } from './ReviewCard';
 import { MiniWall } from './MiniWall';
 import { Eyebrow, Row, primaryBtn } from './ui';
 
@@ -16,10 +16,10 @@ type Idea = { aiAssisted?: boolean; name: string; reason: string; photoIds: numb
 type Batch = { id: number; name: string; count: number; days: number; covers: number[]; done: boolean };
 const thumb = (id: number) => imgUrl(id, 'thumb');
 
-/** Home on a phone: greeting, the review due, the first to-dos, swipeable ideas, batches to organise, a composition to finish, community review and the wishlist. */
+/** Home on a phone: greeting, the review due, notes, swipeable ideas, batches to organise, a composition to finish, community review and the wishlist. */
 export function MobileHome() {
   const nav = useNavigate();
-  const { summary: s, me, todoItems } = useStore();
+  const { summary: s, me } = useStore();
   const recs = useApi<Idea[]>('/collections/suggestions');
   const comps = useApi<Collection[]>('/collections');
   const shoots = useApi<Shoot[]>('/shoots');
@@ -28,17 +28,12 @@ export function MobileHome() {
   const gear = useApi<WishlistData>('/gear/items');
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [err, setErr] = useState('');
+  const [cur, setCur] = useState(0);
+  const strip = useRef<HTMLDivElement>(null);
   const ideas = (recs.data ?? []).filter((x) => !dismissed.has(x.name));
   const wip = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && !c.printedAt)[0];
   const firstName = (me?.displayName || me?.user?.name || '').split(' ')[0];
-  const tasks = useMemo(() => buildTasks(todoItems), [todoItems]);
-  const due = s?.due ?? 0;
   const openBatches = (batches.data?.batches ?? []).filter((b) => !b.done);
-  const todoRows = [
-    ...(due > 0 ? [{ label: 'Photographs due for review', sub: 'Rate them again', count: due, go: () => nav('/review') }] : []),
-    ...tasks.rows.map((r) => ({ label: r.row, sub: SUB[r.key], count: r.n, go: () => nav(`/todo?task=${r.key}`) })),
-  ];
-  const todoTotal = todoRows.reduce((n, r) => n + r.count, 0);
   const startIdea = async (idea: Idea) => {
     setErr('');
     try {
@@ -48,7 +43,6 @@ export function MobileHome() {
     } catch (e) { setErr((e as Error).message); }
   };
   const notMe = (idea: Idea) => { api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'reject' } }).catch(() => undefined); setDismissed((d) => new Set(d).add(idea.name)); };
-  const begin = () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review');
   const wish = gear.data?.want ?? [];
 
   return (
@@ -58,30 +52,14 @@ export function MobileHome() {
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{(s?.total ?? 0).toLocaleString()} photographs · {shoots.data?.length ?? 0} shoots · {comps.data?.length ?? 0} compositions</span>
       </div>
 
-      {s && (s.due > 0 || s.resumable || s.early > 0) && (
-        <div style={{ position: 'relative', borderRadius: 16, background: 'var(--surface)' }}>
-          {s.nextId && <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 16 }}><div style={{ position: 'absolute', inset: -40, background: `url(${thumb(s.nextId)}) center/cover`, filter: 'var(--home-review-image-filter)', opacity: 'var(--home-review-image-opacity)' as never }} /></div>}
-          <div style={{ position: 'relative', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Eyebrow>{due > 0 ? 'REVIEW · DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}</Eyebrow><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{due > 0 ? `about ${s.minutes} min` : ''}</span></div>
-            {s.nextId && <div style={{ display: 'flex', gap: 4 }}><div style={{ width: 52, height: 64, borderRadius: 3, background: `url(${thumb(s.nextId)}) center/cover var(--hair)` }} /></div>}
-            <h2 style={{ font: '400 30px/1.05 var(--serif)', margin: 0, textWrap: 'pretty' as never }}>{due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review'}</h2>
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text2)', textWrap: 'pretty' as never }}>{due > 0 ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}` : ''}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.'}</p>
-            <button onClick={begin} style={primaryBtn}>{s.resumable ? 'Resume review' : due === 0 ? 'Review anyway' : 'Begin review'}</button>
-          </div>
-        </div>
-      )}
+      {s && (s.due > 0 || s.resumable || s.early > 0) && <ReviewCard />}
 
-      {todoRows.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6 }}><Eyebrow>TO DO · {todoTotal}</Eyebrow><button onClick={() => nav('/todo')} style={{ height: 32, fontSize: 13, color: 'var(--text2)' }}>All to do →</button></div>
-          {todoRows.slice(0, 4).map((t) => <Row key={t.label} label={t.label} sub={t.sub} count={t.count} onClick={t.go} />)}
-        </div>
-      )}
+      <HomeNotes />
 
       <div id="ideas" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Eyebrow>IDEAS FOR YOU</Eyebrow>{ideas.length > 1 && <span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>Swipe ⟶</span>}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Eyebrow>IDEAS FOR YOU</Eyebrow>{ideas.length > 1 && <span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{Math.min(ideas.length, cur + 1)} / {ideas.length}</span>}</div>
         {err && <div role="alert" className="reason">{err}</div>}
-        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', margin: '0 -20px', padding: '0 20px', scrollbarWidth: 'none' }}>
+        <div ref={strip} onScroll={(e) => setCur(Math.round(e.currentTarget.scrollLeft / 304))} style={{ display: 'flex', flexWrap: 'nowrap', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', margin: '0 -20px', padding: '0 20px', scrollbarWidth: 'none' }}>
           {ideas.map((idea) => (
             <div key={idea.name} style={{ flexShrink: 0, width: 292, scrollSnapAlign: 'center', background: 'var(--surface)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 12, boxSizing: 'border-box' }}>
               <div style={{ height: 118, display: 'flex', gap: 3, borderRadius: 8, overflow: 'hidden' }}>{idea.photos.slice(0, 4).map((p) => <div key={p.id} style={{ flex: `${p.ar || 1} 1 0`, minWidth: 0, background: `url(${thumb(p.id)}) center/cover var(--hair)` }} />)}</div>
@@ -127,7 +105,7 @@ export function MobileHome() {
           <Eyebrow>COMMUNITY REVIEW</Eyebrow>
           <span style={{ font: '400 26px/1.05 var(--serif)' }}>Rate other photographers’ work</span>
           <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text2)' }}>Anonymous both ways · {community.data.waiting} photos waiting · reviewing helps your own photos get reviewed</span>
-          <span style={{ alignSelf: 'flex-start', marginTop: 6, height: 44, display: 'inline-flex', alignItems: 'center', padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Start community review</span>
+          <span style={{ alignSelf: 'flex-start', marginTop: 6, minHeight: 44, display: 'inline-flex', alignItems: 'center', fontSize: 14, color: 'var(--text2)' }}>Start community review ›</span>
         </button>
       )}
 
