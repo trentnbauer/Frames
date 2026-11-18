@@ -3,7 +3,7 @@ import { RotateButton } from '../components/RotateButton';
 import { MobilePhoto } from '../mobile/Photo';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, imageChanged, imgUrl, useApi } from '../api';
+import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
@@ -110,7 +110,7 @@ function DesktopPhoto() {
       <ProtoPhoto
         colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}
         photoSrc={imgUrl(p.id, 'preview')} idx={idx >= 0 ? idx + 1 : 1} total={stepIds.length || 1} shootName={shoot?.name ?? 'Library'} onBack={back}
-        onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)} rotateBtn={<RotateButton id={p.id} onDone={() => photo.reload()} />}
+        onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)} rotateBtn={<RotateButton id={p.id} onDone={() => photo.reload()} style={{ width: 40, height: 40, background: 'transparent' }} />}
         mates={mates.map((m) => ({ id: m.id, src: imgUrl(m.id, 'thumb'), ar: m.ar, current: m.id === p.id }))} onOpenMate={(mid: number) => nav(`/photo/${mid}`)}
         pfOn={inPf.data?.state === 'in' || inPf.data?.state === 'auto'} pfLabel={inPf.data?.state === 'in' ? 'In portfolio' : inPf.data?.state === 'auto' ? `Auto · score ${inPf.data.score?.toFixed(1)}` : 'Add to portfolio'}
         pfTitle={inPf.data?.state === 'auto' ? 'Added by your score rule. Click to keep it out.' : 'Show this photograph in your public portfolio'}
@@ -120,7 +120,6 @@ function DesktopPhoto() {
         onRunAi={async () => { if (!ai) return 'AI is off. Turn it on in Settings.'; setAiBusy(true); try { await patch({ reanalyse: true }); return 'Analysing with AI…'; } catch (e) { return (e as Error).message; } finally { setAiBusy(false); } }}
         moreItems={[
           { label: 'Find similar photos', run: () => nav(`/library?similarTo=${p.id}`) },
-          { label: 'Rotate a quarter turn', run: async () => { await api(`/photos/${p.id}/rotate`, { body: { by: 90 } }); imageChanged(p.id); photo.reload(); }, toast: 'Turned. The original file is not changed.' },
           { label: 'Download original', sep: true, meta: `${mb} MB`, run: () => { window.location.assign(`/api/photos/${p.id}/original`); }, toast: `Downloading ${p.file}` },
           { label: 'Export XMP', run: () => { window.location.assign(`/api/photos/${p.id}/xmp`); }, toast: 'XMP sidecar written' },
           { label: 'Review again', sep: true, run: async () => { await patch({ reviewAgain: true }); refreshSummary(); }, toast: 'Added back to the review queue' },
