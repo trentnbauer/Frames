@@ -13,7 +13,6 @@ import { useStore } from '../store';
 import { Eyebrow, Row, Seg } from './ui';
 
 const FILTERS: [string, string][] = [['due', 'Due for review'], ['ai', '✦ AI suggestions'], ['unrated', 'Unrated'], ['loved', 'Loved'], ['noplace', 'No location'], ['noshoot', 'No shoot']];
-const dueNow = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new Date().toISOString();
 
 /** Library on a phone: Photos (by shoot, three across) and Shoots (a card each), with search, filters and a Select mode that rates, moves or adds to a composition. */
 export function MobileLibrary() {
@@ -97,7 +96,7 @@ export function MobileLibrary() {
                 const on = sel.has(p.id);
                 return (
                   <button key={p.id} onClick={() => (selecting ? flip(p.id) : nav(`/photo/${p.id}`))} aria-label={p.title || p.file} aria-pressed={selecting ? on : undefined} style={{ position: 'relative', flex: `${(p.ar || 1).toFixed(3)} 1 calc(${(p.ar || 1).toFixed(3)} * 100vw / ${pinch.cols})`, aspectRatio: String(p.ar || 1), background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)`, outline: on ? '2px solid var(--text)' : 'none', outlineOffset: -2 }}>
-                    {!selecting && dueNow(p) && <span style={{ position: 'absolute', left: 6, bottom: 6, height: 18, display: 'inline-flex', alignItems: 'center', padding: '0 7px', borderRadius: 999, background: 'rgba(20,20,19,.82)', color: '#efede8', fontSize: 10.5 }}>Due</span>}
+                    {!selecting && !p.orphaned && shootName(p.shootId) !== 'Photos' && <span style={{ position: 'absolute', left: 6, bottom: 6, height: 18, maxWidth: 'calc(100% - 12px)', display: 'inline-flex', alignItems: 'center', padding: '0 7px', borderRadius: 999, background: 'rgba(20,20,19,.82)', color: '#efede8', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shootName(p.shootId)}</span>}
                     {!selecting && filter === 'ai' && <span aria-label="AI suggestions waiting" style={{ position: 'absolute', right: 6, bottom: 6, height: 18, display: 'inline-flex', alignItems: 'center', padding: '0 7px', borderRadius: 999, background: 'rgba(20,20,19,.82)', color: '#efede8', fontSize: 10.5 }}>✦</span>}
                     {selecting && <span style={{ position: 'absolute', top: 6, left: 6, width: 22, height: 22, borderRadius: '50%', background: on ? '#efede8' : 'rgba(0,0,0,.25)', boxShadow: 'inset 0 0 0 1.5px #fff', display: 'grid', placeItems: 'center', color: '#0d0d0d', fontSize: 12, fontWeight: 600 }}>{on ? '✓' : ''}</span>}
                   </button>
