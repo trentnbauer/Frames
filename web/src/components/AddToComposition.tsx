@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { SegSlider } from './SegSlider';
-import { api, useApi } from '../api';
+import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
 import { useUi } from '../ui';
 import { Modal } from './Modal';
@@ -14,7 +13,6 @@ import { Modal } from './Modal';
 export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void }) {
   const colls = useApi<Collection[]>('/collections');
   const { openNew } = useUi();
-  const [tab, setTab] = useState<'existing' | 'new'>('existing');
   const [q, setQ] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,38 +45,47 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
   };
   const create = () => { if (!name.trim()) return; onClose(); openNew({ name: name.trim(), photoIds: ids }); };
   const what = ids.length === 1 ? 'photograph' : `${ids.length} photographs`;
+  const needle = q.trim();
+  const label = needle ? (shown.length ? `${shown.length} matching ${shown.length === 1 ? 'composition' : 'compositions'}` : 'No composition matches') : ids.some((id) => open.some((c) => c.photoIds.includes(id))) ? 'Already in · most recent' : 'Recent compositions';
+  const hit = (t: string) => { const at = needle ? t.toLowerCase().indexOf(needle.toLowerCase()) : -1; return at < 0 ? t : <>{t.slice(0, at)}<b style={{ fontWeight: 500, background: 'var(--chip)', borderRadius: 3 }}>{t.slice(at, at + needle.length)}</b>{t.slice(at + needle.length)}</>; };
+  const stageName = (c: Collection) => (c.stage === 'review' ? 'Review' : c.stage === 'done' ? 'Done' : 'Progress');
+  const n = (c: Collection) => c.photoIds.length;
 
   return (
-    <Modal title="Add to composition" sub={`Added as candidates, ranked by score. Nothing goes straight into a print.`} width={520} onClose={onClose}
-      foot={tab === 'existing'
-        ? <><span className="grow">{err ? <span className="reason" style={{ margin: 0 }}>{err}</span> : changes.length ? `${changes.length} change${changes.length === 1 ? '' : 's'}` : ''}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={apply} disabled={!changes.length || busy}>Apply</button></>
-        : <><span className="grow" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={!name.trim()}>Create and continue</button></>}>
-      <div className="seg" role="tablist"><SegSlider />
-        <button role="tab" aria-selected={tab === 'existing'} className={tab === 'existing' ? 'on' : ''} onClick={() => setTab('existing')}>Existing composition</button>
-        <button role="tab" aria-selected={tab === 'new'} className={tab === 'new' ? 'on' : ''} onClick={() => setTab('new')}>New composition</button>
+    <Modal title={`Add ${ids.length === 1 ? 'this photo' : `${ids.length} photos`}`} width={560} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 16px', borderRadius: 999, background: 'var(--surface)', boxShadow: `inset 0 0 0 1px ${needle ? 'var(--text)' : 'var(--outline)'}` }}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden style={{ color: 'var(--muted)', flexShrink: 0 }}><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg>
+          <input value={q} onChange={(e) => { setQ(e.target.value); setName(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Enter') { if (changes.length) void apply(); else if (needle && shown.length === 0) create(); } }} placeholder="Find a composition, or type a name for a new one" aria-label="Composition name" autoFocus style={{ flex: 1, minWidth: 0, background: 'none', border: 0, outline: 'none', color: 'var(--text)', font: '400 15px var(--sans, inherit)' }} />
+        </label>
+        <span style={{ font: '500 11px var(--mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', padding: '2px 4px 0' }}>{label}</span>
+        <div role="group" aria-label="Compositions" style={{ display: 'flex', flexDirection: 'column', maxHeight: 300, overflowY: 'auto' }}>
+          {colls.loading && <div className="muted" style={{ padding: 12 }}>Loading…</div>}
+          {shown.map((c) => (
+            <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', borderRadius: 10, cursor: 'pointer', background: state(c) ? 'var(--hover)' : undefined }}>
+              <input type="checkbox" checked={state(c)} onChange={(e) => setTicks((t) => ({ ...(t ?? {}), [c.id]: e.target.checked }))} style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, background: (c.chosenIds[0] ?? c.photoIds[0]) ? `url(${imgUrl(c.chosenIds[0] ?? c.photoIds[0], 'thumb')}) center/cover var(--surface)` : 'var(--surface)' }} />
+              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 15, overflowWrap: 'anywhere' }}>{hit(c.name)}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{stageName(c)} · {n(c)} {n(c) === 1 ? 'candidate' : 'candidates'}</span></span>
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{n(c)}</span>
+            </label>
+          ))}
+          {!colls.loading && shown.length === 0 && !needle && <div className="muted" style={{ padding: 12, fontSize: 13.5 }}>No open compositions yet. Type a name to make one.</div>}
+          {needle && (
+            <button onClick={create} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', borderTop: shown.length ? '1px solid var(--hair)' : undefined, borderRadius: 10, textAlign: 'left', background: shown.length === 0 ? 'var(--hover)' : undefined }}>
+              <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--muted)', marginLeft: 32 }}>+</span>
+              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 500, overflowWrap: 'anywhere' }}>Create “{needle}”</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>New composition, with {what} in it</span></span>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Enter ↵</span>
+            </button>
+          )}
+        </div>
+        {err && <div role="alert" className="reason">{err}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6, borderTop: '1px solid var(--hair)' }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{changes.length ? `${changes.length} change${changes.length === 1 ? '' : 's'}` : ''}</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={apply} disabled={!changes.length || busy}>Add</button>
+        </div>
       </div>
-      {tab === 'existing' ? (
-        <>
-          <input className="field-in" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${open.length} composition${open.length === 1 ? '' : 's'}`} aria-label="Search compositions" autoFocus />
-          <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflow: 'auto', margin: '0 -8px' }}>
-            {colls.loading && <div className="muted" style={{ padding: 12 }}>Loading…</div>}
-            {!colls.loading && shown.length === 0 && <div className="muted" style={{ padding: 12, fontSize: 13.5 }}>{q ? 'No composition has that name.' : 'No open compositions yet. Make one on the New composition tab.'}</div>}
-            {!q && shown.length > 0 && <div className="eyebrow" style={{ padding: '4px 8px 8px' }}>{ids.some((id) => open.some((c) => c.photoIds.includes(id))) ? 'Already in · most recent' : 'Most recent'}</div>}
-            {shown.map((c) => (
-              <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 8px', borderRadius: 8, cursor: 'pointer' }} className="pickrow">
-                <input type="checkbox" checked={state(c)} onChange={(e) => setTicks((t) => ({ ...(t ?? {}), [c.id]: e.target.checked }))} />
-                <span style={{ flex: 1, minWidth: 0 }}>{c.name}</span>
-                <span className="faint" style={{ fontSize: 12 }}>{c.photoIds.length} photo{c.photoIds.length === 1 ? '' : 's'}</span>
-              </label>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <input className="field-in" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') create(); }} placeholder="Composition name" aria-label="Composition name" autoFocus />
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>New composition opens next, with {what} already loaded.</p>
-        </>
-      )}
     </Modal>
   );
 }

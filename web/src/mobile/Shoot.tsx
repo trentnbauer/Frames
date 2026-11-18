@@ -38,22 +38,22 @@ export function MobileShoot() {
     <div className="ppage flush" data-screen-label="Shoot" style={{ padding: 0 }}>
       <div style={{ padding: 'max(16px, env(safe-area-inset-top)) 16px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav('/library?view=shoots'); }} aria-label="Back" style={{ boxShadow: 'inset 0 0 0 1px var(--outline)', borderRadius: '50%', width: 44, height: 44, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 18 }}>←</button>
+          <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav('/library?view=shoots'); }} aria-label="Back" style={{ background: 'var(--surface)', borderRadius: '50%', width: 44, height: 44, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 18 }}>←</button>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <h1 style={{ font: '400 30px/1.05 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{s.name}</h1>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>{[s.place, s.dates, `${s.count} ${s.count === 1 ? 'photo' : 'photos'}`, `${pct}% reviewed`].filter(Boolean).join(' · ')}</span>
           </div>
-          <button onClick={() => setSheet('more')} aria-label="More" style={{ boxShadow: 'inset 0 0 0 1px var(--outline)', borderRadius: '50%', width: 44, height: 44, flexShrink: 0, fontSize: 18, display: 'grid', placeItems: 'center' }}>⋯</button>
+          <button onClick={() => setSheet('more')} aria-label="More" style={{ background: 'var(--surface)', borderRadius: '50%', width: 44, height: 44, flexShrink: 0, fontSize: 18, display: 'grid', placeItems: 'center' }}>⋯</button>
         </div>
         {err && <div role="alert" className="reason">{err}</div>}
         <div style={{ display: 'flex', gap: 8 }}>
           {s.dueCount > 0 && <button onClick={() => nav(reviewUrl(s.duePhotoIds))} style={{ ...primaryBtn, flex: 1, height: 44, fontSize: 14.5 }}>Review {s.dueCount} due</button>}
-          <button onClick={() => setSharing(true)} style={{ flex: 1, height: 44, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Share</button>
+          <button onClick={() => setSharing(true)} style={{ flex: '0 0 auto', height: 44, padding: '0 30px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Share</button>
         </div>
       </div>
-      <div {...pinch.handlers} style={{ display: 'grid', gridTemplateColumns: `repeat(${pinch.cols},minmax(0,1fr))`, gap: 2, paddingBottom: 40, ...pinch.style }}>
+      <div {...pinch.handlers} style={{ display: 'flex', flexWrap: 'wrap', gap: 2, paddingBottom: 130, ...pinch.style }}>
         {photos.map((p) => (
-          <button key={p.id} onClick={() => nav(`/photo/${p.id}`)} aria-label={p.title || p.file} style={{ position: 'relative', aspectRatio: '1', background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)` }}>
+          <button key={p.id} onClick={() => nav(`/photo/${p.id}`)} aria-label={p.title || p.file} style={{ position: 'relative', flex: `${(p.ar || 1).toFixed(3)} 1 calc(${(p.ar || 1).toFixed(3)} * 100vw / ${pinch.cols})`, aspectRatio: String(p.ar || 1), background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)` }}>
             {!!p.nextReviewAt && p.nextReviewAt <= now && <span style={{ position: 'absolute', left: 6, bottom: 6, height: 18, display: 'inline-flex', alignItems: 'center', padding: '0 7px', borderRadius: 999, background: 'rgba(20,20,19,.82)', color: '#efede8', fontSize: 10.5 }}>Due</span>}
           </button>
         ))}
