@@ -58,10 +58,10 @@ function DesktopPhoto() {
   const fromList = !!listed && listed.includes(here);
   const stepIds = walk ?? (fromList ? listed! : libList.filter((x) => x.shootId === p.shootId).map((x) => x.id));
   const idx = stepIds.indexOf(here);
-  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromList ? '?in=list' : ''}`); };
+  const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromList ? '?in=list' : ''}`, { replace: true }); }; // stepping replaces the page, so Back goes to where the photo was opened from
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
   const mates = libList.filter((x) => x.shootId === p.shootId);
-  const back = () => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); };
+  const back = () => { if (!todoKey && !fromList && shoot && !window.location.search.includes('in=library')) nav(`/shoots/${shoot.id}`); else if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); }; // the label says the shoot, so Back goes there
   const patch = async (body: Record<string, unknown>) => { await api(`/photos/${p.id}`, { method: 'PATCH', body }); photo.reload(); };
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); refreshSummary(); };
   const ai = !!settings && settings.ai !== 'off';
@@ -111,7 +111,7 @@ function DesktopPhoto() {
         colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}
         photoSrc={imgUrl(p.id, 'preview')} idx={idx >= 0 ? idx + 1 : 1} total={stepIds.length || 1} shootName={shoot?.name ?? 'Library'} onBack={back}
         onStep={step} onFindSimilar={() => nav(`/library?similarTo=${p.id}`)} rotateBtn={<RotateButton id={p.id} onDone={() => photo.reload()} />}
-        mates={mates.map((m) => ({ id: m.id, src: imgUrl(m.id, 'thumb'), ar: m.ar, current: m.id === p.id }))} onOpenMate={(mid: number) => nav(`/photo/${mid}`)}
+        mates={mates.map((m) => ({ id: m.id, src: imgUrl(m.id, 'thumb'), ar: m.ar, current: m.id === p.id }))} onOpenMate={(mid: number) => nav(`/photo/${mid}`, { replace: true })}
         pfOn={inPf.data?.state === 'in' || inPf.data?.state === 'auto'} pfLabel={inPf.data?.state === 'in' ? 'In portfolio' : inPf.data?.state === 'auto' ? `Auto · score ${inPf.data.score?.toFixed(1)}` : 'Add to portfolio'}
         pfTitle={inPf.data?.state === 'auto' ? 'Added by your score rule. Click to keep it out.' : 'Show this photograph in your public portfolio'}
         onTogglePf={async () => { await api(`/portfolio/photos/${p.id}`, { body: { on: inPf.data?.state === 'none' } }); inPf.reload(); }}
