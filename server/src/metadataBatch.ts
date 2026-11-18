@@ -45,7 +45,7 @@ export function metadataInput(body: Row) {
     } else if (key === 'medium') {
       if (!['', 'film', 'digital'].includes(String(value))) throw new WorkflowError('Choose film or digital.');
       patch.medium = value;
-    } else if (key === 'tags' || key === 'subjects') {
+    } else if (key === 'tags') {
       if (!Array.isArray(value) || value.length > 100 || value.some((v) => typeof v !== 'string' || !v.trim() || v.length > 60))
         throw new WorkflowError('Tags must be short names.');
       patch[key] = [...new Set(value.map((v) => v.trim().toLowerCase()))];
@@ -84,8 +84,8 @@ export function metadataBatch(db: DB, body: Row, apply: boolean) {
       const values: Row = {};
       let tagChanges = false;
       for (const [field, value] of Object.entries(patch)) {
-        if (field === 'tags' || field === 'subjects') {
-          const kind = field === 'tags' ? 'tag' : 'subject';
+        if (field === 'tags') {
+          const kind = 'tag';
           const absent = (value as string[]).filter((name) => !tags.some((t) => t.name === name && t.kind === kind && t.accepted === 1));
           if (absent.length) {
             tagChanges = true;

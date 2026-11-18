@@ -79,14 +79,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     // Archived only means "left out of review". It never hides a photograph from browsing or search.
     if (q.shoot) { where.push('p.shoot_id = ?'); args.push(num(q.shoot)); }
     if (q.orphaned === '1') where.push('p.shoot_id IN (SELECT id FROM shoots WHERE unsorted = 1)'); // photographs in no photoshoot
-    for (const s of String(q.subject ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
-      where.push("EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.kind = 'subject' AND t.accepted = 1)"); args.push(s);
-    }
-    // ?missing=subject, tag, camera, lens, film or place: photographs with none yet.
+    // ?missing=tag, camera, lens, film or place: photographs with none yet.
     for (const k of String(q.missing ?? '').split(',')) {
       if (k === 'camera' || k === 'lens' || k === 'film') where.push(`COALESCE(p.${k}, '') = ''`);
       if (k === 'place') where.push("COALESCE(p.place, '') = '' AND p.lat IS NULL AND NOT EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND s.place != '')");
-      if (k === 'subject' || k === 'tag') where.push(`NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = '${k}' AND t.accepted = 1${k === 'tag' ? " AND t.source <> 'gear'" : ''})`); // tags made from camera details do not count as tagged
+      if (k === 'tag') where.push("NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear')"); // tags made from camera details do not count as tagged
     }
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(s);
@@ -126,7 +123,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       const avg = '(SELECT AVG(r.rating) FROM reviews r WHERE r.photo_id = p.id)';
       where.push(String(q.rating) === '4+' ? `${avg} >= 4` : String(q.rating) === '3+' ? `${avg} >= 3` : `${avg} < 3`);
     }
-    // "No people": leave out photos with that tag or subject, or mentioning it in their title or description.
+    // "No people": leave out photos with that tag, or mentioning it in their title or description.
     for (const e of String(q.exclude ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push("NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND t.name = ?) AND lower(p.title) NOT LIKE ? ESCAPE '\\' AND lower(p.description) NOT LIKE ? ESCAPE '\\'");
       args.push(e, like(e), like(e));
@@ -256,13 +253,13 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     return { ai: on, parsed };
   });
 
-  /** "Find subjects, tags and colours for a composition from its name": the model picks from names the library already has. Without AI: { ai: false }. */
+  /** "Find tags and colours for a composition from its name": the model picks from names the library already has. Without AI: { ai: false }. */
   app.post('/api/ai/suggest-filters', async (req, rep) => {
     if (!aiConfigsFor(db, 'ideas').length) return { ai: false, picks: null };
     const name = String(((req.body ?? {}) as Row).name ?? '').trim().slice(0, 120);
     if (!name) return rep.code(400).send({ error: 'Give the composition a name first' });
     const vocab = (kind: string) => all("SELECT name FROM tags WHERE kind = ? AND accepted = 1 GROUP BY name ORDER BY COUNT(*) DESC, name LIMIT 300", kind).map((r) => r.name as string);
-    const picks = await tryEach(db, 'ideas', (c) => suggestFilters(c, name, { subjects: vocab('subject'), tags: vocab('tag'), colours: [...COLOR_NAMES] }));
+    const picks = await tryEach(db, 'ideas', (c) => suggestFilters(c, name, { tags: vocab('tag'), colours: [...COLOR_NAMES] }));
     return { ai: true, picks };
   });
 
@@ -434,8 +431,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     return true;
   }
 
-  // ---------- tags and subjects ----------
-  // One photo. Body: { name, kind?: 'tag'|'subject', action?: 'add'|'accept'|'reject'|'remove' }.
+  // ---------- tags ----------
+  // One photo. Body: { name, action?: 'add'|'accept'|'reject'|'remove' }.
   // Old clients send { remove: true } or { accepted: false }; both still work.
   app.put('/api/photos/:id/tags', async (req, rep) => {
     const id = num((req.params as Row).id);
@@ -443,7 +440,6 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const name = String(b.name ?? '').trim().toLowerCase().slice(0, 60);
     if (!name) return rep.code(400).send({ error: 'name required' });
-    const kind = b.kind === 'subject' ? 'subject' : 'tag';
     const action = b.action ?? (b.remove ? 'remove' : b.accepted === false ? 'reject' : 'add');
     const existing = one('SELECT source, kind FROM tags WHERE photo_id = ? AND name = ?', id, name);
     if (action === 'remove') db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(id, name);
@@ -451,7 +447,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
       // A rejected AI suggestion is kept (hidden) so the AI does not suggest it again. A tag the user added is simply removed.
       if (existing?.source === 'ai') db.prepare("UPDATE tags SET accepted = -1, ai_source_id = '' WHERE photo_id = ? AND name = ?").run(id, name);
       else db.prepare('DELETE FROM tags WHERE photo_id = ? AND name = ?').run(id, name);
-    } else db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, ?) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1, source = 'user', ai_source_id = ''").run(id, name, existing?.kind ?? kind);
+    } else db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, ?) ON CONFLICT(photo_id, name) DO UPDATE SET accepted = 1, source = 'user', ai_source_id = ''").run(id, name, 'tag');
     return x.tagsOf(id);
   });
 
@@ -466,26 +462,26 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     return { cameras: list('camera'), lenses: list('lens'), films: list('film') };
   });
 
-  // The whole vocabulary: every tag and subject in use, plus ones created ahead of time.
+  // The whole vocabulary: every tag in use, plus ones created ahead of time.
   app.get('/api/tags', async (req) => {
     const kind = (req.query as Row).kind;
     const rows = all(`SELECT name, kind, SUM(n) n FROM (
         SELECT name, kind, COUNT(*) n FROM tags WHERE accepted = 1 GROUP BY name, kind
         UNION ALL SELECT name, kind, 0 FROM vocab) GROUP BY name, kind ORDER BY n DESC, name`);
-    return kind === 'tag' || kind === 'subject' ? rows.filter((r) => r.kind === kind) : rows;
+    return kind === 'tag' ? rows.filter((r) => r.kind === kind) : rows;
   });
   app.post('/api/tags', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const name = String(b.name ?? '').trim().toLowerCase().slice(0, 60);
     if (!name) return rep.code(400).send({ error: 'name required' });
-    db.prepare('INSERT OR IGNORE INTO vocab(name, kind) VALUES(?, ?)').run(name, b.kind === 'subject' ? 'subject' : 'tag');
+    db.prepare('INSERT OR IGNORE INTO vocab(name, kind) VALUES(?, ?)').run(name, 'tag');
     return { ok: true };
   });
   // Renaming to a name that already exists merges the two.
   app.patch('/api/tags/:kind/:name', async (req, rep) => {
     const { kind, name } = req.params as Row;
     const to = String(((req.body ?? {}) as Row).name ?? '').trim().toLowerCase().slice(0, 60);
-    if (!to || (kind !== 'tag' && kind !== 'subject')) return rep.code(400).send({ error: 'name required' });
+    if (!to || kind !== 'tag') return rep.code(400).send({ error: 'name required' });
     db.transaction(() => {
       db.prepare('UPDATE OR IGNORE tags SET name = ? WHERE name = ? AND kind = ?').run(to, String(name).toLowerCase(), kind);
       db.prepare('DELETE FROM tags WHERE name = ? AND kind = ?').run(String(name).toLowerCase(), kind); // rows that collided with an existing one

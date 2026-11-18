@@ -19,7 +19,7 @@ import { aiHiddenFilter, privateShootsLocalOnly } from './privacyPrefs.js';
  */
 
 export type { AiCfg };
-export type Analysis = { description: string; subjects: string[]; tags: string[]; environment: string; composition: string; lighting: string; mood: string };
+export type Analysis = { description: string; tags: string[]; environment: string; composition: string; lighting: string; mood: string };
 export type ParsedQuery = { text: string; subjects: string[]; exclude: string[]; colours: string[]; time: { from: string; to: string } | null };
 
 export const getSecret = (db: DB, name: string) => getSetting<string>(db, `secret:${name}`, '');
@@ -140,7 +140,7 @@ const yes = (v: unknown) => v === true || v === 'true';
 
 export async function describePhoto(c: AiCfg, jpeg: Buffer): Promise<Analysis> {
   const a = await askJson(c, DESCRIBE, jpeg);
-  return { description: text(a.description), subjects: clean(a.subjects), tags: [...new Set([...clean(a.tags), ...(yes(a.light_leak) ? ['light leak'] : []), ...(yes(a.lens_flare) ? ['lens flare'] : [])])], environment: text(a.environment, 200), composition: text(a.composition, 300), lighting: text(a.lighting, 300), mood: text(a.mood, 80) };
+  return { description: text(a.description), tags: [...new Set([...clean(a.subjects), ...clean(a.tags), ...(yes(a.light_leak) ? ['light leak'] : []), ...(yes(a.lens_flare) ? ['lens flare'] : [])])], environment: text(a.environment, 200), composition: text(a.composition, 300), lighting: text(a.lighting, 300), mood: text(a.mood, 80) };
 }
 
 /** Some sources (Claude, OpenRouter) have no embeddings. Those still describe and tag; search by meaning is just unavailable. */
@@ -169,19 +169,19 @@ export async function parseQuery(c: AiCfg, q: string): Promise<ParsedQuery | nul
   } catch { return null; }
 }
 
-export type FilterPicks = { subjects: string[]; tags: string[]; colours: string[] };
+export type FilterPicks = { tags: string[]; colours: string[] };
 /**
- * Which of the library's own subjects, tags and colours fit a composition's name? The model is shown the names that exist and may
+ * Which of the library's own tags and colours fit a composition's name? The model is shown the names that exist and may
  * only pick from them: anything it makes up is dropped. Null if it cannot answer or AI is off.
  */
-export async function suggestFilters(c: AiCfg, title: string, known: { subjects: string[]; tags: string[]; colours: string[] }): Promise<FilterPicks | null> {
+export async function suggestFilters(c: AiCfg, title: string, known: { tags: string[]; colours: string[] }): Promise<FilterPicks | null> {
   try {
-    const a = await askJson(c, `A photographer is making a composition (a set of prints) called "${title.replace(/"/g, "'").slice(0, 120)}". Choose which of the photographer's existing subjects, tags and colours describe the photographs it should contain. Answer with JSON only, in exactly this shape: {"subjects": [], "tags": [], "colours": []}. Choose only from these lists, copying names exactly, and choose nothing that does not clearly fit.\nSubjects: ${JSON.stringify(known.subjects)}\nTags: ${JSON.stringify(known.tags)}\nColours: ${JSON.stringify(known.colours)}`);
+    const a = await askJson(c, `A photographer is making a composition (a set of prints) called "${title.replace(/"/g, "'").slice(0, 120)}". Choose which of the photographer's existing tags and colours describe the photographs it should contain. Answer with JSON only, in exactly this shape: {"tags": [], "colours": []}. Choose only from these lists, copying names exactly, and choose nothing that does not clearly fit.\nTags: ${JSON.stringify(known.tags)}\nColours: ${JSON.stringify(known.colours)}`);
     const only = (v: unknown, allowed: string[]) => {
       const set = new Map(allowed.map((n) => [n.toLowerCase(), n]));
       return [...new Set((Array.isArray(v) ? v : []).map((n) => set.get(String(n).trim().toLowerCase())).filter((n): n is string => !!n))].slice(0, 12);
     };
-    return { subjects: only(a?.subjects, known.subjects), tags: only(a?.tags, known.tags), colours: only(a?.colours, known.colours) };
+    return { tags: only(a?.tags, known.tags), colours: only(a?.colours, known.colours) };
   } catch { return null; }
 }
 
@@ -221,10 +221,9 @@ export function createAiWorker(db: DB, cfg: Cfg) {
     const jpeg = await sharp(f).resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
     const a = await describePhoto(c, jpeg);
     let emb: Float32Array | null = null;
-    if (canEmbed(c)) try { emb = await embedText(c, [a.description, ...a.subjects, ...a.tags].join('. ')); } catch (e) { state.lastError = `Embeddings unavailable: ${(e as Error).message}`; }
+    if (canEmbed(c)) try { emb = await embedText(c, [a.description, ...a.tags].join('. ')); } catch (e) { state.lastError = `Embeddings unavailable: ${(e as Error).message}`; }
     db.transaction(() => {
       // Suggestions only: INSERT OR IGNORE keeps anything the user already accepted or rejected.
-      for (const s of a.subjects) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind, ai_source_id) VALUES(?, ?, 'ai', 0, 'subject', ?)").run(id, s, c.id ?? '');
       for (const t of a.tags) db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind, ai_source_id) VALUES(?, ?, 'ai', 0, 'tag', ?)").run(id, t, c.id ?? '');
       db.prepare("UPDATE photos SET ai_json = ?, ai_status = 'done', ai_attempts = 0, embedding = ? WHERE id = ?")
         .run(JSON.stringify({ ...a, model: c.model, sourceId: c.id ?? '', at: new Date().toISOString() }), emb ? toBlob(emb) : null, id);

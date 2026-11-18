@@ -47,10 +47,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   const validDate = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
 
   // ---- what a photoshoot passes down to its photographs ----
-  // Place: filled in where a photograph has none of its own (or still has the shoot's old one). Subjects and tags: added to every photograph
+  // Place: filled in where a photograph has none of its own (or still has the shoot's old one). Tags: added to every photograph
   // as the person's own, marked as coming from the shoot so taking them off the shoot takes back only those. A photograph's own choices stay.
-  const sharedOfShoot = (s: Row): { subjects: string[]; tags: string[] } => {
-    try { const j = JSON.parse(s.shared || '{}'); return { subjects: Array.isArray(j.subjects) ? j.subjects : [], tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { subjects: [], tags: [] }; }
+  const sharedOfShoot = (s: Row): { tags: string[] } => {
+    try { const j = JSON.parse(s.shared || '{}'); return { tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { tags: [] }; }
   };
   const cleanNames = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).map((n) => String(n).trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 30);
   const inList = (ids: number[]) => ids.length ? `IN (${ids.map(Number).join(',')})` : 'IN (NULL)';
@@ -63,7 +63,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     const accept = db.prepare("UPDATE tags SET accepted = 1, source = 'shoot', kind = ? WHERE photo_id = ? AND name = ? AND accepted = 0"); // an AI suggestion waiting for a yes
     const sh = sharedOfShoot(s);
     db.transaction(() => {
-      for (const id of ids) for (const [names, kind] of [[sh.subjects, 'subject'], [sh.tags, 'tag']] as const) for (const n of names) { ins.run(id, n, kind); accept.run(kind, id, n); }
+      for (const id of ids) for (const n of sh.tags) { ins.run(id, n, 'tag'); accept.run('tag', id, n); }
     })();
     return { photos: ids.length };
   };
@@ -71,7 +71,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   const unapplyShoot = (s: Row, ids: number[]) => {
     if (!ids.length) return;
     const sh = sharedOfShoot(s);
-    const names = [...sh.subjects, ...sh.tags];
+    const names = sh.tags;
     if (names.length) db.prepare(`DELETE FROM tags WHERE source = 'shoot' AND name IN (${names.map(() => '?').join(',')}) AND photo_id ${inList(ids)}`).run(...names);
     if (s.place) db.prepare(`UPDATE photos SET place = '' WHERE place = ? AND id ${inList(ids)}`).run(s.place);
   };
@@ -177,10 +177,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       else db.prepare("UPDATE photos SET place = ? WHERE shoot_id = ? AND (place = '' OR place = ?)").run(place, id, before.place);
       db.prepare('UPDATE shoots SET place = ? WHERE id = ?').run(place, id);
     }
-    if ('subjects' in b || 'tags' in b) {
+    if ('tags' in b) {
       const was = sharedOfShoot(before);
-      const now = { subjects: 'subjects' in b ? cleanNames(b.subjects) : was.subjects, tags: 'tags' in b ? cleanNames(b.tags) : was.tags };
-      const gone = [...was.subjects.filter((n) => !now.subjects.includes(n)), ...was.tags.filter((n) => !now.tags.includes(n))];
+      const now = { tags: cleanNames(b.tags) };
+      const gone = was.tags.filter((n) => !now.tags.includes(n));
       if (gone.length) db.prepare(`DELETE FROM tags WHERE source = 'shoot' AND name IN (${gone.map(() => '?').join(',')}) AND photo_id IN (SELECT id FROM photos WHERE shoot_id = ?)`).run(...gone, id);
       db.prepare('UPDATE shoots SET shared = ? WHERE id = ?').run(JSON.stringify(now), id);
       applyShoot(id);
@@ -215,7 +215,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     moveInto(id, (((req.body ?? {}) as Row).photoIds as unknown[]) ?? []);
     return x.shootDto(one('SELECT * FROM shoots WHERE id = ?', id)!);
   });
-  // Pass the shoot's place, subjects and tags down to every photograph again (after changes made one by one, or to catch up older shoots).
+  // Pass the shoot's place and tags down to every photograph again (after changes made one by one, or to catch up older shoots).
   app.post('/api/shoots/:id/sync', async (req, rep) => {
     const id = num((req.params as Row).id);
     if (!one('SELECT 1 x FROM shoots WHERE id = ?', id)) return notFound(rep);

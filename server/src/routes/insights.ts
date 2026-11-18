@@ -21,7 +21,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     return m;
   };
   const featuresOf = () => {
-    // Words that describe a photo: its accepted tags and subjects, and its main colours.
+    // Words that describe a photo: its accepted tags, and its main colours.
     const m = new Map<number, string[]>();
     for (const t of all('SELECT photo_id, name, kind FROM tags WHERE accepted = 1')) (m.get(t.photo_id) ?? m.set(t.photo_id, []).get(t.photo_id)!).push(`${t.kind}:${t.name}`);
     for (const p of all("SELECT id, colors FROM photos WHERE colors != ''")) for (const c of String(p.colors).trim().split(' ')) (m.get(p.id) ?? m.set(p.id, []).get(p.id)!).push(`colour:${c}`);
@@ -29,7 +29,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   };
 
   /**
-   * What the photographer seems to like: for each tag, subject or colour, how well photos with it have been rated,
+   * What the photographer seems to like: for each tag or colour, how well photos with it have been rated,
    * nudged by what they accepted ("more like this", "start a collection") and rejected ("not for me") in recommendations.
    */
   function preferenceProfile(rv: Map<number, Rv[]>, feats: Map<number, string[]>) {
@@ -98,7 +98,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
   };
   app.get('/api/recommendations', async () => recommendations());
 
-  /** Ideas use explicit subject, tag, colour and location groups as well as visual similarity. */
+  /** Ideas use explicit tag, colour and location groups as well as visual similarity. */
   function togetherSets(photos: Row[], f: ReturnType<typeof loadFeatures>, feats: Map<number, string[]>, prof: Map<string, number>, rv: Map<number, Rv[]>, dto: (p: Row) => Record<string, any>) {
     const rejected = new Set(all("SELECT photo_id FROM feedback WHERE kind = 'together' AND verdict = 'reject'").map((r) => r.photo_id as number));
     const pool = photos.filter((p) => f.has(p.id) && !rejected.has(p.id) && (!rv.get(p.id) || avgOf(rv.get(p.id)!.map((r) => r.rating)) >= 3.5))
@@ -114,7 +114,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     for (const p of pool) {
       for (const feature of new Set(feats.get(p.id) ?? [])) {
         const split = feature.indexOf(':'), kind = feature.slice(0, split), label = feature.slice(split + 1).trim();
-        if (label && ['tag', 'subject', 'colour'].includes(kind)) add(kind, label, kind === 'colour' ? `Shared colour: ${label}.` : `Shared ${kind}: ${label}.`, p);
+        if (label && ['tag', 'colour'].includes(kind)) add(kind, label, kind === 'colour' ? `Shared colour: ${label}.` : `Shared ${kind}: ${label}.`, p);
       }
       const place = typeof p.place === 'string' ? p.place.trim() : '';
       if (place) add('location', place, `Photographed at ${place}.`, p);
@@ -133,7 +133,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     for (const p of pool) { const root = find(p.id); visual.set(root, [...(visual.get(root) ?? []), p]); }
     for (const members of visual.values()) grouped.set(`visual:${members[0].id}`, { kind: 'visual', label: 'A similar look', reason: 'Similar colours, light and composition.', members });
     // Rotate through the reasons so a heavily tagged library still gets colour and location ideas.
-    const queues = ['subject', 'location', 'colour', 'tag', 'visual'].map((kind) => [...grouped.values()].filter((g) => g.kind === kind && g.members.length >= 3).sort((a, b) => b.members.length - a.members.length));
+    const queues = ['location', 'colour', 'tag', 'visual'].map((kind) => [...grouped.values()].filter((g) => g.kind === kind && g.members.length >= 3).sort((a, b) => b.members.length - a.members.length));
     const chosen: Idea[] = [];
     while (chosen.length < 6 && queues.some((q) => q.length)) for (const queue of queues) {
       const idea = queue.shift(); if (!idea || chosen.length >= 6) continue;
@@ -150,7 +150,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
       const number = (names.get(baseName) ?? 0) + 1; names.set(baseName, number);
       return { name: number === 1 ? baseName : `${baseName} ${number}`,
         reason: `${g.reason} From ${shoots} ${shoots === 1 ? 'photoshoot' : 'photoshoots'}.`,
-        aiAssisted: (g.kind === 'visual' && g.members.some((p) => f.get(p.id)?.embedding)) || (['tag', 'subject'].includes(g.kind) && g.members.some((p) => aiTags.has(`${p.id}:${g.kind}:${g.label.toLowerCase()}`))),
+        aiAssisted: (g.kind === 'visual' && g.members.some((p) => f.get(p.id)?.embedding)) || (g.kind === 'tag' && g.members.some((p) => aiTags.has(`${p.id}:${g.kind}:${g.label.toLowerCase()}`))),
         photoIds: g.members.slice(0, 12).map((p) => p.id as number), photos: g.members.slice(0, 6).map(dto) };
     });
   }
@@ -296,7 +296,7 @@ export function registerInsights(app: FastifyInstance, x: Ctx) {
     const dist_ = (kind: string) => all('SELECT name, COUNT(*) n FROM tags WHERE accepted = 1 AND kind = ? GROUP BY name ORDER BY n DESC, name LIMIT 12', kind);
     return {
       year, years, photos: p.n, bytes: p.bytes, completePct: p.n ? Math.round((complete / p.n) * 100) : 0, avgRating: avg, inCollections, dist, perShoot, top,
-      subjects: dist_('subject'), tags: dist_('tag'),
+      tags: dist_('tag'),
       // How the average rating moves over time, and how it differs from first session to last.
       trend: all(`SELECT substr(date, 1, 7) month, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews ${rw} GROUP BY month ORDER BY month`, ...ra),
       bySession: all(`SELECT session, ROUND(AVG(rating), 2) avg, COUNT(*) n FROM reviews ${rw} GROUP BY session ORDER BY session`, ...ra),

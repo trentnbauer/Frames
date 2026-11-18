@@ -443,6 +443,27 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // A photograph can be turned by quarter turns in Frames (rotation, in degrees clockwise); only its previews are turned, never the original.
   (db) => { addColumn(db, 'photos', 'rotation', 'INTEGER NOT NULL DEFAULT 0'); },
+  // Subjects are gone: what was a subject is now an ordinary tag (on photographs, in the vocabulary and in a photoshoot's shared tags).
+  (db) => {
+    db.exec("UPDATE OR IGNORE tags SET kind = 'tag' WHERE kind = 'subject'; DELETE FROM tags WHERE kind = 'subject';");
+    db.exec("INSERT OR IGNORE INTO vocab(name, kind) SELECT name, 'tag' FROM vocab WHERE kind = 'subject'; DELETE FROM vocab WHERE kind = 'subject';");
+    for (const r of db.prepare("SELECT id, shared FROM shoots WHERE shared LIKE '%subjects%'").all() as { id: number; shared: string }[]) {
+      try {
+        const j = JSON.parse(r.shared);
+        const tags = [...new Set([...(Array.isArray(j.tags) ? j.tags : []), ...(Array.isArray(j.subjects) ? j.subjects : [])])];
+        db.prepare('UPDATE shoots SET shared = ? WHERE id = ?').run(JSON.stringify({ tags }), r.id);
+      } catch { /* an unreadable value is left as it is */ }
+    }
+    const s = db.prepare("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string } | undefined;
+    if (!s) return;
+    try {
+      const v = JSON.parse(s.value) as { todoReasons?: unknown };
+      if (Array.isArray(v.todoReasons) && v.todoReasons.includes('subjects')) {
+        const rest = v.todoReasons.filter((x) => x !== 'subjects');
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'settings'").run(JSON.stringify({ ...v, todoReasons: rest.includes('tags') ? rest : [...rest, 'tags'] }));
+      }
+    } catch { /* an unreadable value is left as it is */ }
+  },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */
