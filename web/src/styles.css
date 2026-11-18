@@ -665,7 +665,7 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .stage-shape.progress { border-radius: 50%; }
 .stage-shape.review { transform: rotate(45deg); }
 .composition-stage-error { color: var(--danger); font-size: 12.5px; }
-.composition-actions { width: 280px; flex: 0 0 280px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; position: relative; }
+.composition-actions { flex: none; display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; position: relative; }
 .composition-stage-wrap { position: relative; }
 .composition-stage-error { position: absolute; top: calc(100% + 6px); right: 0; min-width: 240px; z-index: 10; background: var(--surface); border-radius: 8px; padding: 8px 12px; }
 
@@ -705,7 +705,21 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
   .app-header .head-right > .userbtn, .app-header .head-right > .iconbtn { position: relative; z-index: 42; }
 }
 
-.composition-header { margin-bottom: 24px; }
+.composition-header { margin-bottom: 24px; container-type: inline-size; }
+.composition-header > * { flex: none; }
+.composition-header > div:not(.composition-actions) { flex: 0 1 auto; min-width: 0; }
+/* Guests and Share… sit together in one contained pill; neither is a mode, so neither has a selected fill. */
+.comp-pill { display: inline-flex; align-items: center; padding: 3px; border-radius: 999px; background: var(--surface); }
+.comp-pill button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 16px; border-radius: 999px; font-size: 14px; color: var(--text); white-space: nowrap; }
+.comp-pill button:hover { background: var(--hover); }
+.comp-pill i { width: 1px; height: 18px; background: var(--hair); }
+.comp-pill b { font: 500 11px var(--mono); background: var(--chip); color: var(--text2); border-radius: 999px; padding: 1px 7px; }
+.comp-pill b.on { background: var(--btn-bg); color: var(--btn-fg); }
+/* Narrow header: the chosen stage keeps its label, the others show their shapes only, and "← Compositions" becomes "←". */
+@container (max-width: 1100px) {
+  .composition-header .hdr-back-label { display: none; }
+  .composition-stage button[aria-pressed="false"] .stage-label { display: none; }
+}
 
 .home-review-card { position: relative; border-radius: 12px; overflow: hidden; background: var(--surface); color: var(--text); margin-bottom: 16px; }
 .home-review-backdrop { position: absolute; inset: 0; background-position: center; background-size: cover; filter: var(--home-review-image-filter); opacity: var(--home-review-image-opacity); transform: scale(1.2); }
@@ -746,13 +760,13 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .removal-details h2 { font-size:32px; line-height:1.1; margin:0; }
 .removal-details > .muted, .removal-details > p { font-size:13px; margin:0; }
 .removal-average { display:flex; align-items:baseline; flex-wrap:wrap; gap:18px; margin-top:14px; }
-.removal-average > span:first-child { font:400 64px/1 'Instrument Serif',Georgia,serif; }
+.removal-average > span:first-child { font:400 64px/1 var(--serif); }
 .removal-average small { font-size:26px; color:var(--muted); }
 .removal-average > .muted { font-size:12px; }
 .removal-history { width:100%; margin-top:8px; }
 .removal-scores { display:grid; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:8px; max-height:220px; overflow:auto; }
 .removal-scores > div { text-align:center; border-radius:8px; background:var(--bg); padding:14px 4px; }
-.removal-scores strong { display:block; font:400 32px/1 'Instrument Serif',Georgia,serif; }
+.removal-scores strong { display:block; font:400 32px/1 var(--serif); }
 .removal-scores small { font-size:16px; color:var(--muted); }
 .removal-scores span, .removal-scores time { display:block; font-size:11px; color:var(--muted); margin-top:8px; }
 .removal-actions { display:flex; gap:12px; margin-top:auto; padding-top:12px; }

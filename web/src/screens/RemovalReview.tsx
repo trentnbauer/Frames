@@ -19,5 +19,5 @@ export function RemovalReviewScreen() {
     return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', key); };
   }, [location.key, nav, refreshSummary]);
   if (phone) return <MobileRemoval onChanged={refreshSummary} onLeave={leave} />;
-  return <main className="removal-screen"><button className="btn outline removal-exit" onClick={leave}>Back</button><RemovalReview onChanged={refreshSummary} /></main>;
+  return <main className="removal-screen"><button className="btn outline removal-exit" onClick={leave}>Done <span className="mono faint" style={{ fontSize: 11 }}>· Esc</span></button><RemovalReview onChanged={refreshSummary} /></main>;
 }
