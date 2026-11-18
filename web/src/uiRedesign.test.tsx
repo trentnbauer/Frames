@@ -7,7 +7,7 @@ import { isUntitled } from './desktop/LibraryPage';
 import { DeleteShootDialog } from './desktop/parts';
 import { buildTasks } from './todoTasks';
 import { ShareShoot } from './pages/ShareShoot';
-import { TAB_PATHS } from './mobile/Chrome';
+import { TAB_PATHS, tabFor } from './mobile/Chrome';
 import type { Shoot } from './data';
 
 vi.mock('./store', () => ({ useStore: () => ({ summary: { due: 3 }, todoItems: [], refreshSummary: () => undefined }) }));
@@ -22,7 +22,9 @@ describe('the redesigned screens', () => {
   it('puts Library, a shoot and a photograph under one Library tab on a phone', () => {
     expect(TAB_PATHS['/library']).toBe('library');
     expect(TAB_PATHS['/shoots']).toBe('library');
-    expect(TAB_PATHS['/reviews']).toBe('review');
+    expect(TAB_PATHS['/todo']).toBe('todo');
+    expect(tabFor('/todo', '')).toBe('todo');
+    expect(tabFor('/todo', '?task=tags')).toBeUndefined(); // the one-at-a-time view is a page above the tab bar
     expect(TAB_PATHS['/photo/1']).toBeUndefined(); // a photograph is a page above the tab bar
   });
   it('shows a shared photoshoot with a download card, filters and a send bar when guests may rate and download', () => {

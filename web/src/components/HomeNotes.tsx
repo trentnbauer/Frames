@@ -17,6 +17,8 @@ export function HomeNotes() {
     }, 600);
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  // Fallback for browsers without field-sizing: grow to fit the text, never scroll inside.
+  const grow = (el: HTMLTextAreaElement | null) => { if (el && !(typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content'))) { el.style.height = 'auto'; el.style.height = `${Math.max(96, el.scrollHeight)}px`; } };
   if (!saved.data && !saved.error) return null;
   return (
     <section aria-label="Notes" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
@@ -25,7 +27,7 @@ export function HomeNotes() {
         <span role="status" style={{ fontSize: 12.5, color: state === 'error' ? 'var(--err)' : 'var(--faint)' }}>{state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Could not save' : ''}</span>
       </div>
       <textarea className="field-in" aria-label="Notes" rows={4} maxLength={5000} value={text} placeholder="Jot down what to print, shoot or sort next. Only you see this."
-        onChange={(e) => { setText(e.target.value); save(e.target.value); }} style={{ resize: 'vertical', minHeight: 96 }} />
+        onChange={(e) => { setText(e.target.value); save(e.target.value); }} style={{ resize: 'none', overflow: 'hidden', minHeight: 96, fieldSizing: 'content', fontSize: 15 } as React.CSSProperties} ref={grow} />
     </section>
   );
 }

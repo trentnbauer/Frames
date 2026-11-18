@@ -34,9 +34,8 @@ import { api, openPortfolio } from './api';
 import { AUTH_PATHS, AuthApp } from './pages/Auth';
 import { useStore } from './store';
 import { usePhoneWidth } from './usePhoneWidth';
-import { TAB_PATHS } from './mobile/Chrome';
+import { tabFor } from './mobile/Chrome';
 import { MobileNotifications } from './mobile/Notifications';
-import { MobileReviewTab } from './mobile/ReviewTab';
 import { MobileOrganise } from './mobile/Organise';
 
 const PAGE_NAMES: Record<string, string> = {
@@ -94,12 +93,12 @@ function Shell() {
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
-      {!inReview && !(phone && TAB_PATHS[loc.pathname.replace(/\/$/, '') || '/'] && loc.pathname !== '/') && <div className="app-header"><Header /></div>}
+      {!inReview && !(phone && tabFor(loc.pathname, loc.search) && loc.pathname !== '/') && <div className="app-header"><Header /></div>}
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />
         <Route path="/notifications" element={<PhoneOnly><MobileNotifications /></PhoneOnly>} />
-        <Route path="/reviews" element={<PhoneOnly><MobileReviewTab /></PhoneOnly>} />
+        <Route path="/reviews" element={<Navigate to="/todo" replace />} />
         <Route path="/organise" element={<PhoneOnly><MobileOrganise /></PhoneOnly>} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/imports" element={<Navigate to="/stats?tab=imports" replace />} />

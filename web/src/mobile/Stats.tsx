@@ -47,6 +47,7 @@ const Thumbs = ({ photos, onOpen }: { photos: { id: number; ar: number; label?: 
 );
 
 /** Stats on a phone: everything the wide screen shows (overview, community, imports), in the phone's own layout. */
+const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
 export function MobileStats() {
   const nav = useNavigate();
   const [tab, setTab] = useState<'overview' | 'community'>('overview');
@@ -64,12 +65,12 @@ export function MobileStats() {
     <div className="ppage" data-screen-label="Stats">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
         <div style={{ paddingTop: 4 }}><BackPill /></div>
-        <h1 style={{ font: '400 56px/1 var(--serif)', margin: 0 }}>Stats</h1>
+        <h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Stats</h1>
         <Seg label="Stats view" value={tab} onPick={setTab} options={[['overview', 'Overview'], ['community', 'Community']]} />
         {st.error && <p role="alert" className="muted">Something went wrong: {st.error}</p>}
         {tab === 'overview' && d && <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{[['', 'All time'], ...d.years.slice(0, 2).map((y) => [y, y])].map(([y, l]) => yearPill(y, l))}</div>
-          <Tiles items={[[fmt(d.photos), 'Photographs'], [size(d.bytes), 'Storage'], [`${d.completePct}%`, 'Finished all reviews'], [d.avgRating ? d.avgRating.toFixed(1) : '–', 'Average rating'], [fmt(d.inCollections), 'In compositions']]} />
+          <Tiles items={[[fmt(d.photos), 'Photographs'], [size(d.bytes), 'Storage'], [`${d.completePct}%`, 'Fully reviewed'], [d.avgRating ? d.avgRating.toFixed(1) : '–', 'Average rating'], [fmt(d.inCollections), 'In compositions']]} />
           <Bars title="Rating distribution" rows={RATINGS.map((r) => ({ label: `${r.emoji}  ${r.label}`, n: d.dist.find((x) => x.value === r.value)?.n ?? 0 }))} />
           {trend.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -89,7 +90,7 @@ export function MobileStats() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Eyebrow>AVERAGE BY REVIEW SESSION</Eyebrow>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 110 }}>
-                {d.bySession.map((b) => <div key={b.session} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 6, height: '100%' }}><span style={{ font: '400 12px var(--mono)', color: 'var(--muted)' }}>{b.avg.toFixed(1)}</span><i style={{ display: 'block', width: '100%', height: `${Math.max(8, Math.round(((b.avg - 1) / 4) * 70))}%`, borderRadius: '3px 3px 0 0', background: 'var(--text2)' }} /><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>S{b.session}</span></div>)}
+                {d.bySession.map((b) => <div key={b.session} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 6, height: '100%' }}><span style={{ font: '400 12px var(--mono)', color: 'var(--muted)' }}>{b.avg.toFixed(1)}</span><i style={{ display: 'block', width: '100%', height: `${Math.max(8, Math.round(((b.avg - 1) / 4) * 70))}%`, borderRadius: '3px 3px 0 0', background: 'var(--text2)' }} /><span style={{ font: '400 11px var(--mono)', color: 'var(--faint)' }}>{ORD[b.session - 1] ?? `S${b.session}`}</span></div>)}
               </div>
             </div>
           )}

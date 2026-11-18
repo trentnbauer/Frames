@@ -48,23 +48,23 @@ export function MobilePhoto() {
   const accepted = p.tags.filter((t) => t.accepted);
   const suggested = p.tags.filter((t) => !t.accepted);
   const descSuggested = ai && !p.description && !!p.aiSuggestion?.description;
-  const today = new Date().toISOString().slice(0, 10);
-  const mine = p.reviews[p.reviews.length - 1] && p.reviews[p.reviews.length - 1].date.slice(0, 10) === today ? p.reviews[p.reviews.length - 1].rating : null;
-  const last = p.reviews[p.reviews.length - 1];
-  const rate = async (n: number) => { setErr(''); try { await api('/review/rate', { body: { photoId: p.id, rating: n, note: '' } }); photo.reload(); refreshSummary(); say(`Rated ${RATINGS[n - 1].label}`); } catch (e) { setErr((e as Error).message); } };
   const save = () => { if (!edit) return; const v = draft.trim(); void patch(edit === 'place' ? { place: v } : { [edit]: v }); setEdit(null); };
-  const row = (key: 'title' | 'description' | 'place' | null, label: string, value: string, placeholder: string, aiDesc = false, action?: { label: string; run: () => void }) => (
-    <div key={label} style={{ padding: '13px 0', borderBottom: '1px solid var(--hair)', display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 20 }}>
-        <span style={{ font: '500 10.5px var(--mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)' }}>{label}</span>
-        {key && <button onClick={() => { if (edit === key) save(); else { setEdit(key); setDraft(value); } }} style={{ fontSize: 13, color: 'var(--text2)', height: 28, paddingLeft: 12 }}>{edit === key ? 'Save' : 'Edit'}</button>}
-        {action && <button onClick={action.run} style={{ fontSize: 13, color: 'var(--text2)', height: 28, paddingLeft: 12 }}>{action.label}</button>}
+  const row = (key: 'title' | 'description' | 'place' | null, label: string, value: string, placeholder: string, aiDesc = false, action?: { label: string; run: () => void }) => {
+    const editing = !!key && edit === key;
+    const open = () => { if (key && !editing) { setEdit(key); setDraft(value); } };
+    return (
+      <div key={label} style={{ borderBottom: '1px solid var(--hair)' }}>
+        <div role={key ? 'button' : undefined} tabIndex={key ? 0 : undefined} onClick={open} onKeyDown={(e) => { if (key && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } }} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 52, cursor: key ? 'pointer' : undefined }}>
+          <span style={{ width: 92, flexShrink: 0, fontSize: 12.5, color: 'var(--muted)' }}>{label}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 1.35, color: value ? 'var(--text)' : 'var(--faint)', textWrap: 'pretty' as never, overflowWrap: 'anywhere', ...(editing ? {} : key === 'description' ? { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) }}>{aiDesc && value && <span aria-label="Added by AI" title="Added by AI">✦ </span>}{editing ? '' : value || placeholder}</span>
+          {action && <button onClick={action.run} style={{ fontSize: 13, color: 'var(--text2)', height: 44, paddingLeft: 12 }}>{action.label}</button>}
+          {key && !editing && <span aria-hidden style={{ color: 'var(--faint)' }}>›</span>}
+          {editing && <button onClick={save} style={{ fontSize: 13, color: 'var(--text2)', height: 44, paddingLeft: 12 }}>Save</button>}
+        </div>
+        {editing && <textarea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} aria-label={label} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', border: 0, outline: 'none', borderRadius: 10, padding: '10px 12px', margin: '0 0 12px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15, lineHeight: 1.45, fontFamily: 'inherit' }} />}
       </div>
-      {key && edit === key
-        ? <textarea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} aria-label={label} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', border: 0, outline: 'none', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15, lineHeight: 1.45, fontFamily: 'inherit' }} />
-        : <div style={{ fontSize: 15, lineHeight: 1.45, color: value ? 'var(--text)' : 'var(--faint)', textWrap: 'pretty' as never, overflowWrap: 'anywhere' }}>{aiDesc && value && <span aria-label="Added by AI" title="Added by AI">✦ </span>}{value || placeholder}</div>}
-    </div>
-  );
+    );
+  };
   const avg = p.reviews.length ? p.reviews.reduce((n, r) => n + r.rating, 0) / p.reviews.length : null;
   const due = !!p.nextReviewAt && p.nextReviewAt <= new Date().toISOString();
   const moveTo = async (s: Shoot) => { try { await api(`/shoots/${s.id}/move`, { body: { photoIds: [p.id] } }); setSheet(null); photo.reload(); say(`Moved to “${s.name}”`); } catch (e) { setErr((e as Error).message); } };
@@ -75,9 +75,9 @@ export function MobilePhoto() {
 
   return (
     <div className="ppage flush" data-screen-label="Photo" style={{ padding: 0 }}>
-      <div style={{ position: 'relative', height: 420, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', height: 420, background: 'var(--review)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
         <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: '100%', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
-        <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', right: 14, bottom: 14, background: 'rgba(0,0,0,.55)', color: '#efede8', boxShadow: 'none' }} />
+        <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', left: '50%', marginLeft: -20, bottom: 14, width: 40, height: 40, background: 'rgba(30,30,29,.82)', color: '#efede8', boxShadow: 'none' }} />
         <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(shoot ? `/shoots/${shoot.id}` : '/library'); }} aria-label="Back" style={{ ...circle, top: 52, left: 14, fontSize: 18 }}>‹</button>
         {stepIds.length > 1 && <span style={{ position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)', font: 'italic 400 18px/1 var(--serif)', color: '#efede8' }}>{idx + 1} / {stepIds.length}</span>}
         <button onClick={() => setSheet('more')} aria-label="More actions" style={{ ...circle, top: 52, right: 14 }}>⋯</button>
@@ -86,18 +86,12 @@ export function MobilePhoto() {
       </div>
       <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <h1 style={{ font: '400 34px/1.05 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{p.title || p.file}</h1>
+          <h1 style={{ font: '400 34px/1.05 var(--serif)', margin: 0, overflowWrap: 'anywhere' }}>{p.title || <span style={{ color: 'var(--faint)' }}>Add a title</span>}</h1>
           <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{p.file} · {fmtDate(p.dateEdit ?? p.capturedAt ?? p.addedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </div>
         {err && <div role="alert" className="reason">{err}</div>}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><Eyebrow>YOUR RATING</Eyebrow><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{mine ? `Rated ${RATINGS[mine - 1].label} today` : last ? `Last: ${RATINGS[last.rating - 1].label} · ${fmtDate(last.date)}` : 'Not rated yet'}</span></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6 }}>
-            {RATINGS.map((r) => { const on = mine === r.value; return <button key={r.value} onClick={() => rate(r.value)} aria-pressed={on} style={{ height: 60, borderRadius: 14, background: on ? 'var(--btn-bg)' : 'var(--chip)', color: on ? 'var(--btn-fg)' : 'var(--text2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }}><span style={{ fontSize: 24, lineHeight: 1 }}>{r.emoji}</span><span style={{ fontSize: 11 }}>{r.label}</span></button>; })}
-          </div>
-        </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setSheet('comp')} style={{ flex: 1, height: 46, borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14, textAlign: 'center' }}>Add to composition</button>
+          <button onClick={() => setSheet('comp')} style={{ flex: 1, height: 46, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 14, textAlign: 'center' }}>Add to composition</button>
           <button onClick={() => setSharing(true)} style={{ height: 46, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Share</button>
         </div>
         <div role="tablist" style={{ display: 'flex', gap: 18, borderBottom: '1px solid var(--hair)' }}>
@@ -170,7 +164,7 @@ export function MobilePhoto() {
               { label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } },
               { label: p.orphaned ? 'Put in a shoot' : 'Move to shoot', act: () => setSheet('move') },
               ...(p.orphaned ? [] : [{ label: 'Take out of its shoot (no shoot)', act: async () => { setSheet(null); try { await api('/photos/orphan', { body: { photoIds: [p.id] } }); photo.reload(); say('Now in no shoot'); } catch (e) { setErr((e as Error).message); } } }]),
-              { label: 'Compare with similar', meta: 'Full app ↗', act: () => nav('/compare') },
+              { label: 'Compare with similar', act: () => nav('/compare') },
               { label: 'Download original', meta: p.file, act: () => { setSheet(null); window.location.assign(`/api/photos/${p.id}/original`); } },
               { label: 'Remove from Frames…', fg: protectedShoot ? 'var(--faint)' : 'var(--danger)', meta: protectedShoot ? 'Shoot protected' : '', act: () => { if (protectedShoot) say('This shoot is protected from deletion'); else setSheet('remove'); } },
             ].map((r) => <button key={r.label} onClick={r.act} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, borderTop: '1px solid var(--hair)', textAlign: 'left', color: r.fg }}><span style={{ flex: 1, fontSize: 15 }}>{r.label}</span>{r.meta && <span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{r.meta}</span>}</button>)}

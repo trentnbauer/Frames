@@ -16,12 +16,12 @@ export function MobileCommunity({ loading, src, who, kit, progress, seen, total,
   const [rep, setRep] = useState(false);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const shell = { position: 'fixed', inset: 0, zIndex: 60, background: '#000', color: '#efede8' } as const;
+  const shell = { position: 'fixed', inset: 0, zIndex: 60, background: 'var(--review)', color: '#efede8' } as const;
   if (!src) {
     return (
       <div style={{ ...shell, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 28px' }} data-screen-label="Community review">
         <span style={{ font: "500 11px 'IBM Plex Mono',monospace", letterSpacing: '.08em', color: '#6f6c67' }}>COMMUNITY REVIEW</span>
-        <span style={{ font: "400 46px/1 'Instrument Serif',Georgia,serif" }}>{loading ? 'Looking for photographs…' : 'All caught up.'}</span>
+        <span style={{ font: "400 46px/1 'Instrument Serif',Georgia,serif" }}>{loading ? 'Looking for photographs…' : 'Nothing to review.'}</span>
         {!loading && <span style={{ fontSize: 14, lineHeight: 1.5, color: '#a8a59f' }}>There is nothing else to review right now. Share some of your own photographs and more will come back.</span>}
         {!loading && <button onClick={onRestart} style={{ alignSelf: 'flex-start', height: 44, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.25)', fontSize: 14 }}>Look again</button>}
         <button onClick={() => nav('/')} style={{ ...primaryBtn, background: '#efede8', color: '#0d0d0d', marginTop: 12 }}>Done</button>
@@ -32,12 +32,12 @@ export function MobileCommunity({ loading, src, who, kit, progress, seen, total,
   return (
     <div role="dialog" aria-label="Community review" data-screen-label="Community review" style={shell}>
       <div style={{ position: 'absolute', top: 'max(14px, env(safe-area-inset-top))', left: 16, right: 16, display: 'flex', gap: 2 }}>
-        {Array.from({ length: Math.min(Math.max(total, 1), 40) }, (_, i) => <i key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < seen - 1 ? '#efede8' : i === seen - 1 ? 'rgba(239,237,232,.55)' : 'rgba(239,237,232,.14)' }} />)}
+        {total > 40 ? <i style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(239,237,232,.14)', overflow: 'hidden' }}><b style={{ display: 'block', height: '100%', width: `${Math.min(100, (seen - 1) / total * 100)}%`, background: '#efede8' }} /></i> : Array.from({ length: Math.max(total, 1) }, (_, i) => <i key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < seen - 1 ? '#efede8' : i === seen - 1 ? 'rgba(239,237,232,.55)' : 'rgba(239,237,232,.14)' }} />)}
       </div>
       <div style={{ position: 'absolute', top: 'max(28px, calc(env(safe-area-inset-top) + 14px))', left: 20, right: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ font: "italic 400 24px/1 'Instrument Serif',Georgia,serif" }}>{seen} <span style={{ color: '#6f6c67' }}>/ {total}</span></span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#8f8c86', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Community review</span>
-        <button onClick={() => nav('/')} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: '#a8a59f', fontSize: 13 }}>Finish</button>
+        <button onClick={() => nav('/')} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: '#a8a59f', fontSize: 13 }}>Done</button>
       </div>
       <div style={{ position: 'absolute', top: 84, bottom: 236, left: 12, right: 12 }}><div role="img" aria-label="Photograph to rate" style={{ width: '100%', height: '100%', background: `url(${src}) center/contain no-repeat` }} /></div>
       <div style={{ position: 'absolute', bottom: 196, left: 20, right: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>

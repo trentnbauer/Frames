@@ -4,7 +4,7 @@ import { Sheet } from '../components/Sheet';
 import { RATINGS, fmtDate, type PhotoFull } from '../data';
 import { primaryBtn } from './ui';
 
-/** Removal review on a phone: one suggested photograph at a time, with your rating history, Keep and Delete…. */
+/** Removal review on a phone: one suggested photograph at a time, with your rating history, Keep and Remove…. */
 export function MobileRemoval({ onChanged, onLeave }: { onChanged: () => void; onLeave: () => void }) {
   const list = useApi<{ below: number; sessions: number; photos: { id: number; avg: number }[] }>('/photos/delete-suggestions');
   const current = list.data?.photos[0] ?? null;
@@ -34,7 +34,7 @@ export function MobileRemoval({ onChanged, onLeave }: { onChanged: () => void; o
   );
   if (list.data && !current) {
     return (
-      <div data-screen-label="Removal review" style={{ position: 'fixed', inset: 0, background: '#000', color: '#efede8', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 28px' }}>
+      <div data-screen-label="Removal review" style={{ position: 'fixed', inset: 0, background: 'var(--review)', color: '#efede8', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 28px' }}>
         {head}
         <span style={{ font: "500 11px 'IBM Plex Mono',monospace", letterSpacing: '.08em', color: '#6f6c67' }}>REMOVAL REVIEW</span>
         <span style={{ font: "400 46px/1 'Instrument Serif',Georgia,serif" }}>Nothing to decide.</span>
@@ -44,7 +44,7 @@ export function MobileRemoval({ onChanged, onLeave }: { onChanged: () => void; o
     );
   }
   return (
-    <div data-screen-label="Removal review" style={{ position: 'fixed', inset: 0, background: '#000', color: '#efede8', overflowY: 'auto' }}>
+    <div data-screen-label="Removal review" style={{ position: 'fixed', inset: 0, background: 'var(--review)', color: '#efede8', overflowY: 'auto' }}>
       {head}
       {current && (
         <div style={{ display: 'flex', flexDirection: 'column', padding: '88px 20px 40px', minHeight: '100%', boxSizing: 'border-box' }}>
@@ -56,20 +56,20 @@ export function MobileRemoval({ onChanged, onLeave }: { onChanged: () => void; o
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: 14, borderTop: '1px solid rgba(255,255,255,.08)' }}>
             {[...reviews].reverse().map((r) => <div key={`${r.session}-${r.date}`} style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 50, borderBottom: '1px solid rgba(255,255,255,.08)' }}><span style={{ fontSize: 24, width: 42 }}>{RATINGS[r.rating - 1].emoji}</span><span style={{ flex: 1, fontSize: 16 }}>{RATINGS[r.rating - 1].label}</span><span style={{ font: "400 12.5px 'IBM Plex Mono',monospace", color: '#8f8c86' }}>{fmtDate(r.date, { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>)}
           </div>
-          <span style={{ margin: '16px 0 18px', fontSize: 15, color: '#a8a59f' }}>Personal average {face.label} over {reviews.length || list.data?.sessions || 1} review{reviews.length === 1 ? '' : 's'}.</span>
+          <span style={{ margin: '16px 0 18px', fontSize: 15, color: '#a8a59f' }}>Your average: {face.emoji} {face.label}, over {reviews.length || list.data?.sessions || 1} review{reviews.length === 1 ? '' : 's'}</span>
           {err && <div role="alert" style={{ marginBottom: 10, fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
           <div style={{ display: 'flex', gap: 16 }}>
             <button disabled={busy} onClick={() => act('keep')} style={{ flex: 1, height: 50, borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(239,237,232,.25)', fontSize: 16 }}>Keep</button>
-            <button disabled={busy} onClick={() => setAsking(true)} style={{ flex: 1, height: 50, borderRadius: 999, background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500, fontSize: 16 }}>Delete…</button>
+            <button disabled={busy} onClick={() => setAsking(true)} style={{ flex: 1, height: 50, borderRadius: 999, background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500, fontSize: 16 }}>⚠ Remove…</button>
           </div>
-          <span style={{ marginTop: 18, fontSize: 15, color: '#8f8c86' }}>Keep hides it here until you rate it again.</span>
+          <span style={{ marginTop: 18, fontSize: 13, color: 'var(--muted)' }}>Keep hides it here until you rate it again.</span>
         </div>
       )}
       {asking && (
         <Sheet title="Remove this photo from Frames?" sub="Its reviews, tags and composition places go with it. The original isn’t touched and won’t be imported again." onClose={() => setAsking(false)}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => setAsking(false)} style={{ height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Cancel</button>
-            <button disabled={busy} onClick={() => act('delete')} style={{ ...primaryBtn, height: 46, padding: '0 22px', fontSize: 14.5, background: 'var(--danger)', color: '#0d0d0d' }}>Remove</button>
+            <button disabled={busy} onClick={() => act('delete')} style={{ ...primaryBtn, height: 46, padding: '0 22px', fontSize: 14.5, background: 'var(--danger)', color: '#0d0d0d' }}>⚠ Remove</button>
           </div>
         </Sheet>
       )}
