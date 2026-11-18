@@ -10,7 +10,7 @@ type Data = { blacklisted: { id: number; name: string; types: string[] }[]; own:
 type Draft = { id: number | 'new'; name: string; price: string; link: string; why: string };
 
 /** The design's gear icons: a camera body, or a lens as two rings. */
-function GearIcon({ type }: { type: string }) {
+export function GearIcon({ type }: { type: string }) {
   return type === 'lens'
     ? <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--text2)" strokeWidth="1.4" aria-hidden style={{ flexShrink: 0 }}><circle cx="10" cy="10" r="6.5" /><circle cx="10" cy="10" r="3" /></svg>
     : <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--text2)" strokeWidth="1.4" strokeLinejoin="round" aria-hidden style={{ flexShrink: 0 }}><rect x="2.5" y="6" width="15" height="10" rx="1.5" /><path d="M7 6l1.2-2h3.6L13 6" /><circle cx="10" cy="11" r="2.8" /></svg>;
