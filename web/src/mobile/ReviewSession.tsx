@@ -5,17 +5,16 @@ import { RATINGS, fmtDate, type PhotoFull } from '../data';
 import { primaryBtn } from './ui';
 
 type Props = {
-  total: number; index: number; shootName?: string; photoId: number; photoSrc: string; rating?: number; note: string;
-  onRate: (n: number) => void; onBin: () => void; onSkip: () => void; onBack: () => void; onFinish: () => void; onNote: (note: string) => void | Promise<void>;
-  offer: { name: string } | null; onAddOffer: () => void; onChooseOffer: () => void; onDismissOffer: () => void;
+  total: number; index: number; shootName?: string; photoId: number; photoSrc: string; rating?: number;
+  onRate: (n: number) => void; onBin: () => void; onSkip: () => void; onBack: () => void; onFinish: () => void;
+  fav: { busy: boolean } | null; onFavourite: () => void; onDismissFav: () => void;
   renderCompPicker: (close: () => void, done: (m: string) => void) => ReactNode; error?: string; rotateBtn?: ReactNode;
 };
 
 /** A review session on a phone: a segmented progress bar, the photograph, and five faces to rate with. Ratings stay hidden while you rate (the review is blind). */
 export function MobileReviewSession(p: Props) {
   const photo = useApi<PhotoFull>(`/photos/${p.photoId}`);
-  const [sheet, setSheet] = useState<null | 'note' | 'comp'>(null);
-  const [draft, setDraft] = useState('');
+  const [sheet, setSheet] = useState<null | 'comp'>(null);
   const [toast, setToast] = useState('');
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast(''), 2400); };
   const ph = photo.data;
@@ -41,7 +40,6 @@ export function MobileReviewSession(p: Props) {
       </div>
       <div style={{ position: 'absolute', bottom: 136, left: 12, right: 12, display: 'flex', justifyContent: 'space-between' }}>
         <button onClick={p.onBack} disabled={p.index === 0} style={{ ...btn, color: p.index === 0 ? '#4a4844' : '#a8a59f' }}>← Back</button>
-        <button onClick={() => { setDraft(p.note); setSheet('note'); }} style={btn}>{p.note ? 'Edit note' : 'Note'}</button>
         <button onClick={() => setSheet('comp')} style={btn}>+ Composition</button>
         <button onClick={p.onBin} style={{ ...btn, color: 'var(--danger)' }}>Bin</button>
         <button onClick={p.onSkip} style={btn}>Skip →</button>
@@ -54,23 +52,14 @@ export function MobileReviewSession(p: Props) {
         ))}
       </div>
       {p.error && <div role="alert" style={{ position: 'absolute', bottom: 8, left: 16, right: 16, fontSize: 12.5, color: 'var(--danger)', textAlign: 'center' }}>{p.error}</div>}
-      {p.offer && (
-        <div style={{ position: 'absolute', top: 116, left: 16, right: 16, background: '#1e1e1d', borderRadius: 14, padding: '14px 16px', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13.5 }}>
-          <span><b style={{ fontWeight: 500 }}>You loved the last one.</b> <span style={{ color: '#a8a59f' }}>Add it to {p.offer.name}?</span></span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={p.onAddOffer} style={{ height: 38, padding: '0 16px', borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500 }}>Add</button>
-            <button onClick={p.onChooseOffer} style={{ height: 38, padding: '0 10px', color: '#a8a59f' }}>Choose…</button>
-            <button onClick={p.onDismissOffer} style={{ height: 38, padding: '0 10px', color: '#6f6c67', marginLeft: 'auto' }}>Not now</button>
-          </div>
+      {p.fav && (
+        <div style={{ position: 'absolute', bottom: 236, left: 16, right: 16, background: '#1e1e1d', borderRadius: 14, padding: '10px 10px 10px 16px', boxShadow: '0 0 0 1px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}>
+          <span style={{ flex: 1, minWidth: 0 }}><b style={{ fontWeight: 500 }}>Loved it.</b> <span style={{ color: '#a8a59f' }}>Add to your portfolio favourites?</span></span>
+          <button disabled={p.fav.busy} onClick={p.onFavourite} style={{ height: 38, padding: '0 14px', borderRadius: 999, background: '#efede8', color: '#0d0d0d', fontWeight: 500, flexShrink: 0 }}>♥ Favourite</button>
+          <button onClick={p.onDismissFav} aria-label="Not now" style={{ width: 38, height: 38, color: '#a8a59f', flexShrink: 0 }}>✕</button>
         </div>
       )}
       {toast && <div role="status" style={{ position: 'fixed', top: 58, left: '50%', transform: 'translateX(-50%)', zIndex: 95, padding: '9px 16px', borderRadius: 999, background: '#1e1e1d', boxShadow: '0 0 0 1px rgba(255,255,255,.08)', fontSize: 13 }}>{toast}</div>}
-      {sheet === 'note' && (
-        <Sheet title="Note" sub="Only you see this. It is saved with your rating." onClose={() => setSheet(null)}>
-          <textarea autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={1000} aria-label="Note" style={{ width: '100%', boxSizing: 'border-box', resize: 'none', border: 0, outline: 'none', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)', fontSize: 15, fontFamily: 'inherit' }} />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button onClick={() => setSheet(null)} style={{ height: 46, padding: '0 16px', fontSize: 14, color: 'var(--text2)' }}>Cancel</button><button onClick={async () => { await p.onNote(draft.trim()); setSheet(null); }} style={{ ...primaryBtn, height: 46, padding: '0 22px', fontSize: 14.5 }}>Save</button></div>
-        </Sheet>
-      )}
       {sheet === 'comp' && p.renderCompPicker(() => setSheet(null), (m) => { setSheet(null); say(m); })}
     </div>
   );

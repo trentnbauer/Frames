@@ -1,3 +1,4 @@
+import { TabAvatar } from './Chrome';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -42,7 +43,7 @@ export function MobileGear() {
     <div className="pscreen ptab headless" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Gear</h1>
-        <button onClick={() => { setErr(''); setDraft({ id: 'new', name: '', price: '', link: '', why: '' }); }} style={{ height: 40, padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>+ Wishlist</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => { setErr(''); setDraft({ id: 'new', name: '', price: '', link: '', why: '' }); }} style={{ height: 40, padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>+ Wishlist</button><TabAvatar /></div>
       </div>
       <Seg label="Gear view" value={view} options={[['owned', 'Owned'], ['wish', `Wishlist${want.length ? ` · ${want.length}` : ''}`]]} onPick={(v) => { const n = new URLSearchParams(sp); if (v === 'wish') n.set('view', 'wish'); else n.delete('view'); setSp(n, { replace: true }); }} />
       {err && !draft && <div role="alert" className="reason">{err}</div>}
