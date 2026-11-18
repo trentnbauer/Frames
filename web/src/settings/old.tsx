@@ -64,8 +64,8 @@ const Toggle = ({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 );
 
 export function Vocabulary() {
-  const [kind, setKind] = useState<'subject' | 'tag'>('tag');
-  const list = useApi<{ name: string; kind: 'subject' | 'tag'; n: number }[]>('/tags');
+  const [kind, setKind] = useState<'tag'>('tag');
+  const list = useApi<{ name: string; kind: 'tag'; n: number }[]>('/tags');
   const [name, setName] = useState('');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
@@ -78,14 +78,13 @@ export function Vocabulary() {
   };
   const shown = (list.data ?? []).filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className="field">
-    <p>Manage all tags and subjects here. Renaming to an existing name merges entries of the same type.</p>
+    <p>Manage all tags here. Renaming to an existing name merges the two.</p>
     {error && <p role="alert" className="reason">{error}</p>}
     <form className="form" style={{ margin: '14px 0' }} onSubmit={(e) => { e.preventDefault(); if (name.trim() && !busy) void act(() => api('/tags', { body: { name, kind } }), () => setName('')); }}>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New tag or subject" aria-label="New tag or subject" />
-      <select aria-label="Type" value={kind} onChange={(e) => setKind(e.target.value as 'tag' | 'subject')}><option value="tag">Tag</option><option value="subject">Subject</option></select>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New tag" aria-label="New tag" />
       <button className="btn outline" disabled={!name.trim() || busy}>Create</button>
     </form>
-    <input aria-label="Find tags and subjects" placeholder="Find tags and subjects" value={query} onChange={(e) => setQuery(e.target.value)} />
+    <input aria-label="Find tags" placeholder="Find tags" value={query} onChange={(e) => setQuery(e.target.value)} />
     {list.loading && <Loading error={list.error} />}
     {list.error && <p role="alert">{list.error}</p>}
     {!list.loading && !shown.length && <p className="muted">{query ? 'No matches.' : 'None yet.'}</p>}
@@ -122,7 +121,7 @@ export function Metadata({ s, save }: { s: Settings; save: (p: Partial<Settings>
       <Toggle on={s.xmpWriteBack} onChange={(v) => save({ xmpWriteBack: v })} label="Write XMP next to my originals" hint="Off by default, because libraries are read-only. Turn it on only if the library folder is mounted writable. Another program’s existing sidecar is never overwritten." />
       <div className="field">
         <h3>Export approved metadata</h3>
-        <p>Your titles and descriptions, accepted tags and subjects, and average review rating, as XMP sidecars. They are always saved in Frames’ data folder{s.xmpWriteBack ? ', and beside the originals too' : ''}. You can also export one photograph from its page.</p>
+        <p>Your titles and descriptions, accepted tags, and average review rating, as XMP sidecars. They are always saved in Frames’ data folder{s.xmpWriteBack ? ', and beside the originals too' : ''}. You can also export one photograph from its page.</p>
         <button className="pill" onClick={async () => setRes(await api('/metadata/export', { body: {} }))}>Export all</button>
         {res && <p role="status" style={{ marginTop: 10 }}>Wrote {res.written} sidecars{res.writtenBeside > 0 && `, ${res.writtenBeside} beside the originals`}.{res.skipped.length > 0 && <span className="reason"> Skipped {res.skipped.length}: {res.skipped.slice(0, 3).map((k) => `${k.file} (${k.reason})`).join('; ')}.</span>}</p>}
       </div>

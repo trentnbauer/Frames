@@ -17,13 +17,13 @@ describe('composition ideas from a tagged library', () => {
     expect(found).toMatchObject({ name: 'Interiors', photoIds: [1, 2, 3], aiAssisted: false });
     expect(found!.reason).toContain('1 photoshoot.');
   });
-  it('includes distinct colour, location and subject ideas with explanations', async () => {
-    for (let i = 1; i <= 3; i++) photo(i, { subject: 'architecture' });
+  it('includes distinct colour, location and tag ideas with explanations', async () => {
+    for (let i = 1; i <= 3; i++) photo(i, { tag: 'architecture' });
     for (let i = 4; i <= 6; i++) photo(i, { colour: 'blue' });
     for (let i = 7; i <= 9; i++) photo(i, { place: 'Melbourne' });
     const found = await ideas();
     expect(found).toEqual(expect.arrayContaining([
-      expect.objectContaining({ reason: expect.stringContaining('Shared subject: architecture'), photoIds: [1, 2, 3] }),
+      expect.objectContaining({ reason: expect.stringContaining('Shared tag: architecture'), photoIds: [1, 2, 3] }),
       expect.objectContaining({ name: 'Blue tones', reason: expect.stringContaining('Shared colour: blue'), photoIds: [4, 5, 6] }),
       expect.objectContaining({ name: 'Melbourne', reason: expect.stringContaining('Photographed at Melbourne'), photoIds: [7, 8, 9] }),
     ]));

@@ -36,7 +36,7 @@ export function AiSettings({ server = false }: { server?: boolean }) {
         <h3>{server ? 'AIs for everyone on this server' : 'Your AIs'}</h3>
         {server
           ? <p>Set one up here once and it appears in everyone’s list, ready to use, so people do not each need their own address and key. The key stays on this server and is never shown. Each person still chooses whether to use it, and can set up their own as well under Settings, AI. Photographs are sent to a shared AI the same way as to a personal one, so a service outside your network needs the confirmation below.</p>
-          : <p>Descriptions, tags and subjects, search by meaning, similar photos and suggestions. Nothing here changes your files, and it all stays a suggestion until you accept it. Set up as many as you like and switch on the one to use (one at a time). With every switch off, everything else works as normal. AIs marked <i>from the administrator</i> are shared by this server: you can use them but not change them.</p>}
+          : <p>Descriptions and tags, search by meaning, similar photos and suggestions. Nothing here changes your files, and it all stays a suggestion until you accept it. Set up as many as you like and switch on the one to use (one at a time). With every switch off, everything else works as normal. AIs marked <i>from the administrator</i> are shared by this server: you can use them but not change them.</p>}
         {sources.length === 0 && <p className="muted">Nothing set up yet. Add one below.</p>}
         {sources.map((src) => (
           <Item key={src.id} base={base} server={server} src={src} type={types.find((t) => t.id === src.type)!} active={active === src.id} one={one} run={run} />

@@ -9,7 +9,7 @@ it('sends links to their own page and everything else to the one-at-a-time view'
 
 it('shows a photograph only for its most important task, and removal outranks the rest', () => {
   const t = buildTasks([
-    { key: 'delete', count: 1, ids: [1] }, { key: 'ai-tags', count: 2, ids: [1, 2] }, { key: 'subjects', count: 2, ids: [2, 3] },
+    { key: 'delete', count: 1, ids: [1] }, { key: 'ai-tags', count: 2, ids: [1, 2] }, { key: 'tags', count: 2, ids: [2, 3] },
     { key: 'place', count: 1, ids: [3] }, { key: 'lens', count: 1, ids: [4] }, { key: 'camera', count: 1, ids: [4] },
   ]);
   expect(t.byPhoto.get(1)).toEqual(['delete', 'ai-tags']);

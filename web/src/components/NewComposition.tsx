@@ -54,11 +54,11 @@ export function wallFromRects(rects: Rect[]): Print[] {
   });
 }
 
-type Kind = 'subject' | 'tag' | 'colour';
+type Kind = 'tag' | 'colour';
 type Item = { name: string; n?: number };
 
 /**
- * "+ Composition": a name, how many prints and what size, and optionally subjects, tags and colours to look for. The name is matched
+ * "+ Composition": a name, how many prints and what size, and optionally tags and colours to look for. The name is matched
  * against them as you type ("Birds at the Beach" picks the bird and beach ones; you can take any away). Photographs that have any of the
  * chosen ones go in as the first candidates; otherwise they are added afterwards (or come with it, from a search, a shoot or a selection).
  */
@@ -77,25 +77,24 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const setN = (n: number) => { const c = Math.max(1, Math.min(12, n)); setCount(c); choose(optionsFor(c)[0]); };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const subjects = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
   const tags = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
-  const known: Record<Kind, Item[]> = { subject: subjects.data ?? [], tag: tags.data ?? [], colour: COLOURS.map((name) => ({ name })) };
-  const [manual, setManual] = useState<Record<Kind, string[]>>({ subject: [], tag: [], colour: [] });
+  const known: Record<Kind, Item[]> = { tag: tags.data ?? [], colour: COLOURS.map((name) => ({ name })) };
+  const [manual, setManual] = useState<Record<Kind, string[]>>({ tag: [], colour: [] });
   const [dismissed, setDismissed] = useState<string[]>([]); // names matched from the title that were taken away again
   // What the title points to, less what has been taken away.
   const auto = useMemo(() => {
     const out = {} as Record<Kind, string[]>;
     // Photographs handed over (opened from one photograph, a photoshoot, a search...) are the whole starting set: a name that happens to match
-    // a subject, tag or colour must not pull in every photograph that has it. Matching from the name is for compositions started from nothing.
+    // a tag or colour must not pull in every photograph that has it. Matching from the name is for compositions started from nothing.
     const given = (start.photoIds?.length ?? 0) > 0;
-    for (const k of ['subject', 'tag', 'colour'] as Kind[]) out[k] = given ? [] : fuzzyNames(name, known[k].map((i) => i.name)).filter((n) => !dismissed.includes(`${k}:${n}`));
+    for (const k of ['tag', 'colour'] as Kind[]) out[k] = given ? [] : fuzzyNames(name, known[k].map((i) => i.name)).filter((n) => !dismissed.includes(`${k}:${n}`));
     return out;
-  }, [name, dismissed.join('|'), subjects.data, tags.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [name, dismissed.join('|'), tags.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const chosen = (k: Kind) => [...new Set([...auto[k], ...manual[k]])];
   const add = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: [...m[k], n] })); setDismissed((d) => d.filter((x) => x !== `${k}:${n}`)); };
   const remove = (k: Kind, n: string) => { setManual((m) => ({ ...m, [k]: m[k].filter((x) => x !== n) })); setDismissed((d) => [...d, `${k}:${n}`]); };
 
-  // The AI reads the name and picks from the subjects, tags and colours the library already has.
+  // The AI reads the name and picks from the tags and colours the library already has.
   const askAi = async () => {
     if (!name.trim() || aiBusy) return;
     setAiBusy(true); setAiMsg('');
@@ -103,7 +102,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
       const r = await api<{ ai: boolean; picks: Record<Kind, string[]> | null }>('/ai/suggest-filters', { body: { name } });
       if (!r.picks) { setAiMsg(r.ai ? 'The AI could not answer just now. Try again.' : 'AI is off. Turn it on in Settings, Your AI.'); return; }
       let n = 0;
-      for (const k of ['subject', 'tag', 'colour'] as Kind[]) {
+      for (const k of ['tag', 'colour'] as Kind[]) {
         const picked = r.picks[`${k}s` as unknown as Kind] ?? [];
         for (const nm of picked) if (!chosen(k).includes(nm)) { add(k, nm); n++; }
       }
@@ -115,8 +114,8 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const custom = (fn: (q: Print[]) => void) => { const q = prints.map((p) => ({ ...p, frame: p.frame ? { ...p.frame } : null })); fn(q); setPreset('custom'); setPrints(q); setCount(q.length); if (mode === 'free' || (mode === 'grid' && q.length < 3)) setMode('row'); };
   const [found, setFound] = useState<number[]>([]);
   const [looking, setLooking] = useState(false);
-  const queries = [...chosen('subject').map((n) => `subject=${encodeURIComponent(n)}`), ...chosen('tag').map((n) => `tag=${encodeURIComponent(n)}`), ...chosen('colour').map((n) => `colour=${encodeURIComponent(n)}`)];
-  // The photographs that have any of the chosen subjects, tags or colours.
+  const queries = [...chosen('tag').map((n) => `tag=${encodeURIComponent(n)}`), ...chosen('colour').map((n) => `colour=${encodeURIComponent(n)}`)];
+  // The photographs that have any of the chosen tags or colours.
   useEffect(() => {
     if (!queries.length) { setFound([]); setLooking(false); return; }
     let live = true; setLooking(true);
@@ -139,7 +138,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const SIZES = ['A5', 'A4', 'A3', 'A2', 'A1'];
-  const chips = (['subject', 'tag', 'colour'] as Kind[]).flatMap((k) => chosen(k).map((n) => ({ label: `${k === 'colour' ? 'Colour' : cap(k)}: ${n}`, remove: () => remove(k, n) })));
+  const chips = (['tag', 'colour'] as Kind[]).flatMap((k) => chosen(k).map((n) => ({ label: `${k === 'colour' ? 'Colour' : cap(k)}: ${n}`, remove: () => remove(k, n) })));
   const opts = optionsFor(count);
   // Esc closes it wherever focus is (it used to work only inside the inner box).
   useEffect(() => { const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +150,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     ncPrints: prints.map((p, i) => ({ n: i + 1, size: sizeName(p.size), orient: cap(p.orientation), frame: p.frame ? (p.frame.size === p.size ? 'Framed, no border' : `${sizeName(p.frame.size)} frame`) : 'Poster',
       cycle: () => custom((q) => { const next = SIZES[(SIZES.indexOf(q[i].size) + 1) % SIZES.length] ?? 'A3'; q[i].size = next; if (q[i].frame && !fits(q[i].frame!.size, next)) q[i].frame = { ...q[i].frame!, size: next }; }) })),
     askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Suggest with AI', aiSpin: null,
-    ncChips: chips, ncChipHint: chips.length ? aiMsg : aiMsg || 'Type a name and Frames matches subjects, tags and colours you already have.',
+    ncChips: chips, ncChipHint: chips.length ? aiMsg : aiMsg || 'Type a name and Frames matches tags and colours you already have.',
     ncSummary: looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`,
     ncCreate: create, ncClose: onClose, ncError: err,
   };

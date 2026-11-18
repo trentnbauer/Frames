@@ -10,7 +10,7 @@ import { MobileStats } from '../mobile/Stats';
 type S = {
   year: string; years: string[]; photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;
   dist: { value: number; n: number }[]; perShoot: { id: number; name: string; n: number }[]; top: PhotoLite[];
-  subjects: { name: string; n: number }[]; tags: { name: string; n: number }[];
+  tags: { name: string; n: number }[];
   trend: { month: string; avg: number; n: number }[]; bySession: { session: number; avg: number; n: number }[];
 };
 type C = { reviewed: number; shared: number; received: number; average: number | null; notes: number; you: number | null; guests: number | null; community: number | null; favourites: { id: number; avg: number; n: number; title?: string }[] };
@@ -49,7 +49,6 @@ function DesktopStats() {
     statLists: [
       bars('Rating distribution', RATINGS.map((r) => ({ label: `${r.emoji} ${r.label}`, n: d.dist.find((x) => x.value === r.value)?.n ?? 0 }))),
       bars('Photos per shoot', d.perShoot.map((s) => ({ label: s.name, n: s.n, to: `/shoots/${s.id}` })), 'All shoots →', 'shoots'),
-      bars('Subjects', d.subjects.map((s) => ({ label: s.name, n: s.n, to: `/library?subject=${encodeURIComponent(s.name)}` }))),
       bars('Tags', d.tags.map((s) => ({ label: s.name, n: s.n, to: `/library?tag=${encodeURIComponent(s.name)}` }))),
     ],
     months: trend.map((t) => MONTH[Number(t.month.slice(5, 7)) - 1] ?? t.month), trendPts: pts,

@@ -11,7 +11,7 @@ const one = (s: Shoot) => (s.dateFrom && s.dateFrom === s.dateTo ? s.dateFrom.sl
 
 /**
  * Everything about a shoot in one window. What is saved here goes to every photograph in it (place, date and camera details,
- * over what each had), and photographs added to the shoot later take it too. Tags and subjects are only ever added here.
+ * over what each had), and photographs added to the shoot later take it too. Tags are only ever added here.
  */
 export function EditShoot({ shoot: s, onClose, onSaved }: { shoot: Shoot; onClose: () => void; onSaved: (msg: string) => void }) {
   const gear = useApi<{ cameras: { name: string }[]; lenses: { name: string }[] }>('/gear');
@@ -21,7 +21,6 @@ export function EditShoot({ shoot: s, onClose, onSaved }: { shoot: Shoot; onClos
   const [clearPlace, setClearPlace] = useState(false);
   const [cam, setCam] = useState({ camera: s.gear?.camera ?? '', lens: s.gear?.lens ?? '', film: s.gear?.film ?? '' });
   const [tags, setTags] = useState('');
-  const [subjects, setSubjects] = useState('');
   const [desc, setDesc] = useState(s.description ?? '');
   const [map, setMap] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,9 +35,8 @@ export function EditShoot({ shoot: s, onClose, onSaved }: { shoot: Shoot; onClos
     const g = s.gear ?? { camera: '', lens: '', medium: '', film: '' };
     // Sent whenever the shoot has camera details (even unchanged), so saving puts them back on any photograph that has drifted.
     if (cam.camera.trim() || cam.lens.trim() || cam.film.trim() || cam.camera.trim() !== g.camera || cam.lens.trim() !== g.lens || cam.film.trim() !== g.film) body.gear = { ...g, camera: cam.camera.trim(), lens: cam.lens.trim(), film: cam.film.trim(), medium: cam.film.trim() ? 'film' : g.medium };
-    const addT = names(tags).filter((n) => !s.tags.includes(n)), addS = names(subjects).filter((n) => !s.subjects.includes(n));
+    const addT = names(tags).filter((n) => !s.tags.includes(n));
     if (addT.length) body.tags = [...s.tags, ...addT];
-    if (addS.length) body.subjects = [...s.subjects, ...addS];
     if (desc !== (s.description ?? '')) body.description = desc;
     if (Object.keys(body).length === 1) { onClose(); return; }
     setBusy(true); setErr('');
@@ -65,7 +63,6 @@ export function EditShoot({ shoot: s, onClose, onSaved }: { shoot: Shoot; onClos
           {row('Lens', <input className="field-in" list="es-lenses" value={cam.lens} onChange={(e) => setCam({ ...cam, lens: e.target.value })} placeholder="Lens" aria-label="Lens" />)}
           {row('Film stock', <input className="field-in" value={cam.film} onChange={(e) => setCam({ ...cam, film: e.target.value })} placeholder="Leave blank for digital" aria-label="Film stock" />)}
           {row('Add tags', <input className="field-in" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Comma-separated" aria-label="Add tags" />, s.tags.length ? `Already: ${s.tags.join(', ')}` : undefined)}
-          {row('Add subjects', <input className="field-in" value={subjects} onChange={(e) => setSubjects(e.target.value)} placeholder="Comma-separated" aria-label="Add subjects" />, s.subjects.length ? `Already: ${s.subjects.join(', ')}` : undefined)}
           {row('Description', <textarea className="field-in" rows={3} value={desc} maxLength={1000} onChange={(e) => setDesc(e.target.value)} aria-label="Description" />)}
           <datalist id="es-cameras">{(gear.data?.cameras ?? []).map((c) => <option key={c.name} value={c.name} />)}</datalist>
           <datalist id="es-lenses">{(gear.data?.lenses ?? []).map((c) => <option key={c.name} value={c.name} />)}</datalist>

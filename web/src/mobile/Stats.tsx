@@ -7,7 +7,7 @@ import { BackPill, Eyebrow, Row, Seg } from './ui';
 type S = {
   year: string; years: string[]; photos: number; bytes: number; completePct: number; avgRating: number; inCollections: number;
   dist: { value: number; n: number }[]; perShoot: { id: number; name: string; n: number }[]; top: PhotoLite[];
-  subjects: { name: string; n: number }[]; tags: { name: string; n: number }[];
+  tags: { name: string; n: number }[];
   trend: { month: string; avg: number; n: number }[]; bySession: { session: number; avg: number; n: number }[];
 };
 type C = { reviewed: number; shared: number; received: number; average: number | null; notes: number; you: number | null; guests: number | null; community: number | null; favourites: { id: number; avg: number; n: number; title?: string }[] };
@@ -95,7 +95,6 @@ export function MobileStats() {
             </div>
           )}
           <Bars title="Photos per shoot" rows={d.perShoot.slice(0, 6).map((s) => ({ label: s.name, n: s.n, to: `/shoots/${s.id}` }))} more={d.perShoot.length > 6 ? { label: 'All shoots →', to: '/library' } : undefined} />
-          <Bars title="Subjects" rows={d.subjects.slice(0, 8).map((s) => ({ label: s.name, n: s.n, to: `/library?subject=${encodeURIComponent(s.name)}` }))} />
           <Bars title="Tags" rows={d.tags.slice(0, 8).map((s) => ({ label: s.name, n: s.n, to: `/library?tag=${encodeURIComponent(s.name)}` }))} />
           {d.top.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}><Eyebrow>TOP RATED</Eyebrow><Thumbs photos={d.top.slice(0, 9)} onOpen={(id) => nav(`/photo/${id}`)} /></div>}
           <div style={{ display: 'flex', flexDirection: 'column' }}><Row label="Imports" sub="What was brought in, and from where" onClick={() => nav('/stats?tab=imports')} /></div>

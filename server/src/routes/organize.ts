@@ -7,7 +7,6 @@ const filters = new Set([
   'q',
   'shoot',
   'missing',
-  'subject',
   'tag',
   'colour',
   'rating',

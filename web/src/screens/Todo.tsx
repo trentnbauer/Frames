@@ -121,9 +121,9 @@ function TodoTasks() {
   if (r === 'delete') return frame(<RemovalReview onChanged={reload} />);
 
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-  const chip = (kind: 'subject' | 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--ai-active)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--ai-active) 55%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
+  const chip = (kind: 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--ai-active)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--ai-active) 55%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
   // "Accept all": every ✦ suggestion of this kind becomes the photograph's own, in one click.
-  const acceptAll = (kind: 'subject' | 'tag') => {
+  const acceptAll = (kind: 'tag') => {
     const waiting = (p?.tags ?? []).filter((t) => t.kind === kind && t.source === 'ai' && !t.accepted);
     return waiting.length > 1 ? <button onClick={async () => { for (const t of waiting) await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name: t.name, kind, action: 'accept' } }); photo.reload(); }} style={{ height: 26, padding: '0 12px', borderRadius: 999, fontSize: 12.5, boxShadow: 'inset 0 0 0 1px var(--outline)', color: 'var(--text)' }}>Accept all {waiting.length}</button> : null;
   };
@@ -151,20 +151,20 @@ function TodoTasks() {
     isTodo: true, isStats: false, isCompare: false, isDupes: false, isNew: false, isWelcome: false,
     tEyebrow: r!.startsWith('ai-') ? '✦ Waiting on you' : 'Missing', tEyebrowFg: r!.startsWith('ai-') ? 'var(--ai-active)' : 'var(--faint)', tReasonTitle: meta.title, tWhy: WHY[r!](p, { camMissing, tags: (p?.tags ?? []).filter((t) => t.source === 'ai' && !t.accepted).length }),
     tLater: later.length ? `This photo comes back later for ${later.join(' and ')}.` : '',
-    tShowCamera: r === 'camera', tShowLocation: r === 'location', tShowSubjects: r === 'ai-tags' || r === 'tags', tShowTags: r === 'ai-tags' || r === 'tags', tShowDesc: r === 'desc' || r === 'ai-desc',
+    tShowCamera: r === 'camera', tShowLocation: r === 'location', tShowTags: r === 'ai-tags' || r === 'tags', tShowDesc: r === 'desc' || r === 'ai-desc',
     tNotes: ([['light', 'Light', 'Soft, low side light'], ['mood', 'Mood', 'Calm']] as const).filter(([k]) => r === k).map(([k, label, ph]) => ({ label, ph, value: notes[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNotes((n) => ({ ...n, [k]: e.target.value })) })),
     tTimeNote: r === 'time' && p ? 'Set its date on the photo page.' : '', tOpenPhoto: () => { if (p) nav(`/photo/${p.id}`); }, tShowComp: r === 'composition',
     tPhoto: id ? imgUrl(id, 'preview') : '', tRotate: p ? <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', top: 12, right: 12 }} /> : null, tTitle: p?.title || p?.file || '', tShoot: shoot?.name ?? '',
     tCam: [['Body', 'Camera body'], ['Lens', 'Lens'], ['Aperture', 'f/–'], ['Shutter', '1/–'], ['ISO', 'ISO'], ['Film', 'Film stock']].map(([label, ph], i) => ({ label, ph, control: [0, 1, 5].includes(i) ? <TodoGearInput key={`${id}-${i}`} value={cam[i]} type={i === 0 ? 'camera' : i === 1 ? 'lens' : 'film'} placeholder={ph} owned={gear.data?.own ?? []} discovered={gear.data?.found ?? []} onChange={(value) => setCam((current) => current.map((item, index) => index === i ? value : item))} /> : null, value: cam[i], ring: cam[i] ? 'var(--outline)' : 'color-mix(in srgb, var(--text) 12%, transparent)', onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCam((c) => c.map((x, j) => (j === i ? e.target.value : x))) })),
     tCamMissing: `${camMissing} of 6 missing`,
     tGearHints: <SameShootGear camera={cam[0] === suggestedGear.camera ? '' : suggestedGear.camera} lens={cam[1] === suggestedGear.lens ? '' : suggestedGear.lens} onUse={(field, value) => setCam((current) => current.map((item, index) => index === (field === 'camera' ? 0 : 1) ? value : item))} />,
-    tTags: chip('tag'), tSubjects: chip('subject'), tAcceptTags: acceptAll('tag'), tAcceptSubjects: acceptAll('subject'), tShootTags: [...(shoot?.subjects ?? []), ...(shoot?.tags ?? [])].join(', ') || 'none',
+    tTags: chip('tag'), tAcceptTags: acceptAll('tag'), tShootTags: (shoot?.tags ?? []).join(', ') || 'none',
     tComps: [], tCompPicker: p ? <AddToComposition key={p.id} ids={[p.id]} label="Add to composition" onDone={() => { colls.reload(); reload(); }} /> : null,
     tAiLabel: busy ? 'Analysing…' : '✦ Analyse with AI', tAiFg: busy ? 'var(--text2)' : 'var(--ai-active)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
     tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const sg = p?.aiSuggestion?.description; if (sg) setDesc(sg); },
-    addSubject: (name: string) => tagAct(name, 'subject', 'accept'), addTag: (name: string) => tagAct(name, 'tag', 'accept'),
+    addTag: (name: string) => tagAct(name, 'tag', 'accept'),
     skipTodo: skip, saveTodo: () => save(),
   };
   return frame(

@@ -26,7 +26,6 @@ export function useLibraryFilters(shoots: Shoot[]) {
   const [sp, setSp] = useSearchParams();
   const [open, setOpen] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const subjects = useApi<{ name: string; n: number }[]>(filtersOpen ? '/tags?kind=subject' : null);
   const tags = useApi<{ name: string; n: number }[]>(filtersOpen ? '/tags?kind=tag' : null);
   const gear = useApi<{ cameras: { name: string; n: number }[]; lenses: { name: string; n: number }[] }>(filtersOpen ? '/gear' : null);
   const set = (k: string, v: string | null) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n, { replace: true }); };
@@ -41,7 +40,6 @@ export function useLibraryFilters(shoots: Shoot[]) {
   if (sp.get('q')) chips.push({ label: `“${sp.get('q')}”`, remove: () => set('q', null) });
   if (sp.get('shoot')) chips.push({ label: `Shoot: ${shootById.get(Number(sp.get('shoot')))?.name ?? '…'}`, remove: () => set('shoot', null) });
   for (const k of multi(sp.get('missing'))) chips.push({ label: `No ${k}`, remove: () => toggle('missing', k) });
-  for (const s of multi(sp.get('subject'))) chips.push({ label: `Subject: ${s}`, remove: () => toggle('subject', s) });
   for (const s of multi(sp.get('tag'))) chips.push({ label: `Tag: ${s}`, remove: () => toggle('tag', s) });
   for (const s of multi(sp.get('colour'))) chips.push({ label: `Colour: ${s}`, remove: () => toggle('colour', s) });
   if (sp.get('rating')) chips.push({ label: `Score ${sp.get('rating')}`, remove: () => set('rating', null) });
@@ -61,10 +59,6 @@ export function useLibraryFilters(shoots: Shoot[]) {
     <MenuState.Provider value={{ open, setOpen }}>
       <div className="filters" style={{ marginBottom: 16 }}>
         <Menu id="shoot" label="Shoot">{(shoots_.data ?? []).map((s) => <Item key={s.id} on={sp.get('shoot') === String(s.id)} onClick={() => { set('shoot', String(s.id)); setOpen(null); }}>{s.name}</Item>)}</Menu>
-        <Menu id="subject" label="Subject">
-          {(subjects.data ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
-          {(subjects.data ?? []).map((t) => <Item key={t.name} on={multi(sp.get('subject')).includes(t.name)} onClick={() => toggle('subject', t.name)}>{t.name} <span className="faint">{t.n}</span></Item>)}
-        </Menu>
         <Menu id="tag" label="Tag">
           {(tags.data ?? []).length === 0 && <span className="faint menu-note">None yet</span>}
           {(tags.data ?? []).map((t) => <Item key={t.name} on={multi(sp.get('tag')).includes(t.name)} onClick={() => toggle('tag', t.name)}>{t.name} <span className="faint">{t.n}</span></Item>)}

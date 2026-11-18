@@ -8,7 +8,7 @@ import ProtoMapPicker from '../proto/ProtoMapPicker';
 type Place = { name: string; address: string; kind: string; lat: number; lng: number; precision: string; suburb: string; city: string };
 type Preview = { changed: number; unchanged: number; missing: number; counts: Record<string, number>; versions: Record<string, string> };
 export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: () => void }) {
-  const [values, setValues] = useState({ camera: '', lens: '', film: '', description: '', dateEdit: '', tags: '', subjects: '' }),
+  const [values, setValues] = useState({ camera: '', lens: '', film: '', description: '', dateEdit: '', tags: '' }),
     [enabled, setEnabled] = useState<Record<string, boolean>>({}),
     [fillBlanks, setFillBlanks] = useState(true),
     [blankFields, setBlankFields] = useState<Record<string, boolean>>({}),
@@ -23,7 +23,7 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
     for (const [key, value] of Object.entries(values))
       if (enabled[key])
         result[key] =
-          key === 'tags' || key === 'subjects'
+          key === 'tags'
             ? value
                 .split(',')
                 .map((v) => v.trim())
@@ -144,7 +144,6 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
                       description: 'Description',
                       dateEdit: 'Date',
                       tags: 'Tags to add',
-                      subjects: 'Subjects to add',
                     } as Record<string, string>
                   )[key]
                 }
@@ -173,11 +172,11 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
                   aria-label={`Bulk ${key}`}
                   type={key === 'dateEdit' ? 'date' : 'text'}
                   value={value}
-                  placeholder={key === 'tags' || key === 'subjects' ? 'Comma-separated names' : ''}
+                  placeholder={key === 'tags' ? 'Comma-separated names' : ''}
                   onChange={(event) => change(key as keyof typeof values, event.target.value)}
                 />
               )}{' '}
-              {key !== 'tags' && key !== 'subjects' && (
+              {key !== 'tags' && (
                 <label className="batch-choice">
                   <input
                     type="checkbox"

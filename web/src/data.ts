@@ -2,7 +2,7 @@
 export { checkTarget, parseTarget, printRatio, requiredPx, targetProblem, type Target } from './target';
 import type { Target } from './target';
 
-export type Tag = { name: string; kind: 'tag' | 'subject'; source: string; accepted: boolean; aiSourceId?: string };
+export type Tag = { name: string; kind: 'tag'; source: string; accepted: boolean; aiSourceId?: string };
 export type Review = { session: number; date: string; rating: number; note?: string };
 export type Swatch = { hex: string; pct: number; name: string };
 export type PhotoLite = {
@@ -13,7 +13,7 @@ export type PhotoLite = {
   palette: Swatch[]; brightness: number | null; contrast: number | null; saturation: number | null;
   xmpRating: number | null; aiStatus: string | null; similarity?: number;
 };
-export type AiSuggestion = { description: string; subjects: string[]; tags: string[]; environment: string; composition: string; lighting: string; mood: string; model?: string; sourceId?: string } | null;
+export type AiSuggestion = { description: string; tags: string[]; environment: string; composition: string; lighting: string; mood: string; model?: string; sourceId?: string } | null;
 export type PhotoFull = PhotoLite & {
   tags: Tag[]; reviews: Review[]; description: string; descSource: string; aiSuggestion: AiSuggestion;
   variants: number[]; conflicts: { field: string; mine: string; theirs: string }[];
@@ -21,8 +21,8 @@ export type PhotoFull = PhotoLite & {
 export type Shoot = {
   id: number; name: string; protected: boolean; private?: boolean; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
   dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; dueCount: number; waitingCount: number; duePhotoIds: number[]; sessions: number;
-  /** Subjects and tags the shoot gives to every photograph in it. */
-  subjects: string[]; tags: string[];
+  /** Tags the shoot gives to every photograph in it. */
+  tags: string[];
   /** Camera details the shoot gives to photographs that have none. */
   gear?: { camera: string; lens: string; medium: '' | 'digital' | 'film'; film: string };
 };

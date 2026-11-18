@@ -13,14 +13,14 @@ export type TodoItem = { key: string; title: string; detail: string; count: numb
 const SAMPLE = 24;
 
 /**
- * Everything that is waiting on the person: photographs with no subject or tag, AI suggestions to approve,
+ * Everything that is waiting on the person: photographs with no tag, AI suggestions to approve,
  * missing camera details, colours not read yet, and a cloud account that needs reconnecting. Nothing here changes anything.
  */
 export function registerTodo(app: FastifyInstance, x: Ctx) {
   const { db, all, one, num } = x;
 
   /**
-   * What each photograph still needs, for the one-at-a-time view: its subjects and tags (a suggestion to approve, or none yet), its place,
+   * What each photograph still needs, for the one-at-a-time view: its tags (a suggestion to approve, or none yet), its place,
    * its camera when that reason is enabled, and its description (an AI one to approve; a missing one is only asked for on a photograph that is on the list for something else, so
    * a library full of undescribed photographs does not become a to-do list of thousands). Newest first.
    */
@@ -29,12 +29,11 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const on = new Set(loadSettings(db).todoReasons);
     const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status, p.camera, p.lens,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.source = 'ai' AND t.accepted = 0) AS pend,
-      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) AS hasSubject,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear') AS hasTag
       FROM photos p WHERE p.missing = 0 ORDER BY p.id DESC`) as Row[];
     const out: { id: number; need: Need }[] = [];
     for (const r of rows) {
-      const tags = (!!r.pend && (on.has('subjects') || on.has('tags'))) || (on.has('subjects') && !r.hasSubject) || (on.has('tags') && !r.hasTag);
+      const tags = (!!r.pend && on.has('tags')) || (on.has('tags') && !r.hasTag);
       const lens = on.has('lens') && !String(r.lens ?? '').trim();
       const camera = on.has('camera') && !String(r.camera ?? '').trim();
       const place = on.has('location') && !String(r.place ?? '').trim();
@@ -59,12 +58,12 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     if (on.has('shoot')) add('orphaned', 'Put photographs in a shoot', 'These are in no photoshoot yet. Choose some and move them into a new or existing shoot.',
       ids('SELECT p.id FROM photos p WHERE p.missing = 0 AND p.shoot_id IN (SELECT id FROM shoots WHERE unsorted = 1) ORDER BY COALESCE(p.captured_at, p.added_at), p.id'));
 
-    // AI suggestions waiting for a yes or no: suggested tags and subjects, and a suggested description.
+    // AI suggestions waiting for a yes or no: suggested tags and a suggested description.
     const pendingTags = new Set(ids("SELECT DISTINCT p.id FROM photos p JOIN tags t ON t.photo_id = p.id WHERE p.missing = 0 AND t.source = 'ai' AND t.accepted = 0 ORDER BY p.id DESC"));
     const pendingDesc = (all("SELECT id, ai_json FROM photos WHERE missing = 0 AND ai_status = 'done' AND description = '' AND ai_json LIKE '%description%' ORDER BY id DESC") as Row[])
       .filter((r) => { try { const a = JSON.parse(r.ai_json as string); return !!a.description && !a.descriptionRejected; } catch { return false; } })
       .map((r) => r.id as number);
-    if (on.has('subjects') || on.has('tags')) add('ai-tags', 'Approve the AI’s suggested tags and subjects', 'The AI suggested these. Nothing is kept until you accept it.', [...pendingTags]);
+    if (on.has('tags')) add('ai-tags', 'Approve the AI’s suggested tags', 'The AI suggested these. Nothing is kept until you accept it.', [...pendingTags]);
     if (on.has('description')) add('ai-description', 'Approve the AI’s suggested descriptions', 'A suggested description is shown on the photograph’s page until you accept or reject it.', pendingDesc);
 
     // Photographs with no description at all (one an AI wrote is in the list above; each photograph is counted once there).
@@ -75,8 +74,6 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     }
 
     // Photographs with nothing set yet (newest first, so what was just brought in comes first).
-    if (on.has('subjects')) add('subjects', 'Add a subject', 'No subject yet, so these do not show up when you filter the library or a composition by subject.',
-      ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'subject' AND t.accepted = 1) ORDER BY p.id DESC"));
     if (on.has('tags')) add('tags', 'Add a tag', 'No tags yet.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear') ORDER BY p.id DESC"));
     if (on.has('location')) add('place', 'Name the place', 'No place yet, so these cannot be found by location.',

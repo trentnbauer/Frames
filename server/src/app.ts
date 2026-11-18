@@ -232,8 +232,8 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     } catch { return null; }
   };
   /** The subjects and tags a photoshoot gives to every photograph in it. */
-  const sharedOf = (s: Row): { subjects: string[]; tags: string[] } => {
-    try { const j = JSON.parse(s.shared || '{}'); return { subjects: Array.isArray(j.subjects) ? j.subjects : [], tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { subjects: [], tags: [] }; }
+  const sharedOf = (s: Row): { tags: string[] } => {
+    try { const j = JSON.parse(s.shared || '{}'); return { tags: Array.isArray(j.tags) ? j.tags : [] }; } catch { return { tags: [] }; }
   };
   const shootDto = (s: Row) => {
     const st = db.prepare('SELECT COUNT(*) n, MIN(captured_at) a, MAX(captured_at) b, MIN(id) first FROM photos WHERE shoot_id = ?').get(s.id) as Row;

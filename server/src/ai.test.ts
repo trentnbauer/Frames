@@ -38,7 +38,7 @@ beforeAll(async () => {
         if (hasImage) seen.images++;
         let out: unknown;
         if (prompt.startsWith('Convert this photo-library search')) out = { text: 'fog', subjects: ['harbour'], exclude: ['people'], colours: [], time: { from: '05:00', to: '08:00' } };
-        else if (prompt.startsWith('A photographer is making a composition')) out = { subjects: ['Harbour', 'made up'], tags: ['moody'], colours: ['blue', 'notacolour'] };
+        else if (prompt.startsWith('A photographer is making a composition')) out = { tags: ['Harbour', 'made up', 'moody'], colours: ['blue', 'notacolour'] };
         else if (prompt.includes('"ok": true')) out = { ok: true };
         else out = DESCRIPTIONS[(seen.images - 1) % DESCRIPTIONS.length] && { ...DESCRIPTIONS[(seen.images - 1) % DESCRIPTIONS.length], environment: 'outdoors', composition: 'centred', lighting: 'soft', mood: 'calm' };
         if (req.url === '/v1/messages') return send({ content: [{ type: 'text', text: JSON.stringify(out) }] });
@@ -111,7 +111,7 @@ describe('provider colour validation', () => {
 });
 
 describe('local provider', () => {
-  it('analyses photos in the background: descriptions, subjects, tags and embeddings, as suggestions', async () => {
+  it('analyses photos in the background: descriptions, tags and embeddings, as suggestions', async () => {
     const { act, src } = await addSource('ollama', { endpoint: base + '/', model: 'llava', embedModel: 'nomic', color: '#e7b76d' });
     expect(act!.status).toBe(200);
     expect((await A.get('/api/settings')).body.settings.ai).toBe('local');
@@ -127,7 +127,7 @@ describe('local provider', () => {
     // Suggestions are not facts: nothing is accepted yet.
     expect(full.tags.length).toBeGreaterThan(0);
     expect(full.tags.every((t: any) => t.source === 'ai' && t.accepted === false && t.aiSourceId === src.id)).toBe(true);
-    expect(full.tags.some((t: any) => t.kind === 'subject')).toBe(true);
+    expect(full.tags.every((t: any) => t.kind === 'tag')).toBe(true); // what the model called subjects are tags too
     expect(full.description).toBe('');
     // Not searchable as a tag until accepted.
     expect((await A.get('/api/photos?tag=fog')).body.photos).toHaveLength(0);
@@ -141,8 +141,8 @@ describe('local provider', () => {
     expect(acceptedTag.source).toBe('user');
     expect(acceptedTag.aiSourceId).toBe('');
     expect((await A.get(`/api/photos?tag=${tag.name}`)).body.photos.map((x: any) => x.id)).toContain(p.id);
-    const other = full.tags.find((t: any) => t.kind === 'subject');
-    await A.put(`/api/photos/${p.id}/tags`, { name: other.name, kind: 'subject', action: 'reject' });
+    const other = full.tags.find((t: any) => t.name !== tag.name);
+    await A.put(`/api/photos/${p.id}/tags`, { name: other.name, action: 'reject' });
     expect(((await A.get(`/api/photos/${p.id}`)).body.tags as any[]).some((t) => t.name === other.name)).toBe(false);
     await A.patch(`/api/photos/${p.id}`, { acceptAiDescription: true });
     const after = (await A.get(`/api/photos/${p.id}`)).body;
@@ -174,14 +174,14 @@ describe('local provider', () => {
     expect(r.ai).toBe(true);
     expect(r.parsed).toEqual({ text: 'fog', subjects: ['harbour'], exclude: ['people'], colours: [], time: { from: '05:00', to: '08:00' } });
   });
-  it('finds subjects, tags and colours for a composition name, only from names the library already has', async () => {
+  it('finds tags and colours for a composition name, only from names the library already has', async () => {
     const h = (await photos()).find((p) => p.file === 'harbour.jpg');
-    await A.put(`/api/photos/${h.id}/tags`, { name: 'harbour', kind: 'subject' });
+    await A.put(`/api/photos/${h.id}/tags`, { name: 'harbour' });
     expect((await A.post('/api/ai/suggest-filters', { name: '   ' })).status).toBe(400);
     const r = (await A.post('/api/ai/suggest-filters', { name: 'Harbour mornings' })).body;
     expect(r.ai).toBe(true);
     // 'Harbour' matches the existing 'harbour' (any case); 'made up', a tag nobody has and a colour that is not one are dropped.
-    expect(r.picks).toEqual({ subjects: ['harbour'], tags: [], colours: ['blue'] });
+    expect(r.picks).toEqual({ tags: ['harbour'], colours: ['blue'] });
   });
   it('re-checks one photograph now and says what is new', async () => {
     const h = (await photos()).find((p) => p.file === 'harbour.jpg');

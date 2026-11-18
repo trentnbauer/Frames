@@ -36,34 +36,35 @@ describe('the place a shoot passes down', () => {
   });
 });
 
-describe('the subjects and tags a shoot passes down', () => {
+describe('the tags a shoot passes down', () => {
   it('adds them to every photograph as its own, lower-cased, marked as coming from the shoot', async () => {
-    const r = await A.patch(`/api/shoots/${shoot}`, { subjects: ['Coast', 'coast', ' Sea Wall '], tags: ['Moody'] });
-    expect(r.body).toMatchObject({ subjects: ['coast', 'sea wall'], tags: ['moody'] });
+    const r = await A.patch(`/api/shoots/${shoot}`, { tags: ['Moody', 'Coast', 'coast', ' Sea Wall '] });
+    expect(r.body).toMatchObject({ tags: ['moody', 'coast', 'sea wall'] });
     for (const id of [a, b]) expect(tagsOf(id)).toEqual([
-      { name: 'coast', kind: 'subject', source: 'shoot', accepted: 1 }, { name: 'moody', kind: 'tag', source: 'shoot', accepted: 1 }, { name: 'sea wall', kind: 'subject', source: 'shoot', accepted: 1 },
+      { name: 'coast', kind: 'tag', source: 'shoot', accepted: 1 }, { name: 'moody', kind: 'tag', source: 'shoot', accepted: 1 }, { name: 'sea wall', kind: 'tag', source: 'shoot', accepted: 1 },
     ]);
     expect(tagsOf(c)).toEqual([]);
   });
   it('takes back only what came from the shoot when one is removed, never a photograph’s own', async () => {
     await A.put(`/api/photos/${a}/tags`, { name: 'moody', kind: 'tag' }); // the person's own 'moody' on a (it already had the shoot's: kept as it is)
     env.db.prepare("UPDATE tags SET source = 'user' WHERE photo_id = ? AND name = 'moody'").run(a);
-    await A.patch(`/api/shoots/${shoot}`, { tags: [] });
+    await A.patch(`/api/shoots/${shoot}`, { tags: ['coast', 'sea wall'] });
     expect(tagsOf(a).map((t) => t.name)).toEqual(['coast', 'moody', 'sea wall']); // a's own moody stays
     expect(tagsOf(b).map((t) => t.name)).toEqual(['coast', 'sea wall']); // b's came from the shoot, so it went
   });
   it('turns an AI suggestion that is waiting into a yes, but not one that was rejected', async () => {
-    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'harbour', 'ai', 0, 'subject')").run(a);
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'harbour', 'ai', 0, 'tag')").run(a);
     env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'dull', 'ai', -1, 'tag')").run(a);
-    await A.patch(`/api/shoots/${shoot}`, { subjects: ['coast', 'sea wall', 'harbour'], tags: ['dull'] });
+    await A.patch(`/api/shoots/${shoot}`, { tags: ['coast', 'sea wall', 'harbour', 'dull'] });
     expect(tagsOf(a).find((t) => t.name === 'harbour')).toMatchObject({ accepted: 1, source: 'shoot' });
     expect(tagsOf(a).find((t) => t.name === 'dull')).toMatchObject({ accepted: -1 }); // rejected stays rejected
   });
   it('bad input is ignored: not a list, too long, too many', async () => {
-    const r = await A.patch(`/api/shoots/${shoot}`, { subjects: 'coast', tags: ['x'.repeat(200)] });
-    expect(r.body.subjects).toEqual([]); // not a list: treated as none
+    let r = await A.patch(`/api/shoots/${shoot}`, { tags: ['x'.repeat(200)] });
     expect(r.body.tags[0].length).toBe(60);
-    await A.patch(`/api/shoots/${shoot}`, { subjects: ['coast', 'sea wall', 'harbour'], tags: [] });
+    r = await A.patch(`/api/shoots/${shoot}`, { tags: 'coast' });
+    expect(r.body.tags).toEqual([]); // not a list: treated as none
+    await A.patch(`/api/shoots/${shoot}`, { tags: ['coast', 'sea wall', 'harbour'] });
   });
 });
 
