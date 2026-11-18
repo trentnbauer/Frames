@@ -45,7 +45,7 @@ describe('recoverable changes', () => {
     env.db
       .prepare("INSERT INTO reviews(photo_id,session,run_id,date,rating)VALUES(?,1,'recovery-test',?,2)")
       .run(id, new Date().toISOString());
-    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'car','subject','user',1)").run(id);
+    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'car','tag','user',1)").run(id);
     await a.del(`/api/photos/${id}`);
     const recovered = (await a.get('/api/recovery')).body[0];
     expect(JSON.stringify(recovered)).not.toContain(env.lib);
@@ -142,18 +142,16 @@ describe('library score ordering', () => {
   });
 });
 describe('batch edits and owned aliases', () => {
-  it('lets a bulk edit accept a previously rejected tag or subject', async () => {
+  it('lets a bulk edit accept a previously rejected tag', async () => {
     env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkrej','tag','ai',-1)").run(ids[0]);
-    env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkrejs','subject','ai',-1)").run(ids[0]);
     env.db.prepare("INSERT INTO tags(photo_id,name,kind,source,accepted)VALUES(?,'bulkok','tag','ai',1)").run(ids[0]);
-    const body = { ids: [ids[0]], patch: { tags: ['bulkrej', 'bulkok'], subjects: ['bulkrejs'] } };
+    const body = { ids: [ids[0]], patch: { tags: ['bulkrej', 'bulkok'] } };
     const preview = (await a.post('/api/photos/bulk-preview', body)).body;
-    expect(preview.counts).toMatchObject({ tags: 1, subjects: 1 });
+    expect(preview.counts).toMatchObject({ tags: 1 });
     const applied = await a.post('/api/photos/bulk-apply', { ...body, versions: preview.versions });
     expect(applied.status).toBe(200);
     const acc = (name: string) => (env.db.prepare('SELECT accepted,source FROM tags WHERE photo_id=? AND name=?').get(ids[0], name) as any);
     expect(acc('bulkrej')).toEqual({ accepted: 1, source: 'user' });
-    expect(acc('bulkrejs')).toEqual({ accepted: 1, source: 'user' });
     expect(acc('bulkok').source).toBe('ai');
     expect((await a.post(`/api/changes/${applied.body.operationId}/undo`)).status).toBe(200);
     expect(acc('bulkrej').accepted).toBe(-1);

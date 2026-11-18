@@ -94,15 +94,14 @@ describe('searching and filtering', () => {
     expect(await ids('colour=red&from=2026-10-12&gps=1&q=red')).toEqual(['red.jpg']);
     expect(await ids('colour=red&to=2026-10-11')).toEqual([]);
   });
-  it('filters by tag and subject separately, with several tags meaning all of them', async () => {
+  it('filters by tag, with several tags meaning all of them', async () => {
     const red = await photo('red.jpg'), blue = await photo('blue.jpg');
-    await A.put(`/api/photos/${red.id}/tags`, { name: 'harbour', kind: 'subject' });
+    await A.put(`/api/photos/${red.id}/tags`, { name: 'harbour' });
     await A.put(`/api/photos/${red.id}/tags`, { name: 'moody' });
     await A.put(`/api/photos/${blue.id}/tags`, { name: 'moody' });
-    expect(await ids('subject=harbour')).toEqual(['red.jpg']);
+    expect(await ids('tag=harbour')).toEqual(['red.jpg']);
     expect(await ids('tag=moody')).toEqual(['blue.jpg', 'red.jpg']);
     expect(await ids('tag=moody,harbour')).toEqual(['red.jpg']);
-    expect(await ids('subject=moody')).toEqual([]);
   });
   it('searches the place and description text', async () => {
     const blue = await photo('blue.jpg');
@@ -165,15 +164,15 @@ describe('similarity, near-duplicates and variants', () => {
   });
 });
 
-describe('subjects and tags', () => {
+describe('tags', () => {
   it('creates, lists, renames, merges and deletes them', async () => {
-    await A.post('/api/tags', { name: 'Street', kind: 'subject' });
-    const list = (await A.get('/api/tags?kind=subject')).body as any[];
+    await A.post('/api/tags', { name: 'Street' });
+    const list = (await A.get('/api/tags?kind=tag')).body as any[];
     expect(list.find((t) => t.name === 'street').n).toBe(0);
     await A.patch('/api/tags/tag/moody', { name: 'atmospheric' });
     expect(((await A.get('/api/tags?kind=tag')).body as any[]).map((t) => [t.name, t.n])).toContainEqual(['atmospheric', 2]);
-    await A.patch('/api/tags/subject/harbour', { name: 'street' });
-    expect(((await A.get('/api/tags?kind=subject')).body as any[]).find((t) => t.name === 'street').n).toBe(1);
+    await A.patch('/api/tags/tag/harbour', { name: 'street' });
+    expect(((await A.get('/api/tags?kind=tag')).body as any[]).find((t) => t.name === 'street').n).toBe(1);
     await A.del('/api/tags/tag/atmospheric');
     expect(((await A.get('/api/tags?kind=tag')).body as any[]).some((t) => t.name === 'atmospheric')).toBe(false);
   });

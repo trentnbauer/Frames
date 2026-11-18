@@ -63,7 +63,7 @@ export function MobileShoot() {
       {sharing && <SharePanel kind="shoot" id={s.id} name={s.name} onClose={() => setSharing(false)} />}
       {adding && <AddPhotosModal onClose={() => setAdding(false)} onDone={() => { list.reload(); shoot.reload(); }} />}
       {sheet === 'more' && (
-        <Sheet title={s.name} sub={[...s.subjects, ...s.tags].join(' · ') || undefined} onClose={() => setSheet(null)}>
+        <Sheet title={s.name} sub={s.tags.join(' · ') || undefined} onClose={() => setSheet(null)}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {[
               { label: 'Rename', act: () => { setName(s.name); setErr(''); setSheet('rename'); } },

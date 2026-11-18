@@ -17,26 +17,25 @@ beforeAll(async () => {
 afterAll(() => { env.app.close(); cleanup(env); });
 
 describe('the To do list', () => {
-  it('is empty with no photographs, and lists new photographs that have no subject or tag', async () => {
+  it('is empty with no photographs, and lists new photographs that have no tag', async () => {
     const t = (await A.get('/api/todo')).body;
     expect(t.total).toBe(3); // each photograph counts once, even with several missing details, plus the one group of near-duplicates the two test photographs make
-    expect(await kinds()).toEqual(expect.arrayContaining(['subjects', 'tags']));
-    expect(t.items.find((i: any) => i.key === 'subjects')).toMatchObject({ count: 2 });
+    expect(await kinds()).toEqual(expect.arrayContaining(['tags']));
+    expect(t.items.find((i: any) => i.key === 'tags')).toMatchObject({ count: 2 });
   });
 
-  it('drops a photograph from the list once it has a subject and a tag', async () => {
+  it('drops a photograph from the list once it has a tag', async () => {
     const id = await idOf('a.jpg');
-    await A.put(`/api/photos/${id}/tags`, { name: 'coast', kind: 'subject' });
+    await A.put(`/api/photos/${id}/tags`, { name: 'coast', kind: 'tag' });
     await A.put(`/api/photos/${id}/tags`, { name: 'moody', kind: 'tag' });
     const items = (await A.get('/api/todo')).body.items as any[];
-    expect(items.find((i) => i.key === 'subjects')).toMatchObject({ count: 1 });
-    expect(items.find((i) => i.key === 'subjects').photoIds).not.toContain(id);
+    expect(items.find((i) => i.key === 'tags')).toMatchObject({ count: 1 });
     expect(items.find((i) => i.key === 'tags').photoIds).not.toContain(id);
   });
 
   it('lists the AI’s suggested tags and description until they are accepted or rejected', async () => {
     const id = await idOf('b.jpg');
-    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'harbour', 'ai', 0, 'subject')").run(id);
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'harbour', 'ai', 0, 'tag')").run(id);
     env.db.prepare("UPDATE photos SET ai_status = 'done', ai_json = ? WHERE id = ?").run(JSON.stringify({ description: 'A boat at dawn' }), id);
     let items = (await A.get('/api/todo')).body.items as any[];
     expect(items.find((i) => i.key === 'ai-tags')).toMatchObject({ count: 1, photoIds: [id] });
@@ -68,13 +67,11 @@ describe('accepting the AI’s suggestions in one go, and finding what has nothi
     expect((await A.post('/api/todo/accept-ai', { kind: 'everything' })).status).toBe(400);
   });
 
-  it('filters the Library to photographs with no subject or no tag', async () => {
+  it('filters the Library to photographs with no tag', async () => {
     const id = await idOf('a.jpg');
     const ids = async (q: string) => ((await A.get(`/api/photos?${q}`)).body.photos as any[]).map((p) => p.id);
-    expect(await ids('missing=subject')).not.toContain(id); // it has the subject added earlier
     expect(await ids('missing=tag')).not.toContain(id);
     env.db.prepare('DELETE FROM tags WHERE photo_id = ?').run(id);
-    expect(await ids('missing=subject')).toContain(id);
     expect(await ids('missing=tag')).toContain(id);
   });
 });
@@ -85,15 +82,15 @@ describe('the one-at-a-time list', () => {
     const walk = (await A.get('/api/todo/walk')).body;
     expect(walk.photos.length).toBeGreaterThan(0);
     const first = walk.photos[0];
-    expect(first).toMatchObject({ need: { tags: true, place: true, desc: true }, shoot: expect.any(String) });
+    expect(first).toMatchObject({ need: { place: true, desc: true }, shoot: expect.any(String) });
     expect(first.ar).toBeGreaterThan(0);
     expect(walk.photos.map((p: any) => p.id)).toEqual([...walk.photos.map((p: any) => p.id)].sort((a: number, b: number) => b - a));
     expect(walk.things).toBe(walk.photos.reduce((n: number, p: any) => n + +p.need.tags + +p.need.place + +p.need.desc, 0));
   });
 
-  it('drops a photograph once it has a subject, a tag and a place, and does not ask for a description on its own', async () => {
+  it('drops a photograph once it has a tag and a place, and does not ask for a description on its own', async () => {
     const id = (await A.get('/api/todo/walk')).body.photos[0].id as number;
-    await A.put(`/api/photos/${id}/tags`, { name: 'harbour', kind: 'subject' });
+    await A.put(`/api/photos/${id}/tags`, { name: 'harbour', kind: 'tag' });
     await A.put(`/api/photos/${id}/tags`, { name: 'dawn', kind: 'tag' });
     await A.patch(`/api/photos/${id}`, { place: 'Fremantle' });
     expect(((await A.get('/api/todo/walk')).body.photos as any[]).some((p) => p.id === id)).toBe(false); // no description, but nothing else is outstanding
@@ -135,13 +132,12 @@ describe('the one-at-a-time list', () => {
 
   it('leaves out a reason that is switched off, lists opt-in reasons only when on, and lists poorly reviewed photographs', async () => {
     const photos = (await A.get('/api/photos')).body.photos as any[];
-    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['shoot', 'location', 'subjects', 'tags', 'description']);
+    expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['shoot', 'location', 'tags', 'description']);
     expect(await kinds()).not.toContain('camera');
     await A.put('/api/settings', { todoReasons: ['camera', 'nonsense'] });
     expect((await A.get('/api/settings')).body.settings.todoReasons).toEqual(['camera']); // unknown reasons are dropped
     const k = await kinds();
     expect(k).toContain('camera');
-    expect(k).not.toContain('subjects');
     expect(k).not.toContain('place');
     expect(((await A.get('/api/todo/walk')).body.photos as any[]).map((p) => p.id).sort()).toEqual(photos.filter((p) => !p.camera.trim()).map((p) => p.id).sort());
     await A.put('/api/settings', { archiveSuggest: true });
@@ -150,6 +146,6 @@ describe('the one-at-a-time list', () => {
     const { sessions } = (await A.get('/api/settings')).body.settings;
     for (let i = 1; i <= sessions; i++) env.db.prepare("INSERT INTO reviews(photo_id, session, run_id, date, rating) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z', 1)").run(id, i, `d${i}`);
     expect(((await A.get('/api/todo')).body.items as any[]).find((i) => i.key === 'delete')).toMatchObject({ count: 1, photoIds: [id] });
-    await A.put('/api/settings', { todoReasons: ['location', 'subjects', 'tags', 'description'] });
+    await A.put('/api/settings', { todoReasons: ['location', 'tags', 'description'] });
   });
 });

@@ -23,7 +23,7 @@ export const taskMeta = (key: string) => TASKS.find((t) => t.key === key);
 
 /** Which kind of task each list from the server belongs to. */
 const GROUP_OF: Record<string, TaskKey> = {
-  delete: 'delete', 'ai-tags': 'ai-tags', subjects: 'tags', tags: 'tags', 'ai-description': 'ai-desc', description: 'desc',
+  delete: 'delete', 'ai-tags': 'ai-tags', tags: 'tags', 'ai-description': 'ai-desc', description: 'desc',
   place: 'location', camera: 'camera', lens: 'camera', time: 'time', light: 'light', mood: 'mood', composition: 'composition',
 };
 

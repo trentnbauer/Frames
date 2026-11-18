@@ -81,7 +81,7 @@ const ROW_NEW: Idx[] = [
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvSize', g: 'Previews', label: 'Preview size', hint: 'What you see on the Photo page and in Review.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvQuality', g: 'Previews', label: 'Preview quality', hint: 'JPEG quality, 70 to 95.' },
   { tab: 'lib', sec: 'storage', sub: 'storage', id: 'pvConvert', g: 'Previews', label: 'Convert existing previews', hint: 'Every preview matches your settings.' },
-  { tab: 'lib', sec: 'photo', sub: 'tags', id: 'tagsSubjects', g: 'Subjects', label: 'Tags & subjects', hint: 'Create, search, rename, merge or delete in one list.' },
+  { tab: 'lib', sec: 'photo', sub: 'tags', id: 'tagsSubjects', g: 'Tags', label: 'Tags', hint: 'Create, search, rename, merge or delete in one list.' },
   { tab: 'lib', sec: 'photo', sub: 'camera-xmp', id: 'xmpWrite', g: 'Export and differences', label: 'Write XMP sidecars', hint: 'Titles, descriptions, accepted tags and average ratings, for every photo.' },
   { tab: 'lib', sec: 'photo', sub: 'ai', id: 'aiAutoAnalyse', g: 'Providers', label: 'Automatically analyse new photos', hint: 'Analyse new and waiting photos.' },
   { tab: 'lib', sec: 'portfolio', id: 'pfFavMark', g: 'What’s shown', label: 'Favourites', hint: 'Pinned to the top. Only you add these.' },

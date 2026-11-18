@@ -130,7 +130,7 @@ export function useNotifications(ctx: Ctx): Section {
 
 /* ------------------------------------------------------------------ Reviews */
 const SPACING = ['Instant', '1 day', '3 days', '1 week', '2 weeks', '1 month', '3 months', '6 months', '1 year'];
-const TODO: [string, string][] = [['Shoot', 'shoot'], ['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
+const TODO: [string, string][] = [['Shoot', 'shoot'], ['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
 const SHARE: [string, string][] = [['Portfolio photos only', 'portfolio'], ['Photos rated 4 or more', 'rated4'], ['Any photo', 'any']];
 export function useReviews(ctx: Ctx): Section {
   const nav = useNavigate();
@@ -185,15 +185,15 @@ export function useReviews(ctx: Ctx): Section {
 
 /* -------------------------------------------------------------------- Tags */
 export function useTags(ctx: Ctx): Section {
-  const subj = useApi<{ name: string; n: number }[]>('/tags?kind=subject');
+  const subj = useApi<{ name: string; n: number }[]>('/tags?kind=tag');
   const prefs = usePrefs('user');
   const hidden = prefs.get<string[]>('hidden', []);
-  const manage = () => ctx.modal(<Modal title="Tags & subjects" sub="Create, rename, merge or delete tags and subjects." width={640} onClose={() => { ctx.modal(null); subj.reload(); }}><Vocabulary /></Modal>);
+  const manage = () => ctx.modal(<Modal title="Tags" sub="Create, rename, merge or delete tags." width={640} onClose={() => { ctx.modal(null); subj.reload(); }}><Vocabulary /></Modal>);
   return {
-    key: 'tags', name: 'Tags & subjects', hint: 'How photos get described and found.',
+    key: 'tags', name: 'Tags', hint: 'How photos get described and found.',
     groups: [
-      { title: 'Subjects', rows: [
-        { id: 'subjects', t: 'button', label: 'Tags & subjects', hint: 'Create, search, rename, merge or delete in one list.', meta: 'Manage tags', act: manage },
+      { title: 'Tags', rows: [
+        { id: 'subjects', t: 'button', label: 'Tags', hint: 'Create, search, rename, merge or delete in one list.', meta: 'Manage tags', act: manage },
       ] },
       { title: 'Sensitive content', rows: [
         { id: 'sensPf', t: 'toggle', label: 'Keep flagged photos off my portfolio', value: prefs.get('sensPf', false), set: (v) => { prefs.set('sensPf', v); ctx.toast('Saved'); } },

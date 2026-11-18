@@ -20,7 +20,6 @@ export function Compare() {
     ['Captured', (p) => fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }) || '–'],
     ['Camera', (p) => p.camera || '–'],
     ['Exposure', (p) => p.exposure || '–'],
-    ['Subjects', (p) => p.tags.filter((t) => t.kind === 'subject' && t.accepted).map((t) => t.name).join(', ') || '–'],
     ['Tags', (p) => p.tags.filter((t) => t.kind === 'tag' && t.accepted).map((t) => t.name).join(', ') || '–'],
   ];
   const prefer = async (p: PhotoFull) => { const other = p.id === a.id ? b : a; await api(`/photos/${other.id}`, { method: 'PATCH', body: { archived: true } }); nav(`/photo/${p.id}`); };

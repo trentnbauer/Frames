@@ -119,13 +119,13 @@ describe('collection insights', () => {
 describe('statistics', () => {
   it('reports distributions and trends', async () => {
     await A.put('/api/settings', { sessions: 6 }); // these photos have up to four sessions: with six to do, none is complete
-    await A.put(`/api/photos/${id.red1}/tags`, { name: 'harbour', kind: 'subject' });
+    await A.put(`/api/photos/${id.red1}/tags`, { name: 'harbour' });
     await A.put(`/api/photos/${id.red1}/tags`, { name: 'sand' });
     const s = (await A.get('/api/stats')).body;
     expect(s.photos).toBe(7);
     expect(s.dist).toHaveLength(5);
     expect(s.dist.reduce((n: number, d: any) => n + d.n, 0)).toBeGreaterThan(10);
-    expect(s.subjects).toContainEqual({ name: 'harbour', n: 1 });
+    expect(s.tags).toContainEqual({ name: 'harbour', n: 1 });
     expect(s.tags.map((t: any) => t.name)).toContain('sand');
     expect(s.trend.length).toBeGreaterThan(1);
     expect(s.trend[0]).toHaveProperty('month');

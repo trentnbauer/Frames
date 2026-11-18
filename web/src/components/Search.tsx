@@ -37,7 +37,7 @@ function DesktopSearch({ onClose }: { onClose: () => void }) {
 
   const understood: { key: string; label: string }[] = [];
   if (parsed) {
-    if (parsed.subjects.length) understood.push({ key: 'subjects', label: `Subject: ${parsed.subjects.join(', ')}` });
+    if (parsed.subjects.length) understood.push({ key: 'subjects', label: `Tag: ${parsed.subjects.join(', ')}` });
     if (parsed.exclude.length) understood.push({ key: 'exclude', label: `Exclude: ${parsed.exclude.join(', ')}` });
     if (parsed.time) understood.push({ key: 'time', label: `Time: ${parsed.time.from}–${parsed.time.to}` });
     if (parsed.colours.length) understood.push({ key: 'colours', label: `Colour: ${parsed.colours.join(', ')}` });
@@ -52,7 +52,7 @@ function DesktopSearch({ onClose }: { onClose: () => void }) {
     if (text.trim() && metaNow.length === 0) p.set('q', text.trim());
     for (const c of metaNow) p.set(c.param, c.value);
     if (parsed) {
-      if (!removed.includes('subjects') && parsed.subjects.length) p.set('subject', parsed.subjects.join(','));
+      if (!removed.includes('subjects') && parsed.subjects.length) p.set('tag', parsed.subjects.join(','));
       if (!removed.includes('exclude') && parsed.exclude.length) p.set('exclude', parsed.exclude.join(','));
       if (!removed.includes('time') && parsed.time) p.set('time', `${parsed.time.from}-${parsed.time.to}`);
       if (!removed.includes('colours') && parsed.colours.length) p.set('colour', parsed.colours.join(','));

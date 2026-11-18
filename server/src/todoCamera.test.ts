@@ -5,8 +5,8 @@ let env: Env, a: ReturnType<typeof api>, id: number;
 beforeEach(async()=>{
  env=makeEnv();a=api(env);fs.writeFileSync(env.lib+'/complete.jpg',await jpg(svg(300,200,'#345678','#bbaacc',[.3,.5]),{exif:{IFD0:{Make:'NORITSU KOKI',Model:'EZ Controller'}}}));await a.scan();id=(await a.get('/api/photos')).body.photos[0].id;
  await a.patch(`/api/photos/${id}`,{place:'Mill Markets',description:'A car interior',camera:''});
- await a.put(`/api/photos/${id}/tags`,{name:'cars',kind:'subject'});await a.put(`/api/photos/${id}/tags`,{name:'interior',kind:'tag'});
- await a.put('/api/settings',{todoReasons:['camera','location','subjects','tags','description'],deleteBelow:0});
+ await a.put(`/api/photos/${id}/tags`,{name:'cars',kind:'tag'});await a.put(`/api/photos/${id}/tags`,{name:'interior',kind:'tag'});
+ await a.put('/api/settings',{todoReasons:['camera','location','tags','description'],deleteBelow:0});
 });
 afterEach(async()=>{await env.app.close();cleanup(env)});
 it('includes a photo missing only its camera in Everything, the camera category and total',async()=>{
@@ -16,7 +16,7 @@ it('includes a photo missing only its camera in Everything, the camera category 
 });
 it('drops the task after saving the camera and honours turning that reason off',async()=>{
  await a.patch(`/api/photos/${id}`,{camera:'Minolta XD'});expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);expect((await a.get('/api/todo')).body.total).toBe(0);
- await a.patch(`/api/photos/${id}`,{camera:''});await a.put('/api/settings',{todoReasons:['location','subjects','tags','description']});expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);expect((await a.get('/api/todo')).body.total).toBe(0);
+ await a.patch(`/api/photos/${id}`,{camera:''});await a.put('/api/settings',{todoReasons:['location','tags','description']});expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);expect((await a.get('/api/todo')).body.total).toBe(0);
 });
 it('adds the task when a scanner camera is cleared by the blacklist',async()=>{
  await a.patch(`/api/photos/${id}`,{camera:'NORITSU KOKI EZ Controller'});expect((await a.get('/api/todo/walk')).body.photos).toEqual([]);
