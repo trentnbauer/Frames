@@ -82,19 +82,3 @@ export function PhoneMeSheet({ name, onClose }: { name: string; onClose: () => v
   );
 }
 
-/** A 32px avatar for a tab's title row: opens your menu, with an accent dot while notifications are unread. */
-export function TabAvatar() {
-  const { me } = useStore();
-  const [open, setOpen] = useState(false);
-  const unread = useApi<{ items: { read: boolean }[] }>('/notifications').data?.items.some((i) => !i.read);
-  const name = me?.displayName || me?.user?.name || me?.user?.email || 'You';
-  return (
-    <>
-      <button onClick={() => setOpen(true)} aria-label={unread ? 'Your menu, unread notifications' : 'Your menu'} className="avatar" style={{ position: 'relative', width: 32, height: 32, flexShrink: 0, ...(me?.hasAvatar ? { backgroundImage: 'url(/api/profile/avatar)' } : {}) }}>
-        {!me?.hasAvatar && name.slice(0, 1).toUpperCase()}
-        {unread && <i style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 0 2px var(--page)' }} />}
-      </button>
-      {open && <PhoneMeSheet name={name} onClose={() => setOpen(false)} />}
-    </>
-  );
-}

@@ -19,6 +19,8 @@
   /* a tab's own page: the shell's header above, the tab bar below */
   .ptab { padding: 8px 20px 130px; }
   .ptab.headless { padding-top: 28px; }
+  /* A page that keeps the sticky Frames header above it instead of covering the screen. */
+  .ppage.withhead { position: static; inset: auto; z-index: auto; overflow: visible; min-height: calc(100dvh - 68px); padding: 20px 20px 130px; }
   /* sign in, PIN and the pages before it: the design's phone sign-in */
   html .auth-shell { place-items: start stretch; align-content: start; padding: 110px 28px 48px; background: var(--page); }
   .auth-shell main, .auth-shell main > * { max-width: 100%; }

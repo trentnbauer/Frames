@@ -93,7 +93,7 @@ function Shell() {
     }}>
     <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
-      {!inReview && !(phone && tabFor(loc.pathname, loc.search) && loc.pathname !== '/') && <div className="app-header"><Header /></div>}
+      {!inReview && <div className="app-header"><Header /></div>}
       <div className="app-content"><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/library" element={<Library />} />

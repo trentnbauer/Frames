@@ -1,4 +1,3 @@
-import { TabAvatar } from './Chrome';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -38,7 +37,7 @@ export function MobileCompositions() {
     <div className="pscreen ptab headless" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Compositions</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{all.length}</span></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => openNew()} aria-label="New composition" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1 }}>+</button><TabAvatar /></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => openNew()} aria-label="New composition" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1 }}>+</button></div>
       </div>
       <div role="group" aria-label="Stage" style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
         {STAGES.map(([k, l, shape]) => <button key={k} aria-pressed={stage === k} onClick={() => setStage(k)} style={{ flex: 1, height: 36, borderRadius: 999, background: stage === k ? 'var(--btn-bg)' : 'transparent', color: stage === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>{shape && <span aria-hidden className={`stage-shape ${shape}`} />}{l}</button>)}
