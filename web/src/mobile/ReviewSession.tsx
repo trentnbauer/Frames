@@ -8,7 +8,7 @@ type Props = {
   total: number; index: number; shootName?: string; photoId: number; photoSrc: string; rating?: number; note: string;
   onRate: (n: number) => void; onBin: () => void; onSkip: () => void; onBack: () => void; onFinish: () => void; onNote: (note: string) => void | Promise<void>;
   offer: { name: string } | null; onAddOffer: () => void; onChooseOffer: () => void; onDismissOffer: () => void;
-  renderCompPicker: (close: () => void, done: (m: string) => void) => ReactNode; error?: string;
+  renderCompPicker: (close: () => void, done: (m: string) => void) => ReactNode; error?: string; rotateBtn?: ReactNode;
 };
 
 /** A review session on a phone: a segmented progress bar, the photograph, and five faces to rate with. Ratings stay hidden while you rate (the review is blind). */
@@ -29,6 +29,7 @@ export function MobileReviewSession(p: Props) {
       <div style={{ position: 'absolute', top: 'max(28px, calc(env(safe-area-inset-top) + 14px))', left: 20, right: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ font: "italic 400 24px/1 'Instrument Serif',Georgia,serif" }}>{p.index + 1} <span style={{ color: '#6f6c67' }}>/ {p.total}</span></span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#8f8c86', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.shootName}</span>
+        {p.rotateBtn}
         <button onClick={p.onFinish} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: '#a8a59f', fontSize: 13 }}>Done</button>
       </div>
       <div style={{ position: 'absolute', top: 84, bottom: 236, left: 12, right: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

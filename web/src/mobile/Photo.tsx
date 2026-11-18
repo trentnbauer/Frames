@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RotateButton } from '../components/RotateButton';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { CompPicker } from '../components/AddToComposition';
@@ -76,6 +77,7 @@ export function MobilePhoto() {
     <div className="ppage flush" data-screen-label="Photo" style={{ padding: 0 }}>
       <div style={{ position: 'relative', height: 420, background: 'var(--review)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 44, boxSizing: 'border-box' }}>
         <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: '100%', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
+        <RotateButton id={p.id} onDone={() => photo.reload()} style={{ position: 'absolute', right: 14, bottom: 14, background: 'rgba(0,0,0,.55)', color: '#efede8', boxShadow: 'none' }} />
         <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(shoot ? `/shoots/${shoot.id}` : '/library'); }} aria-label="Back" style={{ ...circle, top: 52, left: 14, fontSize: 18 }}>‹</button>
         {stepIds.length > 1 && <span style={{ position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)', font: 'italic 400 18px/1 var(--serif)', color: '#efede8' }}>{idx + 1} / {stepIds.length}</span>}
         <button onClick={() => setSheet('more')} aria-label="More actions" style={{ ...circle, top: 52, right: 14 }}>⋯</button>

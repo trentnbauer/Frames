@@ -12,6 +12,7 @@ import { applyGear, syncGearTags } from '../gear.js';
 import { hemisphere, monthsOf, type Season, type Seasons } from '../seasons.js';
 import { getSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
+import { processPhoto } from '../ingest.js';
 
 const like = (s: string) => `%${s.replace(/[\\%_]/g, '\\$&')}%`;
 
@@ -81,8 +82,10 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     for (const s of String(q.subject ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
       where.push("EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.kind = 'subject' AND t.accepted = 1)"); args.push(s);
     }
-    // ?missing=subject or ?missing=tag: photographs with none yet.
+    // ?missing=subject, tag, camera, lens, film or place: photographs with none yet.
     for (const k of String(q.missing ?? '').split(',')) {
+      if (k === 'camera' || k === 'lens' || k === 'film') where.push(`COALESCE(p.${k}, '') = ''`);
+      if (k === 'place') where.push("COALESCE(p.place, '') = '' AND p.lat IS NULL AND NOT EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND s.place != '')");
       if (k === 'subject' || k === 'tag') where.push(`NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = '${k}' AND t.accepted = 1${k === 'tag' ? " AND t.source <> 'gear'" : ''})`); // tags made from camera details do not count as tagged
     }
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
@@ -321,6 +324,19 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   // Forget what was taken out: the next scan imports again whatever files are still in the library folders.
   app.post('/api/removed/restore', async () => { const n = db.prepare('DELETE FROM removed').run().changes; return { cleared: n }; });
 
+  // Turn a photograph that came in the wrong way round. Only its previews are made again, turned; the original file is never changed.
+  app.post('/api/photos/:id/rotate', async (req, rep) => {
+    const id = num((req.params as Row).id);
+    const by = ((req.body ?? {}) as Row).by;
+    if (by !== 90 && by !== -90 && by !== 180) return rep.code(400).send({ error: 'by must be 90, -90 or 180' });
+    const p = one('SELECT path, rotation, missing FROM photos WHERE id = ?', id);
+    if (!p) return notFound(rep);
+    if (p.missing) return rep.code(409).send({ error: 'The original file is missing, so it cannot be turned.' });
+    const rotation = (((p.rotation as number) + by) % 360 + 360) % 360;
+    db.prepare(`UPDATE photos SET rotation = ?${by === 180 ? '' : ', w = h, h = w'} WHERE id = ?`).run(rotation, id);
+    const ok = await processPhoto(db, x.cfg, id, String(p.path)).catch(() => false);
+    return ok ? { id, rotation } : rep.code(500).send({ error: 'The previews could not be made again.' });
+  });
   app.patch('/api/photos/:id', async (req, rep) => {
     const id = num((req.params as Row).id);
     const p = one('SELECT * FROM photos WHERE id = ?', id);

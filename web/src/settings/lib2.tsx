@@ -19,7 +19,7 @@ const act = async (ctx: Ctx, fn: () => Promise<unknown>, ok = 'Saved') => { try 
 type Src = { id: string; type: string; name: string; model: string; color?: string; shared?: boolean; ready: boolean; why: string; endpoint?: string; embedModel?: string; ack?: boolean; hasKey?: boolean };
 type Type = { id: string; label: string; local: boolean; needsKey: boolean; endpoint: string; model: string };
 type JobCfg = { on: boolean; order: string[]; skip: string[] };
-const JOBS: [string, string, string][] = [['search', 'Search by description', 'Runs often, so a local model first keeps costs down.'], ['describe', 'Describe and tag photos', 'Titles, captions, alt text and tags for Analyze with AI.'], ['sensitive', 'Flag sensitive photos', 'Suggests nudity, violence or adult tags for you to confirm.'], ['ideas', 'Composition ideas on Home', 'Groups photos by tags and colour.']];
+const JOBS: [string, string, string][] = [['search', 'Search by description', 'Runs often, so a local model first keeps costs down.'], ['describe', 'Describe and tag photos', 'Titles, captions, alt text and tags for Analyze with AI.'], ['ideas', 'Composition ideas on Home', 'Groups photos by tags and colour.']];
 const BRANDS: [string, string, string, string, string, string][] = [['anthropic', 'CL', 'Claude', 'Anthropic · best at descriptions', 'key', 'claude-sonnet'], ['openai', 'OA', 'OpenAI', 'GPT models with vision', 'key', 'gpt-4.1-mini'], ['gemini', 'GE', 'Google Gemini', 'Cheap, fast, good at tags', 'key', 'gemini-2.5-flash'], ['ollama', 'OL', 'Local (Ollama)', 'Runs on your hardware · free', 'addr', 'llava'], ['openrouter', 'OR', 'OpenRouter', 'Many models, one key', 'key', 'openai/gpt-4o-mini'], ['custom', '+', 'Other', 'Any OpenAI-compatible address: LM Studio, OpenRouter…', 'both', '']];
 const initials = (s: string) => s.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'AI';
 
@@ -168,13 +168,17 @@ export function useAi(ctx: Ctx): Section {
         id: `ai-${s.id}`, t: 'link' as const, icon: initials(s.name || s.type), label: s.name || s.type,
         hint: s.shared ? `Shared by this server · ${s.model || 'no model yet'}` : `${s.ready ? 'Connected' : s.why || 'Not ready'} · ${s.model || 'no model yet'}`,
         meta: s.shared ? 'Shared' : 'Manage', act: s.shared ? () => ctx.toast('Shared AI is managed by an admin in Server → AI') : () => manage(s),
-        aiColour: { value: s.color ?? '', readonly: !!s.shared, set: (color: string) => {
+        aiColour: { value: s.color ?? '', set: (color: string) => {
           void api(`/ai/sources/${s.id}`, { method: 'PUT', body: { color } })
             .then(() => { d.reload(); ctx.toast('Provider colour saved'); })
             .catch((error) => ctx.toast(msg(error)));
         } },
       })) },
       { title: 'Automatic analysis', rows: [
+        { id: 'aiRedoAll', t: 'button', label: 'Re-analyse the whole library', hint: 'The AI looks at every photograph again, for example after switching AI. Accepted and rejected tags are kept.', meta: 'Re-analyse', act: async () => {
+          if (!(await confirmAction('Analyse every photograph again?\n\nThis takes a while and, on a paid service, costs one request per photograph. Descriptions and suggestions are replaced as each is redone. Tags you have accepted or rejected are kept.'))) return;
+          try { await api('/ai/run?all=1', { method: 'POST', body: {} }); ctx.toast('Re-analysing the whole library'); } catch (error) { ctx.toast(msg(error)); }
+        } },
         { id: 'aiAutoAnalyse', t: 'toggle', label: 'Automatically analyse new photos', hint: 'Analyse new and waiting photos after imports and startup. Turn off to use Analyze with AI manually. An in-flight photo finishes before automatic analysis stops.', value: settings?.aiAutoAnalyse ?? true, set: async (value: boolean) => { try { await setSettings({ aiAutoAnalyse: value }); ctx.toast('Saved'); } catch (error) { ctx.toast(msg(error)); } } },
       ] },
       { title: 'Which AI does what · tried in order', rows: JOBS.flatMap(([k, label, hint]) => {
@@ -184,9 +188,8 @@ export function useAi(ctx: Ctx): Section {
         return [{ id: `ord-${k}`, t: 'order' as const, label, hint, tog: c.on, togSet: (v: boolean) => put(k, { on: v }), order: { first: act[0] ? nameOf(act[0]) : '—', more: Math.max(0, act.length - 1), open: () => openOrder(k, label) } }];
       }) },
       { title: 'Limits & privacy', rows: [
-        { id: 'aiLimit', t: 'select', label: 'Monthly limit across paid providers', hint: 'When it’s reached, jobs move to a free provider or wait.', opts: ['$5', '$10', '$25', 'No limit'], value: prefs.get('aiLimit', '$10'), set: (v) => { prefs.set('aiLimit', v); ctx.toast('Saved'); } },
         { id: 'aiPrivate', t: 'toggle', label: 'Skip photos with hidden tags', hint: 'They’re never sent to any provider.', value: prefs.get('aiPrivate', true), set: (v) => { prefs.set('aiPrivate', v); ctx.toast('Saved'); } },
-        { id: 'aiLocalOnly', t: 'toggle', label: 'Keep private shoots on local AI only', hint: 'Shoots marked private never leave this server.', value: prefs.get('aiLocalOnly', true), set: (v) => { prefs.set('aiLocalOnly', v); ctx.toast('Saved'); } },
+        { id: 'aiLocalOnly', t: 'toggle', label: 'Keep private shoots on local AI only', hint: 'A shoot made private (in its ⋯ menu) only goes to an AI on your own network.', value: prefs.get('aiLocalOnly', true), set: (v) => { prefs.set('aiLocalOnly', v); ctx.toast('Saved'); } },
       ] },
     ],
   };
@@ -215,9 +218,7 @@ export function useCloud(ctx: Ctx): Section {
       { title: 'Connected', rows: rows.length ? rows : [{ id: 'none', t: 'link', label: 'Nothing connected', hint: 'An administrator sets up the services under Server → Storage.', meta: '' }] },
       { title: 'Importing', rows: [
         { id: 'syncEvery', t: 'select', label: 'Check for new photos', opts: EVERY.map((e) => e[0]), value: every, set: async (v: string) => { const n = EVERY.find((e) => e[0] === v)![1]; await act(ctx, () => Promise.all(conns.map((c) => api(`/cloud/${c.id}`, { method: 'PUT', body: { intervalMin: n } })))); d.reload(); } },
-        { id: 'grouping', t: 'select', label: 'File new photos as', opts: ['One shoot per day', 'One shoot per folder', 'Ask each time'], value: prefs.get('grouping', 'One shoot per day'), set: (v) => { prefs.set('grouping', v); ctx.toast('Saved'); } },
         { id: 'cloudFullRes', t: 'toggle', label: 'Save original resolution', hint: 'Full-size files, as uploaded. Off: a 4096 px copy, about a tenth of the space.', note: res.data?.lockedByAdmin ? 'Turned off by an admin for everyone on this server. Cloud photos are saved as 4096 px copies.' : undefined, value: !!res.data?.saveOriginal && !res.data?.lockedByAdmin, togDisabled: res.data?.lockedByAdmin ? 'Turned off by an admin' : undefined, set: async (v: boolean) => { await act(ctx, () => api('/cloud/resolution', { method: 'PUT', body: { saveOriginal: v } })); res.reload(); } },
-        { id: 'skipDupes', t: 'toggle', label: 'Skip duplicates', hint: 'Matched by content, not filename.', value: prefs.get('skipDupes', true), set: (v) => { prefs.set('skipDupes', v); ctx.toast('Saved'); } },
         { id: 'cloudRO', t: 'link', label: 'Read-only', hint: 'Frames only copies from cloud folders. It never deletes, moves or changes files there.', meta: '' },
       ] },
     ],
@@ -264,7 +265,6 @@ export function usePortfolio(ctx: Ctx): Section {
         { id: 'pfButtons', t: 'links', label: 'Menu links', hint: 'Shown after Index, Favourites and Gear, in this order. Each needs a full name, a short name (up to 4 characters or an emoji) and a link.', value: c?.buttons ?? [], max: 8, set: (v: { short: string; name: string; url: string }[]) => void save({ buttons: v }) },
         { id: 'pfGear', t: 'button', label: 'Gear page', hint: 'Synced from your gear list. The want-to-buy list is optional.', meta: 'Open gear →', act: () => window.location.assign('/gear') },
         { id: 'pfFull', t: 'seg', label: 'Opening a photo shows', hint: 'Camera data is removed from resized copies.', opts: FULL.map((x) => x[0]), value: FULL.find((x) => x[1] === c?.fullSize)?.[0] ?? 'Resized', set: (v) => void save({ fullSize: FULL.find((x) => x[0] === v)![1] }) },
-        { id: 'pfFilters', t: 'toggle', label: 'Subject filters', hint: 'Buttons above “All work”.', value: prefs.get('pfFilters', true), set: (v) => { prefs.set('pfFilters', v); ctx.toast('Saved'); } },
       ] },
     ],
   };

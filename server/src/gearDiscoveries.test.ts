@@ -17,6 +17,20 @@ beforeEach(async () => {
 });
 afterEach(async () => { await env.app.close(); cleanup(env); });
 
+describe('gear blacklisted and then added as owned', () => {
+  it('lifts the blacklist and gives photographs their camera back, and a later blacklist still wins', async () => {
+    metadata();
+    const camera = (await found()).find((n: any) => n.gear.type === 'camera');
+    await a.post(`/api/notifications/${camera.id}/gear`, { action: 'blacklist' });
+    expect((await a.get(`/api/photos/${photo}`)).body.camera).toBe('');
+    await a.post('/api/gear/items', { kind: 'own', name: 'Atlas Body 1', type: 'camera' });
+    expect((await a.get('/api/gear/items')).body.blacklisted).toEqual([]);
+    expect((await a.get(`/api/photos/${photo}`)).body.camera).toBe('Atlas Body 1');
+    await a.post('/api/gear/blacklist', { name: 'Atlas Body 1' });
+    expect((await a.get(`/api/photos/${photo}`)).body.camera).toBe('');
+  });
+});
+
 describe('gear discovery notifications', () => {
   it('emits one camera and one lens alert on metadata import, without adding either to owned gear', async () => {
     metadata(); const first = await found();

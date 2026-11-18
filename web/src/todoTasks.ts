@@ -50,3 +50,6 @@ export function buildTasks(items: TodoNavItem[]): Tasks {
   const rows = TASKS.map((t) => ({ key: t.key, row: t.row, n: t.key === 'orphaned' ? orphans : queue(t.key).length })).filter((r) => r.n > 0);
   return { byPhoto: sorted, queue, rows };
 }
+
+/** AI suggestions still waiting on a decision: saving a photograph without accepting them counts as rejecting them. */
+export const unacceptedAiTags = <T extends { source: string; accepted: boolean }>(tags: T[]) => tags.filter((t) => t.source === 'ai' && !t.accepted);

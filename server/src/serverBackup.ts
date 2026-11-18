@@ -69,35 +69,39 @@ export const archivesIn = (dir: string): { name: string; bytes: number; at: stri
   return fs.readdirSync(dir).filter((n) => /^frames-server-backup-[\w.-]{1,40}\.tar$/.test(n)).map((n) => { const s = fs.statSync(path.join(dir, n)); return { name: n, bytes: s.size, at: s.mtime.toISOString() }; }).sort((a, b) => b.name.localeCompare(a.name));
 };
 
-/** Reads the files out of a ustar archive. Only plain files with the names a backup uses are accepted; anything else is an error. */
-export function readTar(file: string): { name: string; data: Buffer }[] {
-  const buf = fs.readFileSync(file);
-  const out: { name: string; data: Buffer }[] = [];
-  for (let at = 0; at + 512 <= buf.length;) {
-    const h = buf.subarray(at, at + 512);
-    if (h.every((b) => b === 0)) break;
-    const name = h.toString('utf8', 0, 100).replace(/\0.*$/, '');
-    const size = parseInt(h.toString('ascii', 124, 135).trim() || '0', 8);
-    const type = String.fromCharCode(h[156] || 48);
-    if (!Number.isFinite(size) || size < 0 || at + 512 + size > buf.length) throw new Error('That file is not a Frames backup (it is cut short).');
-    if (type !== '0') throw new Error('That file is not a Frames backup (it holds something other than databases).');
-    if (!PART.test(name)) throw new Error(`That file is not a Frames backup (unexpected file “${name.slice(0, 40)}”).`);
-    out.push({ name, data: buf.subarray(at + 512, at + 512 + size) });
-    at += 512 + Math.ceil(size / 512) * 512;
-  }
-  return out;
+/** Walks the files of a ustar archive one at a time, so only one database is in memory at once. Only plain files with the names a backup uses are accepted; anything else is an error. */
+function* tarEntries(file: string, withData = true): Generator<{ name: string; data: Buffer }> {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const total = fs.fstatSync(fd).size, h = Buffer.alloc(512);
+    for (let at = 0; at + 512 <= total;) {
+      fs.readSync(fd, h, 0, 512, at);
+      if (h.every((b) => b === 0)) break;
+      const name = h.toString('utf8', 0, 100).replace(/\0.*$/, '');
+      const size = parseInt(h.toString('ascii', 124, 135).trim() || '0', 8);
+      const type = String.fromCharCode(h[156] || 48);
+      if (!Number.isFinite(size) || size < 0 || at + 512 + size > total) throw new Error('That file is not a Frames backup (it is cut short).');
+      if (type !== '0') throw new Error('That file is not a Frames backup (it holds something other than databases).');
+      if (!PART.test(name)) throw new Error(`That file is not a Frames backup (unexpected file “${name.slice(0, 40)}”).`);
+      let data = Buffer.alloc(0);
+      if (withData) { data = Buffer.alloc(size); for (let got = 0; got < size;) { const n = fs.readSync(fd, data, got, size - got, at + 512 + got); if (!n) break; got += n; } }
+      yield { name, data };
+      at += 512 + Math.ceil(size / 512) * 512;
+    }
+  } finally { fs.closeSync(fd); }
 }
+export const readTar = (file: string): { name: string; data: Buffer }[] => [...tarEntries(file)];
 
 /** Checks an archive and puts it aside for the next start. Throws a plain message if it cannot be used. */
 export function stageRestore(archive: string, dataDir: string): { parts: string[]; people: number } {
-  const files = readTar(archive);
-  if (!files.some((f) => f.name === 'system.db')) throw new Error('That backup has no people in it (no system.db), so it is not a whole-server backup.');
+  const names = [...tarEntries(archive, false)].map((f) => f.name);
+  if (!names.includes('system.db')) throw new Error('That backup has no people in it (no system.db), so it is not a whole-server backup.');
   const dir = path.join(dataDir, PENDING);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   let people = 0;
   try {
-    for (const f of files) {
+    for (const f of tarEntries(archive)) {
       const p = path.join(dir, f.name);
       fs.writeFileSync(p, f.data);
       const c = new Database(p, { readonly: true });
@@ -109,8 +113,8 @@ export function stageRestore(archive: string, dataDir: string): { parts: string[
       } finally { c.close(); }
     }
   } catch (e) { fs.rmSync(dir, { recursive: true, force: true }); throw e instanceof Error && !/SQLITE|file is not a database/i.test(e.message) ? e : new Error('That file is not a Frames backup (a database in it cannot be read).'); }
-  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ at: new Date().toISOString(), parts: files.map((f) => f.name) }));
-  return { parts: files.map((f) => f.name), people };
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ at: new Date().toISOString(), parts: names }));
+  return { parts: names, people };
 }
 
 export const pendingRestore = (dataDir: string): { at: string; parts: string[] } | null => {

@@ -1,4 +1,6 @@
 import { AiIndicator } from './AiIndicator';
+import { ApplyStatus } from './ApplyStatus';
+import { SegSlider } from './SegSlider';
 import { TodoNav } from './TodoNav';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -90,7 +92,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
     catch (e) { setClearError((e as Error).message); load(); }
     finally { setClearing(false); }
   };
-  const notificationAction = async (notification: Notif, action: 'dismiss' | 'add' | 'blacklist') => {
+  const notificationAction = async (notification: Notif, action: 'dismiss' | 'add') => {
     if (acting !== null || clearing) return;
     ++loadVersion.current; setActing(notification.id); setClearError('');
     try {
@@ -133,7 +135,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
                   <button type="button" className="notification-dismiss" aria-label={`Dismiss ${n.text}`} title="Dismiss notification" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>×</button>
                   {n.gear?.state === 'new' && <div style={{ display: 'flex', gap: 8, padding: '0 34px 12px 46px', flexWrap: 'wrap' }}>
                     <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
-                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'blacklist')}>Block</button>
+                    <button type="button" className="btn outline" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>Dismiss</button>
                   </div>}
                 </div>
               ))}
@@ -204,6 +206,7 @@ export function Header({ right }: { right?: ReactNode }) {
       <span />
       <div className="head-right">
         {right}
+        <ApplyStatus />
         <AiIndicator />
         <button type="button" className="iconbtn phone-only" aria-label="Search" onClick={ui.openSearch}><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg></button>
         <ThemeToggle />
@@ -231,6 +234,7 @@ export function BottomNav() {
   const item = (to: string, label: string) => <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'on' : '')}>{label}</NavLink>;
   return (
     <nav className="bnav" aria-label="Primary">
+      <SegSlider />
       {item('/', 'Home')}
       {/* One Library item: its Shoots and Photos views, a shoot and a photograph all belong to it. */}
       <NavLink to="/library" className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>
@@ -276,7 +280,7 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn outline" onClick={() => setReset(true)}>Clear site data…</button>
       </div>
       {reset && <ClearSiteDataModal onClose={() => setReset(false)} />}
-      <div className="seg" role="tablist">{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+      <div className="seg" role="tablist"><SegSlider />{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
       <input className="field-in" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={KINDS.find((k) => k[0] === kind)![2]} aria-label="Title" />
       <textarea className="field-in" value={body} onChange={(e) => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" aria-label="Details" />
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--text2)', cursor: 'pointer' }}>

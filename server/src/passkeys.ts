@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
-import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, RegistrationResponseJSON } from '@simplewebauthn/server';
+import type { AuthenticationResponseJSON, AuthenticatorTransport, RegistrationResponseJSON } from '@simplewebauthn/server';
 import type { DB } from './db.js';
 
 /**
@@ -35,7 +35,7 @@ export const removePasskey = (sys: DB, userId: number, id: string) => sys.prepar
 export const hasPasskeys = (sys: DB) => (sys.prepare('SELECT COUNT(*) n FROM passkeys').get() as { n: number }).n > 0;
 
 type Where = { rpID: string; origin: string };
-const trans = (s: string) => (s ? (s.split(',') as AuthenticatorTransportFuture[]) : undefined);
+const trans = (s: string) => (s ? (s.split(',') as AuthenticatorTransport[]) : undefined);
 
 export async function registrationOptions(sys: DB, w: Where, user: { id: number; email: string; name: string }) {
   const existing = sys.prepare('SELECT id, transports FROM passkeys WHERE user_id = ?').all(user.id) as { id: string; transports: string }[];

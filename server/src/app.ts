@@ -72,10 +72,10 @@ const GUEST_OK = /^\/api\/(me|guest\/links)$/;
 const SHARE_URL = /^\/(?:api\/)?s\/([A-Za-z0-9_-]{16,64})(?:[/?]|$)/;
 
 export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
-  // trustProxy: behind a reverse proxy, take the visitor's address from X-Forwarded-For (needed for per-visitor rate limits).
+  // trustProxy: behind one reverse proxy or tunnel, take the visitor's address from the one X-Forwarded-For entry it added (needed for per-visitor rate limits). Entries the visitor sent themselves are ignored.
   // A person's portfolio can live at /handle/ (answered as /portfolio/ for them). The system database is opened below, so the rewrite looks it up when called.
   let handleRewrite: (raw: { url?: string }) => string = (raw) => raw.url ?? '';
-  const app = Fastify({ logger: false, trustProxy: !!baseCfg.trustProxy, rewriteUrl: (raw) => handleRewrite(raw) });
+  const app = Fastify({ logger: false, trustProxy: baseCfg.trustProxy ? (_addr: string, hop: number) => hop < 1 : false, rewriteUrl: (raw) => handleRewrite(raw) });
   // A ceiling per visitor on everything, high enough that a grid of thousands of thumbnails never meets it, low enough to stop a flood.
   // (The sign-in, password and share-link routes have their own, much stricter limits.)
   void app.register(rateLimit, { global: false, max: 6000, timeWindow: '1 minute', allowList: (req) => req.url === '/api/health' });
@@ -126,7 +126,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     if (pg.mode === 'allow') r.tenant = pg.tenant;
     else if (req.url !== '/api/health' && !isPublicPath(req.url) && !isAuthPath(req.url) && !isPortfolioPath(req.url)) {
       // Optional sign-in: OAuth providers (Settings, Sign-in & access) and/or a shared password (AUTH_PASSWORD). Neither set = open (the owner).
-      const v = auth.verify(req);
+      const v = await auth.verify(req);
       if (!v.ok) return auth.deny(req, rep, v.limited);
       r.authUser = v.user;
       r.authVia = v.via;
@@ -246,7 +246,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     // Dates the user typed win; otherwise they come from the photographs' capture times, then the import date.
     const from = s.date_from ?? st.a, to = s.date_to ?? st.b;
     const dates = from ? (!to || from.slice(0, 10) === to.slice(0, 10) ? fmt(from) : `${fmt(from)} – ${fmt(to)}`) : fmt(s.imported_at);
-    return { id: s.id, name: s.name, protected: !!s.protected, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: shootCoverId(db, s.id), dueCount: duePhotoIds.length, waitingCount, duePhotoIds: duePhotoIds.slice(0, 500), reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
+    return { id: s.id, name: s.name, protected: !!s.protected, private: !!s.private, source: s.source, place: s.place, gear: parseGear(s.gear), ...sharedOf(s), description: s.description, dateFrom: s.date_from, dateTo: s.date_to, dates, importedAt: s.imported_at, count: st.n, coverId: shootCoverId(db, s.id), dueCount: duePhotoIds.length, waitingCount, duePhotoIds: duePhotoIds.slice(0, 500), reviewPct: st.n ? Math.round((done / st.n) * 100) : 0, sessions };
   };
   /** The layout stored for a composition, or null (older compositions have none until they are edited). */
   const storedLayout = (c: Row, members: Set<number>): Layout | null => { if (!c.layout) return null; try { return parseLayout(JSON.parse(c.layout), members); } catch { return null; } };
@@ -376,11 +376,11 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
 
   app.get('/api/review/summary', async () => {
     const s = getSession();
-    const due = dueIds().length;
+    const ids = dueIds();
+    const due = ids.length;
     const resumable = !!s && s.index > 0 && s.index < s.queue.length;
     const left = s ? Math.max(0, s.queue.length - s.index) : 0;
     const count = resumable ? left : due;
-    const ids = dueIds();
     const nextId = resumable && s ? s.queue[s.index].id : ids[0] ?? null;
     const shootNames = ids.length
       ? (db.prepare(`SELECT DISTINCT sh.name FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id IN (${ids.slice(0, 500).join(',')}) LIMIT 2`).all() as Row[]).map((r) => r.name as string)
@@ -627,7 +627,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerBackground(app, ctx);
   registerMap(app, ctx);
   registerShare(app, ctx);
-  registerPortfolio(app, ctx, (req) => { const v = auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
+  registerPortfolio(app, ctx, async (req) => { const v = await auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
   registerAuth(app, ctx, auth);
   registerMfa(app, ctx, auth);
   registerProfile(app, ctx);

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SegSlider } from './SegSlider';
 import { imgUrl } from '../api';
 import {
   arrange, area, cap, cellOf, dims, FRAMES, fits, frameOf, GROUPS, MATS, mouldOf, nextUp, or, PAD, PAPER, pxOf, rectsIn, shoppingList, sizeName,
@@ -138,7 +139,7 @@ export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange,
           </select>
         ), true)}
         {row('Orientation', (
-          <div className="seg" role="group" aria-label="Orientation" style={{ alignSelf: 'auto' }}>
+          <div className="seg" role="group" aria-label="Orientation" style={{ alignSelf: 'auto' }}><SegSlider />
             {(['portrait', 'landscape'] as const).map((o) => <button key={o} aria-pressed={sp.orientation === o} className={sp.orientation === o ? 'on' : ''} onClick={() => onChange((q) => { q.orientation = o; })}>{o === 'portrait' ? '▯ Portrait' : '▭ Landscape'}</button>)}
           </div>
         ), true)}
@@ -153,13 +154,13 @@ export function PrintModal({ prints, index, count, ppi = 300, photoId, onChange,
                 {Object.keys(PAPER).filter((k) => fits(k, sp.size)).sort((x, y) => area(x) - area(y)).map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             ))}
-            {row('Mat', <div className="seg" role="group" aria-label="Mat" style={{ alignSelf: 'auto' }}>{mats.map(([k, l]) => <button key={k} aria-pressed={matNow === k} className={matNow === k ? 'on' : ''} onClick={() => setMat(k)}>{l}</button>)}</div>)}
+            {row('Mat', <div className="seg" role="group" aria-label="Mat" style={{ alignSelf: 'auto' }}><SegSlider />{mats.map(([k, l]) => <button key={k} aria-pressed={matNow === k} className={matNow === k ? 'on' : ''} onClick={() => setMat(k)}>{l}</button>)}</div>)}
             <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.45 }}>{cap(fr.color)} {fr.size} frame{matNow !== 'none' ? `, ${matNow} mat around the ${sp.size} print` : `, no mat`} · outside {Math.round(ow / 10)} × {Math.round(oh / 10)} cm <button onClick={onApplyAll} style={{ color: 'var(--muted)', textDecoration: 'underline', textUnderlineOffset: 3, marginLeft: 6, fontSize: 12 }}>Use on every print</button></div>
           </>
         )}
         <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
           <span style={eyebrow}>Photographs</span>
-          <div className="seg" role="group" aria-label="Photographs" style={{ alignSelf: 'auto' }}>{[false, true].map((st) => <button key={String(st)} aria-pressed={sp.stack === st} className={sp.stack === st ? 'on' : ''} onClick={() => onChange((q) => { q.stack = st; if (!st) q.photoId2 = null; })}>{st ? 'Two stacked' : 'One'}</button>)}</div>
+          <div className="seg" role="group" aria-label="Photographs" style={{ alignSelf: 'auto' }}><SegSlider />{[false, true].map((st) => <button key={String(st)} aria-pressed={sp.stack === st} className={sp.stack === st ? 'on' : ''} onClick={() => onChange((q) => { q.stack = st; if (!st) q.photoId2 = null; })}>{st ? 'Two stacked' : 'One'}</button>)}</div>
         </div>
         {sp.stack && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -6 }}>{sp.orientation === 'portrait' ? 'Two landscape photographs, one above the other.' : 'Two portrait photographs, side by side.'} Each fills {Math.round(cw)} × {Math.round(ch)} mm. The originals are exported as they are, never joined.</div>}
         <div style={{ borderTop: '1px solid var(--hair)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: 'var(--muted)' }}>

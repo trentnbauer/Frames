@@ -87,9 +87,6 @@ export function useAppSettings(ctx: Ctx): Section {
       { title: 'Display', rows: [
         { id: 'fullWidth', t: 'toggle', label: 'Full width', hint: 'Use the available width across the app.', value: fullWidth, set: (v) => { setFullWidth(v); ctx.toast('Saved'); } },
         { id: 'theme', t: 'seg', label: 'Theme', hint: 'Dark unless you change it.', opts: ['Dark', 'Light'], value: theme === 'light' ? 'Light' : 'Dark', set: (v) => { setTheme(v === 'Light' ? 'light' : 'dark'); ctx.toast('Saved'); } },
-        { id: 'start', hint: 'Saved preference; not applied throughout the app yet.', t: 'select', label: 'Open Frames on', opts: ['Home', 'Library', 'Shoots', 'Compositions'], value: prefs.get('start', 'Home'), set: (v) => { prefs.set('start', v); ctx.toast('Saved'); } },
-        { id: 'units', hint: 'Saved preference; not applied throughout the app yet.', t: 'seg', label: 'Print sizes in', opts: ['cm', 'inches'], value: prefs.get('units', 'cm'), set: (v) => { prefs.set('units', v); ctx.toast('Saved'); } },
-        { id: 'dateFmt', hint: 'Saved preference; not applied throughout the app yet.', t: 'select', label: 'Dates', opts: ['9 Nov 2026', '09/11/2026', '2026-11-09', 'Nov 9, 2026'], value: prefs.get('dateFmt', '9 Nov 2026'), set: (v) => { prefs.set('dateFmt', v); ctx.toast('Saved'); } },
       ] },
     { title: 'Help', rows: [{ id: 'welcomeTour', t: 'link', label: 'Welcome tour', hint: 'Take another look around Frames.', meta: 'Open', act: () => navigate('/welcome') }] },
     { title: 'Troubleshooting', rows: [{ id: 'clearSiteData', t: 'link', label: 'Clear site data', hint: 'Clear cached files and browser preferences, then reload.', meta: 'Clear…', act: clear }] },
@@ -133,7 +130,7 @@ export function useNotifications(ctx: Ctx): Section {
 
 /* ------------------------------------------------------------------ Reviews */
 const SPACING = ['Instant', '1 day', '3 days', '1 week', '2 weeks', '1 month', '3 months', '6 months', '1 year'];
-const TODO: [string, string][] = [['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
+const TODO: [string, string][] = [['Shoot', 'shoot'], ['Camera', 'camera'], ['Lens', 'lens'], ['Location', 'location'], ['Time', 'time'], ['Subjects', 'subjects'], ['Tags', 'tags'], ['Description', 'description'], ['Composition', 'composition'], ['Light', 'light'], ['Mood', 'mood']];
 const SHARE: [string, string][] = [['Portfolio photos only', 'portfolio'], ['Photos rated 4 or more', 'rated4'], ['Any photo', 'any']];
 export function useReviews(ctx: Ctx): Section {
   const nav = useNavigate();
@@ -158,7 +155,6 @@ export function useReviews(ctx: Ctx): Section {
         { id: 'adapt', t: 'toggle', label: 'Adapt to consistency', hint: 'Steady ratings come back less often.', value: !!s?.adaptive, set: (v) => void save({ adaptive: v }) },
         { id: 'daily', t: 'stepper', label: 'Photos per review', hint: 'How many are offered at once.', value: s?.reviewSize ?? 12, min: 4, max: 60, step: 4, set: (v) => void save({ reviewSize: v }) },
         { id: 'scale', t: 'seg', label: 'Rating scale', opts: ['😐 → 😍', '★ 1–5'], value: s?.ratingStyle === 'stars' ? '★ 1–5' : '😐 → 😍', set: (v) => void save({ ratingStyle: v.startsWith('★') ? 'stars' : 'emoji' }) },
-        { id: 'blind', t: 'toggle', label: 'Hide scores while rating', hint: 'Keeps each rating independent.', value: prefs.get('blind', true), set: (v) => { prefs.set('blind', v); ctx.toast('Saved'); } },
       ] },
       { title: 'Ranking', rows: [
         { id: 'weight', t: 'seg', label: 'Guest ratings count for', hint: 'In composition rankings.', opts: ['0%', '20%', '35%', '50%'], value: pct, set: async (v: string) => { try { await api('/collections/guest-weight', { method: 'PUT', body: { weight: parseInt(v, 10) } }); ctx.toast('Saved'); } catch (e) { ctx.toast(msg(e)); } w.reload(); } },
@@ -197,20 +193,15 @@ export function useTags(ctx: Ctx): Section {
     key: 'tags', name: 'Tags & subjects', hint: 'How photos get described and found.',
     groups: [
       { title: 'Subjects', rows: [
-        { id: 'aiSubjects', t: 'toggle', label: 'Suggest subjects with AI', hint: 'Suggestions wait for you to accept.', value: prefs.get('aiSubjects', true), set: (v) => { prefs.set('aiSubjects', v); ctx.toast('Saved'); } },
-        { id: 'autoAccept', t: 'select', label: 'Accept automatically above', dep: 'aiSubjects', opts: ['Never', '80% sure', '90% sure', '95% sure'], value: prefs.get('autoAccept', '95% sure'), set: (v) => { prefs.set('autoAccept', v); ctx.toast('Saved'); } },
         { id: 'subjects', t: 'button', label: 'Tags & subjects', hint: 'Create, search, rename, merge or delete in one list.', meta: 'Manage tags', act: manage },
       ] },
       { title: 'Sensitive content', rows: [
-        { id: 'sensAiLink', t: 'link', label: 'Flag sensitive photos with AI', hint: 'Set which AI does this in AI → Which AI does what.', meta: 'AI settings', act: () => ctx.goto('lib', 'ai') },
-        { id: 'sensBlur', t: 'toggle', label: 'Blur flagged photos for guests', hint: 'They click to reveal.', value: prefs.get('sensBlur', true), set: (v) => { prefs.set('sensBlur', v); ctx.toast('Saved'); } },
         { id: 'sensPf', t: 'toggle', label: 'Keep flagged photos off my portfolio', value: prefs.get('sensPf', false), set: (v) => { prefs.set('sensPf', v); ctx.toast('Saved'); } },
         { id: 'sensList', t: 'link', label: 'Flagged photos', hint: 'Never shown in community review.', meta: 'See them', act: () => { window.location.assign('/library?tag=adult'); } },
       ] },
       { title: 'Tags', rows: [
-        { id: 'autoTags', t: 'chips', label: 'Tag automatically from', opts: ['Camera', 'Lens', 'Film', 'Place', 'Season'], value: prefs.get<string[]>('autoTags', ['Camera', 'Film', 'Place']), set: (v: string[]) => { prefs.set('autoTags', v); ctx.toast('Saved'); } },
 
-        { id: 'hidden', t: 'pills', label: 'Hidden tags', hint: 'Never shown to guests or on the portfolio.', value: hidden, addAs: 'private', set: (v: string[]) => { prefs.set('hidden', v); ctx.toast('Saved'); } },
+        { id: 'hidden', t: 'pills', label: 'Hidden tags', hint: 'Photos with these tags are never sent to an AI (see AI, Limits & privacy). Guests and the portfolio never see tags.', value: hidden, addAs: 'private', set: (v: string[]) => { prefs.set('hidden', v); ctx.toast('Saved'); } },
 
       ] },
     ],
@@ -228,9 +219,6 @@ export function useXmp(ctx: Ctx): Section {
     groups: [
       { title: 'XMP sidecars', rows: [
         { id: 'xmpRatings', t: 'toggle', label: 'Write ratings', hint: 'Lightroom and Capture One will see them.', value: !!s?.xmpWriteBack, set: (v) => void save({ xmpWriteBack: v }) },
-        { id: 'xmpMap', t: 'select', label: 'Map scores to', dep: 'xmpRatings', opts: ['Stars (1–5)', 'Colour labels', 'Both'], value: prefs.get('xmpMap', 'Stars (1–5)'), set: (v) => { prefs.set('xmpMap', v); ctx.toast('Saved'); } },
-        { id: 'xmpTags', t: 'toggle', label: 'Write tags and subjects', value: prefs.get('xmpTags', true), set: (v) => { prefs.set('xmpTags', v); ctx.toast('Saved'); } },
-        { id: 'xmpRead', t: 'toggle', label: 'Read edits from other apps', hint: 'Keeps keywords in sync both ways.', value: prefs.get('xmpRead', false), set: (v) => { prefs.set('xmpRead', v); ctx.toast('Saved'); } },
       ] },
       { title: 'Cameras', rows: [
         { id: 'camGear', t: 'button', label: 'Your cameras and lenses', hint: 'Managed on the Gear page. Cameras found in your photos are suggested there.', meta: 'Open gear →', act: () => window.location.assign('/gear') },

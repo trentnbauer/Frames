@@ -11,6 +11,8 @@ import { hostOfUrl } from './tunnel.js';
 import { derivPath } from './ingest.js';
 import { serveDerivative } from './imageServe.js';
 import { avatarPath, displayNameOf } from './routes/profile.js';
+import { SENSITIVE } from './routes/community.js';
+import { flaggedOffPortfolio } from './privacyPrefs.js';
 
 /**
  * The public portfolio website, served by Frames from a collection you choose.
@@ -68,11 +70,11 @@ export const isPortfolioPath = (url: string): boolean => {
   return /^\/portfolio\/?$/.test(p) || /^\/portfolio\/(index\.html|config\.json|gear\.md|avatar\.jpg|css\/style\.css|js\/(app|theme)\.js|images\/manifest\.json|gear\.json|fonts\/[\w.-]{1,60}\.woff2|images\/\d{1,9}\.jpg|images\/\d{1,9}-full)$/.test(p);
 };
 
-/** "2026-Autumn-KonicaAutoS2-FujiC200-R01-0024" gives camera "Konica Auto S 2" and film "Fuji C 200". Same rule as the old build. */
-const humanise = (t: string) => t.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2').replace(/(\d)([A-Za-z])/g, '$1 $2').trim();
-export function parseFilenameMeta(file: string): { camera?: string; film?: string } {
-  const tokens = path.parse(file).name.split('-');
-  return tokens.length < 4 ? {} : { camera: humanise(tokens[2]), film: humanise(tokens[3]) };
+/** What Frames knows about how a photograph was taken, as one caption line: "1/250s · f/2.8 · 35mm · ISO 400". */
+export function exposureLine(p: Row): string {
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? +v.toFixed(1) : null);
+  const sh = String(p.shutter ?? '').trim(), f = n(p.aperture), mm = n(p.focal_mm), iso = n(p.iso);
+  return [sh && `${sh.replace(/s$/, '')}s`, f && `f/${f}`, mm && `${mm}mm`, iso && `ISO ${Math.round(iso)}`].filter(Boolean).join(' · ');
 }
 
 /** First path segments a handle may never take: the app's own pages, routes and files. */
@@ -129,7 +131,7 @@ export function createPortfolioGate(sys: DB, tenants: Tenants, webDir?: string) 
 }
 
 import { gearJson, gearMarkdown } from './routes/gearitems.js';
-export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: FastifyRequest) => number | null) {
+export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: FastifyRequest) => Promise<number | null>) {
   const { db, cfg, num, one, all, notFound } = x;
 
   /**
@@ -139,13 +141,14 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   const MEMBER = `p.has_derivs = 1 AND p.missing = 0 AND p.id NOT IN (SELECT photo_id FROM portfolio_marks WHERE out = 1) AND (
       p.id IN (SELECT photo_id FROM collection_photos WHERE collection_id = :col)
       OR p.id IN (SELECT photo_id FROM portfolio_marks WHERE favourite = 1)
-      OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))`;
+      OR (:auto = 1 AND p.id IN (SELECT photo_id FROM reviews GROUP BY photo_id HAVING AVG(rating) >= :thr)))
+    AND (:sens = 0 OR NOT EXISTS (SELECT 1 FROM tags g WHERE g.photo_id = p.id AND g.accepted != -1 AND lower(g.name) IN (${SENSITIVE.map((n) => `'${n}'`).join(',')})))`; // "Keep flagged photos off my portfolio"
   const photos = (c: PortfolioCfg): Row[] => {
     const order = c.order === 'newest' ? 'p.added_at DESC, p.id DESC' : c.order === 'oldest' ? 'p.added_at ASC, p.id ASC' : c.order === 'score' ? 'COALESCE((SELECT AVG(rating) FROM reviews r WHERE r.photo_id = p.id), 0) DESC, p.id ASC' : c.order === 'captured' ? 'COALESCE(p.captured_at, p.added_at) DESC, p.id DESC' : 'cp.pos IS NULL, cp.pos ASC, p.id ASC';
     return db.prepare(`SELECT p.* FROM photos p LEFT JOIN collection_photos cp ON cp.collection_id = :col AND cp.photo_id = p.id WHERE ${MEMBER} ORDER BY ${order}`)
-      .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold }) as Row[];
+      .all({ col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold, sens: flaggedOffPortfolio(db) ? 1 : 0 }) as Row[];
   };
-  const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold });
+  const inSet = (c: PortfolioCfg, id: number) => !!db.prepare(`SELECT 1 FROM photos p WHERE p.id = :id AND ${MEMBER}`).get({ id, col: c.collectionId ?? 0, auto: c.autoAdd ? 1 : 0, thr: c.autoThreshold, sens: flaggedOffPortfolio(db) ? 1 : 0 });
 
   /**
    * The picture the portfolio shows: at most 2400 px, no camera data. A preview that is already that small (and has none: Frames
@@ -184,7 +187,7 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   app.get('/portfolio/', async (req, rep) => pageFor(req, rep));
   app.get('/portfolio/config.json', async (req, rep) => {
     const c = live(rep); if (!c) return;
-    const own = viewerId(req) === x.tenant().user.id;
+    const own = (await viewerId(req)) === x.tenant().user.id;
     // A separate portfolio hostname cannot serve the app; use its configured public address.
     const dedicated = !!x.sys.prepare('SELECT 1 FROM portfolio_hosts WHERE host = ?').get(hostOf(req));
     const appUrl = dedicated ? loadAuth(x.sys).publicUrl.replace(/\/+$/, '') : '';
@@ -216,10 +219,12 @@ export function registerPortfolio(app: FastifyInstance, x: Ctx, viewerId: (req: 
   });
   app.get('/portfolio/images/manifest.json', async (_req, rep) => {
     const c = live(rep); if (!c) return;
-    // Only what the page needs: a title, the date, the size, and (if allowed) the camera and film. No place, notes, file path or location.
+    // Only what the page needs: a title, the date, the size, and (if captions are on) the place name and how it was taken, as recorded in Frames.
+    // Never coordinates, notes or the file path. A place set to show only its suburb or city is left out: Frames keeps no coarser name to show instead.
     return open(rep).send(photos(c).map((p) => {
       const scale = Math.min(1, MAX_DIM / Math.max(p.w || 1, p.h || 1));
-      const meta = c.captions ? { ...parseFilenameMeta(p.file), ...(parseFilenameMeta(p.file).camera ? {} : p.camera ? { camera: String(p.camera) } : {}) } : {};
+      const text = (v: unknown) => String(v ?? '').trim() || undefined;
+      const meta = c.captions ? { place: (p.place_precision ?? 'exact') === 'exact' ? text(p.place) : undefined, camera: text(p.camera), lens: text(p.lens), film: text(p.film), exposure: exposureLine(p) || undefined } : {};
       return {
         file: `images/${p.id}.jpg`,
         ...(c.fullSize === 'original' && originalsAllowed() ? { original: `images/${p.id}-full` } : {}),

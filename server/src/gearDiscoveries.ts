@@ -1,4 +1,4 @@
-import { purgeBlacklistedGear } from './gear.js';
+import { purgeBlacklistedGear, syncGearTags } from './gear.js';
 import { gearKey } from './gearBlacklist.js';
 export { gearKey } from './gearBlacklist.js';
 import { getSetting, type DB } from './db.js';
@@ -102,4 +102,19 @@ export function unblacklistGear(db: DB, id: number) {
   if (!row) return false;
   db.prepare("UPDATE gear_discoveries SET state = 'new' WHERE key = ? AND state = 'blacklisted'").run(row.key);
   return true;
+}
+
+/**
+ * The latest choice wins: gear added as owned after it was blacklisted is no longer blocked, and photographs that lost it to the
+ * blacklist get it back from the name the file carries.
+ */
+export function ownGear(db: DB, name: string, type: GearType) {
+  const key = gearKey(clean(name));
+  if (!key) return;
+  db.transaction(() => {
+    if (!db.prepare("UPDATE gear_discoveries SET state = 'added' WHERE type = ? AND key = ? AND state = 'blacklisted'").run(type, key).changes) return;
+    const raw = `raw_${type}`;
+    for (const r of db.prepare(`SELECT id, ${raw} name FROM photos WHERE ${type} = '' AND ${raw} != ''`).all() as { id: number; name: string }[])
+      if (gearKey(clean(r.name)) === key) syncGearTags(db, r.id);
+  })();
 }

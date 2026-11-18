@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { Link } from 'react-router-dom';
 import { api, useApi } from '../api';
 import { Eyebrow, PSwitch, SCard, SRow } from '../components/srow';
@@ -91,7 +92,7 @@ export function TunnelSettings() {
         <SRow title="App URL" hint={<>The address you open Frames at from outside. Same as the public address under <a href="/settings?section=access" style={{ textDecoration: 'underline' }}>Sign-in & access</a>.</>}><span className="mono" aria-label="App URL" style={{ fontSize: 13 }}>{t.appUrl || 'Not set yet'}</span></SRow>
         <SRow title="Portfolios" hint="Also serve each person’s portfolio through this tunnel. A portfolio address shows only that person’s public portfolio."><PSwitch on={t.config.portfolios} set={(v) => void save({ portfolios: v })} label="Portfolios" /></SRow>
         <SRow title="Who can reach the App URL" hint={t.protect ? <>Members: Cloudflare Access checks everyone against the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on your allowed list before Frames even loads.</> : 'Anyone: Cloudflare lets everyone through; Frames’ own sign-in still applies if it is on.'}>
-          <div className="seg" role="radiogroup" aria-label="Who can reach the App URL">
+          <div className="seg" role="radiogroup" aria-label="Who can reach the App URL"><SegSlider />
             {([[true, 'Invitation only', 'Members'], [false, 'Open to everyone', 'Anyone']] as const).map(([on, name, short]) => (
               <button key={name} role="radio" aria-checked={t.protect === on} aria-label={name} className={t.protect === on ? 'on' : ''} disabled={t.protectForced && !on} onClick={() => t.protect !== on && void save({ protect: on })}>{short}</button>
             ))}

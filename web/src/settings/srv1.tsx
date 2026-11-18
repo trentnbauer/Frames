@@ -1,4 +1,5 @@
 import { confirmAction } from '../components/dialogs';
+import { SegSlider } from '../components/SegSlider';
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { parseMb, parseSize, showMb, showSize } from './size';
@@ -105,7 +106,7 @@ function Invite({ ctx, reload }: { ctx: Ctx; reload: () => void }) {
     <Modal title="Invite someone" sub="They are added to the allowed list and sent an email if email is set up." width={540} onClose={close(ctx)} foot={<><span className="grow" /><button className="btn primary" disabled={!ok} onClick={() => void send()}>Send invite</button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
         <input className="field-in" autoFocus value={email} placeholder="name@example.com" aria-label="Email address" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ok) void send(); }} />
-        <div className="seg" role="group" aria-label="Role" style={{ alignSelf: 'flex-start' }}>{ROLES.map((r) => <button key={r} className={role === r ? 'on' : ''} aria-pressed={role === r} onClick={() => setRole(r)}>{r}</button>)}</div>
+        <div className="seg" role="group" aria-label="Role" style={{ alignSelf: 'flex-start' }}><SegSlider />{ROLES.map((r) => <button key={r} className={role === r ? 'on' : ''} aria-pressed={role === r} onClick={() => setRole(r)}>{r}</button>)}</div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{{ Admin: 'Everything, including these server settings.', Member: 'Their own library, shoots and compositions.', 'Guest only': 'Only sees compositions shared with them. Can rate and suggest.' }[role]}</div>
         <textarea className="field-in" rows={3} value={note} placeholder="Add a note…" aria-label="A note" onChange={(e) => setNote(e.target.value)} />
         {err && <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
@@ -203,7 +204,6 @@ export function useFolders(ctx: Ctx): Section {
         { id: 'localOn', t: 'toggle', icon: 'LS', label: 'Local storage', hint: L ? 'Upload photos to this server and read the library folder.' : 'Off: nobody can upload, and the library folder isn’t read. Photos already here stay.', value: L, set: async (v: boolean) => { if (!v && !(await confirmAction('Turn off local storage?\n\nNobody will be able to upload photos to Frames, and the library folder will not be read. Photos already in Frames stay where they are.'))) return; void put({ localOn: v }); } },
         { id: 'libPath', t: 'text', indent: true, show: L, label: 'Library folder', value: libs[0]?.path ?? '', disabled: true, env: 'LIBRARY_DIRS' },
         { id: 'disk', t: 'meter', indent: true, show: L, label: 'Disk', hint: dk?.path, pct: dk?.total ? ((dk.total - dk.free) / dk.total) * 100 : 0, text: dk?.total ? `${gb(dk.total - dk.free)} of ${gb(dk.total)}` : '' },
-        { id: 'formats', t: 'chips', indent: true, show: L, label: 'Import', opts: ['JPEG', 'HEIC', 'TIFF', 'RAW'], value: prefs.get<string[]>('formats', ['JPEG', 'HEIC', 'TIFF', 'RAW']), set: (v: string[]) => { prefs.set('formats', v); ctx.toast('Saved'); } },
         { id: 'localOrig', t: 'toggle', indent: true, show: L, label: 'Store original quality', hint: lOrig ? 'Uploads are kept exactly as they are.' : 'Uploads are kept as smaller copies, so downloading one later gives that copy, not the file that was uploaded.', value: lOrig, set: (v: boolean) => void put({ localOrig: v }) },
         { id: 'localPx', t: 'seg', indent: true, show: L && !lOrig, label: 'Resize to', hint: 'Longest side. Print sizes still use the original’s size.', opts: COPY_PX, value: copyPx('localPx', 6144), set: (v: string) => void put({ localPx: parseInt(v, 10) }) },
         { id: 'localQ', t: 'select', indent: true, show: L && !lOrig, label: 'JPEG quality', hint: 'Lower makes smaller files.', opts: QUALITY.map(String), value: String(inst.data?.localQ ?? 80), set: (v: string) => void put({ localQ: Number(v) }) },

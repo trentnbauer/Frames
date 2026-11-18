@@ -16,7 +16,7 @@ it('groups display preferences, welcome and cache troubleshooting in App setting
   function Probe() { app = useAppSettings(ctx); profile = useProfile(ctx); return null; }
   renderToStaticMarkup(<MemoryRouter><Probe /></MemoryRouter>);
   const rows = app.groups.flatMap(g => g.rows);
-  expect(rows.map(r => r.id)).toEqual(['fullWidth', 'theme', 'start', 'units', 'dateFmt', 'welcomeTour', 'clearSiteData']);
+  expect(rows.map(r => r.id)).toEqual(['fullWidth', 'theme', 'welcomeTour', 'clearSiteData']);
   expect(profile.groups.flatMap(g => g.rows).some(r => ['theme', 'start', 'units', 'dateFmt'].includes(r.id))).toBe(false);
   rows.find(r => r.id === 'fullWidth')!.set!(false); expect(mocks.setWidth).toHaveBeenCalledWith(false);
   rows.find(r => r.id === 'theme')!.set!('Light'); expect(mocks.setTheme).toHaveBeenCalledWith('light');

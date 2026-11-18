@@ -19,7 +19,7 @@ export type PhotoFull = PhotoLite & {
   variants: number[]; conflicts: { field: string; mine: string; theirs: string }[];
 };
 export type Shoot = {
-  id: number; name: string; protected: boolean; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
+  id: number; name: string; protected: boolean; private?: boolean; source: string; place: string; description: string; dateFrom: string | null; dateTo: string | null;
   dates: string; importedAt: string; count: number; coverId: number | null; reviewPct: number; dueCount: number; waitingCount: number; duePhotoIds: number[]; sessions: number;
   /** Subjects and tags the shoot gives to every photograph in it. */
   subjects: string[]; tags: string[];

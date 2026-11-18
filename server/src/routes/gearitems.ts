@@ -2,7 +2,7 @@ import { rememberWish } from '../wishHistory.js';
 import { WorkflowError } from '../workflowCore.js';
 import { gearFields, valuesOf, journal } from '../workflowCore.js';
 import { syncGearTags } from '../gear.js';
-import { blacklistGear, blacklistedGear, foundGear, syncGearDiscoveries, unblacklistGear } from '../gearDiscoveries.js';
+import { blacklistGear, blacklistedGear, foundGear, ownGear, syncGearDiscoveries, unblacklistGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
 import type { Ctx, Row } from '../ctx.js';
@@ -112,6 +112,7 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
     if (price !== null && !(price >= 0 && price < 1e8)) return rep.code(400).send({ error: 'The price must be a number.' });
     if (b.link && !/^https?:\/\//i.test(String(b.link))) return rep.code(400).send({ error: 'A link starts with https://' });
     const id = db.transaction(() => { const added = add(kind, name, type, { system: typeof b.system === 'string' && b.system.trim() ? b.system.trim().slice(0, 60) : undefined, year: Number.isInteger(b.year) ? b.year : null, why: b.why, link: b.link, price, front: b.front === true }); if (b.priority !== undefined) prioritize(added, b.priority); return added; })();
+    if (kind === 'own' && (type === 'camera' || type === 'lens')) ownGear(db, name, type);
     syncGearDiscoveries(db);
     return dto(one('SELECT * FROM gear_items WHERE id = ?', id)!);
   });

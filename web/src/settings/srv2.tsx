@@ -1,4 +1,5 @@
 import { confirmAction } from '../components/dialogs';
+import { SegSlider } from '../components/SegSlider';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api, useApi } from '../api';
@@ -35,7 +36,6 @@ export function useSrvAi(ctx: Ctx): Section {
     groups: [
       { title: 'Shared with everyone', rows: (d.data?.sources ?? []).length ? d.data!.sources.map((s): R => ({ id: `s-${s.id}`, t: 'link', icon: (s.name || s.type).replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase(), label: s.name || s.type, hint: `${s.model || 'no model yet'}${s.endpoint ? ` on ${s.endpoint.replace(/^https?:\/\//, '')}` : ''}`, meta: 'Manage', act: manage })) : [{ id: 'none', t: 'link', label: 'Nothing shared yet', hint: 'Add one and it appears in everyone’s list, ready to use.', meta: '' }] },
       { title: 'Rules', rows: [
-        { id: 'sAiWho', t: 'select', label: 'Who can use shared AI', opts: WHO.map((w) => w[0]), value: prefs.get('sAiWho', 'Admins and members'), set: (v) => { prefs.set('sAiWho', v); ctx.toast('Saved'); } },
         { id: 'sAiOwn', t: 'toggle', label: 'Members can add their own AI', hint: 'Their keys, their bill. Shown only to them.', value: inst.data?.aiMembersOwn !== false, set: (v) => void put({ aiMembersOwn: v }) },
         { id: 'sAiCap', t: 'select', label: 'Monthly limit per person', hint: 'For shared paid providers. Free local AI isn’t limited.', opts: CAP.map((c) => c[0]), value: CAP.find((c) => c[1] === inst.data?.aiMonthlyLimit)?.[0] ?? 'No limit', set: (v) => void put({ aiMonthlyLimit: CAP.find((c) => c[0] === v)![1] }) },
         { id: 'sAiFirst', t: 'toggle', label: 'Put shared AI first for new members', hint: 'Sets the starting order for their jobs. They can change it.', value: !!inst.data?.aiSharedFirst, set: (v) => void put({ aiSharedFirst: v }) },
@@ -134,7 +134,7 @@ function MailLog({ ctx }: { ctx: Ctx }) {
   return (
     <Modal title="Email log" sub={`Last 30 days · ${rows.length - failed} sent · ${failed} failed`} width={800} onClose={close(ctx)}
       foot={<><span role="button" tabIndex={0} style={{ flex: 1, fontSize: 13.5, color: 'var(--text2)', cursor: 'pointer', opacity: failed ? 1 : 0.4 }} onClick={async () => { if (failed) { const r = await api<{ sent: number }>('/admin/email/log/retry', { body: {} }); ctx.toast(`${r.sent} resent`); l.reload(); } }}>Retry failed</span><a className="btn outline" href="/api/admin/email/log.csv" download>Download CSV</a><button className="btn primary" onClick={close(ctx)}>Close</button></>}>
-      <div className="seg" role="tablist" style={{ alignSelf: 'flex-start', margin: '12px 0' }}>{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
+      <div className="seg" role="tablist" style={{ alignSelf: 'flex-start', margin: '12px 0' }}><SegSlider />{(['all', 'delivered', 'failed'] as const).map((k) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)} style={{ textTransform: 'capitalize' }}>{k}</button>)}</div>
       <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '2px 14px', maxHeight: 380, overflow: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) minmax(0,1.4fr) 90px 100px', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--hair)', ...eyebrow }}><span>When</span><span>To</span><span>Subject</span><span>Type</span><span style={{ textAlign: 'right' }}>Status</span></div>
         {rows.slice(0, 80).map((r) => (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SegSlider } from '../components/SegSlider';
 import { RATINGS, fmtDate } from '../data';
 import { Mark } from '../components/bits';
 import { Wall, type Pic } from '../components/CompositionWall';
@@ -15,6 +16,17 @@ const ring = 'inset 0 0 0 1px var(--outline)';
 const SWATCH: Record<string, string> = { black: '#151514', white: '#e9e7e1', oak: '#b08a5e', walnut: '#5b3f2c', silver: '#a3a3a0' };
 
 /** Whether the page should use the phone layout: a narrow screen, or a phone held sideways. */
+/** Who is looking, top right of every shared page: the signed-in account's or typed name, otherwise Guest. */
+export function Who({ name }: { name: string }) {
+  const n = name.trim();
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13.5, flex: 'none', marginLeft: 'auto' }}>
+      <span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: n ? 'oklch(0.7 0.13 45)' : 'var(--surface)', boxShadow: n ? undefined : 'inset 0 0 0 1px var(--outline)', color: n ? '#0d0d0d' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }}>{n ? n[0].toUpperCase() : 'G'}</span>
+      {n ? n.split(/\s+/)[0] : 'Guest'}
+    </span>
+  );
+}
+
 export function usePhone(): boolean {
   const q = '(max-width: 700px), (max-height: 520px) and (orientation: landscape)';
   const [on, setOn] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(q).matches);
@@ -160,7 +172,7 @@ export function ShareMobile(p: Props) {
       <div className="sm-left" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {f ? (
           <div style={{ padding: '22px 20px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `${d.owner} shared a composition with you` : 'A composition was shared with you'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}><Mark /><span style={{ fontSize: 13 }}>{d.owner ? `${d.owner} shared a composition with you` : 'A composition was shared with you'}</span><Who name={reviewer} /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <h1 style={{ font: `400 40px/1 ${serif}`, margin: 0, textWrap: 'balance' as never }}>{d.name}</h1>
               <span style={{ font: `400 11.5px ${mono}`, color: 'var(--faint)' }}>{spanLabel}</span>
@@ -225,28 +237,26 @@ export function ShareMobile(p: Props) {
           </div>
         ) : (
           <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}<span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{d.owner ? `Shared by ${d.owner}` : 'Shared with you'}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40 }}>{lockup}<Who name={reviewer} /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14 }}>
-              <span style={{ font: `500 10.5px/1 ${mono}`, letterSpacing: '.08em', color: 'var(--faint)' }}>{d.kind === 'photo' ? 'A PHOTOGRAPH' : `A PHOTOSHOOT · ${photos.length} ${photos.length === 1 ? 'PHOTOGRAPH' : 'PHOTOGRAPHS'}`}</span>
               <h1 style={{ font: `400 52px/.95 ${serif}`, margin: 0, textWrap: 'balance' as never, overflowWrap: 'anywhere' }}>{d.name}</h1>
               {d.description && <p style={{ margin: '2px 0 0', font: `italic 400 21px/1.3 ${serif}`, color: 'var(--text2)', textWrap: 'pretty' as never }}>{d.description}</p>}
-              {hint(canReview ? `Open a photograph to see it full size and give it a rating. ${owner === 'them' ? 'They see' : `${owner} sees`} your ratings and your name, never your email.` : 'Tap a photograph to see it full size.')}
               <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>{expiry}</span>
             </div>
-            {photos[0] && <button onClick={() => setLook(0)} aria-label="Open the cover photograph" style={{ display: 'block', width: '100%', aspectRatio: '1.5', borderRadius: 8, marginTop: 6, background: `url(${imgUrl(photos[0].id, 'preview', token)}) center/cover var(--surface)` }} />}
             {d.allowDownload && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14, padding: 18, borderRadius: 14, background: 'var(--surface)', overflow: 'hidden' }}>
+                {photos[0] && <div aria-hidden style={{ position: 'absolute', inset: -40, background: `url(${imgUrl(photos[0].id, 'thumb', token)}) center/cover`, filter: 'var(--home-review-image-filter)', opacity: 'var(--home-review-image-opacity)' as never }} />}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <span style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center' }}><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg></span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: `400 26px/1.05 ${serif}` }}>Download all {photos.length}</span><span style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)' }}>Full-size originals, one file after another. {owner === 'them' ? 'They allowed' : `${owner} allowed`} downloads on this link.</span></div>
                 </div>
-                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
-                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
+                <button onClick={p.download} disabled={!!p.dl && !p.dl.ready} style={{ position: 'relative', height: 48, borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, textAlign: 'center' }}>{p.dl ? (p.dl.ready ? `${p.dl.total} files sent to your downloads` : `Downloading ${p.dl.done} of ${p.dl.total}…`) : 'Download originals'}</button>
+                {p.dl && !p.dl.ready && <button onClick={p.cancelDl} style={{ position: 'relative', minHeight: 32, fontSize: 13, color: 'var(--text2)' }}>Cancel</button>}
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--hair)', padding: '14px 0 12px' }}>
               {canReview ? (
-                <div role="tablist" aria-label="Show" style={{ flex: 1, display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
+                <div role="tablist" aria-label="Show" style={{ flex: 1, display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
                   {([['all', 'All', photos.length], ['todo', 'To rate', photos.length - ratedCount], ['rated', 'Rated', ratedCount]] as const).map(([k, l, n]) => (
                     <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, borderRadius: 999, background: filter === k ? 'var(--btn-bg)' : 'transparent', color: filter === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 13, whiteSpace: 'nowrap' }}>{l}<span style={{ font: `400 10.5px ${mono}`, color: filter === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: filter === k ? 0.6 : 1 }}>{n}</span></button>
                   ))}

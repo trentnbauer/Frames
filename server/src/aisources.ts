@@ -40,7 +40,18 @@ export const loadSources = (db: DB): AiSource[] => getSetting<AiSource[]>(db, 'a
 export const saveSources = (db: DB, list: AiSource[]) => setSetting(db, 'aiSources', list);
 /** The AIs the administrator set up for everyone (kept in the server's own database). A person's own come first. */
 const serverDb = (db: DB): DB | undefined => (db as unknown as { sys?: DB }).sys;
-export const loadShared = (db: DB): AiSource[] => { const s = serverDb(db); return s ? getSetting<AiSource[]>(s, 'aiSources', []) : []; };
+/** The administrator's AIs, each in the colour this person chose for it, if they chose one. */
+export const loadShared = (db: DB): AiSource[] => {
+  const s = serverDb(db);
+  if (!s) return [];
+  const mine = getSetting<Record<string, string>>(db, 'aiSharedColours', {});
+  return getSetting<AiSource[]>(s, 'aiSources', []).map((x) => (typeof mine[x.id] === 'string' ? { ...x, color: mine[x.id] } : x));
+};
+/** A person recolours a shared AI for themselves only; the administrator's own colour is untouched. */
+export function setSharedColour(db: DB, id: string, color: unknown) {
+  if (typeof color !== 'string' || (color !== '' && !(AI_COLOURS as readonly string[]).includes(color))) throw new BadSetting('Choose a valid provider colour');
+  setSetting(db, 'aiSharedColours', { ...getSetting<Record<string, string>>(db, 'aiSharedColours', {}), [id]: color });
+}
 export const getSource = (db: DB, id: string) => loadSources(db).find((s) => s.id === id) ?? loadShared(db).find((s) => s.id === id);
 
 export const sourceKey = (db: DB, id: string) => getSetting<string>(db, `secret:ai:${id}:key`, '') || (loadShared(db).some((s) => s.id === id) ? getSetting<string>(serverDb(db)!, `secret:ai:${id}:key`, '') : '');

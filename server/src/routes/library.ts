@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiActivity, aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
-import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
+import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSharedColour, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals, shrinkUpload } from '../cloud.js';
 import { removeShoot } from '../remove.js';
@@ -18,7 +18,7 @@ import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, rei
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, unsortedShootId } from '../db.js';
-import { applyGear, applyShootGear, cleanGear, syncGearTags } from '../gear.js';
+import { GEAR_FIELDS, applyGear, applyShootGear, cleanGear, parseGear, syncGearTags } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
 /**
@@ -83,8 +83,19 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (old) unapplyShoot(old, ids.filter((i) => (one('SELECT shoot_id FROM photos WHERE id = ?', i) as Row).shoot_id === from));
     }
     for (const i of ids) db.prepare('UPDATE photos SET shoot_id = ? WHERE id = ?').run(shootId, i);
+    // A photograph added to a shoot takes what the shoot says (its place and camera details), over what the photograph had.
+    const s = one('SELECT place, gear FROM shoots WHERE id = ?', shootId);
+    const set = GEAR_FIELDS.filter((f) => !!parseGear(s?.gear)[f]);
+    for (const i of ids) {
+      if (s?.place) db.prepare('UPDATE photos SET place = ? WHERE id = ?').run(s.place, i);
+      if (set.length) { // neither typed by hand nor read from its file any more: following the shoot (gear_src), so applyGear replaces them
+        const r = one('SELECT user_fields, gear_src FROM photos WHERE id = ?', i);
+        const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
+        db.prepare('UPDATE photos SET user_fields = ?, gear_src = ? WHERE id = ?').run(csv(r?.user_fields).filter((f) => !(set as string[]).includes(f)).join(','), [...new Set([...csv(r?.gear_src), ...set])].join(','), i);
+      }
+    }
     applyShoot(shootId, ids);
-    for (const i of ids) applyGear(db, i, false); // a photograph moved here takes this photoshoot's camera defaults
+    for (const i of ids) applyGear(db, i, false); // the shoot's camera details now win for the fields it sets
   };
 
   app.post('/api/shoots', async (req, rep) => {
@@ -141,6 +152,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (typeof b.protected !== 'boolean') return rep.code(400).send({ error: 'protected must be true or false' });
       db.prepare('UPDATE shoots SET protected = ? WHERE id = ?').run(b.protected ? 1 : 0, id);
     }
+    if ('private' in b) {
+      if (typeof b.private !== 'boolean') return rep.code(400).send({ error: 'private must be true or false' });
+      db.prepare('UPDATE shoots SET private = ? WHERE id = ?').run(b.private ? 1 : 0, id);
+    }
     if ('coverId' in b) {
       if (b.coverId !== null && !Number.isInteger(b.coverId)) return rep.code(400).send({ error: 'coverId must be a photograph id or null' });
       if (b.coverId !== null && !one('SELECT 1 x FROM photos WHERE id = ? AND shoot_id = ?', b.coverId, id)) return rep.code(400).send({ error: 'That photograph is not in this shoot' });
@@ -172,12 +187,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     }
     // The photoshoot's camera defaults: photographs in it with a blank take them, and follow a later change.
     if ('gear' in b) { db.prepare('UPDATE shoots SET gear = ? WHERE id = ?').run(JSON.stringify(cleanGear(b.gear)), id); applyShootGear(db, id);
-      const camera = cleanGear(b.gear).camera;
-      if (everyPhoto && camera) {
-        // Every photograph takes the shoot's camera, and goes on following it (it is no longer "typed by hand").
+      const g = cleanGear(b.gear);
+      const set = GEAR_FIELDS.filter((f) => !!g[f]);
+      if (everyPhoto && set.length) {
+        // Every photograph takes each camera detail the shoot sets, and goes on following it (no longer "typed by hand" or "from the file").
         const csv = (v: unknown) => String(v ?? '').split(',').filter(Boolean);
         for (const r of db.prepare('SELECT id, user_fields, gear_src FROM photos WHERE shoot_id = ?').all(id) as Row[]) {
-          db.prepare('UPDATE photos SET camera = ?, raw_camera = ?, user_fields = ?, gear_src = ? WHERE id = ?').run(camera, camera, csv(r.user_fields).filter((f) => f !== 'camera').join(','), [...new Set([...csv(r.gear_src), 'camera'])].join(','), r.id);
+          db.prepare(`UPDATE photos SET ${set.map((f) => `${f} = ?`).join(', ')}${set.includes('camera') ? ', raw_camera = ?' : ''}${set.includes('lens') ? ', raw_lens = ?' : ''}, user_fields = ?, gear_src = ? WHERE id = ?`)
+            .run(...set.map((f) => g[f]), ...(set.includes('camera') ? [g.camera] : []), ...(set.includes('lens') ? [g.lens] : []), csv(r.user_fields).filter((f) => !(set as string[]).includes(f)).join(','), [...new Set([...csv(r.gear_src), ...set])].join(','), r.id);
           syncGearTags(db, r.id);
         }
       }
@@ -312,9 +329,10 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       if (cloudOnlyOriginals(db)) return rep.code(403).send({ error: 'Uploads are turned off: the administrator requires originals to be kept in cloud storage. Connect a cloud folder in Settings, Cloud sync instead.' });
       // Storage per person: a member at their limit cannot add more (administrators are not limited).
       const limitGb = policyOf(x.sys).userQuotaGb;
-      if (limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin') {
-        const used = (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n;
-        if (used >= limitGb * 1073741824) return rep.code(413).send({ error: `You have used the ${limitGb >= 1 ? `${limitGb} GB` : `${Math.round(limitGb * 1024)} MB`} of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
+      const quota = limitGb && ((req as any).authUser?.role ?? 'admin') !== 'admin' ? limitGb * 1073741824 : 0; // 0: no limit
+      let used = quota ? (db.prepare('SELECT COALESCE(SUM(size_bytes), 0) n FROM photos WHERE missing = 0').get() as { n: number }).n : 0;
+      if (quota) {
+        if (used >= quota) return rep.code(413).send({ error: `You have used the ${limitGb >= 1 ? `${limitGb} GB` : `${Math.round(limitGb * 1024)} MB`} of storage the administrator allows each person. Remove some photos, or ask the administrator for more room.` });
       }
       const dir = internalDir(cfg);
       fs.mkdirSync(dir, { recursive: true });
@@ -325,6 +343,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         // Only the base name is used, so a crafted name cannot write outside the folder.
         const base = path.basename(String(part.filename ?? '')).replace(/[^\w. -]/g, '_');
         if (!base || base.startsWith('.') || !IMAGE_EXT.has(path.extname(base).toLowerCase())) { rejected.push({ file: base || '(unnamed)', reason: 'Not a supported photo type' }); part.file.resume(); continue; }
+        if (quota && used >= quota) { rejected.push({ file: base, reason: 'Over your storage limit' }); part.file.resume(); continue; } // the limit holds within one upload too
         const tmp = path.join(dir, `.upload-${crypto.randomBytes(8).toString('hex')}`);
         try {
           await pipeline(part.file, fs.createWriteStream(tmp));
@@ -338,6 +357,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
           fs.rmSync(tmp, { force: true });
           const smaller = await shrinkUpload(db, path.join(dir, name)); // unless original quality is stored
           if (smaller) { name = smaller.name; shrunk++; db.prepare('INSERT OR REPLACE INTO shrunk_uploads(file, orig_w, orig_h) VALUES (?, ?, ?)').run(name, smaller.w, smaller.h); }
+          if (quota) used += fs.statSync(path.join(dir, name)).size;
           saved.push(name);
         } catch (e) {
           fs.rmSync(tmp, { force: true });
@@ -515,8 +535,14 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
   app.put('/api/ai/sources/:id', async (req, rep) => {
     const list = loadSources(db);
     const i = list.findIndex((s) => s.id === (req.params as Row).id);
-    if (i < 0) return x.notFound(rep);
     const b = (req.body ?? {}) as Row;
+    if (i < 0) {
+      // A shared AI: the only thing a member may change is the colour they see it in.
+      const id = String((req.params as Row).id);
+      if (!loadShared(db).some((s) => s.id === id) || b.color === undefined) return x.notFound(rep);
+      try { setSharedColour(db, id, b.color); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+      return sourcesDto();
+    }
     try { list[i] = applySource(list[i], b); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
     saveSources(db, list);
     if (typeof b.key === 'string' && b.key) setSourceKey(db, list[i].id, b.key.slice(0, 500));

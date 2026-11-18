@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { runApplying } from './ApplyStatus';
 import { api } from '../api';
 import { finishBulkJob } from './BulkJobs';
 import { Modal } from './Modal';
@@ -49,15 +50,16 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
     setError('');
     try {
       const body = { ids, patch, fillBlanks, blankFields };
-      if (apply && ids.length > 500) {
-        const job = await api<{ id: string }>('/photos/bulk-jobs', { body: { ...body, versions: preview?.versions } });
-        await finishBulkJob(job.id, setProgress);
-        onDone();
+      if (apply) {
+        // The window closes at once; the header shows the change being applied, then that it is done (or why not).
+        const versions = preview?.versions;
         onClose();
-      } else if (apply) {
-        await api('/photos/bulk-apply', { body: { ...body, versions: preview?.versions } });
-        onDone();
-        onClose();
+        const ok = await runApplying(`Applying changes to ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}`, async (progress) => {
+          if (ids.length > 500) { const job = await api<{ id: string }>('/photos/bulk-jobs', { body: { ...body, versions } }); await finishBulkJob(job.id, progress); }
+          else await api('/photos/bulk-apply', { body: { ...body, versions } });
+        });
+        if (ok) onDone();
+        return;
       } else {
         const result: Preview = { changed: 0, unchanged: 0, missing: 0, counts: {}, versions: {} };
         for (let start = 0; start < ids.length; start += 500) {
@@ -152,6 +154,7 @@ export function BulkEdit({ ids, onClose, onDone }: { ids: number[]; onClose: () 
                   kind={key}
                   value={value}
                   onCommit={(next) => change(key, next)}
+                  live
                   placeholder={key === 'camera' ? 'Camera body' : 'Lens'}
                   title="Owned and discovered gear, or free text"
                   className="field-in"

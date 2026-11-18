@@ -19,7 +19,7 @@ export function MobileNotifications() {
     api('/notifications/read', { body: { id: n.id } }).catch(() => undefined);
     nav(n.target.screen + (n.target.anchor ? `#${n.target.anchor}` : ''));
   };
-  const act = async (n: Notif, action: 'dismiss' | 'add' | 'blacklist') => {
+  const act = async (n: Notif, action: 'dismiss' | 'add') => {
     if (busy !== null) return;
     setBusy(n.id); setErr('');
     try {
@@ -54,7 +54,7 @@ export function MobileNotifications() {
               {n.gear?.state === 'new' && (
                 <div style={{ display: 'flex', gap: 8, padding: '0 0 14px 44px' }}>
                   <button onClick={() => act(n, 'add')} disabled={busy !== null} style={{ height: 38, padding: '0 14px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 13 }}>Add to gear</button>
-                  <button onClick={() => act(n, 'blacklist')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Not mine</button>
+                  <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Not mine</button>
                 </div>
               )}
             </div>

@@ -627,6 +627,11 @@ main.auth.terms { width: 640px; }
 }
 @media (max-width: 767px) {
   .settings-wrap h1, .settings-wrap h2 { font-size: 30px !important; }
+  /* A phone lists the sections one under another, each a full-width row, and scrolls a long row of tabs sideways. */
+  .settings-phone > aside { flex-direction: column !important; flex-wrap: nowrap; gap: 0 !important; }
+  .settings-phone > aside .snavi { padding: 14px 4px !important; border-radius: 0 !important; border-top: 1px solid var(--hair); font-size: 15px; }
+  .settings-phone [role=tablist].seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .settings-phone [role=tablist].seg > button { flex: none; }
 }
 
 /* A shortcut key shown beside a button's label */
@@ -881,8 +886,8 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .workflow-row img { width:64px; height:48px; object-fit:cover; border-radius:5px; }
 .workflow-row .grow { flex:1; min-width:0; overflow-wrap:anywhere; }
 .workflow-row small { display:block; color:var(--muted); margin-top:6px; }
-.undo-notice { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:90; display:flex; gap:14px; align-items:center; padding:12px 18px; border:1px solid var(--outline); border-radius:12px; background:var(--raised); box-shadow:var(--float); max-width:calc(100vw - 32px); }
-@media(max-width:767px){.workflow-row{flex-wrap:wrap}.undo-notice{width:calc(100vw - 32px);font-size:12px}.workflow-list{padding:0 12px}}
+.undo-notice { position:fixed; left:50%; bottom:168px; transform:translateX(-50%); z-index:90; display:flex; gap:14px; align-items:center; padding:12px 18px; border:1px solid var(--outline); border-radius:12px; background:var(--raised); box-shadow:var(--float); max-width:calc(100vw - 32px); }
+@media(max-width:767px){.workflow-row{flex-wrap:wrap}.undo-notice{width:calc(100vw - 32px);font-size:12px;bottom:calc(150px + env(safe-area-inset-bottom))}.workflow-list{padding:0 12px}}
 .batch-edit-fields { border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:14px;min-width:0; }
 .batch-choice { display:flex;align-items:center;gap:10px;font-size:13px; }
 .batch-choice input { width:16px;height:16px; }
@@ -960,3 +965,12 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 .todo-nav-popover .todo-up-next-row { display:flex; justify-content:space-between; gap:12px; font-size:13.5px; color:var(--text); }
 .todo-nav-popover .todo-up-next-row .mono { color:var(--muted); font-size:12px; white-space:nowrap; }
 .todo-nav-popover .todo-nav-head { padding:10px 12px 4px; margin:0; }
+.pickrow input:focus-visible + .cbox { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 767px) { .fpick { grid-template-columns: 1fr !important; } .fpick > div:first-child > div:last-child { height: auto !important; max-height: 50vh; } }
+/* Segmented controls: the chosen option's pill slides between options (SegSlider). */
+.has-seg-slider > :not(.seg-slider) { position: relative; z-index: 1; }
+.has-seg-slider > [aria-selected="true"], .has-seg-slider > [aria-pressed="true"], .has-seg-slider > [aria-checked="true"], .has-seg-slider > .on { background: transparent !important; transition: color .25s ease; }
+.seg-slider { position: absolute; left: 0; top: 0; border-radius: 999px; background: var(--btn-bg); pointer-events: none; opacity: 0; }
+.seg-slider.ready { transition: transform .28s cubic-bezier(.3,.7,.3,1), width .28s cubic-bezier(.3,.7,.3,1), opacity .2s ease; }
+@media (prefers-reduced-motion: reduce) { .seg-slider.ready { transition: none; } }
+.bnav > .seg-slider { background: var(--chip); }

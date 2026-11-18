@@ -71,7 +71,9 @@ const ROW_LABEL: Record<string, Partial<Pick<Idx, 'label' | 'hint'>>> = {
   removeBelow: { label: 'Averaging below' }, autoRemoveBelow: { label: 'Averaging below' }, todo: { label: 'Flag photos missing' },
 };
 /** Rows that no longer exist (link-only duplicates, or moved into a menu). */
-const ROW_GONE = new Set(['welcomeTour', 'sensAiLink', 'removeVotes', 'exportXmp', 'pfGear', 'camGear', 'film', 'filmTag']);
+const ROW_GONE = new Set(['welcomeTour', 'sensAiLink', 'removeVotes', 'exportXmp', 'pfGear', 'camGear', 'film', 'filmTag',
+  // Settings that never did anything, removed: nothing read them.
+  'start', 'units', 'dateFmt', 'blind', 'aiSubjects', 'autoAccept', 'sensBlur', 'autoTags', 'xmpMap', 'xmpTags', 'xmpRead', 'grouping', 'skipDupes', 'pfFilters', 'formats', 'sAiWho', 'aiLimit']);
 /** Rows the search index did not list before. */
 const ROW_NEW: Idx[] = [
   { tab: 'lib', sec: 'reviews', sub: 'clean-up', id: 'binVotes', g: 'Bin votes', label: 'Remove after this many bin votes', hint: 'Your own bin votes. The photograph leaves Frames; the original file is kept.' },

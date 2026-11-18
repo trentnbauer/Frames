@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -286,5 +287,23 @@ describe('share PIN isolation between libraries', () => {
     for (let i = 0; i < 5; i++) await call('POST', `/api/s/${sa.token}/pin`, { cookie: dev }, { pin: '1357' });
     expect((await call('POST', `/api/s/${sa.token}/pin`, { cookie: dev }, { pin: '2468' })).status).toBe(429);
     expect((await call('POST', `/api/s/${sb.token}/pin`, { cookie: dev }, { pin: '2468' })).status).toBe(200);
+  });
+});
+
+describe('storage limit on uploads', () => {
+  it('holds within one upload of many files, not only before it starts', async () => {
+    const carol = resolveUser(sys, who('c1', 'carol@x.test', 'Carol'), true)!;
+    expect(carol.role).toBe('member');
+    expect((await call('PUT', '/api/admin/instance', me, { userQuotaGb: 0.001, localOrig: true })).body).toMatchObject({ userQuotaGb: 0.001, localOrig: true }); // about 1 MB, kept at full size
+    const { default: sharp } = await import('sharp');
+    const data = await sharp(crypto.randomBytes(700 * 700 * 3), { raw: { width: 700, height: 700, channels: 3 } }).jpeg({ quality: 100 }).toBuffer(); // noise: does not compress
+    expect(data.length).toBeGreaterThan(600_000);
+    const bd = '----quotaTest';
+    const payload = Buffer.concat([...['one.jpg', 'two.jpg', 'three.jpg'].flatMap((n) => [Buffer.from(`--${bd}\r\nContent-Disposition: form-data; name="file"; filename="${n}"\r\nContent-Type: application/octet-stream\r\n\r\n`), data, Buffer.from('\r\n')]), Buffer.from(`--${bd}--\r\n`)]);
+    try {
+      const r = await call('POST', '/api/upload', { ...cookie(carol), 'content-type': `multipart/form-data; boundary=${bd}` }, payload);
+      expect(r.body.saved).toEqual(['one.jpg', 'two.jpg']); // under the limit when each starts; the third would start over it
+      expect(r.body.rejected).toEqual([{ file: 'three.jpg', reason: 'Over your storage limit' }]);
+    } finally { await call('PUT', '/api/admin/instance', me, { userQuotaGb: 0, localOrig: false }); }
   });
 });

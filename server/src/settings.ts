@@ -7,8 +7,8 @@ import { aiType, BadSetting, getSource, isReady, whyNotReady } from './aisources
 export { BadSetting };
 
 /** Reasons a photograph can appear in the To do list. The first four are on until switched off; the rest are opt-in so the list does not fill up. */
-export const TODO_REASONS = ['camera', 'lens', 'location', 'time', 'subjects', 'tags', 'description', 'composition', 'light', 'mood'] as const;
-const TODO_DEFAULT = ['location', 'subjects', 'tags', 'description'];
+export const TODO_REASONS = ['shoot', 'camera', 'lens', 'location', 'time', 'subjects', 'tags', 'description', 'composition', 'light', 'mood'] as const;
+const TODO_DEFAULT = ['shoot', 'location', 'subjects', 'tags', 'description'];
 
 export type Settings = {
   sessions: number;
@@ -46,9 +46,9 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  // A photograph is reviewed four times in about a month: a week between each session.
-  sessions: 4,
-  intervals: ['1 week', '1 week', '1 week', '1 week'],
+  // A photograph is reviewed seven times, at widening gaps, over about eight months.
+  sessions: 7,
+  intervals: ['Instant', '1 day', '3 days', '1 week', '1 week', '1 month', '6 months'],
   adaptive: true,
   archiveSuggest: false,
   autoRemove: false,

@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSession, saveAuth, loadAuth } from './auth.js';
 import { invite, resolveUser } from './users.js';
-import { isPortfolioPath, parseFilenameMeta } from './portfolio.js';
+import { exposureLine, isPortfolioPath } from './portfolio.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, A: ReturnType<typeof api>, web: string;
@@ -106,19 +106,37 @@ describe('the public site', () => {
     expect(isPortfolioPath('/portfolio/fonts/../../etc/passwd')).toBe(false);
   });
   it('lists the collection in its own order, with only what the page needs', async () => {
+    env.db.prepare("UPDATE photos SET lens = 'XF 35mm', shutter = '1/250', aperture = 2.8, focal_mm = 35, iso = 400 WHERE id = ?").run(ids['plain.jpg']);
     const m = (await get('/portfolio/images/manifest.json')).json() as any[];
     expect(m.map((e) => e.file)).toEqual([`images/${ids['plain.jpg']}.jpg`, `images/${ids['2026-Autumn-KonicaAutoS2-FujiC200-R01-0024.jpg']}.jpg`, `images/${ids['third.png']}.jpg`]);
-    expect(m[0]).toMatchObject({ alt: expect.any(String), width: 1200, height: 800, camera: 'Fuji X-T5' });
-    expect(m[1]).toMatchObject({ width: 2400, height: 1600, camera: 'Konica Auto S 2', film: 'Fuji C 200' }); // big one is scaled to fit 2400; names read from the filename
+    // The caption is what Frames holds for the photograph: its place name, camera, lens and settings.
+    expect(m[0]).toMatchObject({ alt: expect.any(String), width: 1200, height: 800, place: 'Secret cove', camera: 'Fuji X-T5', lens: 'XF 35mm', exposure: '1/250s · f/2.8 · 35mm · ISO 400' });
+    expect(m[1]).toMatchObject({ width: 2400, height: 1600 }); // big one is scaled to fit 2400
+    expect(m[1].film).toBeUndefined(); // nothing is read from the file name any more
     expect(m[0].original).toBeUndefined(); // full-size originals are off by default
+    // A place to be shown publicly only as its suburb or city is not shown at all, never more precisely than chosen.
+    await A.patch(`/api/photos/${ids['plain.jpg']}`, { placePrecision: 'city' });
+    expect(((await get('/portfolio/images/manifest.json')).json() as any[])[0].place).toBeUndefined();
+    await A.patch(`/api/photos/${ids['plain.jpg']}`, { placePrecision: 'exact' });
     const text = JSON.stringify(m);
-    for (const secret of ['Secret cove', 'private notes', 'lat', 'lon', 'path', env.tmp, 'place', 'description', 'private.jpg']) expect(text, secret).not.toContain(secret);
+    for (const secret of ['private notes', 'lat', 'lon', 'path', env.tmp, 'description', 'private.jpg']) expect(text, secret).not.toContain(secret);
   });
   it('leaves the camera details out when captions are off', async () => {
     await A.put('/api/portfolio', { captions: false });
     const m = (await get('/portfolio/images/manifest.json')).json() as any[];
-    expect(m.every((e) => !('camera' in e) && !('film' in e))).toBe(true);
+    expect(m.every((e) => !('camera' in e) && !('film' in e) && !('place' in e) && !('lens' in e) && !('exposure' in e))).toBe(true);
     await A.put('/api/portfolio', { captions: true });
+  });
+  it('leaves out photographs tagged nudity, violence or adult while "Keep flagged photos off my portfolio" is on', async () => {
+    const id = ids['third.png'];
+    const listed = async () => ((await get('/portfolio/images/manifest.json')).json() as any[]).map((e) => e.file);
+    env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'Adult', 'user', 1, 'tag')").run(id);
+    expect(await listed()).toContain(`images/${id}.jpg`); // off by default
+    await A.put('/api/prefs', { sensPf: true });
+    expect(await listed()).not.toContain(`images/${id}.jpg`);
+    expect((await get(`/portfolio/images/${id}.jpg`)).statusCode).toBe(404);
+    await A.put('/api/prefs', { sensPf: false });
+    env.db.prepare("DELETE FROM tags WHERE photo_id = ? AND name = 'Adult'").run(id);
   });
   it('serves a resized progressive JPEG with no camera data, even from a file that has GPS', async () => {
     const r = await get(`/portfolio/images/${ids['2026-Autumn-KonicaAutoS2-FujiC200-R01-0024.jpg']}.jpg`);
@@ -175,9 +193,11 @@ describe('the public site', () => {
     for (const ok of ['/portfolio', '/portfolio/', '/portfolio/config.json', '/portfolio/images/manifest.json', '/portfolio/images/12.jpg', '/portfolio/images/12-full', '/portfolio/css/style.css', '/portfolio/js/app.js']) expect(isPortfolioPath(ok), ok).toBe(true);
     for (const no of ['/api/photos', '/portfolio/../api/photos', '/portfolio/images/12.png', '/portfolio/images/../x.jpg', '/portfolio/secret.json', '/portfolioX/', '/portfolio/images/']) expect(isPortfolioPath(no), no).toBe(false);
   });
-  it('reads film and camera from the old filename convention', () => {
-    expect(parseFilenameMeta('2026-Autumn-KonicaAutoS2-FujiC200-R01-0024.jpg')).toEqual({ camera: 'Konica Auto S 2', film: 'Fuji C 200' });
-    expect(parseFilenameMeta('holiday.jpg')).toEqual({});
+  it('writes the exposure line from whichever settings are known', () => {
+    expect(exposureLine({ shutter: '1/60', aperture: 8, focal_mm: 50, iso: 100 })).toBe('1/60s · f/8 · 50mm · ISO 100');
+    expect(exposureLine({ shutter: '2s', aperture: null, focal_mm: 0, iso: null })).toBe('2s');
+    expect(exposureLine({ shutter: '', aperture: 1.4 })).toBe('f/1.4');
+    expect(exposureLine({})).toBe('');
   });
 });
 

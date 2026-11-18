@@ -52,7 +52,7 @@ describe('recommendations from review history', () => {
   it('suggests archiving low-rated ones only when asked to', async () => {
     for (let s = 1; s <= 4; s++) review('red3', 1, s);
     expect(await list('archive')).toEqual([]);
-    await A.put('/api/settings', { archiveSuggest: true });
+    await A.put('/api/settings', { archiveSuggest: true, sessions: 4 }); // four sessions done: all of them
     expect((await list('archive')).map((p) => p.id)).toEqual([id.red3]);
     await A.put('/api/settings', { archiveSuggest: false });
   });

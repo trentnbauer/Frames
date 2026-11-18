@@ -67,7 +67,7 @@ export function PortfolioSettings() {
           <label>Accent colour <input aria-label="Accent colour" value={f.accentColor} placeholder="coral, #d2691e or oklch(0.58 0.13 35)" onChange={(e) => set({ accentColor: e.target.value })} /></label>
           <label>Footer text <input aria-label="Footer text" value={f.footer} placeholder="Blank hides the footer" onChange={(e) => set({ footer: e.target.value })} /></label>
         </div>
-        <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={f.captions} onChange={(e) => save({ captions: e.target.checked })} /> Show the camera and film under a photo that is opened</label>
+        <label className="check" style={{ marginTop: 12 }}><input type="checkbox" checked={f.captions} onChange={(e) => save({ captions: e.target.checked })} /> Show the place, camera, lens and settings under a photo that is opened</label>
         <div style={{ marginTop: 12 }}><button className="pill primary" onClick={() => save({ tagline: f.tagline, accentColor: f.accentColor, footer: f.footer })}>Save the site details</button></div>
       </div>
 
