@@ -121,7 +121,7 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
       {sheet === 'add' && (
         <Sheet title="Add photos" sub="Tap photographs to add them as candidates." onClose={() => { setSheet(null); reload(); }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
-            {library.filter((p) => !c.photoIds.includes(p.id)).slice(0, 60).map((p) => <button key={p.id} disabled={busy} onClick={() => run(async () => { await api(`/collections/${c.id}/photos/${p.id}`, { method: 'PUT' }); reload(); })} aria-label={`Add ${p.title || p.file}`} style={{ aspectRatio: '1', borderRadius: 4, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)` }} />)}
+            {library.slice(0, 60).map((p) => { const added = c.photoIds.includes(p.id); return <button key={p.id} disabled={busy || added} onClick={() => run(async () => { await api(`/collections/${c.id}/photos/${p.id}`, { method: 'PUT' }); reload(); })} aria-label={added ? `${p.title || p.file}, added` : `Add ${p.title || p.file}`} style={{ position: 'relative', aspectRatio: '1', borderRadius: 4, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--surface)` }}>{added && <span style={{ position: 'absolute', top: 4, left: 4, width: 22, height: 22, borderRadius: '50%', background: 'var(--text)', color: 'var(--bg)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}>✓</span>}</button>; })}
           </div>
         </Sheet>
       )}
