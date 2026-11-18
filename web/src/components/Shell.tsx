@@ -273,14 +273,14 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
     onClose();
   };
   return (
-    <Modal title="Send feedback" sub="Opens a new issue on GitHub · trentnbauer/Frames. You can check it before posting." onClose={onClose}
-      foot={<><span className="grow">{ok ? '' : 'Add a title to continue.'}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" style={{ opacity: ok ? 1 : .45 }} onClick={send} disabled={!ok}>Open issue on GitHub ↗</button></>}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--hair)' }}>
+    <Modal title="Send feedback" sub="Opens a pre-filled GitHub issue. Nothing is posted until you submit it there." onClose={onClose}
+      foot={<><span className="grow">{ok ? '' : 'Add a title to continue.'}</span><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={send} disabled={!ok}>Open issue on GitHub ↗</button></>}>
+      <div className="seg" role="tablist"><SegSlider />{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+      {kind === 'bug' && <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--bg)', boxShadow: 'inset 0 0 0 1px var(--hair)' }}>
         <div style={{ flex: 1, fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}><b style={{ color: 'var(--text)', fontWeight: 500 }}>Something looks broken or out of date?</b><br />Clearing site data often fixes it. Your photos, reviews and server settings stay saved.</div>
         <button type="button" className="btn outline" onClick={() => setReset(true)}>Clear site data…</button>
-      </div>
+      </div>}
       {reset && <ClearSiteDataModal onClose={() => setReset(false)} />}
-      <div className="seg" role="tablist"><SegSlider />{KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
       <input className="field-in" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={KINDS.find((k) => k[0] === kind)![2]} aria-label="Title" />
       <textarea className="field-in" value={body} onChange={(e) => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" aria-label="Details" />
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--text2)', cursor: 'pointer' }}>
@@ -327,11 +327,11 @@ export function ShellModals() {
       {fb && <FeedbackModal onClose={() => setFb(false)} />}
       {(upd || news) && (
         <Modal width={600} eyebrow={upd ? 'Admin · update available' : undefined} title={upd ? `Frames ${list[0]?.name ?? ''} is available` : 'What’s new'}
-          sub={upd ? `You’re on v${(rel.data?.current ?? '').replace(/^v/, '')}.` : `You’re on v${(rel.data?.current ?? '').replace(/^v/, '')}.`}
+          sub={upd ? `You’re on v${(rel.data?.current ?? '').replace(/^v/, '')}. Run this to update:` : `You’re on v${(rel.data?.current ?? '').replace(/^v/, '')}.`}
           onClose={() => { setUpd(false); setNews(false); }}
           foot={<><span className="grow">{rel.data?.source === 'none' ? 'Could not reach GitHub' : 'Source: GitHub Releases'}</span>
             {upd && <button className="btn" onClick={() => { try { localStorage.setItem('frames-upd-remind', String(Date.now() + 86_400_000)); } catch { /* */ } setUpd(false); }}>Remind me tomorrow</button>}
-            <button className="btn primary" onClick={() => { setUpd(false); setNews(false); }}>Got it</button></>}>
+            <button className="btn primary" onClick={() => { setUpd(false); setNews(false); }}>{upd ? 'Close' : 'Got it'}</button></>}>
           {rel.loading && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '24px 0', fontSize: 13.5, color: 'var(--text2)' }}><Spinner />Fetching release notes from GitHub…</div>}
           <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 360, overflow: 'auto' }}>
             {list.length === 0 && !rel.loading && <p className="muted" style={{ fontSize: 13.5 }}>No release notes to show.</p>}

@@ -89,7 +89,7 @@ export function LibraryPage() {
     <div className="page-shell" data-screen-label="Library">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Library</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{total.toLocaleString()} photographs · {all.length} shoots</span></div>
-        <button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>Add photos<span style={{ font: `400 11px ${mono}`, opacity: 0.55 }}>A</span></button>
+        <button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>Add photos</button><Kbd k="A" />
       </div>
       {(pending.data?.count ?? 0) > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'var(--surface)', marginBottom: 16, fontSize: 14 }}>
