@@ -1,3 +1,4 @@
+import { confirmAction } from './dialogs';
 import { keyClick } from './keyClick';
 import { AiIndicator } from './AiIndicator';
 import { ApplyStatus } from './ApplyStatus';
@@ -93,7 +94,7 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
     catch (e) { setClearError((e as Error).message); load(); }
     finally { setClearing(false); }
   };
-  const notificationAction = async (notification: Notif, action: 'dismiss' | 'add') => {
+  const notificationAction = async (notification: Notif, action: 'dismiss' | 'add' | 'hide' | 'blacklist') => {
     if (acting !== null || clearing) return;
     ++loadVersion.current; setActing(notification.id); setClearError('');
     try {
@@ -136,7 +137,8 @@ function Bell({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void 
                   <button type="button" className="notification-dismiss" aria-label={`Dismiss ${n.text}`} title="Dismiss notification" disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>×</button>
                   {n.gear?.state === 'new' && <div style={{ display: 'flex', gap: 8, padding: '0 34px 12px 46px', flexWrap: 'wrap' }}>
                     <button type="button" className="btn primary" style={{ height: 32 }} disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'add')}>Add to gear</button>
-                    <button type="button" className="btn outline" style={{ height: 32 }} disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'dismiss')}>Not mine</button>
+                    <button type="button" className="btn outline" style={{ height: 32 }} disabled={clearing || acting !== null} onClick={() => void notificationAction(n, 'hide')}>Hide</button>
+                    <button type="button" className="btn outline" style={{ height: 32, color: 'var(--danger)' }} disabled={clearing || acting !== null} onClick={async () => { if (await confirmAction(`Blacklist ${n.gear?.name ?? 'this gear'}?\n\nIt is cleared from the camera details of your photos, now and when new ones arrive. Original files are not changed.`, { confirm: 'Blacklist', danger: true })) void notificationAction(n, 'blacklist'); }}>Blacklist</button>
                   </div>}
                 </div>
               ))}

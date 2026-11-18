@@ -464,6 +464,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       }
     } catch { /* an unreadable value is left as it is */ }
   },
+  // Discovered gear can be hidden: it leaves the Found list and its notification goes, but the camera details on photographs stay (unlike the blacklist).
+  (db) => { db.exec('CREATE TABLE IF NOT EXISTS gear_hidden (key TEXT PRIMARY KEY, name TEXT NOT NULL)'); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

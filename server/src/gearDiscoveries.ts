@@ -31,7 +31,7 @@ function discover(db: DB, type: GearType, raw: string, owned: Set<string>) {
     return;
   }
   const inserted = db.prepare('INSERT OR IGNORE INTO gear_discoveries(type, name, key) VALUES(?, ?, ?)').run(type, name, key);
-  if (inserted.changes) notify(db, 'gear-found', `Found ${type === 'camera' ? 'camera' : 'lens'}: ${name}`, { screen: '/gear' }, String(inserted.lastInsertRowid));
+  if (inserted.changes && !db.prepare('SELECT 1 x FROM gear_hidden WHERE key = ?').get(key)) notify(db, 'gear-found', `Found ${type === 'camera' ? 'camera' : 'lens'}: ${name}`, { screen: '/gear' }, String(inserted.lastInsertRowid));
 }
 export function discoverPhotoGear(db: DB, id: number) {
   const photo = db.prepare('SELECT camera, lens FROM photos WHERE id = ? AND missing = 0').get(id) as { camera: string; lens: string } | undefined;
@@ -42,12 +42,13 @@ export function discoverPhotoGear(db: DB, id: number) {
 export function foundGear(db: DB): Found[] {
   const own = ownedKeys(db);
   const blocked = new Set((db.prepare("SELECT type, key FROM gear_discoveries WHERE state = 'blacklisted'").all() as { type: string; key: string }[]).map((g) => `${g.type}:${g.key}`));
+  const hidden = new Set((db.prepare('SELECT key FROM gear_hidden').all() as { key: string }[]).map((h) => h.key));
   const found = new Map<string, Found>();
   for (const type of ['camera', 'lens'] as const) {
     const rows = db.prepare(`SELECT ${type} name, COUNT(*) count FROM photos WHERE ${type} != '' AND missing = 0 GROUP BY ${type}`).all() as { name: string; count: number }[];
     for (const row of rows) {
       const name = clean(row.name), key = `${type}:${gearKey(name)}`;
-      if (!gearKey(name) || isOwned(own, type, gearKey(name)) || blocked.has(key)) continue;
+      if (!gearKey(name) || isOwned(own, type, gearKey(name)) || blocked.has(key) || hidden.has(gearKey(name))) continue;
       const old = found.get(key);
       if (old) old.count += row.count; else found.set(key, { name, type, count: row.count });
     }
@@ -67,7 +68,8 @@ export function syncGearDiscoveries(db: DB) {
 export function discoveryForNotification(db: DB, ref: string) {
   return db.prepare('SELECT id, type, name, state FROM gear_discoveries WHERE id = ?').get(ref) as { id: number; type: GearType; name: string; state: string } | undefined;
 }
-export function resolveGearDiscovery(db: DB, id: number, action: 'add' | 'blacklist') {
+export function resolveGearDiscovery(db: DB, id: number, action: 'add' | 'blacklist' | 'hide') {
+  if (action === 'hide') { const row = db.prepare('SELECT name FROM gear_discoveries WHERE id = ?').get(id) as { name: string } | undefined; return row ? hideGear(db, row.name) : false; }
   return db.transaction(() => {
     const gear = db.prepare('SELECT * FROM gear_discoveries WHERE id = ?').get(id) as { id: number; type: GearType; name: string; key: string; state: string } | undefined;
     if (!gear) return false;
@@ -118,3 +120,16 @@ export function ownGear(db: DB, name: string, type: GearType) {
       if (gearKey(clean(r.name)) === key) syncGearTags(db, r.id);
   })();
 }
+
+/** Hide a discovered camera or lens: it leaves the Found list and its notification is cleared. Photographs keep their camera details. */
+export function hideGear(db: DB, raw: string) {
+  const name = clean(raw), key = gearKey(name);
+  if (!key) return false;
+  db.transaction(() => {
+    db.prepare('INSERT INTO gear_hidden(key, name) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET name = excluded.name').run(key, name);
+    for (const row of db.prepare('SELECT id FROM gear_discoveries WHERE key = ?').all(key) as { id: number }[]) clearDiscovery(db, row.id);
+  })();
+  return true;
+}
+export const hiddenGear = (db: DB) => db.prepare('SELECT key, name FROM gear_hidden ORDER BY name COLLATE NOCASE').all() as { key: string; name: string }[];
+export function unhideGear(db: DB, key: string) { return db.prepare('DELETE FROM gear_hidden WHERE key = ?').run(key).changes > 0; }
