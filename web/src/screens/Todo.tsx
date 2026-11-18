@@ -121,7 +121,7 @@ function TodoTasks() {
   if (r === 'delete') return frame(<RemovalReview onChanged={reload} />);
 
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p!.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); };
-  const chip = (kind: 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind && !(kind === 'tag' && t.source === 'gear')).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--ai-active)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--ai-active) 55%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
+  const chip = (kind: 'tag') => (p?.tags ?? []).filter((t) => t.kind === kind).map((t) => ({ label: t.accepted ? t.name : `✦ ${t.name}`, bg: t.accepted ? 'color-mix(in srgb, var(--text) 12%, transparent)' : 'transparent', fg: t.accepted ? 'var(--text)' : 'var(--ai-active)', ring: t.accepted ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--ai-active) 55%, transparent)', go: () => tagAct(t.name, t.kind, t.accepted ? 'remove' : 'accept'), reject: t.accepted || t.source !== 'ai' ? null : () => tagAct(t.name, t.kind, 'reject') }));
   // "Accept all": every ✦ suggestion of this kind becomes the photograph's own, in one click.
   const acceptAll = (kind: 'tag') => {
     const waiting = (p?.tags ?? []).filter((t) => t.kind === kind && t.source === 'ai' && !t.accepted);

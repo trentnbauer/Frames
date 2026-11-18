@@ -1,7 +1,7 @@
 import { rememberWish } from '../wishHistory.js';
 import { WorkflowError } from '../workflowCore.js';
 import { gearFields, valuesOf, journal } from '../workflowCore.js';
-import { syncGearTags } from '../gear.js';
+import { syncPhotoGear } from '../gear.js';
 import { blacklistGear, blacklistedGear, foundGear, hideGear, hiddenGear, ownGear, syncGearDiscoveries, unblacklistGear, unhideGear } from '../gearDiscoveries.js';
 import type { FastifyInstance } from 'fastify';
 import { getSetting, setSetting, type DB } from '../db.js';
@@ -146,14 +146,14 @@ export function registerGearItems(app: FastifyInstance, x: Ctx) {
       const updated = one('SELECT * FROM gear_items WHERE id = ?',id)!;
       const fields = gearFields.filter(field=>JSON.stringify(current[field])!==JSON.stringify(updated[field]));
       const operationId = current.kind === 'own' && fields.length ? journal(db,'Edit owned gear',[{table:'gear_items',id,identity:current.created_at,before:valuesOf(current,fields),after:valuesOf(updated,fields)}]) : null;
-      if (fields.includes('name') || fields.includes('type')) for (const photo of all('SELECT id FROM photos')) syncGearTags(db,photo.id);
+      if (fields.includes('name') || fields.includes('type')) for (const photo of all('SELECT id FROM photos')) syncPhotoGear(db,photo.id);
       return {...dto(updated),operationId};
     })();
   });
   app.delete('/api/gear/items/:id', async (req, rep) => {
     const id = num((req.params as Row).id), kind = ((req.query ?? {}) as Row).kind;
     if (kind !== undefined && kind !== 'want') return rep.code(400).send({ error: 'The removal kind must be want.' });
-    const removed = db.transaction(()=>{const current=one('SELECT * FROM gear_items WHERE id=?',id);if(!current||(kind==='want'&&current.kind!=='want'))return 0;if(current.kind==='want')rememberWish(db,current,'declined');const count=db.prepare('DELETE FROM gear_items WHERE id=?').run(id).changes;if(current.kind==='own')for(const photo of all('SELECT id FROM photos'))syncGearTags(db,photo.id);return count;})();
+    const removed = db.transaction(()=>{const current=one('SELECT * FROM gear_items WHERE id=?',id);if(!current||(kind==='want'&&current.kind!=='want'))return 0;if(current.kind==='want')rememberWish(db,current,'declined');const count=db.prepare('DELETE FROM gear_items WHERE id=?').run(id).changes;if(current.kind==='own')for(const photo of all('SELECT id FROM photos'))syncPhotoGear(db,photo.id);return count;})();
     if (kind === 'want' && !removed) return rep.code(409).send({ error: 'This item is no longer on your wishlist. Refresh the list before trying again.' });
     return { removed };
   });

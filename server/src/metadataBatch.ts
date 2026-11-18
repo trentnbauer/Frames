@@ -1,6 +1,6 @@
 import type { DB } from './db.js';
 import type { Row } from './ctx.js';
-import { syncGearTags } from './gear.js';
+import { syncPhotoGear } from './gear.js';
 import { journal, photoChange, photoTags, photoVersion, WorkflowError } from './workflowCore.js';
 const textFields: Record<string, [string, number]> = {
   camera: ['camera', 120],
@@ -127,7 +127,7 @@ export function metadataBatch(db: DB, body: Row, apply: boolean) {
       if ('title' in values) values.title_user = 1;
       const keys = Object.keys(values);
       db.prepare(`UPDATE photos SET ${keys.map((key) => `${key}=?`).join(',')} WHERE id=?`).run(...keys.map((key) => values[key]), id);
-      syncGearTags(db, id);
+      syncPhotoGear(db, id);
       const after = db.prepare('SELECT * FROM photos WHERE id=?').get(id) as Row;
       const change = photoChange(before, after, tags, photoTags(db, id));
       if (change) changes.push(change);
