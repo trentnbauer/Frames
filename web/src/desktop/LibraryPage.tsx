@@ -90,7 +90,7 @@ export function LibraryPage() {
   return (
     <div className="page-shell" data-screen-label="Library">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Library</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{total.toLocaleString()} photographs · {all.length} shoots</span></div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}><h1 style={{ font: `400 48px/1 ${serif}`, margin: 0 }}>Library</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{total.toLocaleString()} photographs · {all.length} {all.length === 1 ? 'shoot' : 'shoots'}</span></div>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, flex: 'none' }}><button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15, whiteSpace: 'nowrap' }}>Add photos</button><Kbd k="A" /></span>
       </div>
       {(pending.data?.count ?? 0) > 0 && (

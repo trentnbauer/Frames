@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { optionsFor, wallFromRects } from './components/NewComposition';
+import { dims } from './layout';
 import { stepOf } from './components/Shell';
 import { greetingFor } from './pages/Today';
 import { seasonOf } from './season';
@@ -50,5 +51,15 @@ describe('new composition layouts', () => {
     expect(w[1].x).toBeLessThan(w[2].x);
     const landscape = wallFromRects(optionsFor(1).find((o) => o.label === 'Panorama')!.rects);
     expect(landscape[0].orientation).toBe('landscape');
+  });
+  it('hangs framed prints clear of each other, whatever the card drew', () => {
+    for (let n = 1; n <= 6; n++) for (const o of optionsFor(n)) {
+      const w = wallFromRects(o.rects);
+      w.forEach((a, i) => w.slice(i + 1).forEach((b) => {
+        const [aw, ah] = dims(a), [bw, bh] = dims(b);
+        const apart = a.x + aw <= b.x || b.x + bw <= a.x || a.y + ah <= b.y || b.y + bh <= a.y;
+        expect(apart, `${n} prints, ${o.label}`).toBe(true);
+      }));
+    }
   });
 });

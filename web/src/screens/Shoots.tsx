@@ -19,7 +19,7 @@ import { Modal } from '../components/Modal';
 import { ShootDate } from '../components/ShootDate';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
-type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
+type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null; photoIds?: number[] };
 type Suggestion = { groups: { name: string; photoIds: number[] }[]; shootId?: number; name?: string };
 
 const dayLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : 'No camera date');
@@ -126,11 +126,13 @@ function DesktopShoots() {
   const viewPhotos = ph.map((p) => ({ id: p.id, ar: p.ar, src: imgUrl(p.id, 'thumb'), score: p.reviewCount > 0 ? p.avgRating : null, comp: inComp.has(p.id), isNew: Date.now() - new Date(p.addedAt).getTime() < 7 * 864e5 && p.reviewCount === 0, missing: !p.camera, dayLabel: dayLabel(p.dateEdit ?? p.capturedAt) }));
 
   const place = async (r: ScanResult, o: { mode: string; name: string; existingId: number | null; split: boolean }) => {
-    if (!r.shootId || r.imported === 0) return;
-    if (o.mode === 'existing' && o.existingId) { const ids = (await api<{ photos: { id: number }[] }>(`/photos?shoot=${r.shootId}`)).photos.map((p) => p.id); await api(`/shoots/${o.existingId}/move`, { body: { photoIds: ids } }); return; }
-    const nm = o.name || r.shootName || todayName();
-    await api(`/shoots/${r.shootId}`, { method: 'PATCH', body: { name: nm } });
-    if (o.split) await api(`/shoots/${r.shootId}/split-by-day`, { body: { name: nm } }).catch(() => undefined);
+    const ids = r.photoIds ?? [];
+    if (!ids.length) return;
+    // New photographs arrive in the hidden "No shoot" bucket, which cannot be renamed or split: move just these into a real shoot.
+    if (o.mode === 'existing' && o.existingId) { await api(`/shoots/${o.existingId}/move`, { body: { photoIds: ids } }); return; }
+    const nm = o.name || todayName();
+    const made = await api<{ id: number }>('/shoots', { body: { name: nm, photoIds: ids } });
+    if (o.split) await api(`/shoots/${made.id}/split-by-day`, { body: { name: nm } }).catch(() => undefined);
   };
 
   const days = new Set(files.map((f) => new Date(f.lastModified).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })));
@@ -168,13 +170,13 @@ function DesktopShoots() {
         onCloudPlace={async (o: { shootId: number | null; mode: string; name: string; existingId: number | null; split: boolean }) => { if (o.shootId) await place({ shootId: o.shootId, imported: 1, duplicates: 0, shootName: null }, o); reloadAll(); }}
         thumb={(pid: number) => imgUrl(pid, 'thumb')}
         shoots={shown.map((s) => ({ id: s.id, name: s.name, count: s.count, place: s.place || '', dates: s.dates, pct: `${Math.round(s.reviewPct)}%`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '', ...tagFor(s) }))}
-        countLine={`${all.length} shoots · ${totalPhotos.toLocaleString()} photos`}
+        countLine={`${all.length} ${all.length === 1 ? 'shoot' : 'shoots'} · ${totalPhotos.toLocaleString()} photos`}
         pendingN={pending.data?.count ?? 0} importLabel={importing ? 'Importing…' : `Import ${pending.data?.count ?? 0}`}
         importPending={async () => { setImporting(true); try { await waitScan(); } finally { setImporting(false); reloadAll(); } }}
         sugg={s0 && !dismissed ? { name: s0.name ?? s0.groups[0]?.name ?? 'A shoot', n: s0.groups.length, accept: async () => { for (const g of s0.groups) await api('/shoots', { body: { name: g.name, photoIds: g.photoIds } }); reloadAll(); }, dismiss: () => setDismissed(true) } : null}
         q={q} onQ={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)} orderLabel={newest ? 'Newest first' : 'Oldest first'} toggleOrder={() => setNewest(!newest)}
         chips={[{ label: `Not in a composition · ${nUncomposed}`, on: filter === 'uncomposed', go: () => setFilter(filter === 'uncomposed' ? '' : 'uncomposed') }, { label: `Due for review · ${nReview}`, on: filter === 'review', go: () => setFilter(filter === 'review' ? '' : 'review') }]}
-        yearLabel={years[0] ?? ''} yearMeta={`${all.length} shoots${years.length > 1 ? ' · ' + years.slice(1, 5).join(' · ') + (years.length > 5 ? ' · earlier' : '') : ''}`}
+        yearLabel={years[0] ?? ''} yearMeta={`${all.length} ${all.length === 1 ? 'shoot' : 'shoots'}${years.length > 1 ? ' · ' + years.slice(1, 5).join(' · ') + (years.length > 5 ? ' · earlier' : '') : ''}`}
         onOpenShoot={(i: number) => nav(`/shoots/${i}`)} onCloseShoot={() => nav('/shoots')}
         shoot={view} shootPhotos={viewPhotos} onOpenPhoto={(pid: number) => nav(`/photo/${pid}`)}
         moveTargets={all.map((s) => ({ id: s.id, name: s.name, meta: `${s.count} photos · ${s.dates}`, src: s.coverId ? imgUrl(s.coverId, 'thumb') : '' }))}
