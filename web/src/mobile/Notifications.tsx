@@ -4,7 +4,7 @@ import { api } from '../api';
 import { ICON, ago, type Notif } from '../components/Shell';
 import { BackPill } from './ui';
 
-/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear and Dismiss. */
+/** Notifications as a page of their own on a phone: each with a dismiss ×, new gear with Add to gear and Not mine. */
 export function MobileNotifications() {
   const nav = useNavigate();
   const [items, setItems] = useState<Notif[] | null>(null);
@@ -37,7 +37,7 @@ export function MobileNotifications() {
           <BackPill label="Home" />
           <div style={{ display: 'flex', gap: 4 }}>
             <button onClick={readAll} disabled={!unread || busy !== null} style={{ height: 36, padding: '0 10px', fontSize: 13, color: unread ? 'var(--text2)' : 'var(--faint)' }}>Mark all read</button>
-            <button onClick={clear} disabled={!list.length || busy !== null} style={{ height: 36, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>{busy === 'all' ? 'Clearing…' : 'Clear'}</button>
+            <button onClick={clear} disabled={!list.length || busy !== null} style={{ height: 36, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>{busy === 'all' ? 'Clearing…' : 'Clear all'}</button>
           </div>
         </div>
         <h1 style={{ font: '400 40px/1 var(--serif)', margin: 0 }}>Notifications</h1>
@@ -53,8 +53,8 @@ export function MobileNotifications() {
               <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} aria-label={`Dismiss: ${n.text}`} style={{ position: 'absolute', top: 8, right: -6, width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--muted)', fontSize: 17 }}>×</button>
               {n.gear?.state === 'new' && (
                 <div style={{ display: 'flex', gap: 8, padding: '0 0 14px 44px' }}>
-                  <button onClick={() => act(n, 'add')} disabled={busy !== null} style={{ height: 38, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>Add to gear</button>
-                  <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Dismiss</button>
+                  <button onClick={() => act(n, 'add')} disabled={busy !== null} style={{ height: 38, padding: '0 14px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 13 }}>Add to gear</button>
+                  <button onClick={() => act(n, 'dismiss')} disabled={busy !== null} style={{ height: 38, padding: '0 10px', fontSize: 13, color: 'var(--text2)' }}>Not mine</button>
                 </div>
               )}
             </div>

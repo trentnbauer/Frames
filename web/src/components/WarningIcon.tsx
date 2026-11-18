@@ -1,0 +1,2 @@
+/** The warning symbol that goes before the label of anything that removes data held in Frames (DESIGN.md: Deleting data in Frames). */
+export const WarningIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" role="img" aria-label="Warning"><path d="M8 2 1.5 13.5h13L8 2z" /><path d="M8 6.5v3.2" /><circle cx="8" cy="11.6" r=".5" fill="currentColor" /></svg>;

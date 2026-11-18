@@ -33,13 +33,13 @@ export function TodoNav({ total, items = [] }: { total: number; removals?: numbe
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); const links = [...(root.current?.querySelectorAll<HTMLAnchorElement>('a') ?? [])]; const index = links.indexOf(document.activeElement as HTMLAnchorElement); links[(index + (event.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length]?.focus(); }
   }}><button ref={trigger} className={'btodo' + (active ? ' on' : '')} aria-expanded={open} aria-controls="todo-navigation" title="To do (T)" onClick={() => nav('/todo')}>To do {total > 0 && <b className="mono">{total.toLocaleString()}</b>}<kbd className="kbd" aria-hidden="true">T</kbd></button>{open && <div className="todo-nav-popover" id="todo-navigation"><nav aria-label="To do tasks">
     {first && <Link to="/todo" className="todo-up-next"><span className="eyebrow">Up next</span><span className="todo-up-next-row"><span>{taskMeta(first.key)?.title} · {first.n.toLocaleString()} {first.n === 1 ? 'photo' : 'photos'}</span><span className="mono">Start →</span></span></Link>}
-    {tasks.rows.length > 0 && <p className="eyebrow todo-nav-head">Or work through one task</p>}
+    {tasks.rows.length > 0 && <p className="eyebrow todo-nav-head">By task</p>}
     {tasks.rows.map((r) => <Link key={r.key} to={`/todo?task=${r.key}`}>{r.row}<span>{r.n.toLocaleString()}</span></Link>)}
     {!tasks.rows.length && !dupes && !cloud && <p className="muted">All caught up</p>}
     {(dupes || cloud) && <div className="msep" role="separator" />}
     {dupes && <Link to="/duplicates">Near-duplicates<span>{dupes.count.toLocaleString()}</span></Link>}
     {cloud && <Link to={cloud.link ?? '/settings?section=cloud'}>Reconnect cloud account<span>→</span></Link>}
     <div className="msep" role="separator" />
-    <Link to="/settings?section=app">Choose what counts<span>→</span></Link>
+    <Link to="/settings?section=app">To do settings<span>→</span></Link>
   </nav></div>}</div>;
 }

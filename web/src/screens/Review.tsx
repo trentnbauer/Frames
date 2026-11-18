@@ -57,7 +57,7 @@ export function Review() {
     setS({ ...s, ratings: { ...s.ratings, [cur.id]: n }, index: s.index + 1 });
     const fit = n >= 4 ? bestFit(cur.id) : null;
     setOffer(fit ? { id: cur.id, comp: fit } : null);
-    if (n === 5) { const id = cur.id; api<{ inPortfolio: boolean }>(`/portfolio/photos/${id}`).then((st) => { if (!st.inPortfolio) setFav({ id, busy: false }); }).catch(() => undefined); }
+    if (n === 5) { const id = cur.id; api<{ favourite: boolean }>(`/portfolio/photos/${id}`).then((st) => { if (!st.favourite) setFav({ id, busy: false }); }).catch(() => undefined); }
     api('/review/rate', { body: { photoId: cur.id, rating: n, note: s.notes[cur.id] } }).then(() => { refreshSummary(); void checkRemovals(); }).catch((e: Error) => { setS(before); setSaveErr(`That rating was not saved (${e.message}). Try it again.`); });
   };
 
@@ -79,7 +79,7 @@ export function Review() {
     );
   }
   const favModal = fav && (
-    <Modal title="Add this five to your portfolio favourites?" sub="Favourites are shown on your portfolio. You can take it out again from the photograph’s page." width={480} onClose={() => setFav(null)}
+    <Modal title="Loved it. Add to your portfolio favourites?" sub="Favourites are shown on your portfolio. You can take it out again from the photograph’s page." width={480} onClose={() => setFav(null)}
       foot={<><span className="grow" /><button className="btn" onClick={() => setFav(null)}>Not now</button><button className="btn primary" disabled={fav.busy} onClick={async () => { setFav({ ...fav, busy: true }); try { await api(`/portfolio/photos/${fav.id}`, { body: { favourite: true } }); } catch (e) { setSaveErr(`It could not be added to your portfolio (${(e as Error).message}).`); } setFav(null); }}>Add to favourites</button></>}>
       <img src={imgUrl(fav.id, 'thumb')} alt="" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 8, background: '#000' }} />
     </Modal>
@@ -88,17 +88,14 @@ export function Review() {
   if (phone && cur) {
     return (<>
       <MobileReviewSession
-        key={cur.id} total={s.queue.length} index={s.index} shootName={s.shootName} photoId={cur.id} photoSrc={imgUrl(cur.id, 'preview')} rating={s.ratings[cur.id]} note={s.notes[cur.id] ?? ''}
+        key={cur.id} total={s.queue.length} index={s.index} shootName={s.shootName} photoId={cur.id} photoSrc={imgUrl(cur.id, 'preview')} rating={s.ratings[cur.id]}
         onRate={rate} onBin={bin} onSkip={() => move(s.index + 1)} onBack={() => move(Math.max(0, s.index - 1))} onFinish={leave}
-        onNote={async (note: string) => { if (s.ratings[cur.id] !== undefined) setS(await api<Session>('/review/note', { body: { photoId: cur.id, note } })); else setS({ ...s, notes: { ...s.notes, [cur.id]: note } }); }}
-        offer={offer ? { name: offer.comp.name } : null} onDismissOffer={() => setOffer(null)}
-        onAddOffer={async () => { if (!offer) return; await api(`/collections/${offer.comp.id}/photos/${offer.id}`, { method: 'PUT' }); setOffer(null); colls.reload(); }}
-        onChooseOffer={() => { if (offer) { setPickFor(offer.id); setOffer(null); } }}
+        fav={fav && fav.id === cur.id ? { busy: fav.busy } : null} onDismissFav={() => setFav(null)}
+        onFavourite={async () => { if (!fav) return; setFav({ ...fav, busy: true }); try { await api(`/portfolio/photos/${fav.id}`, { body: { favourite: true } }); setFav(null); } catch (e) { setFav(null); setSaveErr(`It could not be added to your favourites (${(e as Error).message}).`); } }}
         renderCompPicker={(close, d) => <CompPicker ids={[pickFor ?? cur.id]} from="The photo you just rated" onClose={() => { setPickFor(null); close(); }} onDone={(m) => { setPickFor(null); colls.reload(); d(m); }} />}
         rotateBtn={<RotateButton id={cur.id} onDone={() => setS({ ...s })} style={{ width: 36, height: 36, background: 'rgba(255,255,255,.08)', color: '#efede8' }} />}
         error={saveErr}
       />
-      {favModal}
     </>);
   }
   return (<>
