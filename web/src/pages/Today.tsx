@@ -156,7 +156,7 @@ export function Today() {
   }
 
   const dueText = s && s.due > 0
-    ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')} · ` : ''}about ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'} · ratings rank your compositions`
+    ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')} · ` : ''}about ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'}`
     : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.';
   const cloudLeft = batches.data?.left ?? 0;
   const total = shoots.data?.length ?? 0;
@@ -171,8 +171,8 @@ export function Today() {
       </div>
 
       {s && (s.due > 0 || s.resumable || s.early > 0) && <HomeReviewBanner
-        cover={s.nextId ? cover(s.nextId) : undefined} tag={s.due > 0 ? 'DUE NOW' : s.resumable ? 'IN PROGRESS' : 'ANYTIME'}
-        title={s.due > 0 ? `${s.due} ${s.due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is waiting to be seen again'}
+        cover={s.nextId ? cover(s.nextId) : undefined} tag={s.due > 0 ? 'Review · Due now' : s.resumable ? 'Review · In progress' : 'Review · Anytime'}
+        title={s.due > 0 ? `${s.due} ${s.due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review'}
         description={dueText} buttonLabel={s.resumable ? 'Resume review' : s.due === 0 ? 'Review anyway' : 'Begin review'} onBegin={begin}
       />}
 
@@ -206,7 +206,7 @@ export function Today() {
                   <div style={{ display: 'flex', gap: 6, height: 120 }}>{idea.photos.slice(0, 4).map((p) => <img key={p.id} src={cover(p.id)} alt="" style={{ height: '100%', flex: `${p.ar} 1 0`, minWidth: 0, objectFit: 'cover', borderRadius: 4 }} />)}</div>
                   <h3 className="serif" style={{ fontSize: 24 }}>{idea.name}</h3>
                   <p className="muted" style={{ margin: 0, fontSize: 13 }}>{idea.reason}</p>
-                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}><button className="btn primary" onClick={() => startIdea(idea)}>Start this composition</button><button className="muted" onClick={() => notMe(idea)}>Not for me</button></div>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}><button className="btn primary" onClick={() => startIdea(idea)}>Start composition</button><button className="muted" onClick={() => notMe(idea)}>Skip idea</button></div>
                 </div>
               ) : <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>{recs.loading ? 'Looking for sets…' : 'No ideas yet. Rate a few more photographs and Frames will suggest sets.'}</p>}
             </div>

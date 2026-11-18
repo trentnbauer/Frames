@@ -144,11 +144,11 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
   const v = {
     isNew: true, isStats: false, isTodo: false, isCompare: false, isDupes: false, isWelcome: false,
     ncName: name, onNcName: (e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value),
-    ncCount: count, ncDec: () => setN(count - 1), ncInc: () => setN(count + 1), ncDecFg: count > 1 ? 'var(--text)' : '#4a4845', ncIncFg: count < 12 ? 'var(--text)' : '#4a4845',
+    ncCount: count, ncDec: () => setN(count - 1), ncInc: () => setN(count + 1), ncDecFg: count > 1 ? 'var(--text)' : 'var(--disabled)', ncIncFg: count < 12 ? 'var(--text)' : 'var(--disabled)',
     layouts: opts.map((pr) => { const on = preset === pr.key; return { label: pr.label, bg: on ? 'var(--text)' : 'transparent', fg: on ? 'var(--bg)' : 'var(--text)', hover: on ? 'var(--text)' : 'color-mix(in srgb, var(--text) 4%, transparent)', ring: on ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent)', wall: on ? '#dcd9d2' : 'color-mix(in srgb, var(--text) 4%, transparent)', blockBg: on ? 'var(--bg)' : 'var(--text2)', blocks: pr.rects.map(([x, y, w, h]) => ({ x: `${x}%`, y: `${(y / 64) * 100}%`, w: `${w}%`, h: `${(h / 64) * 100}%` })), go: () => choose(pr) }; }),
     ncPrints: prints.map((p, i) => ({ n: i + 1, size: sizeName(p.size), orient: cap(p.orientation), frame: p.frame ? (p.frame.size === p.size ? 'Framed, no border' : `${sizeName(p.frame.size)} frame`) : 'Poster',
       cycle: () => custom((q) => { const next = SIZES[(SIZES.indexOf(q[i].size) + 1) % SIZES.length] ?? 'A3'; q[i].size = next; if (q[i].frame && !fits(q[i].frame!.size, next)) q[i].frame = { ...q[i].frame!, size: next }; }) })),
-    askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Ask the AI', aiSpin: null,
+    askAi: aiOn ? askAi : () => setAiMsg('AI is off. Turn it on in Settings, Your AI.'), aiLabel: aiBusy ? 'Asking the AI…' : '✦ Suggest with AI', aiSpin: null,
     ncChips: chips, ncChipHint: chips.length ? aiMsg : aiMsg || 'Type a name and Frames matches subjects, tags and colours you already have.',
     ncSummary: looking ? 'Looking…' : ids.length ? `${ids.length} candidates for ${printsSummary(prints)}` : `${prints.length} ${prints.length === 1 ? 'print' : 'prints'} · ${prints.filter((p) => p.frame).length} framed. You add the photographs next.`,
     ncCreate: create, ncClose: onClose,
@@ -158,7 +158,7 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
       <div onKeyDown={(e) => e.key === 'Escape' && onClose()}>
         <ProtoMore page="new" v={v} />
       </div>
-      {err && <p role="alert" style={{ position: 'fixed', bottom: 24, left: 0, right: 0, textAlign: 'center', color: '#e79a82' }}>{err}</p>}
+      {err && <p role="alert" style={{ position: 'fixed', bottom: 24, left: 0, right: 0, textAlign: 'center', color: 'var(--err)' }}>{err}</p>}
     </div>
   );
 }

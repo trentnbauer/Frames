@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
 import { BulkEdit } from '../components/BulkEdit';
+import { WarningIcon } from '../components/WarningIcon';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { Modal } from '../components/Modal';
 import { useApi } from '../api';
@@ -33,7 +34,7 @@ export function useToast() {
 /** The design's confirm dialog: a serif title, a sentence, Cancel and a red action. */
 export function ConfirmDialog({ title, sub, cta, onGo, onClose }: { title: string; sub: string; cta: string; onGo: () => void; onClose: () => void }) {
   return (
-    <Modal title={title} sub={sub} width={480} onClose={onClose} foot={<><span className="grow" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn" style={{ background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500 }} onClick={onGo}>{cta}</button></>}>
+    <Modal title={title} sub={sub} width={480} onClose={onClose} foot={<><span className="grow" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn danger" onClick={onGo}><WarningIcon />{cta}</button></>}>
       <span />
     </Modal>
   );
@@ -42,8 +43,8 @@ export function ConfirmDialog({ title, sub, cta, onGo, onClose }: { title: strin
 /** What to do with the photographs when a shoot is deleted: keep them (in no shoot) or remove them too. */
 export function DeleteShootDialog({ title, count, onKeep, onDelete, onClose }: { title: string; count: number; onKeep: () => void; onDelete: () => void; onClose: () => void }) {
   return (
-    <Modal title={title} sub={`The shoot goes either way. What about its ${count} ${count === 1 ? 'photograph' : 'photographs'}?`} width={520} onClose={onClose}
-      foot={<><button className="btn" onClick={onClose}>Cancel</button><span className="grow" /><button className="btn outline" onClick={onKeep}>Delete shoot</button><button className="btn" style={{ background: 'var(--danger)', color: '#0d0d0d', fontWeight: 500 }} onClick={onDelete}>Delete shoot & photos</button></>}>
+    <Modal title={title} sub="Either way, your original files aren’t touched. Removed photos go to Recently removed, where you can restore them." width={520} onClose={onClose}
+      foot={<><button className="btn" onClick={onClose}>Cancel</button><span className="grow" /><button className="btn outline" onClick={onKeep}>Delete shoot, keep photos</button><button className="btn danger" onClick={onDelete}><WarningIcon />Delete shoot, remove photos from Frames</button></>}>
       <p className="muted" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>Kept photographs stay in Frames with their ratings and tags, in no shoot, and show up in To do until you put them in one. Deleted photographs move to Recently removed for 30 days. Original files are never touched.</p>
     </Modal>
   );
@@ -90,27 +91,30 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
   const move = async (to: Shoot) => { try { await api(`/shoots/${to.id}/move`, { body: { photoIds: ids } }); setDlg(null); onClear(); onChanged(); say(`Moved ${ids.length} to “${to.name}”`); } catch (e) { setErr((e as Error).message); } };
   const scan = async () => { setErr(''); setScanning(true); try { await api('/ai/run', { method: 'POST', body: { photoIds: ids } }); say(`Scanning ${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'} with AI`); onClear(); } catch (e) { setErr((e as Error).message); } finally { setScanning(false); } };
   const remove = async () => { try { await api('/photos/remove', { body: { ids: removable, originals: 'keep' } }); setDlg(null); onClear(); onChanged(); refreshSummary(); say(`Moved ${removable.length} to Recently removed${blocked.length ? ` · ${blocked.length} protected, kept` : ''}`); } catch (e) { setErr((e as Error).message); setDlg(null); } };
+  const plain = { height: 32, padding: '0 12px', color: 'var(--text)' } as const;
   const pill = { height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)' } as const;
   return (
     <>
       <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 96, zIndex: 25, display: 'flex', gap: 8, alignItems: 'center', background: 'var(--raised2)', borderRadius: 999, padding: '8px 8px 8px 24px', boxShadow: 'var(--float)', fontSize: 14, whiteSpace: 'nowrap' }}>
         <b style={{ fontWeight: 500, marginRight: 4 }}>{ids.length} selected</b>
         <button onClick={onClear} style={{ height: 32, padding: '0 12px', color: 'var(--text2)' }}>Clear</button>
-        <button onClick={() => { setErr(''); setDlg('edit'); }} title="Set camera, lens, film, place, date, tags and more on every selected photograph" style={pill}>Edit details…</button>
-        <button onClick={() => { setErr(''); setDlg('move'); }} style={pill}>Move to shoot…</button>
-        {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={pill}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
-        <button onClick={() => { if (allBlocked) say('These photos are in a protected shoot. Turn off protection to remove them.'); else setDlg('remove'); }} title={blocked.length ? `${blocked.length} selected photo${blocked.length > 1 ? 's are' : ' is'} in a protected shoot and can’t be removed` : 'Move to Recently removed'} style={{ ...pill, color: allBlocked ? 'var(--faint)' : 'var(--danger)', boxShadow: allBlocked ? 'inset 0 0 0 1px var(--hair)' : 'inset 0 0 0 1px color-mix(in srgb, var(--danger) 60%, transparent)' }}>{allBlocked ? 'Protected' : blocked.length ? `Remove ${removable.length}` : 'Remove'}</button>
-        <button onClick={() => setDlg('comp')} style={{ height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Add to composition</button>
+        <i aria-hidden style={{ width: 1, height: 20, background: 'var(--hair)' }} />
+        <button onClick={() => { if (allBlocked) say('These photos are in a protected shoot. Turn off protection to remove them.'); else setDlg('remove'); }} disabled={allBlocked} title={blocked.length ? `${blocked.length} selected photo${blocked.length > 1 ? 's are' : ' is'} in a protected shoot and can’t be removed` : 'Move to Recently removed'} style={{ height: 32, padding: '0 12px', color: allBlocked ? 'var(--faint)' : 'var(--danger)' }}>{blocked.length ? `Remove ${removable.length}…` : 'Remove…'}</button>
+        <i aria-hidden style={{ width: 1, height: 20, background: 'var(--hair)' }} />
+        <button onClick={() => { setErr(''); setDlg('edit'); }} title="Set camera, lens, film, place, date, tags and more on every selected photograph" style={plain}>Edit details…</button>
+        <button onClick={() => { setErr(''); setDlg('move'); }} style={plain}>Move to shoot…</button>
+        {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={plain}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
+        <button onClick={() => setDlg('comp')} style={{ height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Add to composition…</button>
       </div>
       {err && <div role="alert" className="reason" style={{ position: 'fixed', bottom: 150, left: '50%', transform: 'translateX(-50%)', zIndex: 26 }}>{err}</div>}
       {dlg === 'move' && (
-        <Modal title="Move to a shoot" sub={`${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'} selected`} width={560} onClose={() => setDlg(null)}>
+        <Modal title={`Move ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}`} width={560} onClose={() => setDlg(null)}>
           <MoveToShoot count={ids.length} shoots={shoots} canOrphan={picked.some((p) => !p.orphaned)} busy={false} error={err} onAdd={move} onCreate={create} onOrphan={orphan} onClose={() => setDlg(null)} />
         </Modal>
       )}
       {dlg === 'edit' && <BulkEdit ids={ids} onClose={() => setDlg(null)} onDone={onChanged} />}
       {dlg === 'comp' && <CompPicker ids={ids} onClose={() => setDlg(null)} onDone={(m) => { setDlg(null); onClear(); say(m); }} />}
-      {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photograph' : 'photographs'}?`} sub="They move to Recently removed, where you can restore them. The original files are kept." cta="Remove" onGo={remove} onClose={() => setDlg(null)} />}
+      {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photograph' : 'photographs'}?`} sub="They’re removed from Frames and go to Recently removed, where you can restore them. The original files stay where they are." cta={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}`} onGo={remove} onClose={() => setDlg(null)} />}
     </>
   );
 }

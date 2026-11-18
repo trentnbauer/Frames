@@ -1,3 +1,4 @@
+import { WarningIcon } from './WarningIcon';
 import { confirmAction } from './dialogs';
 import { useEffect, useState } from 'react';
 import { api, imgUrl, useApi } from '../api';
@@ -46,8 +47,8 @@ export function RemovalReview({ onChanged }: { onChanged: () => void }) {
           {history.map((review, index) => <circle key={index} cx={x(index)} cy={y(review.rating)} r="5" fill="var(--text)"><title>Session {review.session}: {review.rating}/5 · {new Date(review.date).toLocaleDateString()}</title></circle>)}
         </svg>
         <div className="removal-scores">{history.map((review,index) => <div key={index}><strong>{review.rating}<small> / 5</small></strong><span>Session {review.session}</span><time dateTime={review.date}>{new Date(review.date).toLocaleDateString()}</time></div>)}</div>
-        <div className="removal-actions"><button type="button" className="btn primary" disabled={busy} onClick={() => void act('keep')}>Keep</button><button type="button" className="btn outline" disabled={busy} style={{ color: 'var(--danger)' }} onClick={() => void act('delete')}>Delete</button></div>
-        <small className="muted">Keep dismisses this suggestion until another rating. Delete asks for confirmation. Original files are kept.</small>
+        <div className="removal-actions"><button type="button" className="btn outline" disabled={busy} onClick={() => void act('keep')}>Keep</button><button type="button" className="btn danger" disabled={busy} onClick={() => void act('delete')}><WarningIcon />Remove…</button></div>
+        <small className="muted">Keep dismisses this suggestion until another rating. Remove asks for confirmation. Original files are kept.</small>
         {error && <p role="alert" className="reason">{error}</p>}
       </div>
     </div>
