@@ -90,7 +90,7 @@ const addColumn = (db: DB, table: string, col: string, ddl: string) => { if (!ha
 const INTERVAL_DAYS: Record<string, number> = { '1 day': 1, '1 week': 7, '1 month': 30, '3 months': 90, '6 months': 182, '1 year': 365 };
 
 /** Each step runs once, in order, and is safe to re-run. The database version is stored in PRAGMA user_version. */
-const MIGRATIONS: ((db: DB) => void)[] = [
+export const MIGRATIONS: ((db: DB) => void)[] = [
   // 2: location, analysis, variants, metadata, AI, richer organisation
   (db) => {
     for (const [c, d] of [
@@ -466,6 +466,8 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   },
   // Discovered gear can be hidden: it leaves the Found list and its notification goes, but the camera details on photographs stay (unlike the blacklist).
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS gear_hidden (key TEXT PRIMARY KEY, name TEXT NOT NULL)'); },
+  // Camera, lens, film stock and field of view are no longer copied into tags: the ones already there are removed (search reads the details themselves).
+  (db) => { db.exec("DELETE FROM tags WHERE source = 'gear'; UPDATE photos SET gear_sig = '' WHERE gear_sig != ''"); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

@@ -7,7 +7,7 @@ import { pruneRecovery, recoveryDays, restoreRemoval, undoChange, journal, Workf
 import { hashFile, processPhoto } from '../ingest.js';
 import { metadataBatch, metadataInput } from '../metadataBatch.js';
 import { gearKey } from '../gearBlacklist.js';
-import { syncGearTags } from '../gear.js';
+import { syncPhotoGear } from '../gear.js';
 export function registerWorkflow(app: FastifyInstance, x: Ctx) {
   const { db, all, one, num, notFound } = x;
   app.get('/api/recovery/settings', async () => ({ days: recoveryDays(db) }));
@@ -57,7 +57,7 @@ export function registerWorkflow(app: FastifyInstance, x: Ctx) {
     }
     const restored = restoreRemoval(db, id);
     const ready = restored.missing ? false : await processPhoto(db, x.cfg, restored.id, restored.path, { derivsOnly: true });
-    syncGearTags(db, restored.id);
+    syncPhotoGear(db, restored.id);
     return { id: restored.id, missing: restored.missing, previewReady: ready };
   });
   app.get('/api/changes', async () => {
@@ -71,7 +71,7 @@ export function registerWorkflow(app: FastifyInstance, x: Ctx) {
   });
   app.post('/api/changes/:id/undo', async (req) => {
     const result = undoChange(db, num((req.params as Row).id));
-    for (const photo of all('SELECT id FROM photos')) syncGearTags(db, photo.id);
+    for (const photo of all('SELECT id FROM photos')) syncPhotoGear(db, photo.id);
     return result;
   });
   app.post('/api/photos/bulk-preview', async (req) => metadataBatch(db, req.body as Row, false));
@@ -178,7 +178,7 @@ export function registerWorkflow(app: FastifyInstance, x: Ctx) {
           changes.push({ table: 'gear_aliases', id: after!.id, gearId: gear.id, identity: gear.created_at, before: null, after });
         }
       }
-      for (const photo of all('SELECT id FROM photos')) syncGearTags(db, photo.id);
+      for (const photo of all('SELECT id FROM photos')) syncPhotoGear(db, photo.id);
       return { ok: true, operationId: journal(db, 'Add gear aliases', changes) };
     })();
   });
@@ -188,7 +188,7 @@ export function registerWorkflow(app: FastifyInstance, x: Ctx) {
       if (!before) return { ok: true };
       const gear = one('SELECT * FROM gear_items WHERE id=?', before.gear_id)!;
       db.prepare('DELETE FROM gear_aliases WHERE id=?').run(before.id);
-      for (const photo of all('SELECT id FROM photos')) syncGearTags(db, photo.id);
+      for (const photo of all('SELECT id FROM photos')) syncPhotoGear(db, photo.id);
       return {
         ok: true,
         operationId: journal(db, 'Remove gear alias', [
