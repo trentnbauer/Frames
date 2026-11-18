@@ -4,7 +4,7 @@ import { api, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { fuzzyNames } from '../fuzzy';
 import { useStore } from '../store';
-import { WALL_BG, arrange, area, fits, frameOf, fromPreset, GROUPS, metres, newPrintId, PAPER, PRESETS, printsSummary, rectsIn, sizeName, type Mode, type Print } from '../layout';
+import { WALL_BG, GAP, arrange, area, dims, fits, frameOf, fromPreset, GROUPS, metres, newPrintId, PAPER, PRESETS, printsSummary, rectsIn, sizeName, type Mode, type Print } from '../layout';
 import type { NewCompositionStart } from '../ui';
 import ProtoMore from '../proto/ProtoMore';
 
@@ -47,11 +47,21 @@ export function wallFromRects(rects: Rect[]): Print[] {
   const longest = Math.max(...rects.map(([, , w, h]) => Math.max(w, h)));
   const k = 420 / longest; // the biggest print is about A3-A2 sized
   const SIZES: [string, number][] = [['A5', 210], ['A4', 297], ['A3', 420], ['A2', 594], ['A1', 841]];
-  return rects.map(([x, y, w, h]) => {
+  const placed = rects.map(([x, y, w, h]) => {
     const long = Math.max(w, h) * k;
     const size = SIZES.reduce((best, c) => (Math.abs(c[1] - long) < Math.abs(best[1] - long) ? c : best))[0];
     return { id: newPrintId(), size, orientation: h >= w ? 'portrait' : 'landscape', frame: { size: FRAME_FOR[size], mat: 'white', color: 'black' }, photoId: null, photoId2: null, stack: false, x: Math.round(x * k), y: Math.round(y * k) } as Print;
   });
+  // The card draws bare prints, but each is hung in a larger frame: spread the positions until no two frames touch.
+  const clear = (q: Print[]) => q.every((a, i) => q.slice(i + 1).every((c) => {
+    const [aw, ah] = dims(a), [cw, ch] = dims(c);
+    return a.x + aw + GAP <= c.x || c.x + cw + GAP <= a.x || a.y + ah + GAP <= c.y || c.y + ch + GAP <= a.y;
+  }));
+  for (let f = 1; f <= 3; f += 0.05) {
+    const q = placed.map((p) => ({ ...p, x: Math.round(p.x * f), y: Math.round(p.y * f) }));
+    if (clear(q) || f > 2.95) return q;
+  }
+  return placed;
 }
 
 type Kind = 'tag' | 'colour';

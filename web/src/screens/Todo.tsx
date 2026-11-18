@@ -143,7 +143,10 @@ function TodoTasks() {
     if (Object.keys(body).length) await api(`/photos/${p.id}`, { method: 'PATCH', body });
     // Saving is the answer for the AI tags too: any not accepted are rejected, so the user only approves the ones they want.
     if (r === 'ai-tags') for (const t of unacceptedAiTags(p.tags ?? [])) await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name: t.name, kind: t.kind, action: 'reject' } });
-    setDone((d) => d + 1); skip(); reload();
+    // Saving with nothing entered is only a skip: it must not count as done, or the count would run ahead of the "waiting" one.
+    const answered = Object.keys(body).length > 0 || r === 'ai-tags' || (r === 'tags' && (p.tags?.length ?? 0) > 0);
+    if (answered) setDone((d) => d + 1);
+    skip(); reload();
   };
   const camMissing = cam.filter((x) => !x).length;
   const meta = taskMeta(r!)!;

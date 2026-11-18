@@ -167,7 +167,7 @@ export function Today() {
       <GettingStarted />
       <div className="spread" style={{ alignItems: 'flex-end', marginBottom: 24, flexWrap: 'wrap' }}>
         <h1 className="serif" style={{ fontSize: 48, lineHeight: 1 }}>{greetingFor(new Date().getHours())}{firstName ? `, ${firstName}.` : ''}</h1>
-        <span className="muted" style={{ fontSize: 13 }}>{(s?.total ?? 0).toLocaleString()} photographs · {total} shoots · {comps.data?.length ?? 0} compositions</span>
+        <span className="muted" style={{ fontSize: 13 }}>{(s?.total ?? 0).toLocaleString()} photographs · {total} {total === 1 ? 'shoot' : 'shoots'} · {comps.data?.length ?? 0} compositions</span>
       </div>
 
       {s && (s.due > 0 || s.resumable || s.early > 0) && <HomeReviewBanner

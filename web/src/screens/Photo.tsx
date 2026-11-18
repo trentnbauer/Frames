@@ -73,8 +73,10 @@ function DesktopPhoto() {
   const score = combined(avg);
   const rank = avg === null ? null : 1 + mates.filter((x) => x.reviewCount > 0 && x.avgRating > avg).length;
 
+  // addedAt is a UTC timestamp: its date part can be yesterday (or tomorrow) where the person is.
+  const localDate = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const camera = p.capturedAt?.slice(0, 10) ?? '';
-  const dateVal = p.dateEdit ?? (camera || p.addedAt.slice(0, 10));
+  const dateVal = p.dateEdit ?? (camera || localDate(p.addedAt));
   const hemi = profile.data?.hemisphere ?? 'north';
   const month = Number(dateVal.slice(5, 7));
   const season = hemi === 'none' || !month ? '' : seasonOf(month, hemi);

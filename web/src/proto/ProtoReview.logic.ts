@@ -11,7 +11,7 @@ export class Logic extends DCLogic {
   componentDidMount() {
     this.onKey = (e) => {
       const P = this.props, S = this.state;
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || S.del || S.pick) return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || S.del || S.pick || document.querySelector('[role=dialog]')) return;
       if (/^[1-5]$/.test(e.key)) P.onRate(+e.key);
       else if (e.key === '0' && P.onBin) P.onBin();
       else if ((e.key === 'a' || e.key === 'A') && P.offer) { e.preventDefault(); P.onAddOffer(); }
