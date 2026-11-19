@@ -29,7 +29,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
     const on = new Set(loadSettings(db).todoReasons);
     const rows = all(`SELECT p.id, p.place, p.description, p.ai_json, p.ai_status, p.camera, p.lens,
       EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.source = 'ai' AND t.accepted = 0) AS pend,
-      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear') AS hasTag
+      EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1) AS hasTag
       FROM photos p WHERE p.missing = 0 ORDER BY p.id DESC`) as Row[];
     const out: { id: number; need: Need }[] = [];
     for (const r of rows) {
@@ -75,7 +75,7 @@ export function registerTodo(app: FastifyInstance, x: Ctx) {
 
     // Photographs with nothing set yet (newest first, so what was just brought in comes first).
     if (on.has('tags')) add('tags', 'Add a tag', 'No tags yet.',
-      ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear') ORDER BY p.id DESC"));
+      ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1) ORDER BY p.id DESC"));
     if (on.has('location')) add('place', 'Name the place', 'No place yet, so these cannot be found by location.',
       ids("SELECT p.id FROM photos p WHERE p.missing = 0 AND TRIM(p.place) = '' ORDER BY p.id DESC"));
     add('colours', 'Colours not read yet', 'The dominant colours are read from the preview, so these cannot be found by colour yet. A scan fills them in.',

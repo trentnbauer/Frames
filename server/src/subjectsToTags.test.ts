@@ -11,7 +11,7 @@ describe('subjects become tags', () => {
     db.prepare("INSERT INTO vocab(name, kind) VALUES ('street', 'subject'), ('street', 'tag'), ('boat', 'subject')").run();
     db.prepare("INSERT INTO shoots(name, source, imported_at, shared) VALUES ('Coast', 'Manual', '2026-01-01', ?)").run(JSON.stringify({ subjects: ['coast'], tags: ['moody'] }));
     db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('settings', ?)").run(JSON.stringify({ todoReasons: ['shoot', 'subjects', 'description'] }));
-    db.pragma(`user_version = ${Number(db.pragma('user_version', { simple: true })) - 1}`); // run the subjects migration again
+    db.pragma(`user_version = ${Number(db.pragma('user_version', { simple: true })) - 3}`); // run the subjects migration again (and the one after it)
     migrate(db);
     expect(db.prepare('SELECT name, kind FROM tags ORDER BY name').all()).toEqual([{ name: 'harbour', kind: 'tag' }, { name: 'moody', kind: 'tag' }]);
     expect(db.prepare('SELECT name, kind FROM vocab ORDER BY name').all()).toEqual([{ name: 'boat', kind: 'tag' }, { name: 'street', kind: 'tag' }]);

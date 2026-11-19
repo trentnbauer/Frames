@@ -10,7 +10,7 @@ import { Modal, Spinner } from './Modal';
 
 export type Status = { smtpHealthy: boolean; storage: { local: boolean; cloud: boolean }; cloudProviders: string[]; admin: boolean };
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
-type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null };
+type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null; photoIds?: number[] };
 
 /** "9 Nov 2026": the name a shoot gets when the name is left blank. */
 export const todayName = () => new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -71,15 +71,15 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
   };
 
   /** Puts what just came in where the person asked: named, joined to an existing shoot, and split by day. */
-  const place = async (r: ScanResult) => {
-    if (!r.shootId || r.imported === 0) return;
-    if (target !== 'new') {
-      const ids = (await api<{ photos: { id: number }[] }>(`/photos?shoot=${r.shootId}`)).photos.map((p) => p.id);
-      await api(`/shoots/${target}/move`, { body: { photoIds: ids } });
-      return;
-    }
-    await api(`/shoots/${r.shootId}`, { method: 'PATCH', body: { name: finalName } });
-    if (split) await api(`/shoots/${r.shootId}/split-by-day`, { body: { name: finalName } }).catch(() => undefined); // all from one day: nothing to split
+  /** Returns the shoot the photographs ended up in. */
+  const place = async (r: ScanResult): Promise<number | undefined> => {
+    const ids = r.photoIds ?? [];
+    if (!ids.length) return undefined;
+    // New photographs arrive in the hidden "No shoot" bucket, which cannot be renamed or split: move just these into a real shoot.
+    if (target !== 'new') { await api(`/shoots/${target}/move`, { body: { photoIds: ids } }); return target; }
+    const made = await api<{ id: number }>('/shoots', { body: { name: finalName, photoIds: ids } });
+    if (split) await api(`/shoots/${made.id}/split-by-day`, { body: { name: finalName } }).catch(() => undefined); // all from one day: nothing to split
+    return made.id;
   };
 
   const upload = async () => {
@@ -91,8 +91,8 @@ export function AddPhotosModal({ onClose, onDone }: { onClose: () => void; onDon
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Upload failed');
       setMsg('Reading camera data and building previews…');
       const out = await waitScan();
-      if (out) await place(out);
-      setRes(out);
+      const into = out ? await place(out) : undefined;
+      setRes(out && into ? { ...out, shootId: into } : out);
       setPhase('review');
     } catch (e) { setErr((e as Error).message); setPhase('pick'); }
   };

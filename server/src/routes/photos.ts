@@ -8,7 +8,7 @@ import { suggestFilters, aiConfig, aiConfigsFor, tryEach, embedText, fromBlob, p
 import { cosine } from '../analysis.js';
 import type { Ctx, Row } from '../ctx.js';
 import { deleteSuggestions, removePhotos } from '../remove.js';
-import { applyGear, syncGearTags } from '../gear.js';
+import { applyGear, syncPhotoGear } from '../gear.js';
 import { hemisphere, monthsOf, type Season, type Seasons } from '../seasons.js';
 import { getSetting } from '../db.js';
 import { loadSettings } from '../settings.js';
@@ -68,6 +68,8 @@ export function nearDuplicateGroups(x: Ctx): number[][] {
   return out;
 }
 
+const LENS_KIND = "(CASE WHEN COALESCE(p.focal35, p.focal_mm) IS NULL OR COALESCE(p.focal35, p.focal_mm) <= 0 THEN '' WHEN COALESCE(p.focal35, p.focal_mm) <= 35 THEN 'wide angle' WHEN COALESCE(p.focal35, p.focal_mm) <= 70 THEN 'regular' ELSE 'telephoto' END)";
+
 export function registerPhotos(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, one, all, notFound } = x;
 
@@ -83,10 +85,11 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     for (const k of String(q.missing ?? '').split(',')) {
       if (k === 'camera' || k === 'lens' || k === 'film') where.push(`COALESCE(p.${k}, '') = ''`);
       if (k === 'place') where.push("COALESCE(p.place, '') = '' AND p.lat IS NULL AND NOT EXISTS (SELECT 1 FROM shoots s WHERE s.id = p.shoot_id AND s.place != '')");
-      if (k === 'tag') where.push("NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1 AND t.source <> 'gear')"); // tags made from camera details do not count as tagged
+      if (k === 'tag') where.push("NOT EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.kind = 'tag' AND t.accepted = 1)");
     }
     for (const s of String(q.tag ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)) {
-      where.push('EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1)'); args.push(s);
+      // A tag, or the same word as one of the photograph's own details: its camera, lens, film or digital, film stock, or wide angle, regular or telephoto.
+      where.push(`(EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.name = ? AND t.accepted = 1) OR lower(p.camera) = ? OR lower(p.lens) = ? OR lower(p.medium) = ? OR (lower(p.medium) = 'film' AND lower(p.film) = ?) OR ${LENS_KIND} = ?)`); args.push(s, s, s, s, s, s);
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.from ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) >= ?'); args.push(q.from); }
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(q.to ?? ''))) { where.push('substr(COALESCE(p.date_edit, p.captured_at, p.added_at), 1, 10) <= ?'); args.push(q.to); }
@@ -155,14 +158,14 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
     // The typed words, each of which must be found somewhere in the photograph's text (file name, title, camera, lens, place, description, tags...).
     const textW: string[] = [], textA: unknown[] = [];
     for (const w of searchWords(String(q.q ?? ''))) {
-      textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.place_address) LIKE ? ESCAPE '\\' OR lower(p.film) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-      textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w));
+      textW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.exposure) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR lower(p.place_address) LIKE ? ESCAPE '\\' OR lower(p.film) LIKE ? ESCAPE '\\' OR lower(p.description) LIKE ? ESCAPE '\\' OR lower(p.file_type) = ? OR (p.ai_status = 'done' AND lower(p.ai_json) LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\' ) OR lower(p.medium) = ? OR ${LENS_KIND} LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM shoots sh WHERE sh.id = p.shoot_id AND lower(sh.name) LIKE ? ESCAPE '\\'))`);
+      textA.push(like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), like(w), w, like(w), like(w), w, like(w), like(w));
     }
     // The narrower test for "this is a name": only fields that name a photograph (not the AI's description of it, which is prose).
     const nameW: string[] = [], nameA: unknown[] = [];
     for (const w of searchWords(String(q.q ?? ''))) {
-      nameW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\'))`);
-      nameA.push(like(w), like(w), like(w), like(w), like(w), like(w));
+      nameW.push(`(lower(p.file) LIKE ? ESCAPE '\\' OR lower(p.title) LIKE ? ESCAPE '\\' OR lower(p.camera) LIKE ? ESCAPE '\\' OR lower(p.lens) LIKE ? ESCAPE '\\' OR lower(p.place) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM tags t WHERE t.photo_id = p.id AND t.accepted = 1 AND lower(t.name) LIKE ? ESCAPE '\\') OR lower(p.medium) = ? OR ${LENS_KIND} LIKE ? ESCAPE '\\')`);
+      nameA.push(like(w), like(w), like(w), like(w), like(w), like(w), w, like(w));
     }
     if (!semantic) { where.push(...textW); args.push(...textA); }
     const order = q.order === 'oldest' ? 'ASC' : 'DESC';
@@ -387,7 +390,7 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
         mark('exposure');
       }
     }
-    if (['camera', 'lens', 'film', 'medium', 'focalMm'].some((k) => b[k] !== undefined)) { applyGear(db, id, false); syncGearTags(db, id); }
+    if (['camera', 'lens', 'film', 'medium', 'focalMm'].some((k) => b[k] !== undefined)) { applyGear(db, id, false); syncPhotoGear(db, id); }
     if (typeof b.archived === 'boolean') set('UPDATE photos SET archived = ? WHERE id = ?', b.archived ? 1 : 0, id);
     if (b.reviewAgain === true) set('UPDATE photos SET next_review_at = ? WHERE id = ?', new Date().toISOString(), id);
     if (b.shootId !== undefined) {

@@ -216,7 +216,7 @@ export async function processPhoto(db: DB, cfg: Cfg, id: number, file: string, o
   return true;
 }
 
-export type ScanResult = { imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null };
+export type ScanResult = { imported: number; duplicates: number; relinked: number; changed: number; errors: { file: string; error: string }[]; shootId: number | null; shootName: string | null; photoIds: number[] };
 
 export function readInto(db: DB, id: number, x: Meta, file: string) {
   // EXIF capture times carry no timezone. Keep the wall-clock time as written ("06:30 on 12 Oct"), never
@@ -265,7 +265,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
   let processed = 0;
   const total = files.length + known.length;
   const tick = () => onProgress?.(++processed, total);
-  const result: ScanResult = { imported: 0, duplicates: 0, relinked: 0, changed: 0, errors: [], shootId: null, shootName: null };
+  const result: ScanResult = { imported: 0, duplicates: 0, relinked: 0, changed: 0, errors: [], shootId: null, shootName: null, photoIds: [] };
 
   const now = new Date();
   if (files.length) {
@@ -305,7 +305,7 @@ export async function scan(db: DB, cfg: Cfg, onProgress?: (done: number, total: 
         readInto(db, id, x, f);
         const ready = await processPhoto(db, cfg, id, f, { exifW: x.ExifImageWidth ?? x.ImageWidth, exifH: x.ExifImageHeight ?? x.ImageHeight });
         importOutcome(db,runId,f,ready?'ready':'failed',id,ready?'':'Preview could not be generated');
-        result.imported++;
+        result.imported++; result.photoIds.push(id);
       } catch (e) {
         const stored=db.prepare('SELECT id FROM photos WHERE path=?').get(f) as {id:number}|undefined;importOutcome(db,runId,f,'failed',stored?.id??null,'Metadata or file could not be read');
         result.errors.push({ file: f, error: e instanceof Error ? e.message : String(e) });

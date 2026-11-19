@@ -11,7 +11,7 @@ describe('To do’s Shoot reason', () => {
     const old = new Database(':memory:');
     migrate(old);
     old.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('settings', ?)").run(JSON.stringify({ todoReasons: ['camera', 'tags'] }));
-    old.pragma(`user_version = ${Number(old.pragma('user_version', { simple: true })) - 3}`); // that migration and the photo-rotation and subjects ones after it
+    old.pragma(`user_version = ${Number(old.pragma('user_version', { simple: true })) - 5}`); // that migration and the photo-rotation, subjects and hidden-gear ones after it
     migrate(old);
     expect(loadSettings(old as any).todoReasons).toEqual(['shoot', 'camera', 'tags']);
   });

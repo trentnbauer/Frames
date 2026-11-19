@@ -10,7 +10,7 @@ import { SegSlider } from './SegSlider';
 import { Kbd, useShortcuts } from './shortcuts';
 
 export type GearItem = { id: number; kind: 'own' | 'want'; name: string; type: string; system: string; serial: string; year: number | null; why: string; link: string; price: number | null; rank: number; used?: number };
-export type GearData = { blacklisted: { id: number; name: string; types: string[] }[]; own: GearItem[]; want: GearItem[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; systems?: string[]; currency?: string } };
+export type GearData = { blacklisted: { id: number; name: string; types: string[] }[]; hidden?: { key: string; name: string }[]; own: GearItem[]; want: GearItem[]; found: { name: string; type: string; count: number }[]; prefs: { showWant: boolean; arrange: 'system' | 'type' | 'used' | 'era'; intro?: string; systems?: string[]; currency?: string } };
 
 const TYPE_LABEL: Record<string, string> = { camera: 'Camera', lens: 'Lens', film: 'Film', light: 'Light meter', app: 'App', other: 'Other' };
 const TYPES = Object.keys(TYPE_LABEL);
@@ -126,6 +126,8 @@ export function GearPage({ data, reload, blocklisting, blocklistError, onBlockli
   });
   const removeOwned = async (item: GearItem) => { if (await confirmAction(`Remove “${item.name}” from your gear?`, { title: `Remove “${item.name}” from your gear?`, confirm: 'Remove from gear', danger: true })) { setTile(null); await run(() => api(`/gear/items/${item.id}`, { method: 'DELETE' })); } };
 
+  const blacklistFound = async (name: string) => { if (await confirmAction(`Blacklist ${name}?\n\nIt is cleared from the camera details of your photos, now and when new ones arrive. Original files are not changed.`, { confirm: 'Blacklist', danger: true })) onBlocklistFound(name); };
+
   // ---- systems
   const [sys, setSys] = useState<{ mode: 'new' | 'rename'; from: string; name: string } | null>(null);
   const saveSys = () => sys && run(async () => { const name = sys.name.trim(); if (!name) throw new Error('Give the system a name.'); await api(sys.mode === 'new' ? '/gear/systems' : '/gear/systems/rename', { body: sys.mode === 'new' ? { name } : { from: sys.from, to: name } }); setSys(null); });
@@ -183,7 +185,7 @@ export function GearPage({ data, reload, blocklisting, blocklistError, onBlockli
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderRadius: 14, border: '1.5px dashed var(--outline)', marginBottom: 32, flexWrap: 'wrap' }}>
           <span className="eyebrow">Found in your photos</span>
           <div style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {d!.found.map((f) => <FoundGearItem key={f.name} name={f.name} count={`${f.count.toLocaleString()} photos`} busy={!!blocklisting} onAdd={() => void run(() => api('/gear/items', { body: { kind: 'own', name: f.name, type: f.type } }))} onBlocklist={() => onBlocklistFound(f.name)} />)}
+            {d!.found.map((f) => <FoundGearItem key={f.name} name={f.name} count={`${f.count.toLocaleString()} ${f.count === 1 ? 'photo' : 'photos'}`} busy={!!blocklisting} onAdd={() => void run(() => api('/gear/items', { body: { kind: 'own', name: f.name, type: f.type } }))} onHide={() => void run(() => api('/gear/hide', { body: { name: f.name } }))} onBlocklist={() => void blacklistFound(f.name)} />)}
           </div>
         </div>
       )}
@@ -226,6 +228,12 @@ export function GearPage({ data, reload, blocklisting, blocklistError, onBlockli
       {arrange === 'system' && <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '28px 0 0' }}><button className="btn outline" onClick={() => setSys({ mode: 'new', from: '', name: '' })}>+ New system</button><Kbd k="N" /></div>}
 
       <div style={{ marginTop: 48, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {(d?.hidden?.length ?? 0) > 0 && (
+          <section aria-label="Hidden from Found" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--text2)' }}>
+            <span className="eyebrow">Hidden from Found</span>
+            {d!.hidden!.map((h) => <span key={h.key} className="gear-blacklist-tag">{h.name}<button type="button" aria-label={`Show ${h.name} in Found again`} onClick={() => void run(() => api(`/gear/hide/${h.key}`, { method: 'DELETE' }))}>×</button></span>)}
+          </section>
+        )}
         <FilmDefaults />
         <GearBlacklist items={d?.blacklisted ?? []} onChanged={() => window.dispatchEvent(new Event('frames:gear-changed'))} />
       </div>

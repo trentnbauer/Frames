@@ -38,7 +38,7 @@ export function registerNotifications(app: FastifyInstance, x: Ctx) {
   });
   app.post('/api/notifications/:id/gear', async (req, rep) => {
     const action = ((req.body ?? {}) as Row).action;
-    if (action !== 'add' && action !== 'blacklist') return rep.code(400).send({ error: 'Choose Add to gear or Blacklist.' });
+    if (action !== 'add' && action !== 'blacklist' && action !== 'hide') return rep.code(400).send({ error: 'Choose Add to gear, Hide or Blacklist.' });
     const notification = x.one("SELECT ref FROM notifications WHERE id = ? AND kind = 'gear-found'", num((req.params as Row).id));
     if (!notification || !resolveGearDiscovery(db, num(notification.ref), action)) return x.notFound(rep);
     return { ok: true };

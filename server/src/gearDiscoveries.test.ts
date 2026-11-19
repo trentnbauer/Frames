@@ -136,3 +136,26 @@ it('applies pre-existing blacklist tags on library open after a restart',async()
   await env.app.close();env.db=openDb(env.data);env.app=buildApp(env.db,env.cfg);a=api(env);
   expect((await a.get(`/api/photos/${photo}`)).body).toMatchObject({camera:'',lens:'Real lens'});
 });
+
+describe('hiding discovered gear', () => {
+  it('takes it off the Found list and clears its notification but keeps the camera on photographs, and can be restored', async () => {
+    metadata();
+    expect((await a.get('/api/gear/items')).body.found.map((f: any) => f.name)).toContain('Atlas Body 1');
+    const camera = (await found()).find((n: any) => n.gear.type === 'camera');
+    expect((await a.post(`/api/notifications/${camera.id}/gear`, { action: 'hide' })).status).toBe(200);
+    const body = (await a.get('/api/gear/items')).body;
+    expect(body.found.map((f: any) => f.name)).not.toContain('Atlas Body 1');
+    expect(body.hidden.map((h: any) => h.name)).toContain('Atlas Body 1');
+    expect(body.blacklisted).toEqual([]);
+    expect((await a.get(`/api/photos/${photo}`)).body.camera).toBe('Atlas Body 1'); // unlike the blacklist
+    expect((await found()).some((n: any) => n.gear.name === 'Atlas Body 1')).toBe(false);
+    await a.del(`/api/gear/hide/${body.hidden[0].key}`);
+    expect((await a.get('/api/gear/items')).body.found.map((f: any) => f.name)).toContain('Atlas Body 1');
+  });
+  it('hides by name from the Gear page', async () => {
+    metadata();
+    expect((await a.post('/api/gear/hide', { name: 'Atlas 50mm' })).status).toBe(200);
+    expect((await a.get('/api/gear/items')).body.found.map((f: any) => f.name)).not.toContain('Atlas 50mm');
+    expect((await a.post('/api/gear/hide', { name: '   ' })).status).toBe(400);
+  });
+});

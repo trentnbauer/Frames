@@ -12,8 +12,8 @@ export function GearBlacklist({ items, onChanged }: { items: { id: number; name:
     if (!name.trim() || busy) return;
     void act(async () => { await api('/gear/blacklist', { body: { name: name.trim() } }); setName(''); });
   };
-  return <section aria-label="Blocked gear" className="gear-blacklist">
-    <span className="eyebrow">Blocked gear</span>
+  return <section aria-label="Blacklisted gear" className="gear-blacklist">
+    <span className="eyebrow">Blacklisted gear</span>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         {items.map((g) => <span className="gear-blacklist-tag" key={g.id} title={g.types.join(', ')}>{g.name}<button type="button" disabled={busy} aria-label={`Remove ${g.name} from blocked gear`} onClick={() => void act(() => api(`/gear/blacklist/${g.id}`, { method: 'DELETE' }))}>×</button></span>)}

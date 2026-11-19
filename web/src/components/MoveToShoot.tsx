@@ -35,7 +35,7 @@ export function MoveToShoot({ count, shoots, canOrphan, busy, error, phone, onAd
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden style={{ color: 'var(--muted)', flexShrink: 0 }}><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg>
         <input ref={field} value={q} onChange={(e) => { setQ(e.target.value); setSel(null); }} onKeyDown={(e) => { if (e.key === 'Enter') enter(); }} placeholder="Find a shoot, or type a name for a new one" aria-label="Shoot name" style={{ flex: 1, minWidth: 0, background: 'none', border: 0, outline: 'none', color: 'var(--text)', font: `400 ${phone ? 16 : 15}px var(--sans, inherit)` }} />
       </label>
-      <span style={{ font: '500 11px var(--mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', padding: '2px 4px 0' }}>{label}</span>
+      <span style={{ font: '500 11px var(--mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', padding: '2px 4px 0' }}>{shown.length === 0 && !name ? 'No shoots yet: type a name above to make one' : label}</span>
       <div role="group" aria-label="Shoots" style={{ display: 'flex', flexDirection: 'column', maxHeight: phone ? 280 : 300, overflowY: 'auto' }}>
         {shown.map((s) => (
           <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', borderRadius: 10, cursor: 'pointer', background: sel === s.id ? 'var(--hover)' : undefined }}>
