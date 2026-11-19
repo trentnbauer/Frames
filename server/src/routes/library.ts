@@ -9,7 +9,7 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { aiActivity, aiConfig, aiCounts, ping, sharedUsage } from '../ai.js';
 import { JOBS, loadJobs, saveJob } from '../aiJobs.js';
-import { AI_TYPES, aiType, applySource, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSharedColour, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
+import { AI_TYPES, aiType, applySource, assertPublicEndpoint, BadSetting, getSource, isReady, loadShared, loadSources, newSource, removeSourceKey, saveSources, setSharedColour, setSourceKey, sourceKey, whyNotReady, type AiCfg, type AiSource } from '../aisources.js';
 import { scrubCopy } from '../backup.js';
 import { cloudOnlyOriginals, shrinkUpload } from '../cloud.js';
 import { removeShoot } from '../remove.js';
@@ -527,6 +527,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     try {
       const src = newSource(String(b.type ?? ''), b);
+      if (((req as any).authUser?.role ?? 'admin') !== 'admin') await assertPublicEndpoint(src.endpoint);
       saveSources(db, [...loadSources(db), src]);
       if (typeof b.key === 'string' && b.key) setSourceKey(db, src.id, b.key.slice(0, 500)); // write-only: stored, used, never sent back
       return rep.code(201).send(sourcesDto());
@@ -543,7 +544,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       try { setSharedColour(db, id, b.color); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
       return sourcesDto();
     }
-    try { list[i] = applySource(list[i], b); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
+    try { list[i] = applySource(list[i], b); if (((req as any).authUser?.role ?? 'admin') !== 'admin') await assertPublicEndpoint(list[i].endpoint); } catch (e) { if (e instanceof BadSetting) return rep.code(400).send({ error: e.message }); throw e; }
     saveSources(db, list);
     if (typeof b.key === 'string' && b.key) setSourceKey(db, list[i].id, b.key.slice(0, 500));
     if (b.clearKey === true) setSourceKey(db, list[i].id, '');

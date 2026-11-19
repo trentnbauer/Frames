@@ -28,3 +28,7 @@ Search shows the matching photographs straight away. If an AI is set up for sear
 ## Recently removed
 
 A removed photograph keeps a small copy for the recovery period (30 days by default, set under Recently removed), shown next to its Restore button. The copy is deleted with the entry.
+
+## Your AI: members cannot use an address on the server's own network
+
+A member who adds their own AI (when the administrator allows it) must use a public internet address. Localhost, private network ranges, cloud metadata addresses and single-word or .local names are refused when saving. An administrator can still add a local AI (Ollama, LM Studio) and share it with everyone.

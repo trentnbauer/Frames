@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { getSetting, setSetting, type DB } from './db.js';
 
 /**
@@ -71,6 +73,34 @@ export function whyNotReady(s: AiSource): string {
   if (!s.model) return 'Enter a model';
   if (!t.local && !s.ack) return 'Confirm that previews will be sent to this third party';
   return '';
+}
+
+/** An address that only this server or its own network can reach: loopback, private, link-local (cloud metadata), carrier-grade NAT, unspecified. */
+export function isInternalIp(ip: string): boolean {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip)?.[1];
+  if (mapped) return isInternalIp(mapped);
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  const v = ip.toLowerCase();
+  return v === '::' || v === '::1' || /^f[cd]/.test(v) || /^fe[89ab]/.test(v);
+}
+
+/**
+ * A member's own AI address may not point at this server or its network: the server would send requests there for them, and the error it
+ * gives back says whether something answered. An administrator may (that is how a local AI is set up).
+ * shortcut: the name is looked up once, when it is saved, so a name that changes to an internal address later is not caught; use an egress rule if that matters.
+ */
+export async function assertPublicEndpoint(endpoint: string): Promise<void> {
+  if (!endpoint) return;
+  const host = new URL(endpoint).hostname.replace(/^\[|\]$/g, '');
+  const bad = () => new BadSetting('Members can only use an AI on the public internet. Ask an administrator to add a local AI for everyone.');
+  if (net.isIP(host)) { if (isInternalIp(host)) throw bad(); return; }
+  if (!host.includes('.') || /\.(local|internal|lan|home|localdomain)$/i.test(host)) throw bad();
+  let found: { address: string }[];
+  try { found = await dns.lookup(host, { all: true }); } catch { return; } // an unknown name cannot be reached either; the test button says so
+  if (found.some((a) => isInternalIp(a.address))) throw bad();
 }
 
 const short = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
