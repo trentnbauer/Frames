@@ -142,6 +142,7 @@ export function sessionAgeMs(sys: DB, req: FastifyRequest): number | null {
 export const endSession = (sys: DB, req: FastifyRequest) => { const t = cookieOf(req, SESSION_COOKIE); if (t) sys.prepare('DELETE FROM sessions WHERE id = ?').run(hash(t)); };
 export const endAllSessions = (sys: DB) => sys.prepare('DELETE FROM sessions').run().changes;
 
+const FLOW_COOKIE = 'frames_flow';
 export function sessionCookie(token: string | null, secure: boolean): string {
   const base = `${SESSION_COOKIE}=${token ? encodeURIComponent(token) : ''}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
   return token ? `${base}; Max-Age=${SESSION_DAYS * 86_400}` : `${base}; Max-Age=0`;
@@ -194,11 +195,13 @@ export function createAuth(db: DB, cfg: AppCfg) {
   const prune = () => { const old = Date.now() - 600_000; for (const [k, f] of flows) if (f.created < old) flows.delete(k); if (flows.size > 1000) flows.clear(); };
 
   /** Where to send the browser to start signing in. */
-  async function begin(p: Provider, req: FastifyRequest, opts: { test: boolean; returnTo: string; linkUser?: number; guest?: boolean }): Promise<string> {
+  async function begin(p: Provider, req: FastifyRequest, rep: FastifyReply, opts: { test: boolean; returnTo: string; linkUser?: number; guest?: boolean }): Promise<string> {
     prune();
     const state = rand(24), verifier = oidc.randomPKCECodeVerifier(), nonce = rand(16);
     const challenge = await oidc.calculatePKCECodeChallenge(verifier);
     const redirectUri = `${baseUrl(req)}/auth/callback/${p.id}`;
+    // The answer is only accepted in the browser that started the sign-in, so a link someone else started cannot sign this browser in as them.
+    rep.header('Set-Cookie', `${FLOW_COOKIE}=${state}; Path=/auth/callback; HttpOnly; SameSite=Lax; Max-Age=600${isSecure(req) ? '; Secure' : ''}`);
     flows.set(state, { providerId: p.id, verifier, nonce, test: opts.test, created: Date.now(), returnTo: opts.returnTo, redirectUri, linkUser: opts.linkUser, guest: opts.guest });
     if (p.type === 'cloudflare') return `${baseUrl(req)}/auth/callback/${p.id}?state=${state}`; // nothing to ask a provider: Access already signed the person in
     if (p.type === 'github' || p.type === 'oauth2' || p.type === 'dropbox') {
@@ -222,6 +225,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
     const q = req.query as Record<string, string>;
     const flow = flows.get(q.state ?? '');
     flows.delete(q.state ?? ''); // one use only
+    if (flow && new RegExp(`(?:^|;\\s*)${FLOW_COOKIE}=${q.state}(?:;|$)`).exec(String(req.headers.cookie ?? '')) === null) throw new Error('This sign-in was not started in this browser. Please start again.');
     const id = (req.params as { id: string }).id;
     if (!flow || flow.providerId !== id || Date.now() - flow.created > 600_000) throw new Error('This sign-in link expired or was already used. Please start again.');
     if (q.error) throw new Error(`The provider did not sign you in (${q.error_description || q.error}).`);
