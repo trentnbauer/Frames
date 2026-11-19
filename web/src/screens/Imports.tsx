@@ -56,7 +56,7 @@ export function Imports({ embedded }: { embedded?: boolean } = {}) {
         >
           {runs.data?.map((run) => (
             <option value={run.id} key={run.id}>
-              {new Date(run.startedAt).toLocaleString()} · {run.source} · {run.files} files · {statusName(run.status).toLowerCase()}
+              {new Date(run.startedAt).toLocaleString('en-AU')} · {run.source} · {run.files} files · {statusName(run.status).toLowerCase()}
             </option>
           ))}
         </select>

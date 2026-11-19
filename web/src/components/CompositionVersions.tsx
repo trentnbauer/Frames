@@ -195,7 +195,7 @@ function Arrangements({ id, readOnly, onChanged, onClose }: { id: number; readOn
               >
                 <strong>{item.name}</strong>
                 <small>
-                  {new Date(item.createdAt).toLocaleDateString()} · {item.layout.prints.length} prints
+                  {new Date(item.createdAt).toLocaleDateString('en-AU')} · {item.layout.prints.length} prints
                 </small>
               </button>
             ))}

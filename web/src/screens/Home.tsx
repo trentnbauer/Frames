@@ -82,7 +82,8 @@ function DesktopHome() {
   const left = (batches.data?.batches ?? []).filter((b) => !done[b.id] && !b.done).length;
   const v = {
     greeting: `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}.` : ''}`,
-    summaryLine: `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} ${shoots.data?.length === 1 ? 'shoot' : 'shoots'} · ${comps.data?.length ?? 0} compositions`,
+    // Until the real counts arrive nothing is shown, rather than zeros that look real.
+    summaryLine: !s || shoots.loading || comps.loading ? '' : `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} ${shoots.data?.length === 1 ? 'shoot' : 'shoots'} · ${comps.data?.length ?? 0} compositions`,
     showReview: !!s && (s.due > 0 || s.resumable || s.early > 0), revCover: s?.nextId ? thumb(s.nextId) : '', revTag: due > 0 ? 'DUE NOW' : s?.resumable ? 'IN PROGRESS' : 'ANYTIME',
     revTitle: due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review',
     revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')}${s!.shootsMore ? ` and ${s!.shootsMore} more` : ''} · ` : ''}about ${duration(s!.minutes)}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',
@@ -109,7 +110,7 @@ function DesktopHome() {
       };
     }),
     compCount: comps.data?.length ?? 0,
-    sug: { aiAssisted: !!idea?.aiAssisted, title: idea?.name ?? 'No ideas yet', photos: (idea?.photos ?? []).slice(0, 4).map((p) => ({ img: `url(${thumb(p.id)}) center/cover`, flex: `${p.ar || 1} 1 0` })), tags: idea?.tags ?? [], colours: idea?.colours ?? [], why: idea?.reason ?? (recs.loading ? 'Looking for sets…' : 'Add shared tags, colours or locations to at least three photographs, or rate more photographs, to find sets.') },
+    sug: { aiAssisted: !!idea?.aiAssisted, title: idea?.name ?? (recs.loading ? 'Looking for ideas…' : 'No ideas yet'), photos: (idea?.photos ?? []).slice(0, 4).map((p) => ({ img: `url(${thumb(p.id)}) center/cover`, flex: `${p.ar || 1} 1 0` })), tags: idea?.tags ?? [], colours: idea?.colours ?? [], why: idea?.reason ?? (recs.loading ? 'Looking for sets…' : 'Add shared tags, colours or locations to at least three photographs, or rate more photographs, to find sets.') },
     sFade: ci.fade, sDots: ideas.map((_, k) => ({ bg: k === ci.i ? 'var(--text)' : 'var(--outline)', go: () => ci.go(k) })), sPrev: () => ci.go(ci.i - 1), sNext: () => ci.go(ci.i + 1),
     startIdea: async () => {
       if (!idea) return;
@@ -122,8 +123,8 @@ function DesktopHome() {
     fade: cw.fade, dots: wip.map((_, k) => ({ bg: k === cw.i ? 'var(--text)' : 'var(--outline)', go: () => cw.go(k) })), prev: () => cw.go(cw.i - 1), next: () => cw.go(cw.i + 1),
     wall: wall
       ? { title: wall.name, status: `${wall.chosenIds.length} of ${wall.layout.prints.length} prints chosen · ${printsSummary(wall)}`, cta: 'Continue', gap: '14px', prints: miniWall(wall), count: `${cw.i + 1} of ${wip.length} in progress`, open: () => nav(`/collections/${wall.id}`) }
-      : { title: 'Nothing in progress', status: 'Start a composition from an idea, or from the Compositions page.', cta: 'Compositions', gap: '0', prints: [] as ReturnType<typeof miniWall>, count: '', open: () => nav('/collections') },
-    showCommunity: !!community.data?.enabled && !!community.data.showOnHome, communityWaiting: community.data?.waiting ?? 0,
+      : { title: comps.loading ? 'Loading…' : 'Nothing in progress', status: comps.loading ? '' : 'Start a composition from an idea, or from the Compositions page.', cta: 'Compositions', gap: '0', prints: [] as ReturnType<typeof miniWall>, count: '', open: () => nav('/collections') },
+    showCommunity: !!community.data?.enabled && !!community.data.showOnHome && community.data.waiting > 0, // nothing waiting: nothing to offer communityWaiting: community.data?.waiting ?? 0,
   };
 
   // Keyboard shortcuts shown on the buttons: A add photos, S start this composition, C continue one. (R, for the review, is in App.tsx.)

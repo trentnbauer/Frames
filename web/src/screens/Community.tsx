@@ -33,7 +33,7 @@ function DesktopCommunity() {
     <div className="page-shell">
 
       <ProtoCommunity
-        loading={loading}
+        loading={loading} empty={rated === 0 && skipped.length === 0 && (cur?.left ?? 0) === 0}
         cur={photo ? { src: `/api/community/image/${photo.token}`, who: `Photographer ${cur?.meta?.anon ?? ''}`, kit: cur?.meta?.details ?? '', where: '' } : null}
         others={cur?.others}
         progress={`${photo ? seen : seen - 1} of ${seen - 1 + (cur?.left ?? 0)} today · ${rated} rated`}

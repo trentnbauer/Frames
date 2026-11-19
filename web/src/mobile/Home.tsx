@@ -100,7 +100,7 @@ export function MobileHome() {
         </div>
       )}
 
-      {community.data?.enabled && (
+      {community.data?.enabled && community.data.waiting > 0 && (
         <button onClick={() => nav('/community')} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 18, borderRadius: 14, boxShadow: 'inset 0 0 0 1px var(--hair)', textAlign: 'left' }}>
           <Eyebrow>COMMUNITY REVIEW</Eyebrow>
           <span style={{ font: '400 26px/1.05 var(--serif)' }}>Rate other photographers’ work</span>
