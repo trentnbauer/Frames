@@ -79,7 +79,7 @@ function DesktopHome() {
   const left = (batches.data?.batches ?? []).filter((b) => !done[b.id] && !b.done).length;
   const v = {
     greeting: `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}.` : ''}`,
-    summaryLine: `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} shoots · ${comps.data?.length ?? 0} compositions`,
+    summaryLine: `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} ${shoots.data?.length === 1 ? 'shoot' : 'shoots'} · ${comps.data?.length ?? 0} compositions`,
     showReview: !!s && (s.due > 0 || s.resumable || s.early > 0), revCover: s?.nextId ? thumb(s.nextId) : '', revTag: due > 0 ? 'DUE NOW' : s?.resumable ? 'IN PROGRESS' : 'ANYTIME',
     revTitle: due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review',
     revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')} · ` : ''}about ${s!.minutes} ${s!.minutes === 1 ? 'minute' : 'minutes'}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',

@@ -18,7 +18,7 @@ import { IMAGE_EXT, convertPreviews, internalDir, outdatedPreviews, rebuild, rei
 import { loadSettings, saveSettings } from '../settings.js';
 import type { Ctx, Row } from '../ctx.js';
 import { getSetting, setSetting, unsortedShootId } from '../db.js';
-import { GEAR_FIELDS, applyGear, applyShootGear, cleanGear, parseGear, syncGearTags } from '../gear.js';
+import { GEAR_FIELDS, applyGear, applyShootGear, cleanGear, parseGear, syncPhotoGear } from '../gear.js';
 import { buildXmp, isOurs } from '../xmp.js';
 
 /**
@@ -195,7 +195,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
         for (const r of db.prepare('SELECT id, user_fields, gear_src FROM photos WHERE shoot_id = ?').all(id) as Row[]) {
           db.prepare(`UPDATE photos SET ${set.map((f) => `${f} = ?`).join(', ')}${set.includes('camera') ? ', raw_camera = ?' : ''}${set.includes('lens') ? ', raw_lens = ?' : ''}, user_fields = ?, gear_src = ? WHERE id = ?`)
             .run(...set.map((f) => g[f]), ...(set.includes('camera') ? [g.camera] : []), ...(set.includes('lens') ? [g.lens] : []), csv(r.user_fields).filter((f) => !(set as string[]).includes(f)).join(','), [...new Set([...csv(r.gear_src), ...set])].join(','), r.id);
-          syncGearTags(db, r.id);
+          syncPhotoGear(db, r.id);
         }
       }
     }

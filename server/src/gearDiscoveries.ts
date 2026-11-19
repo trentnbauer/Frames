@@ -1,4 +1,4 @@
-import { purgeBlacklistedGear, syncGearTags } from './gear.js';
+import { purgeBlacklistedGear, syncPhotoGear } from './gear.js';
 import { gearKey } from './gearBlacklist.js';
 export { gearKey } from './gearBlacklist.js';
 import { getSetting, type DB } from './db.js';
@@ -117,7 +117,7 @@ export function ownGear(db: DB, name: string, type: GearType) {
     if (!db.prepare("UPDATE gear_discoveries SET state = 'added' WHERE type = ? AND key = ? AND state = 'blacklisted'").run(type, key).changes) return;
     const raw = `raw_${type}`;
     for (const r of db.prepare(`SELECT id, ${raw} name FROM photos WHERE ${type} = '' AND ${raw} != ''`).all() as { id: number; name: string }[])
-      if (gearKey(clean(r.name)) === key) syncGearTags(db, r.id);
+      if (gearKey(clean(r.name)) === key) syncPhotoGear(db, r.id);
   })();
 }
 

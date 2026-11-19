@@ -49,7 +49,7 @@ export function MobileHome() {
     <div className="pscreen ptab" style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h1 style={{ font: '400 42px/1 var(--serif)', margin: 0, letterSpacing: '-.01em' }}>{greetingFor(new Date().getHours())}{firstName ? `, ${firstName}.` : ''}</h1>
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{(s?.total ?? 0).toLocaleString()} photographs · {shoots.data?.length ?? 0} shoots · {comps.data?.length ?? 0} compositions</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{(s?.total ?? 0).toLocaleString()} photographs · {shoots.data?.length ?? 0} {shoots.data?.length === 1 ? 'shoot' : 'shoots'} · {comps.data?.length ?? 0} compositions</span>
       </div>
 
       {s && (s.due > 0 || s.resumable || s.early > 0) && <ReviewCard />}
