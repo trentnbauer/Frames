@@ -13,6 +13,7 @@ const token = (o: { email?: string | null; aud?: string; name?: string } = {}) =
   new SignJWT({ ...(o.email === null ? {} : { email: o.email ?? 'alice@x.test' }), ...(o.name ? { name: o.name } : {}) })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(`https://${TEAM}`).setAudience(o.aud ?? AUD).setSubject('cf-user-1').setIssuedAt().setExpirationTime('5m').sign(key);
 const get = (url: string, headers: Record<string, string> = {}) => env.app.inject({ url, headers });
+const flowOf = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat(r.headers['set-cookie'] as string[]).find((c) => c?.startsWith('frames_flow=')) ?? '').split(';')[0];
 const cookieFrom = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat(r.headers['set-cookie'] as string[]).find((c) => c?.startsWith(SESSION_COOKIE)) ?? '').split(';')[0];
 
 beforeAll(async () => {
@@ -46,7 +47,7 @@ describe('Cloudflare Access as a sign-in provider', () => {
     expect(first.headers.location).toBe('/auth/login/cf?returnTo=%2Flibrary');
     const login = await get(first.headers.location as string, h);
     expect(login.statusCode).toBe(302);
-    const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), h);
+    const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), { ...h, cookie: flowOf(login) });
     expect(back.statusCode).toBe(302);
     expect(back.headers.location).toBe('/library');
     const cookie = cookieFrom(back);
@@ -57,14 +58,14 @@ describe('Cloudflare Access as a sign-in provider', () => {
   it('still checks the allow-list: an email that is not on it is refused', async () => {
     const h = { 'cf-access-jwt-assertion': await token({ email: 'mallory@evil.test' }) };
     const login = await get('/auth/login/cf', h);
-    const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), h);
+    const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), { ...h, cookie: flowOf(login) });
     expect(back.statusCode).toBe(403);
     expect(cookieFrom(back)).toBe('');
   });
   it('refuses a token for another application, an unsigned one, a missing one and one with no email', async () => {
     for (const t of [await token({ aud: 'b'.repeat(64) }), 'not.a.jwt', '', await token({ email: null })]) {
       const login = await get('/auth/login/cf', t ? { 'cf-access-jwt-assertion': t } : {});
-      const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), t ? { 'cf-access-jwt-assertion': t } : {});
+      const back = await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), { ...(t ? { 'cf-access-jwt-assertion': t } : {}), cookie: flowOf(login) });
       expect(back.statusCode, t.slice(0, 12)).toBe(400);
       expect(cookieFrom(back)).toBe('');
     }

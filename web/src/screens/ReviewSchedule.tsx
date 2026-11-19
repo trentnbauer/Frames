@@ -91,7 +91,7 @@ export function ReviewSchedule() {
               <Link to={`/photo/${photo.id}`}>{photo.title || photo.file}</Link>
               <small>
                 {photo.shoot} · {photo.reviews} of {data.data?.sessions ?? 0} sessions ·{' '}
-                {photo.due ? new Date(photo.due).toLocaleString() : 'No further review scheduled'}
+                {photo.due ? new Date(photo.due).toLocaleString('en-AU') : 'No further review scheduled'}
               </small>
             </div>
             <button className="btn outline" disabled={status === 'excluded'} onClick={() => nav(reviewUrl([photo.id]))}>

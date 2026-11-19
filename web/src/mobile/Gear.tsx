@@ -30,6 +30,7 @@ export function MobileGear() {
   const [open, setOpen] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [err, setErr] = useState('');
+  const [allFound, setAllFound] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => { const f = () => g.reload(); window.addEventListener('frames:gear-changed', f); return () => window.removeEventListener('frames:gear-changed', f); }, [g.reload]);
   const d = g.data;
@@ -58,7 +59,7 @@ export function MobileGear() {
         {d.found.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '14px 16px', borderRadius: 12, background: 'var(--surface)' }}>
             <Eyebrow>FOUND IN YOUR PHOTOS</Eyebrow>
-            {d.found.map((f) => (
+            {(allFound ? d.found : d.found.slice(0, 3)).map((f) => (
               <div key={f.name} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><GearIcon type={f.type} /><span style={{ flex: 1, fontSize: 15, overflowWrap: 'anywhere' }}>{f.name}</span><span style={meta}>{f.count.toLocaleString()} {f.count === 1 ? 'photo' : 'photos'}</span></div>
                 <div style={{ display: 'flex', gap: 8, paddingLeft: 32 }}>
@@ -68,6 +69,7 @@ export function MobileGear() {
                 </div>
               </div>
             ))}
+            {d.found.length > 3 && <button onClick={() => setAllFound(!allFound)} aria-expanded={allFound} style={{ alignSelf: 'flex-start', minHeight: 44, fontSize: 13.5, color: 'var(--text2)' }}>{allFound ? 'Show fewer' : `Show all ${d.found.length}`}</button>}
           </div>
         )}
         {[...bySystem].map(([name, items]) => (

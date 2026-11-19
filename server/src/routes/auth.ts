@@ -56,7 +56,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
       if (v === 'bad') return rep.redirect(`/auth/signin?e=${encodeURIComponent('Please complete the check to show you are a person, then choose how to sign in.')}${q.returnTo ? `&returnTo=${encodeURIComponent(safeReturn(q.returnTo))}` : ''}${q.guest === '1' ? '&guest=1' : ''}`);
     }
     try {
-      const to = await auth.begin(p, req, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) });
+      const to = await auth.begin(p, req, rep, { test: q.test === '1', returnTo: safeReturn(q.returnTo), guest: q.guest === '1' && /^\/s\/[\w-]+$/.test(safeReturn(q.returnTo)) });
       // From the sign-in page's form (it brings the Turnstile answer along) a redirect would be refused by the page's form-action policy.
       if (q['cf-turnstile-response'] !== undefined) return rep.type('text/html').header('Cache-Control', 'no-store').send(handOver(to));
       return rep.redirect(to);
@@ -86,7 +86,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
         const t = had > 0 ? x.tenants.get(user.id) : null;
         if (t) {
           const ua = String(req.headers['user-agent'] ?? '').slice(0, 80) || 'a new device';
-          const base = (loadAuth(db).publicUrl || auth.baseUrl(req)).replace(/\/+$/, '');
+          const base = mailBase(req).replace(/\/+$/, ''); // never the visitor's own Host header: this email goes to the account's owner
           notify(t.db, 'sign-in', 'Someone signed in to your account from a new device', { screen: '/settings?section=security' }, `si:${dev}`);
           queueMail(x, t, 'sign-in', { type: 'signin', baseUrl: base, params: { subject: 'New sign-in to Frames', preheader: 'A new device signed in', eyebrow: 'Security', title: 'New sign-in', body: `Your account was just signed in on ${ua}. If that was you, there is nothing to do. If not, open Settings and sign out everywhere.`, button_label: 'Review your account', button_url: `${base}/settings?section=security`, fine_print: 'You get this when a device you have not used before signs in.', image_url: '', image_alt: '', note: '', note_from: '' } });
         }
@@ -135,7 +135,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     try { done = await auth.finish(req); } catch (e) {
       const msg = e instanceof Error ? e.message : 'Sign-in failed.';
       // Provider and protocol errors can carry technical detail: log it, show a plain message.
-      const known = /expired|already used|did not|no longer|would not|no code|answered/.test(msg);
+      const known = /expired|already used|not started|did not|no longer|would not|no code|answered/.test(msg);
       if (!known) console.error('sign-in failed', msg);
       return rep.code(400).type('text/html').send(auth.messagePage('Sign-in did not work', known ? msg : 'The provider’s answer could not be checked. Please try again.'));
     }
@@ -387,7 +387,7 @@ export function registerAuth(app: FastifyInstance, x: Ctx, auth: Auth) {
     const u = (req as any).authUser as User | null;
     const p = loadAuth(db).providers.find((x) => x.id === (req.params as Row).id);
     if (!u || (req as any).authVia !== 'session' || !p) return rep.code(404).type('text/html').send(auth.messagePage('Not available', 'Sign in first, then add another way to sign in from Settings.'));
-    try { return rep.redirect(await auth.begin(p, req, { test: false, returnTo: '/', linkUser: u.id })); } catch (e) {
+    try { return rep.redirect(await auth.begin(p, req, rep, { test: false, returnTo: '/', linkUser: u.id })); } catch (e) {
       console.error('link start failed', (e as Error).message);
       return rep.code(502).type('text/html').send(auth.messagePage('Could not reach the provider', 'Frames could not contact the sign-in provider.'));
     }

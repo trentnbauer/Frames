@@ -26,15 +26,15 @@ export function AiIndicator() {
   const [status, setStatus] = useState<AiStatus | null>(null);
   useEffect(() => {
     let live = true, timer: ReturnType<typeof setTimeout>;
-    let pending = false;
+    let pending = false, status_running = false; // only watch closely while it is working
     const poll = async () => {
       if (pending || !live) return;
       clearTimeout(timer);
       if (document.hidden) return;
       pending = true;
-      try { const next = await api<AiStatus>('/ai/status'); if (live) setStatus(next); }
+      try { const next = await api<AiStatus>('/ai/status'); if (live) { setStatus(next); status_running = !!next.running; } }
       catch { if (live) setStatus(null); }
-      finally { pending = false; if (live) timer = setTimeout(poll, 2000); }
+      finally { pending = false; if (live) timer = setTimeout(poll, status_running ? 2000 : 10_000); }
     };
     const wake = () => { if (!document.hidden) void poll(); else clearTimeout(timer); };
     void poll(); document.addEventListener('visibilitychange', wake);

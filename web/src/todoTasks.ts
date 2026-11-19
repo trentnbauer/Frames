@@ -35,6 +35,13 @@ export type Tasks = {
   rows: { key: TaskKey; row: string; n: number }[];
 };
 
+/** How many photographs are waiting on each kind of task, counting every photograph (buildTasks shows each only under the first kind it waits on). */
+export function taskTotals(items: TodoNavItem[]): Partial<Record<TaskKey, number>> {
+  const out: Partial<Record<TaskKey, number>> = {};
+  for (const item of items) { const k = GROUP_OF[item.key] ?? (item.key === 'orphaned' ? 'orphaned' : undefined); if (k) out[k] = Math.max(out[k] ?? 0, item.count); }
+  return out;
+}
+
 export function buildTasks(items: TodoNavItem[]): Tasks {
   const rank = (k: TaskKey) => TASKS.findIndex((t) => t.key === k);
   const byPhoto = new Map<number, Set<TaskKey>>();

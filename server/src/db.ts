@@ -468,6 +468,8 @@ export const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { db.exec('CREATE TABLE IF NOT EXISTS gear_hidden (key TEXT PRIMARY KEY, name TEXT NOT NULL)'); },
   // Camera, lens, film stock and field of view are no longer copied into tags: the ones already there are removed (search reads the details themselves).
   (db) => { db.exec("DELETE FROM tags WHERE source = 'gear'; UPDATE photos SET gear_sig = '' WHERE gear_sig != ''"); },
+  // Tags that only repeat the photograph's own camera, lens or film (made before camera details stopped being copied into tags, and left behind) are removed; search reads the details themselves.
+  (db) => { db.exec("DELETE FROM tags WHERE EXISTS (SELECT 1 FROM photos p WHERE p.id = tags.photo_id AND lower(tags.name) IN (lower(p.camera), lower(p.lens), lower(p.raw_camera), lower(p.raw_lens), lower(p.film)) AND tags.name != '')"); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

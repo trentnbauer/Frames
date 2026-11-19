@@ -79,7 +79,7 @@ export function TunnelSettings() {
         })()}
         <SRow title="Account ID" hint={<>On the right of the Cloudflare dashboard home page, and in its address after <span className="mono">dash.cloudflare.com/</span>.</>}><input className="pin" aria-label="Account ID" value={account} placeholder="32 letters and numbers" onChange={(e) => setAccount(e.target.value)} /></SRow>
         <SRow title="API token" hint="Kept on this server only, never shown again, and left out of backups."><input className="pin" type="password" autoComplete="off" aria-label="API token" value={apiToken} placeholder={t.hasApiToken ? 'Saved. Type to replace' : 'Paste the API token'} onChange={(e) => setApiToken(e.target.value)} /></SRow>
-        <SRow title={t.error ? 'Cloudflare is not set up' : t.appliedAt ? 'Cloudflare is set up' : 'Not set up yet'} hint={t.error ? <span className="reason" role="alert">{t.error}</span> : t.appliedAt ? `Matches the addresses below · ${new Date(t.appliedAt).toLocaleString()}` : 'Save the account ID and token and Frames sets it up.'}>
+        <SRow title={t.error ? 'Cloudflare is not set up' : t.appliedAt ? 'Cloudflare is set up' : 'Not set up yet'} hint={t.error ? <span className="reason" role="alert">{t.error}</span> : t.appliedAt ? `Matches the addresses below · ${new Date(t.appliedAt).toLocaleString('en-AU')}` : 'Save the account ID and token and Frames sets it up.'}>
           {t.hasApiToken && <button className="ghost plain" onClick={() => save({ clearApiToken: true, enabled: false }, 'API token removed.')}>Remove the token</button>}
           <button className="ghost" disabled={account === t.accountId && !apiToken} onClick={async () => { if (await save({ accountId: account, ...(apiToken ? { apiToken } : {}) }, 'Saved. Frames is setting up Cloudflare.')) setApiToken(''); }}>Save</button>
         </SRow>
@@ -94,7 +94,7 @@ export function TunnelSettings() {
         <SRow title="Who can reach the App URL" hint={t.protect ? <>Members: Cloudflare Access checks everyone against the {t.accessPeople} {t.accessPeople === 1 ? 'entry' : 'entries'} on your allowed list before Frames even loads.</> : 'Anyone: Cloudflare lets everyone through; Frames’ own sign-in still applies if it is on.'}>
           <div className="seg" role="radiogroup" aria-label="Who can reach the App URL"><SegSlider />
             {([[true, 'Invitation only', 'Members'], [false, 'Open to everyone', 'Anyone']] as const).map(([on, name, short]) => (
-              <button key={name} role="radio" aria-checked={t.protect === on} aria-label={name} className={t.protect === on ? 'on' : ''} disabled={t.protectForced && !on} onClick={() => t.protect !== on && void save({ protect: on })}>{short}</button>
+              <button key={name} role="radio" aria-checked={t.protect === on} aria-label={`${short}: ${name}`} className={t.protect === on ? 'on' : ''} disabled={t.protectForced && !on} onClick={() => t.protect !== on && void save({ protect: on })}>{short}</button>
             ))}
           </div>
         </SRow>

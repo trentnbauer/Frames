@@ -46,8 +46,17 @@ describe('camera details are searched, not turned into tags', () => {
 
   it('are removed from photographs that had them by the migration', () => {
     env.db.prepare("INSERT INTO tags(photo_id, name, source, accepted, kind) VALUES(?, 'old', 'gear', 1, 'tag')").run(id);
-    const last = MIGRATIONS[MIGRATIONS.length - 1];
-    last(env.db);
+    MIGRATIONS[MIGRATIONS.length - 2](env.db);
     expect(gearTags()).toEqual([]);
+  });
+
+  it('a tag that only repeats the photograph\'s own camera is removed by the next migration, other tags stay', () => {
+    const cam = (env.db.prepare('SELECT camera FROM photos WHERE id = ?').get(id) as { camera: string }).camera || 'Minolta SRT 303';
+    env.db.prepare('UPDATE photos SET camera = ? WHERE id = ?').run(cam, id);
+    env.db.prepare("INSERT OR IGNORE INTO tags(photo_id, name, source, accepted, kind) VALUES(?, ?, 'user', 1, 'tag'), (?, 'keepme', 'user', 1, 'tag')").run(id, cam.toLowerCase(), id);
+    MIGRATIONS[MIGRATIONS.length - 1](env.db);
+    const names = (env.db.prepare('SELECT name FROM tags WHERE photo_id = ?').all(id) as { name: string }[]).map((t) => t.name);
+    expect(names).not.toContain(cam.toLowerCase());
+    expect(names).toContain('keepme');
   });
 });

@@ -128,3 +128,14 @@ describe('database migrations', () => {
     old.close();
   });
 });
+
+describe('the review summary', () => {
+  it('never names the hidden bucket for photographs in no shoot', async () => {
+    const unsorted = db.prepare('SELECT id, name FROM shoots WHERE unsorted = 1').get() as { id: number; name: string };
+    db.prepare("UPDATE photos SET next_review_at = '2000-01-01T00:00:00Z', archived = 0, missing = 0").run();
+    db.prepare('UPDATE photos SET shoot_id = ? WHERE id = 1').run(unsorted.id);
+    const s = await get('/api/review/summary');
+    expect(s.due).toBeGreaterThan(0);
+    expect(s.shootNames).not.toContain(unsorted.name);
+  });
+});

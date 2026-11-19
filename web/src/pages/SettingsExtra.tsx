@@ -100,7 +100,7 @@ export function EmailSettings() {
     <>
       {msg && <div className="banner" role={msg.ok ? 'status' : 'alert'}><span className={msg.ok ? '' : 'reason'}>{msg.t}</span></div>}
       <SCard>
-        <SRow title="Send email" hint={d.configured ? (!h ? 'Not checked yet.' : h.ok ? `Working · checked ${new Date(h.at).toLocaleString()}` : `Not working: ${h.error}`) : 'Off: invites and shares are copy-a-link only.'}>
+        <SRow title="Send email" hint={d.configured ? (!h ? 'Not checked yet.' : h.ok ? `Working · checked ${new Date(h.at).toLocaleString('en-AU')}` : `Not working: ${h.error}`) : 'Off: invites and shares are copy-a-link only.'}>
           <span className="ghost" role="status" style={{ color: d.configured && h?.ok ? 'var(--ok)' : undefined }}>{d.configured ? (h?.ok ? '✓ On' : h ? '✕ Failing' : 'Not checked') : 'Not set up'}</span>
         </SRow>
         <SRow title="SMTP server" hint={d.fromEnv ? 'Some values come from SMTP_* environment variables.' : undefined} sub><input className="pin" placeholder="smtp.example.com" aria-label="SMTP host" value={v.host} onChange={(x) => setF({ ...f, host: x.target.value })} /></SRow>
@@ -152,7 +152,7 @@ export function EmailSettings() {
             <table className="cmp-table" style={{ fontSize: 13 }}>
               <thead><tr>{['When', 'To', 'Subject', 'Type', 'Status'].map((h2) => <th key={h2} style={{ width: 'auto' }}>{h2}</th>)}</tr></thead>
               <tbody>{(log.data?.rows ?? []).slice(0, 60).map((r) => (
-                <tr key={r.id} title={r.error || undefined}><td className="mono" style={{ fontSize: 12 }}>{new Date(r.at).toLocaleString()}</td><td>{r.to}</td><td>{r.subject}</td><td className="muted">{r.type}</td><td style={{ color: r.status === 'failed' ? 'var(--err)' : 'var(--ok)' }}>{r.status}{r.status === 'failed' && r.error ? ` · ${r.error}` : ''}</td></tr>
+                <tr key={r.id} title={r.error || undefined}><td className="mono" style={{ fontSize: 12 }}>{new Date(r.at).toLocaleString('en-AU')}</td><td>{r.to}</td><td>{r.subject}</td><td className="muted">{r.type}</td><td style={{ color: r.status === 'failed' ? 'var(--err)' : 'var(--ok)' }}>{r.status}{r.status === 'failed' && r.error ? ` · ${r.error}` : ''}</td></tr>
               ))}</tbody>
             </table>
             {log.data && log.data.rows.length === 0 && <p className="muted">Nothing sent yet.</p>}
@@ -203,7 +203,7 @@ export function ReportsQueue() {
       {r.data.reports.map((x) => (
         <div key={x.id} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--hair)' }}>
           <img src={`/api/admin/community/image/${x.token}`} alt="Reported photo" width={64} height={64} style={{ objectFit: 'cover', borderRadius: 6 }} />
-          <div style={{ flex: 1 }}><div style={{ fontSize: 14 }}>{x.reason.replace(/-/g, ' ')} · {x.reporters} report{x.reporters === 1 ? '' : 's'}{x.byAdmin ? ' · by an admin' : ''}</div><div className="muted" style={{ fontSize: 12.5 }}>Photo by {x.owner} · {new Date(x.at).toLocaleDateString()}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 14 }}>{x.reason.replace(/-/g, ' ')} · {x.reporters} report{x.reporters === 1 ? '' : 's'}{x.byAdmin ? ' · by an admin' : ''}</div><div className="muted" style={{ fontSize: 12.5 }}>Photo by {x.owner} · {new Date(x.at).toLocaleDateString('en-AU')}</div></div>
           <button className="btn outline" onClick={() => act(x.id, 'keep')}>Keep</button>
           <button className="btn outline" style={{ color: 'var(--danger)' }} onClick={() => act(x.id, 'remove')}>Remove</button>
         </div>

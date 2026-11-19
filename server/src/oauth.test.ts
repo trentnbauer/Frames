@@ -81,6 +81,11 @@ beforeEach(() => { clientIp = `10.1.${Math.floor(ipCount / 250)}.${(ipCount++ % 
 const H = { host: 'frames.test' };
 const call = (method: string, url: string, payload?: unknown, headers: Record<string, string> = {}) => env.app.inject({ method: method as any, url, payload: payload as any, headers: { ...H, ...headers }, remoteAddress: clientIp });
 const cookieOf = (r: { headers: Record<string, any> }) => String([r.headers['set-cookie']].flat().find((c) => String(c).startsWith('frames_session=')) ?? '');
+/** The browser sends back the cookie that tied the sign-in to it. */
+const withFlow = (start: { headers: Record<string, any> }, h: Record<string, string> = {}) => {
+  const f = String([start.headers['set-cookie']].flat().find((c) => String(c).startsWith('frames_flow=')) ?? '').split(';')[0];
+  return { ...h, cookie: [h.cookie, f].filter(Boolean).join('; ') };
+};
 const sessionHeader = (r: { headers: Record<string, any> }) => ({ cookie: cookieOf(r).split(';')[0] });
 const OIDC = { id: 'fake', type: 'oidc', name: 'Fake ID', clientId: 'frames-app', issuer: '', clientSecret: 'right-secret' };
 const GH = { id: 'ghlike', type: 'oauth2', name: 'GH-like', clientId: 'gh-client', authUrl: '', tokenUrl: '', userUrl: '', emailsUrl: '', clientSecret: 'right-secret' };
@@ -93,7 +98,7 @@ async function signIn(id: string, who: Who, opts: { test?: boolean; returnTo?: s
   if (start.statusCode !== 302) return start;
   const there = await fetch(start.headers.location as string, { redirect: 'manual' });
   const back = new URL(there.headers.get('location')!);
-  return call('GET', back.pathname + back.search);
+  return call('GET', back.pathname + back.search, undefined, withFlow(start));
 }
 
 beforeAll(() => {
@@ -369,15 +374,25 @@ describe('with sign-in on', () => {
       const start = await call('GET', '/auth/login/fake');
       const there = await fetch(start.headers.location as string, { redirect: 'manual' });
       const back = new URL(there.headers.get('location')!);
-      expect((await call('GET', back.pathname + back.search)).statusCode).toBe(302);
-      expect((await call('GET', back.pathname + back.search)).statusCode).toBe(400); // replaying the same answer
+      expect((await call('GET', back.pathname + back.search, undefined, withFlow(start))).statusCode).toBe(302);
+      expect((await call('GET', back.pathname + back.search, undefined, withFlow(start))).statusCode).toBe(400); // replaying the same answer
+    });
+    it('refuses an answer from a browser that did not start the sign-in (a link an attacker made cannot sign someone in as them)', async () => {
+      fake.who = owner;
+      const start = await call('GET', '/auth/login/fake');
+      expect(String([start.headers['set-cookie']].flat().find((c) => String(c).startsWith('frames_flow=')))).toMatch(/HttpOnly/);
+      const there = await fetch(start.headers.location as string, { redirect: 'manual' });
+      const back = new URL(there.headers.get('location')!);
+      const r = await call('GET', back.pathname + back.search); // the victim's browser: no cookie
+      expect(r.statusCode).toBe(400);
+      expect(r.headers['set-cookie']).toBeUndefined();
     });
     it('refuses a state that was issued for a different provider', async () => {
       fake.who = owner;
       const start = await call('GET', '/auth/login/fake');
       const there = await fetch(start.headers.location as string, { redirect: 'manual' });
       const back = new URL(there.headers.get('location')!);
-      expect((await call('GET', back.pathname.replace('/fake', '/ghlike') + back.search)).statusCode).toBe(400);
+      expect((await call('GET', back.pathname.replace('/fake', '/ghlike') + back.search, undefined, withFlow(start))).statusCode).toBe(400);
     });
     it('sends PKCE, state and nonce on the way out', async () => {
       const start = await call('GET', '/auth/login/fake');
@@ -493,7 +508,7 @@ describe('the shared-password option alongside OAuth', () => {
       const start = await e.app.inject({ method: 'GET', url: '/auth/login/fake?test=1', headers: H });
       const there = await fetch(start.headers.location as string, { redirect: 'manual' });
       const back = new URL(there.headers.get('location')!);
-      expect((await e.app.inject({ method: 'GET', url: back.pathname + back.search, headers: H })).statusCode).toBe(302);
+      expect((await e.app.inject({ method: 'GET', url: back.pathname + back.search, headers: withFlow(start, H) })).statusCode).toBe(302);
       expect((await e.app.inject({ method: 'PUT', url: '/api/auth/config', headers: h, payload: { enabled: true } })).statusCode).toBe(200);
       expect((await e.app.inject({ method: 'GET', url: '/api/photos', headers: h })).statusCode).toBe(200); // the password still works
       expect((await e.app.inject({ method: 'GET', url: '/api/photos', headers: H })).statusCode).toBe(401);
@@ -597,7 +612,7 @@ describe('linking another way to sign in to the same person', () => {
     if (start.statusCode !== 302) return start;
     const there = await fetch(start.headers.location as string, { redirect: 'manual' });
     const back = new URL(there.headers.get('location')!);
-    return call('GET', back.pathname + back.search, undefined, finisher ?? headers); // the browser that started it comes back with its cookie
+    return call('GET', back.pathname + back.search, undefined, withFlow(start, finisher ?? headers)); // the browser that started it comes back with its cookie
   }
   it('adds the account, lists it, and then signing in with it lands in the same library', async () => {
     const before = (await call('GET', '/api/me', undefined, sess)).json();

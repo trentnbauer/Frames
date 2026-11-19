@@ -9,11 +9,19 @@ const RELEASES_URL = 'https://api.github.com/repos/trentnbauer/Frames/releases?p
 
 export type Release = { name: string; date: string; url: string; items: string[] };
 
+/** One line of GitHub's markdown as plain text: no "by @user in <link>", bare addresses, link syntax, backticks or bold marks. */
+const plainLine = (l: string) => l
+  .replace(/\s+by\s+@[\w-]+(\[bot\])?(\s+in\s+\S+)?/gi, '')
+  .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  .replace(/https?:\/\/\S+/g, '')
+  .replace(/[`*_]{1,3}/g, '')
+  .replace(/\s+/g, ' ').trim();
+
 /** Release notes as short bullets: the lines that start with - or *, else the first few lines. */
 export function releaseItems(body: string): string[] {
-  const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = body.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^\**full changelog/i.test(l));
   const bullets = lines.filter((l) => /^[-*]\s+/.test(l)).map((l) => l.replace(/^[-*]\s+/, ''));
-  return (bullets.length ? bullets : lines.filter((l) => !l.startsWith('#'))).slice(0, 8).map((l) => l.slice(0, 200));
+  return (bullets.length ? bullets : lines.filter((l) => !l.startsWith('#'))).map(plainLine).filter(Boolean).slice(0, 8).map((l) => l.slice(0, 200));
 }
 
 export function registerNotifications(app: FastifyInstance, x: Ctx) {

@@ -72,6 +72,22 @@ type Item = { name: string; n?: number };
  * against them as you type ("Birds at the Beach" picks the bird and beach ones; you can take any away). Photographs that have any of the
  * chosen ones go in as the first candidates; otherwise they are added afterwards (or come with it, from a search, a shoot or a selection).
  */
+const A_MM: Record<string, [number, number]> = Object.fromEntries(['A5', 'A4', 'A3', 'A2', 'A1'].map((k) => [k, PAPER[k]]));
+/** Lowers each print's size to the largest the sharpest photograph can fill at 300 PPI (never below A5); sizes that are not A-series are left alone. */
+/** How many pixels per inch a photograph gives a paper size, before any cropping. */
+export const ppiAt = (w: number, h: number, size: string): number => { const [s, l] = PAPER[size] ?? [0, 0]; return s && l ? Math.min(Math.max(w, h) / l, Math.min(w, h) / s) * 25.4 : Infinity; };
+export function sharpSizes(prints: Print[], photos: { w: number; h: number }[], min = 300): Print[] {
+  const best = photos.map((x) => [Math.max(x.w, x.h), Math.min(x.w, x.h)] as const).sort((a, b) => b[0] * b[1] - a[0] * a[1])[0];
+  if (!best) return prints;
+  const ppi = (size: string) => { const [s, l] = [...A_MM[size]]; return Math.min(best[0] / l, best[1] / s) * 25.4; };
+  const order = Object.keys(A_MM);
+  return prints.map((p) => {
+    if (!A_MM[p.size]) return p;
+    for (let i = order.indexOf(p.size); i >= 0; i--) if (ppi(order[i]) >= min || i === 0) return { ...p, size: order[i] };
+    return p;
+  });
+}
+
 export function NewComposition({ start, onClose }: { start: NewCompositionStart; onClose: () => void }) {
   const nav = useNavigate();
   const { settings } = useStore();
@@ -143,7 +159,10 @@ export function NewComposition({ start, onClose }: { start: NewCompositionStart;
     setBusy(true); setErr('');
     let created: Collection | null = null;
     try {
-      await api<Collection>('/collections', { body: { name: name.trim() || 'Untitled composition', photoIds: ids, layout: { mode, prints: mode === 'free' ? prints : arrange(prints, mode) } } }).then((c) => { created = c; });
+      // A print is only as big as the sharpest photograph in the pool can fill: the layout's default sizes are lowered to fit, and can be raised again in the editor.
+      const pool = ids.length ? (await api<{ photos: PhotoLite[] }>('/photos').catch(() => ({ photos: [] as PhotoLite[] }))).photos.filter((x) => ids.includes(x.id)) : [];
+      const sized = (q: Print[]) => (pool.length ? sharpSizes(q, pool) : q);
+      await api<Collection>('/collections', { body: { name: name.trim() || 'Untitled composition', photoIds: ids, layout: { mode, prints: sized(mode === 'free' ? prints : arrange(prints, mode)) } } }).then((c) => { created = c; });
       onClose(); nav(`/collections/${created!.id}${ids.length ? '' : '?add=1'}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };

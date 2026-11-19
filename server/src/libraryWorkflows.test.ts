@@ -58,6 +58,16 @@ describe('recoverable changes', () => {
     expect(fs.readFileSync(row(response.body.id).path)).toEqual(original);
     expect((await a.post(`/api/recovery/${recovered.id}/restore`)).status).toBe(410);
   });
+  it('keeps a small copy of a removed photograph for the recovery period, then drops it with the entry', async () => {
+    const id = ids[0];
+    await a.del(`/api/photos/${id}`);
+    const entry = (await a.get('/api/recovery')).body[0];
+    const thumb = await env.app.inject(`/api/recovery/${entry.id}/thumb`);
+    expect(thumb.statusCode).toBe(200);
+    expect(thumb.headers['content-type']).toContain('image/jpeg');
+    env.db.prepare('UPDATE photo_recovery SET removed_at = ? WHERE id = ?').run(new Date(Date.now() - 31 * 86400000).toISOString(), entry.id);
+    expect((await env.app.inject(`/api/recovery/${entry.id}/thumb`)).statusCode).toBe(404);
+  });
   it('rejects an original replaced with another photograph and expires recovery', async () => {
     const file = row(ids[0]).path;
     await a.del(`/api/photos/${ids[0]}`);

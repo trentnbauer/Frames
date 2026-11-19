@@ -8,6 +8,7 @@ import { MoveToShoot } from '../components/MoveToShoot';
 import { Sheet } from '../components/Sheet';
 import { RATINGS, fmtDate, type PhotoFull, type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
+import { getPhotoWalk } from '../photoWalk';
 import { Eyebrow, primaryBtn } from './ui';
 
 type Tab = 'details' | 'tags' | 'history';
@@ -38,9 +39,11 @@ export function MobilePhoto() {
   const here = Number(id);
   const libList = all.data?.photos ?? [];
   const fromLibrary = qs.get('in') === 'library';
-  const stepIds = (fromLibrary ? libList : libList.filter((x) => x.shootId === p.shootId)).map((x) => x.id);
+  const listed = qs.get('in') === 'list' ? getPhotoWalk() : null;
+  const fromList = !!listed && listed.includes(here);
+  const stepIds = fromList ? listed! : (fromLibrary ? libList : libList.filter((x) => x.shootId === p.shootId)).map((x) => x.id);
   const idx = stepIds.indexOf(here);
-  const go = (to: number) => nav(`/photo/${stepIds[to]}${fromLibrary ? '?in=library' : ''}`, { replace: true });
+  const go = (to: number) => nav(`/photo/${stepIds[to]}${fromList ? '?in=list' : fromLibrary ? '?in=library' : ''}`, { replace: true });
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
   const ai = !!settings && settings.ai !== 'off';
   const patch = async (body: Record<string, unknown>) => { setErr(''); try { await api(`/photos/${p.id}`, { method: 'PATCH', body }); photo.reload(); } catch (e) { setErr((e as Error).message); } };
@@ -83,9 +86,9 @@ export function MobilePhoto() {
         </div>
         <div role="img" aria-label={p.title || p.file} style={{ width: '100%', height: 'min(52vh, 380px)', background: `url(${imgUrl(p.id, 'preview')}) center/contain no-repeat` }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 14px' }}>
-          {idx > 0 ? <button onClick={() => go(idx - 1)} aria-label="Previous photo" style={{ ...circle, position: 'static' }}>←</button> : <span style={{ width: 40 }} />}
+          {idx > 0 ? <button onClick={() => go(idx - 1)} aria-label="Previous photo" style={{ ...circle, position: 'static' }}>◀</button> : <span style={{ width: 40 }} />}
           <RotateButton id={p.id} onDone={() => photo.reload()} style={{ width: 40, height: 40, background: 'rgba(239,237,232,.14)', color: '#efede8', boxShadow: 'none' }} />
-          {idx >= 0 && idx < stepIds.length - 1 ? <button onClick={() => go(idx + 1)} aria-label="Next photo" style={{ ...circle, position: 'static' }}>→</button> : <span style={{ width: 40 }} />}
+          {idx >= 0 && idx < stepIds.length - 1 ? <button onClick={() => go(idx + 1)} aria-label="Next photo" style={{ ...circle, position: 'static' }}>▶</button> : <span style={{ width: 40 }} />}
         </div>
       </div>
       <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -108,9 +111,10 @@ export function MobilePhoto() {
             {row('description', 'Description', p.description || '', 'Add a description', p.descSource === 'ai')}
             {row('place', 'Place', p.place, 'Add a place')}
             {row(null, 'Shoot', p.orphaned ? 'No shoot' : shoot?.name ?? '', '—', false, { label: 'Move', run: () => setSheet('move') })}
-            {row(null, 'Date taken', fmtDate(p.dateEdit ?? p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric' }), '—')}
+            {row(null, p.dateEdit ? 'Date (edited)' : p.capturedAt ? 'Date taken' : 'Date added', fmtDate(p.dateEdit ?? p.capturedAt ?? p.addedAt, { day: 'numeric', month: 'short', year: 'numeric' }), '—')}
             {row(null, 'Camera', p.camera, '—')}
-            {row(null, 'Lens', p.film ? `${p.lens} · ${p.film}` : p.lens, '—')}
+            {row(null, 'Lens', p.lens, '—')}
+            {p.film ? row(null, 'Film', p.film, '—') : null}
             {row(null, 'Exposure', p.exposure, '—')}
           </div>
         )}
@@ -154,7 +158,7 @@ export function MobilePhoto() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, fontSize: 13, color: 'var(--muted)' }}><span>{avg !== null ? `Average ${RATINGS[Math.min(4, Math.max(0, Math.round(avg) - 1))].label} · ${p.reviews.length} review${p.reviews.length > 1 ? 's' : ''}` : 'No reviews'}</span><span>{due ? 'Due now' : p.nextReviewAt ? `Next review ${fmtDate(p.nextReviewAt)}` : ''}</span></div>
             {[...p.reviews].reverse().map((r) => <div key={`${r.session}-${r.date}`} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 50, borderTop: '1px solid var(--hair)' }}><span style={{ fontSize: 22, width: 40 }}>{RATINGS[r.rating - 1].emoji}</span><span style={{ flex: 1, fontSize: 14.5 }}>{RATINGS[r.rating - 1].label}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{fmtDate(r.date)}</span></div>)}
-            {p.reviews.length === 0 && <span style={{ fontSize: 13.5, color: 'var(--muted)', padding: '12px 0' }}>Not reviewed yet. Rate it above or in the next review.</span>}
+            {p.reviews.length === 0 && <span style={{ fontSize: 13.5, color: 'var(--muted)', padding: '12px 0' }}>Not reviewed yet. It will come up in your next review.</span>}
           </div>
         )}
       </div>
@@ -165,7 +169,7 @@ export function MobilePhoto() {
         <Sheet title={p.title || p.file} onClose={() => setSheet(null)}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {[
-              { label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } },
+              ...(p.orphaned ? [] : [{ label: 'Make this the shoot’s cover', act: async () => { setSheet(null); try { await api(`/shoots/${p.shootId}`, { method: 'PATCH', body: { coverId: p.id } }); say('This is now the shoot’s cover'); } catch (e) { setErr((e as Error).message); } } }]),
               { label: p.orphaned ? 'Put in a shoot' : 'Move to shoot', act: () => setSheet('move') },
               ...(p.orphaned ? [] : [{ label: 'Take out of its shoot (no shoot)', act: async () => { setSheet(null); try { await api('/photos/orphan', { body: { photoIds: [p.id] } }); photo.reload(); say('Now in no shoot'); } catch (e) { setErr((e as Error).message); } } }]),
               { label: 'Compare with similar', act: () => nav('/compare') },
