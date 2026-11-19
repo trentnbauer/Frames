@@ -95,6 +95,23 @@ const clean = (v: unknown, max = 12): string[] => {
   for (const s of splitNames(v)) { const n = s.toLowerCase().replace(/[^\p{L}\p{N} '-]/gu, '').trim(); if (n && n.length <= 40) seen.add(n); }
   return [...seen].slice(0, max);
 };
+/**
+ * Tidies the model's tags: drops filler ("regular", "mainly a dog"), the lens class (search reads that from the camera details), words that
+ * only repeat a longer tag ("wide" and "angle" beside "wide angle"), and near-twins (mist/misty, outdoor/outdoors, fog/foggy: the first stays).
+ */
+export function tidyTags(tags: string[]): string[] {
+  const filler = /^(regular|wide|angle|telephoto|wide angle|photo|photograph|image|picture|shot|scene|good|nice)$|^(a|an|the|mainly|mostly|some|very|just)\s/;
+  const stem = (t: string) => t.replace(/s$/, '').replace(/([a-z])\1y$/, '$1').replace(/y$/, '');
+  const kept = tags.filter((t) => !filler.test(t));
+  const seen = new Set<string>();
+  return kept.filter((t) => {
+    if (!t.includes(' ') && kept.some((o) => o !== t && o.split(' ').includes(t))) return false;
+    const k = stem(t);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
 const text = (v: unknown, max = 600) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /** OpenAI-style services keep their API under a path. A bare host means /v1; an address that already has a path is used as given. */
@@ -135,12 +152,12 @@ async function askJson(c: AiCfg, prompt: string, jpeg?: Buffer): Promise<any> {
   return parseJson(String(j?.choices?.[0]?.message?.content ?? ''));
 }
 
-const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase; include one of wide angle, regular or telephoto for how much of the scene the lens takes in"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words", "light_leak": true or false, "lens_flare": true or false}. light_leak is true only for a light leak: a wash or streak of colour, often red, orange or yellow, coming in from an edge or across the frame, as on film. lens_flare is true only for flare: bright spots, rings, streaks or a washed-out haze from a light shining into the lens. Do not guess names of people.';
+const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words", "light_leak": true or false, "lens_flare": true or false}. light_leak is true only for a light leak: a wash or streak of colour, often red, orange or yellow, coming in from an edge or across the frame, as on film. lens_flare is true only for flare: bright spots, rings, streaks or a washed-out haze from a light shining into the lens. Do not guess names of people.';
 const yes = (v: unknown) => v === true || v === 'true';
 
 export async function describePhoto(c: AiCfg, jpeg: Buffer): Promise<Analysis> {
   const a = await askJson(c, DESCRIBE, jpeg);
-  return { description: text(a.description), tags: [...new Set([...clean(a.subjects), ...clean(a.tags), ...(yes(a.light_leak) ? ['light leak'] : []), ...(yes(a.lens_flare) ? ['lens flare'] : [])])], environment: text(a.environment, 200), composition: text(a.composition, 300), lighting: text(a.lighting, 300), mood: text(a.mood, 80) };
+  return { description: text(a.description), tags: tidyTags([...new Set([...clean(a.subjects), ...clean(a.tags), ...(yes(a.light_leak) ? ['light leak'] : []), ...(yes(a.lens_flare) ? ['lens flare'] : [])])]), environment: text(a.environment, 200), composition: text(a.composition, 300), lighting: text(a.lighting, 300), mood: text(a.mood, 80) };
 }
 
 /** Some sources (Claude, OpenRouter) have no embeddings. Those still describe and tag; search by meaning is just unavailable. */

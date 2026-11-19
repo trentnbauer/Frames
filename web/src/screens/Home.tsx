@@ -42,6 +42,9 @@ function useCarousel(n: number, ms: number, offset = 0) {
   return { i: n ? i % n : 0, fade, go, pause: () => { paused.current = true; }, resume: () => { paused.current = false; } };
 }
 
+/** "about 4 hours" reads better than "253 minutes". */
+export const duration = (m: number) => (m < 90 ? `${m} ${m === 1 ? 'minute' : 'minutes'}` : `${Math.round(m / 60)} hours`);
+
 /** A phone gets its own Home (see mobile/Home.tsx); wider screens keep this one. */
 export function Home() {
   return usePhoneWidth() ? <MobileHome /> : <DesktopHome />;
@@ -63,7 +66,7 @@ function DesktopHome() {
   const [splits, setSplits] = useState<Record<number, boolean>>({});
   const [done, setDone] = useState<Record<number, boolean>>({});
   const ideas = (recs.data ?? []).filter((x) => !dismissed.has(x.name));
-  const wip = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && !c.printedAt).slice(0, 6);
+  const wip = (comps.data ?? []).filter((c) => c.photoIds.length > 0 && c.stage === 'progress').slice(0, 6);
   const ci = useCarousel(ideas.length, 4500, 2250);
   const cw = useCarousel(wip.length, 4500);
   const idea = ideas[ci.i];
@@ -82,7 +85,7 @@ function DesktopHome() {
     summaryLine: `${(s?.total ?? 0).toLocaleString()} photographs · ${shoots.data?.length ?? 0} ${shoots.data?.length === 1 ? 'shoot' : 'shoots'} · ${comps.data?.length ?? 0} compositions`,
     showReview: !!s && (s.due > 0 || s.resumable || s.early > 0), revCover: s?.nextId ? thumb(s.nextId) : '', revTag: due > 0 ? 'DUE NOW' : s?.resumable ? 'IN PROGRESS' : 'ANYTIME',
     revTitle: due > 0 ? `${due} ${due === 1 ? 'photo is' : 'photos are'} waiting for your rating` : 'Nothing is due for review',
-    revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')} · ` : ''}about ${s!.minutes} ${s!.minutes === 1 ? 'minute' : 'minutes'}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',
+    revSub: due > 0 ? `${s!.shootNames.length ? `From ${s!.shootNames.join(' and ')}${s!.shootsMore ? ` and ${s!.shootsMore} more` : ''} · ` : ''}about ${duration(s!.minutes)}` : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.',
     revCta: s?.resumable ? 'Resume review' : due === 0 ? 'Review anyway' : 'Begin review', revThumbs: s?.nextId ? [thumb(s.nextId)] : [],
     begin: () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review'),
     pendingN: pn, pendingText: pn > 0 ? `${pn} new file${pn === 1 ? '' : 's'} are waiting in your library folder.` : 'Upload from this computer or sync from the cloud.',

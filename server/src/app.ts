@@ -383,10 +383,12 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
     const count = resumable ? left : due;
     const nextId = resumable && s ? s.queue[s.index].id : ids[0] ?? null;
     const shootNames = ids.length
-      ? (db.prepare(`SELECT DISTINCT sh.name FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE p.id IN (${ids.slice(0, 500).join(',')}) LIMIT 2`).all() as Row[]).map((r) => r.name as string)
+      ? (db.prepare(`SELECT DISTINCT sh.name FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE sh.unsorted = 0 AND p.id IN (${ids.slice(0, 500).join(',')}) ORDER BY sh.name LIMIT 2`).all() as Row[]).map((r) => r.name as string)
       : [];
+    // The hidden "no shoot" bucket is never named; only the shoots beyond the two named are counted.
+    const shootsDue = ids.length ? (db.prepare(`SELECT COUNT(DISTINCT sh.id) n FROM photos p JOIN shoots sh ON sh.id = p.shoot_id WHERE sh.unsorted = 0 AND p.id IN (${ids.slice(0, 500).join(',')})`).get() as Row).n as number : 0;
     const early = due === 0 && !resumable ? oldestIds() : [];
-    return { due: count, resumable, nextId: nextId ?? early[0] ?? null, early: early.length, shootNames, total: (one('SELECT COUNT(*) n FROM photos') as Row).n, minutes: Math.max(1, Math.round(count * 0.19)), sessions: loadSettings(db).sessions };
+    return { due: count, resumable, nextId: nextId ?? early[0] ?? null, early: early.length, shootNames, shootsMore: Math.max(0, shootsDue - shootNames.length), total: (one('SELECT COUNT(*) n FROM photos') as Row).n, minutes: Math.max(1, Math.round(count * 0.19)), sessions: loadSettings(db).sessions };
   });
   app.post('/api/review/start', async (req) => {
     const body = (req.body ?? {}) as Row;

@@ -9,6 +9,7 @@ import { SharePanel } from '../components/SharePanel';
 import { EditableCompositionName } from '../components/EditableCompositionName';
 import { CompositionStage } from '../components/CompositionStage';
 import { isFull } from '../layout';
+import { ppiAt } from '../components/NewComposition';
 import { CompositionVersions } from '../components/CompositionVersions';
 import { RoomBackground } from '../components/RoomBackground';
 import { usePhoneWidth } from '../usePhoneWidth';
@@ -132,7 +133,11 @@ export function Editor() {
       {sharing && <SharePanel kind="collection" id={c.id} name={c.name} onClose={() => { setSharing(false); links.reload(); }} />}
       <ProtoEditor
         readOnly={readOnly} showExport={readOnly}
-        stageControl={<CompositionStage value={c.stage} full={isFull(c.layout.prints)} disabled={saving > 0} onChange={async (stage) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { stage } })); }} />}
+        stageControl={<CompositionStage value={c.stage} full={isFull(c.layout.prints)} disabled={saving > 0} onChange={async (stage) => {
+          // A soft print is allowed, but worth a second look before the composition moves on.
+          const min = c.layout.ppi ?? 300, soft = stage === 'progress' ? [] : c.layout.prints.map((p, i) => ({ i, ppi: p.photoId ? byId.get(p.photoId) : undefined, p })).filter((x) => x.ppi && ppiAt(x.ppi.w, x.ppi.h, x.p.size) < min);
+          if (soft.length && !(await confirmAction(`${soft.map((x) => `Print ${x.i + 1} (${x.p.size})`).join(', ')} ${soft.length === 1 ? 'is' : 'are'} below ${min} PPI, so ${soft.length === 1 ? 'it' : 'they'} may print soft. Move on anyway?`, { title: 'Soft prints', confirm: 'Move on' }))) return;
+          coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { stage } })); }} />}
         onOpenShare={() => setSharing(true)}
         nameControl={readOnly ? <span title={c.name} style={{ font: "400 40px/1 'Instrument Serif',Georgia,serif", whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span> : <EditableCompositionName name={c.name} onSave={async (name) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { name } })); }} />}
         roomControl={<><CompositionVersions id={c.id} readOnly={readOnly} disabled={saving > 0} onChanged={() => { origin.current = null; reload(); }} /><RoomBackground id={c.id} bg={c.background} onChanged={coll.reload} onScale={async (mmPerPx) => { coll.set(await api<Collection>(`/collections/${c.id}`, { method: 'PATCH', body: { layout: { ...c.layout, bg: { mmPerPx } } } })); }} /></>}

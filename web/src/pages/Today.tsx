@@ -1,4 +1,5 @@
 import { HomeReviewBanner } from '../components/HomeReviewBanner';
+import { duration } from '../screens/Home';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -156,7 +157,7 @@ export function Today() {
   }
 
   const dueText = s && s.due > 0
-    ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')} · ` : ''}about ${s.minutes} ${s.minutes === 1 ? 'minute' : 'minutes'}`
+    ? `${s.shootNames.length ? `From ${s.shootNames.join(' and ')}${s.shootsMore ? ` and ${s.shootsMore} more` : ''} · ` : ''}about ${duration(s.minutes)}`
     : 'Come back when the next ones are due, or begin anyway with the photographs you have not seen for longest.';
   const cloudLeft = batches.data?.left ?? 0;
   const total = shoots.data?.length ?? 0;
