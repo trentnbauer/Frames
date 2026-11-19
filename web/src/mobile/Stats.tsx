@@ -62,7 +62,7 @@ export function MobileStats() {
   const yearPill = (y: string, label: string) => <button key={y} aria-pressed={year === y} onClick={() => setYear(y)} style={{ height: 36, padding: '0 16px', borderRadius: 999, fontSize: 13.5, background: year === y ? 'var(--btn-bg)' : 'transparent', color: year === y ? 'var(--btn-fg)' : 'var(--text2)', boxShadow: year === y ? 'none' : 'inset 0 0 0 1px var(--outline)' }}>{label}</button>;
   const note = c && c.you != null && c.community != null ? (c.community > c.you + 0.05 ? 'The community rates your work a little higher than you do.' : c.community < c.you - 0.05 ? 'The community rates your work a little lower than you do.' : 'The community rates your work about the same as you do.') : 'Ratings from the community appear here once others have reviewed your photos.';
   return (
-    <div className="ppage" data-screen-label="Stats">
+    <div className="ppage withhead" data-screen-label="Stats">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
         <div style={{ paddingTop: 4 }}><BackPill /></div>
         <h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Stats</h1>

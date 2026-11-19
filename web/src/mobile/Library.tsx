@@ -1,4 +1,3 @@
-import { TabAvatar } from './Chrome';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
@@ -69,8 +68,7 @@ export function MobileLibrary() {
           <div style={{ display: 'flex', gap: 8 }}>
             {view === 'photos' && <button onClick={() => { setSelecting(!selecting); setSel(new Set()); }} style={{ height: 40, padding: '0 16px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>{selecting ? 'Done' : 'Select'}</button>}
             <button onClick={() => setAdding(true)} aria-label="Add photos" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1 }}>+</button>
-            <TabAvatar />
-          </div>
+            </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 16px', borderRadius: 999, background: 'var(--surface)' }}>
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg>

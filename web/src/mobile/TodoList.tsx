@@ -4,7 +4,6 @@ import { imgUrl, useApi } from '../api';
 import type { Shoot } from '../data';
 import { useStore } from '../store';
 import { TASKS, buildTasks, taskTotals, type TaskKey } from '../todoTasks';
-import { TabAvatar } from './Chrome';
 import { ReviewCard } from './ReviewCard';
 import { Eyebrow, Row } from './ui';
 
@@ -41,7 +40,7 @@ export function MobileTodoList() {
   const removals = n('delete');
   return (
     <div className="pscreen ptab headless" data-screen-label="To do" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>To do</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{total}</span><span style={{ flex: 1 }} /><TabAvatar /></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>To do</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{total}</span><span style={{ flex: 1 }} /></div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <ReviewCard>
         {removals > 0 && <Row label="Removal review" sub={`${removals} below your removal threshold`} count={removals} onClick={() => nav('/removals')} />}
