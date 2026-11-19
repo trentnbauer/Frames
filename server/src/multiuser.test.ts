@@ -234,7 +234,8 @@ describe('server rules for members', () => {
     expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(403);
     expect((await call('POST', '/api/ai/sources', me, { type: 'ollama' })).status).toBe(201);
     await call('PUT', '/api/admin/instance', me, { cloudWho: 'members', aiMembersOwn: true });
-    expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(201);
+    expect((await call('POST', '/api/ai/sources', a, { type: 'ollama' })).status).toBe(400); // a member's AI may not point at this server's own network
+    expect((await call('POST', '/api/ai/sources', a, { type: 'openai' })).status).toBe(201);
   });
 });
 
