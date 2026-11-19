@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, imgUrl } from '../api';
 import { Sheet } from '../components/Sheet';
 import type { Collection, PhotoLite } from '../data';
+import { ppiAt } from '../components/NewComposition';
 import { FRAMES, MATS, PAD, frameOf, isFull, metres, rectsIn, sizeLabel, type Print } from '../layout';
 import { printsSummary } from '../screens/walls';
 import { primaryBtn } from './ui';
@@ -31,6 +32,9 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
   const run = async (fn: () => Promise<unknown>) => { if (busy) return; setBusy(true); setErr(''); try { await fn(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
   const place = (photoId: number) => run(() => saveLayout(prints.map((p, i) => (i === sel ? { ...p, photoId } : p))));
   const pending = changes.length;
+  // A print the photograph cannot fill sharply is allowed, but flagged, as on the desktop.
+  const minPpi = c.layout.ppi ?? 300;
+  const soft = prints.flatMap((p, i) => { const ph = p.photoId ? byId.get(p.photoId) : undefined; const ppi = ph ? Math.round(ppiAt(ph.w, ph.h, p.size)) : Infinity; return ppi < minPpi ? [{ i, size: p.size, ppi }] : []; });
   const none = prints.length === 0;
 
   return (
@@ -51,6 +55,7 @@ export function MobileComposition({ c, prints, byId, order, readOnly, library, c
           {STAGES.map(([k, l, shape]) => <button key={k} aria-pressed={c.stage === k} disabled={busy} onClick={() => run(() => setStage(k))} style={{ flex: 1, height: 38, borderRadius: 999, background: c.stage === k ? 'var(--btn-bg)' : 'transparent', color: c.stage === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><span aria-hidden className={`stage-shape ${shape}`} />{l}</button>)}
         </div>
         {err && <div role="alert" className="reason">{err}</div>}
+        {soft.length > 0 && <div role="status" style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--warn)' }}>⚠ {soft.map((x) => `Print ${x.i + 1} (${x.size}) is ${x.ppi} PPI`).join(' · ')}: below {minPpi}, so {soft.length === 1 ? 'it' : 'they'} may print soft.</div>}
         <div style={{ position: 'relative', height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--wall-bg)', backgroundImage: 'linear-gradient(var(--wall-grid) 1px,transparent 1px),linear-gradient(90deg,var(--wall-grid) 1px,transparent 1px)', backgroundSize: '20px 20px', display: 'grid', placeItems: 'center' }}>
           {f && (
             <div style={{ position: 'relative', height: '86%', maxWidth: '92%', aspectRatio: String(f.W / f.H) }}>

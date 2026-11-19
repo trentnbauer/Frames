@@ -82,7 +82,7 @@ export const frameOf = (prints: Print[], pad: number): Frame2D => { const b = bo
 const pct = (v: number) => `${v}%`;
 /** Each print's box as percentages of the wall, for drawing. */
 export const rectsIn = (prints: Print[], f: Frame2D) => prints.map((p) => { const [w, h] = dims(p); return { left: pct(((p.x - f.x0 + f.pad) / f.W) * 100), top: pct(((p.y - f.y0 + f.pad) / f.H) * 100), width: pct((w / f.W) * 100), height: pct((h / f.H) * 100) }; });
-export const metres = (mm: number) => (mm / 1000).toFixed(2);
+export const metres = (mm: number) => (mm / 1000).toFixed(1); // the same one decimal as the editor
 
 /** The photographs a print holds, in order (one, or two when stacked). */
 export const photosOf = (p: Print): number[] => [p.photoId, p.stack ? p.photoId2 : null].filter((x): x is number => x !== null);

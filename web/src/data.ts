@@ -44,3 +44,12 @@ export const fmtCoord = (lat: number, lon: number) => `${Math.abs(lat).toFixed(4
 
 /** What to show for a rating: the face, or stars, by the person's choice (Settings, Reviews, Rating scale). */
 export const ratingMark = (r: { value: number; emoji: string }, style: 'emoji' | 'stars' | undefined) => (style === 'stars' ? '★'.repeat(r.value) : r.emoji);
+
+/** "Chrome on Windows" from a browser's user-agent string; the raw string when it is not one we know. */
+export function deviceOf(ua: string | null | undefined): string {
+  const u = String(ua ?? '');
+  if (!u) return 'Device not recorded';
+  const browser = /Edg\//.test(u) ? 'Edge' : /OPR\/|Opera/.test(u) ? 'Opera' : /Firefox\//.test(u) ? 'Firefox' : /Chrome\/|CriOS/.test(u) ? 'Chrome' : /Safari\//.test(u) ? 'Safari' : '';
+  const os = /Windows/.test(u) ? 'Windows' : /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac OS X|Macintosh/.test(u) ? 'macOS' : /CrOS/.test(u) ? 'ChromeOS' : /Linux/.test(u) ? 'Linux' : '';
+  return browser && os ? `${browser} on ${os}` : browser || os || u.slice(0, 60);
+}

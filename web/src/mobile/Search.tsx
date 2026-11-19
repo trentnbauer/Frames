@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
 import { GearIcon } from './Gear';
+import { setPhotoWalk } from '../photoWalk';
 import { Eyebrow } from './ui';
 
 const KEY = 'frames-recent-searches';
@@ -39,6 +40,8 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
   const cs = (comps.data ?? []).filter((c) => c.name.toLowerCase().includes(needle));
   const gs = [...(gear.data?.own ?? []).map((g) => ({ id: g.id, name: g.name, type: g.type, sub: 'Owned' })), ...(gear.data?.want ?? []).map((g) => ({ id: g.id, name: g.name, type: g.type, sub: 'Wishlist' }))].filter((g) => g.name.toLowerCase().includes(needle));
   const ps = photos?.photos ?? [];
+  // Opening a result steps through the results, not the photographs around it.
+  useEffect(() => { if (ps.length) setPhotoWalk(ps.map((x) => x.id)); }, [photos]); // eslint-disable-line react-hooks/exhaustive-deps
   const none = !!needle && photos !== null && ps.length + sh.length + cs.length + gs.length === 0;
   const group = (title: string, count: number, rows: { key: string | number; thumb?: string; icon?: ReactNode; label: string; sub: ReactNode; to: string }[], more?: { label: string; to: string }) => rows.length > 0 && (
     <div key={title} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -86,7 +89,7 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
         )}
         {needle && (
           <>
-            {group('PHOTOS', photos?.total ?? ps.length, ps.slice(0, 5).map((p) => ({ key: p.id, thumb: imgUrl(p.id, 'thumb'), label: p.title || p.file, sub: [shoots.data?.find((s) => s.id === p.shootId)?.name, p.camera].filter(Boolean).join(' · '), to: `/photo/${p.id}` })), (photos?.total ?? 0) > 5 ? { label: `See all ${photos!.total} photos`, to: `/library?q=${encodeURIComponent(q.trim())}` } : undefined)}
+            {group('PHOTOS', photos?.total ?? ps.length, ps.slice(0, 5).map((p) => ({ key: p.id, thumb: imgUrl(p.id, 'thumb'), label: p.title || p.file, sub: [shoots.data?.find((s) => s.id === p.shootId)?.name, p.camera].filter(Boolean).join(' · '), to: `/photo/${p.id}?in=list` })), (photos?.total ?? 0) > 5 ? { label: `See all ${photos!.total} photos`, to: `/library?q=${encodeURIComponent(q.trim())}` } : undefined)}
             {group('SHOOTS', sh.length, sh.slice(0, 5).map((s) => ({ key: s.id, thumb: s.coverId ? imgUrl(s.coverId, 'thumb') : undefined, label: s.name || 'Untitled shoot', sub: `${s.place || 'No place'} · ${s.dates} · ${s.count} photos`, to: `/shoots/${s.id}` })))}
             {group('COMPOSITIONS', cs.length, cs.slice(0, 5).map((c) => ({ key: c.id, thumb: c.photoIds[0] ? imgUrl(c.photoIds[0], 'thumb') : undefined, label: c.name, sub: <><span aria-hidden className={`stage-shape ${c.stage}`} style={{ marginRight: 6 }} />{c.stage.charAt(0).toUpperCase() + c.stage.slice(1)}</>, to: `/collections/${c.id}` })))}
             {group('GEAR', gs.length, gs.slice(0, 5).map((g) => ({ key: `${g.sub}${g.id}`, icon: <GearIcon type={g.type} />, label: g.name, sub: g.sub, to: g.sub === 'Wishlist' ? '/gear?view=wish' : '/gear' })))}

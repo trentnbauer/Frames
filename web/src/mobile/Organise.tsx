@@ -1,11 +1,16 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
+import { useStore } from '../store';
 import { BackPill, Eyebrow } from './ui';
 
 type Batch = { id: number; name: string; count: number; days: number; importedAt: string; covers: number[]; done: boolean };
 
 /** Organise uploads on a phone: each new batch, a name to give it, split by day, and Add shoot. */
 export function MobileOrganise() {
+  const nav = useNavigate();
+  const { todoItems } = useStore();
+  const orphans = todoItems.find((i) => i.key === 'orphaned')?.count ?? 0;
   const data = useApi<{ batches: Batch[]; left: number }>('/home/batches');
   const [names, setNames] = useState<Record<number, string>>({});
   const [splits, setSplits] = useState<Record<number, boolean>>({});
@@ -30,7 +35,7 @@ export function MobileOrganise() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ paddingTop: 4 }}><BackPill /></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}><h1 style={{ font: '400 40px/1 var(--serif)', margin: 0 }}>Organise uploads</h1><span style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--text2)' }}>New photos arrive in batches. Name each one to turn it into a shoot.</span></div>
-        <Eyebrow>{left ? `${left} BATCH${left > 1 ? 'ES' : ''} LEFT` : 'ALL SORTED ✓'}</Eyebrow>
+        <Eyebrow>{left ? `${left} BATCH${left > 1 ? 'ES' : ''} LEFT` : orphans > 0 ? 'NO BATCHES WAITING' : 'ALL SORTED ✓'}</Eyebrow>
         {err && <div role="alert" className="reason">{err}</div>}
         {batches.map((b) => {
           const isDone = !!done[b.id] || b.done, sp = !!splits[b.id], nm = (names[b.id] ?? '').trim() || b.name;
@@ -58,7 +63,8 @@ export function MobileOrganise() {
             </div>
           );
         })}
-        {data.data && batches.length === 0 && <div style={{ padding: '8px 0', fontSize: 13.5, color: 'var(--muted)' }}>Nothing to organise. Photos from a cloud account arrive here in batches.</div>}
+        {data.data && batches.length === 0 && <div style={{ padding: '8px 0', fontSize: 13.5, color: 'var(--muted)' }}>No cloud batches to name. Photos from a cloud account arrive here in batches.</div>}
+        {orphans > 0 && <button onClick={() => nav('/todo?task=orphaned')} style={{ textAlign: 'left', padding: 14, borderRadius: 14, background: 'var(--surface)', fontSize: 13.5, color: 'var(--text)' }}>{orphans.toLocaleString()} {orphans === 1 ? 'photo is' : 'photos are'} in no shoot yet. Put {orphans === 1 ? 'it' : 'them'} in a shoot →</button>}
         <div style={{ padding: 14, borderRadius: 10, boxShadow: 'inset 0 0 0 1px var(--hair)', fontSize: 12.5, lineHeight: 1.5, color: 'var(--muted)' }}>To move single photographs between shoots, select them in Library, then choose Add to… and A shoot. Larger reorganising is easier in the full app.</div>
       </div>
     </div>
