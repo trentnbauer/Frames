@@ -8,7 +8,7 @@ export type Settings = {
   xmpWriteBack: boolean;
   reviewSize: number; ratingStyle: 'emoji' | 'stars'; newShootsFirst: boolean;
 };
-export type Summary = { due: number; resumable: boolean; early: number; nextId: number | null; shootNames: string[]; total: number; minutes: number; sessions: number };
+export type Summary = { due: number; resumable: boolean; early: number; nextId: number | null; shootNames: string[]; shootsMore?: number; total: number; minutes: number; sessions: number };
 
 export type Me = { mfa?: MfaStatus; mode: 'none' | 'password' | 'oauth'; user: { name: string; email: string; provider: string; folder: string } | null; id: number; owner: boolean; role: 'admin' | 'member' | 'guest'; canSignOut: boolean; displayName?: string; hasAvatar?: boolean; cloudOnly?: boolean; storeOriginalQuality?: boolean; signups: boolean; envConfig: boolean };
 

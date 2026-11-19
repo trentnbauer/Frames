@@ -50,7 +50,7 @@ function AuthScreen({ view, lockProps }: { view: 'signin' | 'signup' | 'terms' |
   const [qs] = useSearchParams();
   const o = useApi<Options>('/public/auth');
   const terms = useApi<{ sections: { h: string; p: string }[] }>('/public/auth/terms');
-  useEffect(() => { if (o.data?.signedIn && view !== 'lock' && view !== 'out') nav('/', { replace: true }); }, [o.data, nav, view]);
+  useEffect(() => { if (o.data?.signedIn && view !== 'lock' && view !== 'out' && view !== 'terms') nav('/', { replace: true }); }, [o.data, nav, view]);
   const err = qs.get('e');
   if (!o.data && view !== 'lock' && view !== 'out' && view !== 'terms') return <div className="auth-shell" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>{o.error ? 'Could not load the sign-in options.' : 'Loading…'}</div>;
   const options = { ...(o.data ?? { providers: [], email: false, password: false, turnstile: null, signups: false, serverName: 'Frames', signedIn: false }), passkey: true } as Options & { passkey: boolean };

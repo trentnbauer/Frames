@@ -44,9 +44,9 @@ export function RemovalReview({ onChanged }: { onChanged: () => void }) {
         <svg viewBox="0 0 390 200" className="removal-history" role="img" aria-label={`Your rating history: ${history.map((review) => review.rating).join(', ')}`}>
           {[1,2,3,4,5].map((rating) => <g key={rating}><line x1="30" y1={y(rating)} x2="375" y2={y(rating)} stroke="var(--outline)" /><text x="8" y={y(rating) + 4} fill="var(--muted)" fontSize="11">{rating}</text></g>)}
           <polyline points={points} fill="none" stroke="var(--text2)" strokeWidth="2" />
-          {history.map((review, index) => <circle key={index} cx={x(index)} cy={y(review.rating)} r="5" fill="var(--text)"><title>Session {review.session}: {review.rating}/5 · {new Date(review.date).toLocaleDateString()}</title></circle>)}
+          {history.map((review, index) => <circle key={index} cx={x(index)} cy={y(review.rating)} r="5" fill="var(--text)"><title>Session {review.session}: {review.rating}/5 · {new Date(review.date).toLocaleDateString('en-AU')}</title></circle>)}
         </svg>
-        <div className="removal-scores">{history.map((review,index) => <div key={index}><strong>{review.rating}<small> / 5</small></strong><span>Session {review.session}</span><time dateTime={review.date}>{new Date(review.date).toLocaleDateString()}</time></div>)}</div>
+        <div className="removal-scores">{history.map((review,index) => <div key={index}><strong>{review.rating}<small> / 5</small></strong><span>Session {review.session}</span><time dateTime={review.date}>{new Date(review.date).toLocaleDateString('en-AU')}</time></div>)}</div>
         <div className="removal-actions"><button type="button" className="btn outline" disabled={busy} onClick={() => void act('keep')}>Keep</button><button type="button" className="btn danger" disabled={busy} onClick={() => void act('delete')}><WarningIcon />Remove…</button></div>
         <small className="muted">Keep dismisses this suggestion until another rating. Remove asks for confirmation. Original files are kept.</small>
         {error && <p role="alert" className="reason">{error}</p>}

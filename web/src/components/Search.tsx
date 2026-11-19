@@ -69,10 +69,10 @@ function DesktopSearch({ onClose }: { onClose: () => void }) {
       try {
         const mm = await api<Meta>(`/search/meta?q=${encodeURIComponent(q)}`).catch(() => ({ chips: [], files: [] } as Meta));
         setMeta(mm);
-        let pr = parsed;
-        if (ai && !parsed) { pr = (await api<{ parsed: Parsed | null }>('/search/parse', { body: { q } }).catch(() => ({ parsed: null }))).parsed; setParsed(pr); }
         const r = await api<{ photos: PhotoLite[]; count: number; semantic: boolean }>(`/photos?${params(mm.chips.filter((c) => !removed.includes(c.key)))}`);
         setResults(r.photos); setCount(r.count);
+        // The plain results are on screen already; the AI's reading of the sentence refines them when (and if) it answers. Setting `parsed` runs this search again with it.
+        if (ai && !parsed) { setBusy(false); const pr = (await api<{ parsed: Parsed | null }>('/search/parse', { body: { q } }).catch(() => ({ parsed: null }))).parsed; if (pr) setParsed(pr); }
       } catch { setResults([]); setCount(0); } finally { setBusy(false); }
     }, 350);
     return () => clearTimeout(t);

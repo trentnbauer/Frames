@@ -84,11 +84,11 @@ export function Vocabulary() {
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New tag" aria-label="New tag" />
       <button className="btn outline" disabled={!name.trim() || busy}>Create</button>
     </form>
-    <input aria-label="Find tags" placeholder="Find tags" value={query} onChange={(e) => setQuery(e.target.value)} />
+    <input className="field-in" aria-label="Find tags" placeholder="Find tags" value={query} onChange={(e) => setQuery(e.target.value)} />
     {list.loading && <Loading error={list.error} />}
     {list.error && <p role="alert">{list.error}</p>}
     {!list.loading && !shown.length && <p className="muted">{query ? 'No matches.' : 'None yet.'}</p>}
-    <div style={{ maxHeight: '45vh', overflow: 'auto' }}>{shown.map((t) => {
+    <div style={{ maxHeight: '45vh', overflow: 'auto', scrollbarGutter: 'stable', paddingRight: 8, marginTop: 10 }}>{shown.map((t) => {
       const key = `${t.kind}:${t.name}`, path = `/tags/${t.kind}/${encodeURIComponent(t.name)}`;
       return <div className="row" key={key}>
         {editing === key ? <form className="form" onSubmit={(e) => { e.preventDefault(); if (to.trim() && !busy) void act(() => api(path, { method: 'PATCH', body: { name: to } }), () => setEditing(null)); }}>

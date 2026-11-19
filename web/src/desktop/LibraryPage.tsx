@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { SegSlider } from '../components/SegSlider';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { imgUrl, useApi } from '../api';
+import { setPhotoWalk } from '../photoWalk';
 import { AddPhotosModal } from '../components/AddPhotos';
 import { LibraryMore } from '../components/LibraryMore';
 import { useLibraryFilters } from '../components/LibraryFilters';
@@ -162,7 +163,7 @@ export function LibraryPage() {
               {selecting && hits.length > 0 && <button onClick={() => setPicked((c) => { const n = new Set(c); const every = hits.every((p) => n.has(p.id)); hits.forEach((p) => (every ? n.delete(p.id) : n.add(p.id))); return n; })} style={{ fontSize: 13, color: 'var(--text2)', flexShrink: 0 }}>{hits.every((p) => picked.has(p.id)) ? 'Clear' : 'Select all'}</button>}
             </div>
             {hits.length > 0
-              ? <JustifiedGrid photos={hits} selecting={selecting} picked={picked} due={isDue} badge={(p) => (p.orphaned ? '' : all.find((x) => x.id === p.shootId)?.name.trim() ?? '')} onClick={(p) => (selecting ? flip(p.id) : nav(`/photo/${p.id}?in=library`))} />
+              ? <JustifiedGrid photos={hits} selecting={selecting} picked={picked} due={isDue} badge={(p) => (p.orphaned ? '' : all.find((x) => x.id === p.shootId)?.name.trim() ?? '')} onClick={(p) => { if (selecting) flip(p.id); else { setPhotoWalk(hits.map((x) => x.id)); nav(`/photo/${p.id}?in=list`); } }} />
               : photos.data && <div style={{ padding: 32, borderRadius: 12, background: 'var(--surface)', color: 'var(--muted)', fontSize: 14 }}>No photographs match.</div>}
           </div>
         );

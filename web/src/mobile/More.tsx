@@ -28,8 +28,10 @@ export function MobileRemoved() {
         <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--hair)' }}>
           {list.map((p) => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid var(--hair)' }}>
+              {/* The small copy kept when it was removed: it goes with the entry once the recovery period is over. */}
+              <span aria-hidden style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 4, background: `url(/api/recovery/${p.id}/thumb) center/cover var(--surface)` }} />
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 15, overflowWrap: 'anywhere' }}>{p.title || p.file}</span><span style={{ fontSize: 13, color: 'var(--muted)' }}>Removed {ago(p.removedAt)}{p.originalAvailable ? '' : ' · original missing'}</span></span>
-              <button disabled={busy !== null} onClick={() => restore(p)} style={{ height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>{busy === p.id ? 'Restoring…' : 'Restore'}</button>
+              <button disabled={busy !== null} onClick={() => restore(p)} style={{ flexShrink: 0, marginRight: 2, height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>{busy === p.id ? 'Restoring…' : 'Restore'}</button>
             </div>
           ))}
           {photos.data && list.length === 0 && <div style={{ padding: '24px 0', fontSize: 13.5, color: 'var(--muted)' }}>Nothing removed recently.</div>}
