@@ -127,7 +127,7 @@ function DesktopActivity() {
               <div className="grow">
                 <strong>{change.label}</strong>
                 <small>
-                  {new Date(change.createdAt).toLocaleString()}
+                  {new Date(change.createdAt).toLocaleString('en-AU')}
                   {change.undoneAt ? ' · Undone' : ''}
                 </small>
               </div>

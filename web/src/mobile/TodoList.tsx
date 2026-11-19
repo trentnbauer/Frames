@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { imgUrl, useApi } from '../api';
 import type { Shoot } from '../data';
 import { useStore } from '../store';
-import { TASKS, buildTasks, type TaskKey } from '../todoTasks';
+import { TASKS, buildTasks, taskTotals, type TaskKey } from '../todoTasks';
 import { ReviewCard } from './ReviewCard';
 import { Eyebrow, Row } from './ui';
 
@@ -13,12 +13,9 @@ export const SUB: Record<TaskKey, string> = {
 };
 const GROUPS: [string, TaskKey[]][] = [['PUT AWAY', ['orphaned']], ['MISSING DETAILS', ['ai-tags', 'tags', 'ai-desc', 'desc', 'location', 'camera', 'time', 'light', 'mood']], ['COMPOSITIONS', ['composition']]];
 
-/** The number the To do tab and the desktop dock both show: everything waiting. */
+/** The number the To do tab and the desktop dock both show: the server's own total of what is waiting. */
 export function useTodoTotal() {
-  const { summary, todoItems = [] } = useStore();
-  const tasks = useMemo(() => buildTasks(todoItems), [todoItems]);
-  const dupes = todoItems.find((i) => i.key === 'duplicates')?.count ?? 0;
-  return tasks.rows.reduce((a, r) => a + r.n, 0) + (summary?.due ?? 0) + dupes;
+  return useStore().todo;
 }
 
 /** To do on a phone (a tab): the review prompt, removal and community review, then the kinds of task as a list with counts. */
@@ -26,7 +23,9 @@ export function MobileTodoList() {
   const nav = useNavigate();
   const { summary, todoItems } = useStore();
   const tasks = useMemo(() => buildTasks(todoItems), [todoItems]);
-  const n = (k: TaskKey) => tasks.rows.find((r) => r.key === k)?.n ?? 0;
+  const totals = useMemo(() => taskTotals(todoItems), [todoItems]);
+  // The count on a row is every photograph missing that, not just the ones it is first in line for.
+  const n = (k: TaskKey) => Math.max(totals[k] ?? 0, tasks.rows.find((r) => r.key === k)?.n ?? 0);
   const due = summary?.due ?? 0;
   const dupes = todoItems.find((i) => i.key === 'duplicates')?.count ?? 0;
   const total = useTodoTotal();

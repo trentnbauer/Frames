@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { openPortfolio, useApi } from '../api';
 import { Sheet } from '../components/Sheet';
+import { useStatus } from '../components/AddPhotos';
 import { useStore } from '../store';
 import { useTodoTotal } from './TodoList';
 
@@ -53,6 +54,7 @@ export function PhoneTabBar() {
 export function PhoneMeSheet({ name, onClose }: { name: string; onClose: () => void }) {
   const nav = useNavigate();
   const { me } = useStore();
+  const status = useStatus();
   const batches = useApi<{ left: number }>('/home/batches');
   const removed = useApi<unknown[]>('/recovery');
   const unread = useApi<{ items: { read: boolean }[] }>('/notifications').data?.items.filter((i) => !i.read).length ?? 0;
@@ -60,7 +62,7 @@ export function PhoneMeSheet({ name, onClose }: { name: string; onClose: () => v
   const signOut = async () => { await fetch('/auth/logout', { method: 'POST' }); window.location.assign('/'); };
   const rows: { label: string; sub?: string; meta?: string; act: () => void; fg?: string; gap?: boolean }[] = [
     { label: 'Notifications', meta: unread ? String(unread) : '', act: go('/notifications') },
-    { label: 'Add photos', sub: 'Upload from this phone or sync from the cloud', act: go('/library?add=1') },
+    { label: 'Add photos', sub: status.data?.storage.local ? (status.data.storage.cloud ? 'Upload from this phone or sync from the cloud' : 'Upload from this phone') : status.data?.storage.cloud ? 'Sync from the cloud' : 'Storage is not set up yet', act: go('/library?add=1') },
     { label: 'Organise uploads', sub: 'Name new batches as shoots', meta: batches.data?.left ? String(batches.data.left) : '', act: go('/organise') },
     { label: 'Stats', act: go('/stats'), gap: true },
     { label: 'Recently removed', meta: Array.isArray(removed.data) && removed.data.length ? String(removed.data.length) : '', act: go('/activity') },

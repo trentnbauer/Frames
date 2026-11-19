@@ -1,5 +1,6 @@
 import { ToastSlot } from '../components/Toast';
 import { usePhoneWidth } from '../usePhoneWidth';
+import { BackPill } from '../mobile/ui';
 import { SegSlider } from '../components/SegSlider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -72,7 +73,8 @@ export function SettingsPage() {
 
   if (!settings) return <div className="page settings-page"><Loading /></div>;
   return (
-    <div className="page settings-page" style={{ paddingBottom: 140 }}>
+    <div className={'page settings-page' + (phone ? ' ppage' : '')} style={{ paddingBottom: 140 }}>
+      {phone && listing && <div style={{ paddingTop: 4, marginBottom: 12 }}><BackPill /></div>}
 
       {phone && !listing && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}><button onClick={back} style={{ height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', fontSize: 13, color: 'var(--text2)' }}>← Settings</button>{toast && <ToastSlot>✓ {toast}</ToastSlot>}</div>}
       {!(phone && !listing) && <div className="settings-page-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>

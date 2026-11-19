@@ -62,7 +62,7 @@ export function WishlistHistory() {
               <small>
                 Estimated {entry.estimated === null ? 'not set' : `${entry.currency}${entry.estimated}`} ·{' '}
                 {kind === 'bought' ? `Paid ${entry.paid === null ? 'not set' : `${entry.currency}${entry.paid}`} · ` : ''}
-                {new Date(entry.date).toLocaleDateString()}
+                {new Date(entry.date).toLocaleDateString('en-AU')}
                 {entry.restored ? ' · Restored' : ''}
               </small>
               {entry.note && <p>{entry.note}</p>}

@@ -60,9 +60,10 @@ describe('sign in with the cloud services’ own app', () => {
       const who = (globalThis as any).__dbxWho as { account_id: string; email: string };
       return new Response(JSON.stringify({ account_id: who.account_id, email: who.email, email_verified: true, name: { display_name: 'Dee Box' } }), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const start = async () => new URL(String((await call('GET', '/auth/login/dbx', undefined, {})).headers.location)).searchParams.get('state');
+    const start = async () => { const r = await call('GET', '/auth/login/dbx', undefined, {}); const flow = String(([] as string[]).concat(r.headers['set-cookie'] as string[]).find((c) => c?.startsWith('frames_flow=')) ?? '').split(';')[0]; return { state: new URL(String(r.headers.location)).searchParams.get('state'), headers: { cookie: flow } }; };
     (globalThis as any).__dbxWho = { account_id: 'dbid:AAA', email: 'dee@x.test' };
-    const ok = await call('GET', `/auth/callback/dbx?code=abc&state=${await start()}`, undefined, {});
+    const s1 = await start();
+    const ok = await call('GET', `/auth/callback/dbx?code=abc&state=${s1.state}`, undefined, s1.headers);
     expect(ok.status).toBe(302);
     expect(String(([] as string[]).concat(ok.headers['set-cookie'] as string[]).join(';'))).toContain(SESSION_COOKIE);
     const token = calls.find((c) => c.url.endsWith('/oauth2/token'))!;
@@ -70,7 +71,8 @@ describe('sign in with the cloud services’ own app', () => {
     expect(token.body).toContain(`client_secret=${CLIENT_SECRET}`); // the cloud app's secret, sent to Dropbox only
     expect(calls.find((c) => c.url.endsWith('/users/get_current_account'))!.method).toBe('POST');
     (globalThis as any).__dbxWho = { account_id: 'dbid:BBB', email: 'mallory@evil.test' };
-    const no = await call('GET', `/auth/callback/dbx?code=abc&state=${await start()}`, undefined, {});
+    const s2 = await start();
+    const no = await call('GET', `/auth/callback/dbx?code=abc&state=${s2.state}`, undefined, s2.headers);
     expect(no.status).toBe(403); // not on the allowed list
   });
 });

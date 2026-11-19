@@ -252,7 +252,8 @@ export function registerPhotos(app: FastifyInstance, x: Ctx) {
   app.post('/api/search/parse', async (req) => {
     const text = String(((req.body ?? {}) as Row).q ?? '').slice(0, 300);
     const on = aiConfigsFor(db, 'search').length > 0;
-    const parsed = on && text ? await tryEach(db, 'search', (c) => parseQuery(c, text)).catch(() => null) : null;
+    // A slow or silent AI must not hold the search: after a few seconds the sentence is searched as typed.
+    const parsed = on && text ? await Promise.race([tryEach(db, 'search', (c) => parseQuery(c, text)).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 6000).unref())]) : null;
     return { ai: on, parsed };
   });
 

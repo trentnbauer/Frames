@@ -55,6 +55,7 @@ describe('notifications', () => {
   it('turns release notes into short bullets', () => {
     expect(releaseItems('## What changed\n- Added A\n- Fixed B\nplain')).toEqual(['Added A', 'Fixed B']);
     expect(releaseItems('Just a line')).toEqual(['Just a line']);
+    expect(releaseItems('## What\'s Changed\n* Fixed the `Search` box by @someone in https://github.com/x/y/pull/9\n* **Added** [a thing](https://example.com/a)\n\n**Full Changelog**: https://github.com/x/y/compare/a...b')).toEqual(['Fixed the Search box', 'Added a thing']);
   });
 });
 

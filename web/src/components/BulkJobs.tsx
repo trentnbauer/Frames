@@ -51,7 +51,7 @@ export function BulkJobs({ open: controlled, onClose }: { open?: boolean; onClos
                   {job.cursor} of {job.total} processed
                 </strong>
                 <small>
-                  {new Date(job.createdAt).toLocaleString()} · {job.status}
+                  {new Date(job.createdAt).toLocaleString('en-AU')} · {job.status}
                 </small>
               </div>
               {job.status === 'pending' && (

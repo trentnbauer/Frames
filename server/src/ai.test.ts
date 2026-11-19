@@ -351,3 +351,11 @@ describe('moving from the old single setup', () => {
     } finally { cleanup(e); }
   });
 });
+
+describe('tidyTags', () => {
+  it('drops filler, lens classes, repeated words and near-twins', async () => {
+    const { tidyTags } = await import('./ai.js');
+    expect(tidyTags(['wide', 'angle', 'wide angle', 'regular', 'mainly a dog', 'mist', 'misty', 'outdoor', 'outdoors', 'fog', 'foggy', 'forest'])).toEqual(['mist', 'outdoor', 'fog', 'forest']);
+    expect(tidyTags(['golden hour', 'golden', 'hour'])).toEqual(['golden hour']);
+  });
+});

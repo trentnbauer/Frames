@@ -5,7 +5,7 @@ import { UndoNotice } from './components/UndoNotice';
 import { RemovalReviewScreen } from './screens/RemovalReview';
 import { TwoFactorGate } from './components/TwoFactor';
 import { LayoutPreferencesProvider } from './layoutPreferences';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useKey } from './components/bits';
 import { Header, BottomNav, EnvBanner, ShellModals, TabBar, Footer } from './components/Shell';
@@ -84,7 +84,9 @@ function Shell() {
     if (e.key.toLowerCase() === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !searching) { e.preventDefault(); nav('/todo'); return; }
     if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey && !inReview && !searching) nav(summary && summary.due === 0 && !summary.resumable && summary.early > 0 ? '/review?early' : '/review'); // nothing due: begin anyway
   }, [inReview, searching, summary]);
-  useEffect(() => { refreshSummary(); }, [loc.pathname, refreshSummary]);
+  // The store already fetches these on load; this refreshes them when the page changes.
+  const firstPath = useRef(true);
+  useEffect(() => { if (firstPath.current) { firstPath.current = false; return; } refreshSummary(); }, [loc.pathname, refreshSummary]);
 
   return (
     <GoContext.Provider value={(to) => {
