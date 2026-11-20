@@ -25,7 +25,7 @@ import { Editor as CollectionDetail } from './screens/Editor';
 import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare, Duplicates } from './screens/Compare';
-import { ZineEditor, Zines } from './screens/Zines';
+import { ZineEditor } from './screens/Zines';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './screens/Welcome';
 import { Community } from './screens/Community';
@@ -117,7 +117,7 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
         <Route path="/gear" element={<Gear />} />
-        <Route path="/zines" element={<Zines />} />
+        <Route path="/zines" element={<Navigate to="/collections" replace />} />
         <Route path="/zines/:id" element={<ZineEditor />} />
         <Route path="/gear-history" element={<WishlistHistory />} />
         <Route path="/todo" element={<Todo />} />

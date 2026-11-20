@@ -14,20 +14,22 @@ export const RATIOS = { '4:5': 1350, '3:4': 1440, '1:1': 1080 } as const; // sli
 export const MAX_SLIDES = 20; // Instagram's carousel limit
 const W = 1080;
 
-export type CarouselOpts = { ids: number[]; ratio: keyof typeof RATIOS; border: number; colour: string; split: boolean };
-export type Slide = { id: number; part: number; of: number };
+export type CarouselOpts = { ids: number[]; ratio: keyof typeof RATIOS; border: number; colour: string; split: boolean; pair: boolean };
+/** One slide: a photograph (or this part of one split across `of` slides), and with pair, a second photograph beside or below it. */
+export type Slide = { id: number; part: number; of: number; id2?: number };
 
 /** The options from a query string, or a sentence saying what is wrong with them. */
 export function parseOpts(q: Row): CarouselOpts | string {
   const ids = String(q.ids ?? '').split(',').filter(Boolean).map(Number);
-  if (!ids.length || ids.length > MAX_SLIDES || !ids.every((n) => Number.isInteger(n) && n > 0)) return `Choose between 1 and ${MAX_SLIDES} photographs.`;
+  const pair = q.pair === 'true' || q.pair === '1', most = pair ? MAX_SLIDES * 2 : MAX_SLIDES; // two to a slide: twice as many photographs
+  if (!ids.length || ids.length > most || !ids.every((n) => Number.isInteger(n) && n > 0)) return `Choose between 1 and ${most} photographs.`;
   const ratio = String(q.ratio ?? '4:5');
   if (!(ratio in RATIOS)) return 'The slide shape must be 4:5, 3:4 or 1:1.';
   const border = Number(q.border ?? 5);
   if (!Number.isFinite(border) || border < 0 || border > 25) return 'The border must be from 0 to 25 per cent.';
   const colour = String(q.colour ?? 'ffffff').replace(/^#/, '').toLowerCase();
   if (!/^[0-9a-f]{6}$/.test(colour)) return 'The border colour must be six hex digits, like ffffff.';
-  return { ids, ratio: ratio as CarouselOpts['ratio'], border, colour, split: q.split === 'true' || q.split === '1' };
+  return { ids, ratio: ratio as CarouselOpts['ratio'], border, colour, split: !pair && (q.split === 'true' || q.split === '1'), pair };
 }
 
 /** How many slides a photograph of this shape takes: one, or when split, as many as its width fills (at most the carousel limit). */
@@ -41,6 +43,11 @@ export function partsFor(w: number, h: number, o: CarouselOpts) {
 /** Every slide in order, given each photograph's pixel size. Stops at the carousel limit. */
 export function planSlides(sizes: Map<number, { w: number; h: number }>, o: CarouselOpts): Slide[] {
   const out: Slide[] = [];
+  if (o.pair) {
+    const ids = o.ids.filter((id) => sizes.has(id));
+    for (let i = 0; i < ids.length && out.length < MAX_SLIDES; i += 2) out.push({ id: ids[i], part: 0, of: 1, ...(ids[i + 1] ? { id2: ids[i + 1] } : {}) });
+    return out;
+  }
   for (const id of o.ids) {
     const s = sizes.get(id);
     if (!s) continue;
@@ -51,8 +58,28 @@ export function planSlides(sizes: Map<number, { w: number; h: number }>, o: Caro
 }
 
 /** One slide as a JPEG: the photograph fitted inside the border across `of` slides' width, and this slide's part of it. */
-export async function renderSlide(file: string, s: Slide, o: CarouselOpts): Promise<Buffer> {
+/**
+ * Where two photographs go on one slide: one above the other, or side by side, whichever shows more of them (two landscapes stack,
+ * two portraits sit side by side). The border is round the slide and between them. Boxes are [left, top, width, height].
+ */
+export function pairBoxes(a: { w: number; h: number }, b: { w: number; h: number }, H: number, m: number): [number, number, number, number][] {
+  const area = (cw: number, ch: number) => [a, b].reduce((n, p) => { const k = Math.min(cw / p.w, ch / p.h); return n + p.w * p.h * k * k; }, 0);
+  const sw = W - 2 * m, sh = Math.floor((H - 3 * m) / 2), bw = Math.floor((W - 3 * m) / 2), bh = H - 2 * m;
+  return area(sw, sh) >= area(bw, bh) ? [[m, m, sw, sh], [m, 2 * m + sh, sw, sh]] : [[m, m, bw, bh], [2 * m + bw, m, bw, bh]];
+}
+
+export async function renderSlide(file: string, s: Slide, o: CarouselOpts, file2?: string): Promise<Buffer> {
   const H = RATIOS[o.ratio], m = Math.round((W * o.border) / 100), bg = `#${o.colour}`;
+  if (file2) {
+    const [ma, mb] = await Promise.all([sharp(file).metadata(), sharp(file2).metadata()]);
+    const boxes = pairBoxes({ w: ma.width ?? 1, h: ma.height ?? 1 }, { w: mb.width ?? 1, h: mb.height ?? 1 }, H, m);
+    const layers = await Promise.all([file, file2].map(async (f, i) => {
+      const [l, t, w, h] = boxes[i];
+      const img = await sharp(f).resize({ width: w, height: h, fit: 'inside' }).toBuffer({ resolveWithObject: true });
+      return { input: img.data, left: l + Math.round((w - img.info.width) / 2), top: t + Math.round((h - img.info.height) / 2) };
+    }));
+    return sharp({ create: { width: W, height: H, channels: 3, background: bg } }).composite(layers).jpeg({ quality: 92, mozjpeg: true }).toBuffer();
+  }
   const pic = await sharp(file).resize({ width: W * s.of - 2 * m, height: H - 2 * m, fit: 'inside' }).toBuffer();
   const wide = sharp({ create: { width: W * s.of, height: H, channels: 3, background: bg } }).composite([{ input: pic, gravity: 'centre' }]);
   const flat = await wide.png().toBuffer(); // sharp crops after compositing only from a finished image
@@ -105,7 +132,7 @@ export function registerCarousel(app: FastifyInstance, x: Ctx) {
     const { sizes, slides } = await load(o);
     const s = Number.isInteger(n) ? slides[n] : undefined;
     if (!s) return rep.code(404).send({ error: 'There is no such slide.' });
-    return rep.type('image/jpeg').header('Cache-Control', 'private, no-store').send(await renderSlide(sizes.get(s.id)!.file, s, o));
+    return rep.type('image/jpeg').header('Cache-Control', 'private, no-store').send(await renderSlide(sizes.get(s.id)!.file, s, o, s.id2 ? sizes.get(s.id2)?.file : undefined));
   });
   app.get('/api/carousel/download', async (req, rep) => {
     const o = opts(req.query);
@@ -113,7 +140,7 @@ export function registerCarousel(app: FastifyInstance, x: Ctx) {
     const { sizes, slides } = await load(o);
     if (!slides.length) return rep.code(404).send({ error: 'None of these photographs has a preview yet.' });
     const files = [];
-    for (const [i, s] of slides.entries()) files.push({ name: `slide-${String(i + 1).padStart(2, '0')}.jpg`, data: await renderSlide(sizes.get(s.id)!.file, s, o) });
+    for (const [i, s] of slides.entries()) files.push({ name: `slide-${String(i + 1).padStart(2, '0')}.jpg`, data: await renderSlide(sizes.get(s.id)!.file, s, o, s.id2 ? sizes.get(s.id2)?.file : undefined) });
     return rep.type('application/zip').header('Content-Disposition', 'attachment; filename="carousel.zip"').header('Cache-Control', 'no-store').send(zipOf(files));
   });
 }

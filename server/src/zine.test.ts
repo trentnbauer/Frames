@@ -48,13 +48,25 @@ it('splits a spread so the two halves meet at the fold', async () => {
 });
 
 it('saves a zine and exports it as a PDF with one page per printed page', async () => {
-  const made = await a.post('/api/zines', { name: 'Summer', photoIds: ids });
+  // The chosen photographs become candidates; the pages start empty, as many as asked for.
+  const made = await a.post('/api/zines', { name: 'Summer', photoIds: [...ids, ids[0], 'x'], pageCount: 8 });
   expect(made.status).toBe(201);
-  expect(made.body.pages).toEqual(ids.map((id) => ({ layout: 'one', photos: [id] })));
+  expect(made.body).toMatchObject({ candidates: ids, pageCount: 8, printedCount: 8 });
+  expect(made.body.pages).toEqual(Array(8).fill({ layout: 'one', photos: [null] }));
+  expect((await a.post('/api/zines', { pageCount: 10 })).status).toBe(400);
   const id = made.body.id;
   const pages = [{ layout: 'one', photos: [ids[0]] }, { layout: 'spread', photos: [ids[1]] }, { layout: 'two', photos: [ids[0], ids[1]] }];
   const saved = await a.put(`/api/zines/${id}`, { pages, pageSize: 'a6', margin: 4 });
-  expect(saved.body).toMatchObject({ pageSize: 'a6', margin: 4, printedCount: 4, coverId: ids[0] });
+  expect(saved.body).toMatchObject({ pageSize: 'a6', margin: 4, printedCount: 8, coverId: ids[0] });
+  // More pages than the zine has is refused; a longer zine takes them.
+  const long = Array(9).fill({ layout: 'one', photos: [null] });
+  expect((await a.put(`/api/zines/${id}`, { pages: long })).body.error).toMatch(/more than 8 pages/);
+  expect((await a.put(`/api/zines/${id}`, { pages: long, pageCount: 16 })).body).toMatchObject({ pageCount: 16, printedCount: 16 });
+  expect((await a.put(`/api/zines/${id}`, { pages, pageCount: 8 })).status).toBe(200);
+  // Candidates: added to the end once each, replaced as a list, and a removed photograph drops out.
+  expect((await a.put(`/api/zines/${id}`, { addCandidates: [ids[1], 999999] })).body.candidates).toEqual(ids);
+  expect((await a.put(`/api/zines/${id}`, { candidates: 'no' })).status).toBe(400);
+  expect((await a.put(`/api/zines/${id}`, { candidates: [ids[1]] })).body.candidates).toEqual([ids[1]]);
   expect((await a.put(`/api/zines/${id}`, { pageSize: 'a3' })).status).toBe(400);
   expect((await a.put(`/api/zines/${id}`, { name: '  ' })).status).toBe(400);
   expect((await a.get('/api/zines')).body.map((z: { name: string }) => z.name)).toEqual(['Summer']);
@@ -63,14 +75,14 @@ it('saves a zine and exports it as a PDF with one page per printed page', async 
   expect(pdf.headers['content-type']).toBe('application/pdf');
   const text = (pdf.body as Buffer).toString('latin1');
   expect(text.startsWith('%PDF-1.4')).toBe(true);
-  expect(text.match(/\/Type \/Page /g)).toHaveLength(4);
+  expect(text.match(/\/Type \/Page /g)).toHaveLength(8);
   expect(text).toContain('/MediaBox [0 0 297.64 419.53]'); // A6 in points
   // Every offset in the cross-reference table points at its object.
   const xref = Number(/startxref\n(\d+)/.exec(text)![1]);
   const rows = text.slice(xref).split('\n').slice(3).filter((r) => / n $/.test(r));
   rows.forEach((r, i) => expect(text.slice(Number(r.slice(0, 10))).startsWith(`${i + 1} 0 obj\n`)).toBe(true));
   // A real PDF reader agrees, where one is installed (poppler's pdfinfo).
-  try { expect(execFileSync('pdfinfo', ['-'], { input: pdf.body as Buffer, stdio: ['pipe', 'pipe', 'pipe'] }).toString()).toMatch(/Pages:\s+4/); } catch (e) { if ((e as { code?: string }).code !== 'ENOENT') throw e; }
+  try { expect(execFileSync('pdfinfo', ['-'], { input: pdf.body as Buffer, stdio: ['pipe', 'pipe', 'pipe'] }).toString()).toMatch(/Pages:\s+8/); } catch (e) { if ((e as { code?: string }).code !== 'ENOENT') throw e; }
 
   expect((await a.del(`/api/zines/${id}`)).status).toBe(200);
   expect((await a.get(`/api/zines/${id}`)).status).toBe(404);

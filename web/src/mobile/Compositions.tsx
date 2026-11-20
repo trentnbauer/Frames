@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ZineList } from '../screens/Zines';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
@@ -73,6 +74,7 @@ export function MobileCompositions() {
         ))}
         {colls.data && list.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13.5, color: 'var(--muted)' }}>{all.length === 0 ? 'No compositions yet. Tap + to start one.' : 'No compositions in this stage.'}</div>}
       </div>
+      <ZineList heading={<h2 style={{ font: '400 32px/1 var(--serif)', margin: 0 }}>Zines</h2>} />
     </div>
   );
 }

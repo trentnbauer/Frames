@@ -22,8 +22,11 @@ const DPI = 300;
 /** One printed page: what is on it, and whether Frames added it (a blank before a spread, or padding at the end). */
 export type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
 
-/** The printed pages, in order, for the pages a person laid out. */
-export function printedPages(pages: ZinePage[]): Printed[] {
+export const PAGE_COUNTS = [8, 16, 24] as const;
+export const MAX_CANDIDATES = 500;
+
+/** The printed pages, in order, for the pages a person laid out: filled out with blank pages to `count`, or (0) to a multiple of four. */
+export function printedPages(pages: ZinePage[], count = 0): Printed[] {
   const out: Printed[] = [];
   pages.forEach((p, entry) => {
     if (p.layout === 'spread') {
@@ -31,7 +34,7 @@ export function printedPages(pages: ZinePage[]): Printed[] {
       out.push({ layout: 'left', photos: p.photos, entry }, { layout: 'right', photos: p.photos, entry });
     } else out.push({ layout: p.layout, photos: p.photos, entry });
   });
-  while (out.length % 4) out.push({ layout: 'blank', photos: [], entry: null });
+  while (count ? out.length < count : out.length % 4) out.push({ layout: 'blank', photos: [], entry: null });
   return out;
 }
 
@@ -103,23 +106,34 @@ export function pdfOf(jpegs: { data: Buffer; w: number; h: number }[], ptW: numb
   return Buffer.concat(chunks);
 }
 
-type ZineRow = { id: number; name: string; page_size: PageSize; margin: number; pages: string; created_at: string; updated_at: string };
+type ZineRow = { id: number; name: string; page_size: PageSize; margin: number; pages: string; page_count: number; candidates: string; created_at: string; updated_at: string };
 const readPages = (s: string): ZinePage[] => { try { const p = parsePages(JSON.parse(s)); return typeof p === 'string' ? [] : p; } catch { return []; } };
-const dto = (z: ZineRow) => { const pages = readPages(z.pages); return { id: z.id, name: z.name, pageSize: z.page_size, margin: z.margin, pages, printedCount: printedPages(pages).length, coverId: pages.flatMap((p) => p.photos).find((id) => id != null) ?? null, createdAt: z.created_at, updatedAt: z.updated_at }; };
+const readIds = (s: string): number[] => { try { const v = JSON.parse(s); return Array.isArray(v) ? v.filter((id) => Number.isInteger(id) && id > 0) : []; } catch { return []; } };
+/** Photograph numbers from a request: whole and positive, each once, at most `max`; null when it is not a list. */
+export const parseIds = (v: unknown, max = MAX_CANDIDATES): number[] | null => (Array.isArray(v) ? [...new Set(v.filter((id): id is number => Number.isInteger(id) && id > 0))].slice(0, max) : null);
+/** `count` pages laid out as one photograph each, empty: a new zine of that length. */
+const emptyPages = (count: number): ZinePage[] => Array.from({ length: count }, () => ({ layout: 'one', photos: [null] }));
 
 export function registerZines(app: FastifyInstance, x: Ctx) {
   const { db, cfg, num, notFound } = x;
+  // A photograph taken out of Frames drops out of the candidates (its page slot just shows empty).
+  const dto = (z: ZineRow) => {
+    const pages = readPages(z.pages), ids = readIds(z.candidates);
+    const live = ids.length ? new Set((db.prepare(`SELECT id FROM photos WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as { id: number }[]).map((r) => r.id)) : new Set<number>();
+    return { id: z.id, name: z.name, pageSize: z.page_size, margin: z.margin, pages, pageCount: z.page_count, candidates: ids.filter((id) => live.has(id)), printedCount: printedPages(pages, z.page_count).length, coverId: pages.flatMap((p) => p.photos).find((id) => id != null) ?? null, createdAt: z.created_at, updatedAt: z.updated_at };
+  };
   const get = (id: unknown) => db.prepare('SELECT * FROM zines WHERE id = ?').get(num(id)) as ZineRow | undefined;
   const name = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : null);
 
   app.get('/api/zines', async () => (db.prepare('SELECT * FROM zines ORDER BY updated_at DESC, id DESC').all() as ZineRow[]).map(dto));
   app.post('/api/zines', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
-    const ids = Array.isArray(b.photoIds) ? b.photoIds.filter((id): id is number => Number.isInteger(id) && id > 0).slice(0, MAX_PAGES) : [];
-    // Started from a selection: one photograph a page, in the order they were picked.
-    const pages: ZinePage[] = ids.map((id) => ({ layout: 'one', photos: [id] }));
+    const count = b.pageCount === undefined ? 8 : b.pageCount;
+    if (!PAGE_COUNTS.includes(count as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' });
+    // The chosen photographs become candidates to lay out, as in a composition; the pages start empty.
+    const ids = parseIds(b.photoIds) ?? [];
     const now = new Date().toISOString();
-    const id = Number(db.prepare('INSERT INTO zines(name, pages, created_at, updated_at) VALUES(?, ?, ?, ?)').run(name(b.name) ?? 'Untitled zine', JSON.stringify(pages), now, now).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO zines(name, pages, page_count, candidates, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)').run(name(b.name) ?? 'Untitled zine', JSON.stringify(emptyPages(count as number)), count, JSON.stringify(ids), now, now).lastInsertRowid);
     return rep.code(201).send(dto(get(id)!));
   });
   app.get('/api/zines/:id', async (req, rep) => { const z = get((req.params as Row).id); return z ? dto(z) : notFound(rep); });
@@ -131,8 +145,14 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     if (b.pageSize !== undefined) { if (typeof b.pageSize !== 'string' || !(b.pageSize in SIZES)) return rep.code(400).send({ error: 'The page size must be a5, a6 or square.' }); set.page_size = b.pageSize as PageSize; }
     if (b.margin !== undefined) { if (typeof b.margin !== 'number' || !Number.isFinite(b.margin) || b.margin < 0 || b.margin > 20) return rep.code(400).send({ error: 'The margin must be from 0 to 20 per cent.' }); set.margin = b.margin; }
     if (b.pages !== undefined) { const p = parsePages(b.pages); if (typeof p === 'string') return rep.code(400).send({ error: p }); set.pages = JSON.stringify(p); }
+    if (b.pageCount !== undefined) { if (!PAGE_COUNTS.includes(b.pageCount as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' }); set.page_count = b.pageCount as number; }
+    if (b.candidates !== undefined) { const c = parseIds(b.candidates); if (!c) return rep.code(400).send({ error: 'List the candidates by photograph number.' }); set.candidates = JSON.stringify(c); }
+    // Adding photographs (from Add to… Zine) puts them at the end of the candidates.
+    if (b.addCandidates !== undefined) { const c = parseIds(b.addCandidates); if (!c) return rep.code(400).send({ error: 'List the photographs by number.' }); set.candidates = JSON.stringify([...new Set([...readIds(set.candidates ?? z.candidates), ...c])].slice(0, MAX_CANDIDATES)); }
     const next = { ...z, ...set, updated_at: new Date().toISOString() };
-    db.prepare('UPDATE zines SET name = ?, page_size = ?, margin = ?, pages = ?, updated_at = ? WHERE id = ?').run(next.name, next.page_size, next.margin, next.pages, next.updated_at, z.id);
+    if (next.page_count && printedPages(readPages(next.pages), next.page_count).length > next.page_count)
+      return rep.code(400).send({ error: `That needs more than ${next.page_count} pages. Remove a page, or choose more pages.` });
+    db.prepare('UPDATE zines SET name = ?, page_size = ?, margin = ?, pages = ?, page_count = ?, candidates = ?, updated_at = ? WHERE id = ?').run(next.name, next.page_size, next.margin, next.pages, next.page_count, next.candidates, next.updated_at, z.id);
     return dto(next);
   });
   app.delete('/api/zines/:id', async (req, rep) => {
@@ -142,7 +162,7 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
   app.get('/api/zines/:id/pdf', async (req, rep) => {
     const z = get((req.params as Row).id);
     if (!z) return notFound(rep);
-    const printed = printedPages(readPages(z.pages));
+    const printed = printedPages(readPages(z.pages), z.page_count);
     const live = new Set((db.prepare('SELECT id FROM photos WHERE missing = 0').all() as { id: number }[]).map((r) => r.id));
     const file = (id: number | null) => { if (id == null || !live.has(id)) return null; const f = derivPath(cfg, id, 'preview'); return fs.existsSync(f) ? f : null; };
     const [mmW, mmH] = SIZES[z.page_size] ?? SIZES.a5;

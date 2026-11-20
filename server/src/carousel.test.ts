@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import sharp from 'sharp';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { parseOpts, partsFor, zipOf } from './carousel.js';
+import { pairBoxes, parseOpts, partsFor, zipOf } from './carousel.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, a: ReturnType<typeof api>, square: number, pano: number;
@@ -21,7 +21,10 @@ it('refuses options it cannot use', () => {
   expect(parseOpts({ ids: '1', border: '40' })).toMatch(/border/);
   expect(parseOpts({ ids: '1', colour: 'red' })).toMatch(/colour/);
   expect(parseOpts({ ids: Array.from({ length: 21 }, (_, i) => i + 1).join(',') })).toMatch(/20/);
-  expect(parseOpts({ ids: '3,4', colour: '#FFEEDD', split: 'true' })).toEqual({ ids: [3, 4], ratio: '4:5', border: 5, colour: 'ffeedd', split: true });
+  expect(parseOpts({ ids: '3,4', colour: '#FFEEDD', split: 'true' })).toEqual({ ids: [3, 4], ratio: '4:5', border: 5, colour: 'ffeedd', split: true, pair: false });
+  // Two to a slide: twice as many photographs fit, and splitting is off.
+  expect(parseOpts({ ids: Array.from({ length: 40 }, (_, i) => i + 1).join(','), pair: 'true', split: 'true' })).toMatchObject({ pair: true, split: false });
+  expect(parseOpts({ ids: Array.from({ length: 41 }, (_, i) => i + 1).join(','), pair: 'true' })).toMatch(/40/);
 });
 
 it('splits a wide photograph across as many slides as it fills', () => {
@@ -46,6 +49,15 @@ it('makes bordered slides in the chosen order and a zip of them', async () => {
   expect(zip.headers['content-type']).toBe('application/zip');
   expect((zip.body as Buffer).toString('latin1').match(/slide-0\d\.jpg/g)).toHaveLength(8); // four names, each in the entry and the directory
   expect((await a.get('/api/carousel?ids=999999')).body.slides).toEqual([]);
+});
+
+it('puts two photographs on a slide: landscapes one above the other, portraits side by side', async () => {
+  expect(pairBoxes({ w: 3, h: 2 }, { w: 3, h: 2 }, 1350, 54).map((b) => b[0])).toEqual([54, 54]); // stacked: same left edge
+  expect(pairBoxes({ w: 2, h: 3 }, { w: 2, h: 3 }, 1350, 54).map((b) => b[1])).toEqual([54, 54]); // side by side: same top edge
+  const q = `ids=${square},${pano},${square}&ratio=4:5&border=5&pair=true`;
+  expect((await a.get(`/api/carousel?${q}`)).body.slides).toEqual([{ id: square, part: 0, of: 1, id2: pano }, { id: square, part: 0, of: 1 }]);
+  const slide = await a.get(`/api/carousel/slide/0?${q}`);
+  expect(await sharp(slide.body as Buffer).metadata()).toMatchObject({ width: 1080, height: 1350 });
 });
 
 it('writes a zip that unzip can read', () => {
