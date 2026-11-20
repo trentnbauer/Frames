@@ -9,9 +9,9 @@ import { cleanup, makeEnv, type Env } from './testutil.js';
 /** Cloudflare Access as a sign-in provider: the signed token Access adds to each request is the login. */
 const TEAM = 'team.example.test', AUD = 'a'.repeat(64);
 let env: Env, sys: DB, certs: http.Server, key: CryptoKey;
-const token = (o: { email?: string | null; aud?: string; name?: string } = {}) =>
+const token = (o: { email?: string | null; aud?: string; name?: string; iat?: number } = {}) =>
   new SignJWT({ ...(o.email === null ? {} : { email: o.email ?? 'alice@x.test' }), ...(o.name ? { name: o.name } : {}) })
-    .setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(`https://${TEAM}`).setAudience(o.aud ?? AUD).setSubject('cf-user-1').setIssuedAt().setExpirationTime('5m').sign(key);
+    .setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(`https://${TEAM}`).setAudience(o.aud ?? AUD).setSubject('cf-user-1').setIssuedAt(o.iat).setExpirationTime('5m').sign(key);
 const get = (url: string, headers: Record<string, string> = {}) => env.app.inject({ url, headers });
 const flowOf = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat(r.headers['set-cookie'] as string[]).find((c) => c?.startsWith('frames_flow=')) ?? '').split(';')[0];
 const cookieFrom = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat(r.headers['set-cookie'] as string[]).find((c) => c?.startsWith(SESSION_COOKIE)) ?? '').split(';')[0];
@@ -73,5 +73,24 @@ describe('Cloudflare Access as a sign-in provider', () => {
   it('a token only signs in through the sign-in route: an API call with one but no session is still refused', async () => {
     const r = await get('/api/me', { 'cf-access-jwt-assertion': await token() });
     expect(r.statusCode).toBe(401);
+  });
+  it('judges a fresh sign-in for the env export by when Access signed the person in, without sending them through sign-in again', async () => {
+    const h = { 'cf-access-jwt-assertion': await token() };
+    const login = await get('/auth/login/cf', h);
+    const cookie = cookieFrom(await get((login.headers.location as string).replace(/^https?:\/\/[^/]+/, ''), { ...h, cookie: flowOf(login) }));
+    const put = async (headers: Record<string, string>) => env.app.inject({ method: 'PUT', url: '/api/admin/env/export-enabled', payload: { on: true }, headers: { cookie, ...headers } });
+    // Access signed them in two hours ago: a brand-new Frames session does not count, and the page is not told to redirect.
+    const old = await put({ 'cf-access-jwt-assertion': await token({ iat: Math.floor(Date.now() / 1000) - 7200 }) });
+    expect(old.statusCode).toBe(401);
+    expect(old.json().error).toMatch(/Cloudflare Access signed you in 120 minutes ago.*access\/logout/);
+    expect(old.json().error).not.toMatch(/Sign in again/);
+    expect(old.json().reauth).toBeUndefined();
+    // Not through Access at all: say where to go instead.
+    const none = await put({});
+    expect(none.statusCode).toBe(403);
+    expect(none.json().error).toMatch(/address Access protects/);
+    // A recent Access sign-in turns it on.
+    const fresh = await put({ 'cf-access-jwt-assertion': await token() });
+    expect(fresh.statusCode).toBe(200);
   });
 });

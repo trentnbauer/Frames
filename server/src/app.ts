@@ -618,7 +618,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
       .send(fs.createReadStream(p.path));
   });
 
-  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: () => runScan(), scanning: () => tenants.current().scan.running, sys, tenants, tenant: () => tenants.current(), bag: (key, init) => { const m = tenants.current().bag; if (!m.has(key)) m.set(key, init()); return m.get(key); }, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow() };
+  const ctx: Ctx = { db, cfg, num, one, all, notFound, photoDto, shootDto, collectionDto, tagsOf, ratingAgg, ai, startScan: () => runScan(), scanning: () => tenants.current().scan.running, sys, tenants, tenant: () => tenants.current(), bag: (key, init) => { const m = tenants.current().bag; if (!m.has(key)) m.set(key, init()); return m.get(key); }, baseUrl: auth.baseUrl, isProtected: () => auth.protectedNow(), accessAgeMs: auth.accessAgeMs };
   registerVersions(app, ctx);
   registerImports(app, ctx);
   registerWishHistory(app, ctx);

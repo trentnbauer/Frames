@@ -296,7 +296,13 @@ export function registerAdmin(app: FastifyInstance, x: Ctx) {
     if (on) {
       if (x.cfg.allowEnvExport === false) return rep.code(403).send({ error: 'Export is locked off by ALLOW_ENV_EXPORT=false in this stack\'s environment (the exported file sets it). Set it to true there and restart to export again.' });
       // Signed in as a person: it must be a sign-in from the last few minutes. With a shared password, or no sign-in at all, there is no one to ask again.
-      const age = (req as any).authVia === 'session' ? sessionAgeMs(sys, req) : 0;
+      const session = (req as any).authVia === 'session';
+      // Signed in through Cloudflare Access: sending them through Frames' sign-in again proves nothing (Access answers for them) and fails off
+      // its address, so the Access sign-in itself must be recent. Their messages never say "Sign in again", which the page takes as a cue to redirect.
+      const access = session ? await x.accessAgeMs(req, me(req)) : null;
+      if (access === 'no-token') return rep.code(403).send({ error: 'You signed in through Cloudflare Access: open Frames at the address Access protects to turn on the env file export.' });
+      if (typeof access === 'number' && access > FRESH_SIGN_IN_MS) return rep.code(401).send({ error: `Cloudflare Access signed you in ${Math.round(access / 60_000)} minutes ago. Sign out of Access (open /cdn-cgi/access/logout on this address), sign in through it again, then turn on the env file export within 5 minutes.` });
+      const age = access !== null ? access : session ? sessionAgeMs(sys, req) : 0;
       if (age === null || age > FRESH_SIGN_IN_MS) return rep.code(401).send({ error: 'Sign in again to turn on the env file export.', reauth: true });
       console.warn(`env file export switched on by administrator ${me(req).id}`);
     }
