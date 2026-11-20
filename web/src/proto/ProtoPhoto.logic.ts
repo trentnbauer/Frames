@@ -39,7 +39,7 @@ export class Logic extends DCLogic {
       addLabel: P.inComps.length ? 'In ' + P.inComps.length + ' · Add to composition…' : 'Add to composition…', openPicker: () => this.setState({ pick: true, more: false }),
       pickerOpen: S.pick, compPicker: S.pick ? P.renderCompPicker(() => this.setState({ pick: false }), (m) => { this.setState({ pick: false }); this.ptoast(m); }) : null,
       titleVal: P.title, titlePh: aiBusy ? 'Naming it…' : 'Add a title', onTitle: (e) => P.onTitle(e.target.value), titleBg: 'transparent',
-      dateVal: P.dateVal, dateTitle: P.dateTitle, onDate: (e) => P.onDate(e.target.value), dateSrc: P.dateSrc, dateEdited: P.dateEdited, resetDate: () => P.onResetDate(),
+      dateVal: P.dateVal, dateTitle: P.dateTitle, onDate: (e) => P.onDate(e.target.value), dateSrc: P.dateSrc, taken: P.taken, uploaded: P.uploaded, dateEdited: P.dateEdited, resetDate: () => P.onResetDate(),
       season: P.season, seasonDot: P.seasonDot, seasonTitle: P.seasonTitle,
       palette: P.palette || [], paletteNames: P.paletteNames || '',
       score: P.score, you: P.you, guests: P.guests, rankLine: P.rankLine, nextDue: P.nextDue,
