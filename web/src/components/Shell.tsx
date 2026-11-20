@@ -181,6 +181,7 @@ function UserMenu({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => v
             <div className="eyebrow" style={{ padding: '8px 10px 4px' }}>You</div>
             {item('Portfolio', () => { close(); void openPortfolio(); }, '↗')}
             {item('Gear & wishlist', go('/gear'))}
+            {item('Zines', go('/zines'))}
             {item('Stats', go('/stats'), summary ? `${summary.total.toLocaleString()} photos` : '')}
             {item('Settings', go('/settings'))}
             <div className="msep" />

@@ -25,6 +25,7 @@ import { Editor as CollectionDetail } from './screens/Editor';
 import { Stats } from './screens/Stats';
 import { SettingsPage } from './settings/SettingsPage';
 import { Compare, Duplicates } from './screens/Compare';
+import { ZineEditor, Zines } from './screens/Zines';
 import { SharePage } from './pages/SharePage';
 import { Welcome } from './screens/Welcome';
 import { Community } from './screens/Community';
@@ -41,10 +42,10 @@ import { MobileOrganise } from './mobile/Organise';
 const PAGE_NAMES: Record<string, string> = {
   '/activity': 'Recently removed & changes', '/imports': 'Import history', '/review-schedule': 'Review schedule', '/gear-history': 'Wishlist history',
   '/': 'Today', '/library': 'Library', '/review': 'Review', '/removals': 'Removal review', '/shoots': 'Shoots', '/compare': 'Compare', '/duplicates': 'Duplicates',
-  '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/welcome': 'Welcome', '/settings': 'Settings',
+  '/collections': 'Compositions', '/community': 'Community review', '/gear': 'Gear & wishlist', '/todo': 'To do', '/stats': 'Stats', '/zines': 'Zines', '/welcome': 'Welcome', '/settings': 'Settings',
 };
 /** Pages that name themselves (a composition, a photoshoot, a photograph) are left alone. */
-const NAMES_ITSELF = /^\/(photo|shoots|collections)\/[^/]+/;
+const NAMES_ITSELF = /^\/(photo|shoots|collections|zines)\/[^/]+/;
 
 /** Pages that only exist in the phone layout: a wider screen goes Home instead. */
 function PhoneOnly({ children }: { children: React.ReactNode }) {
@@ -116,6 +117,8 @@ function Shell() {
         <Route path="/collections/:id" element={<CollectionDetail />} />
         <Route path="/community" element={<Community />} />
         <Route path="/gear" element={<Gear />} />
+        <Route path="/zines" element={<Zines />} />
+        <Route path="/zines/:id" element={<ZineEditor />} />
         <Route path="/gear-history" element={<WishlistHistory />} />
         <Route path="/todo" element={<Todo />} />
         <Route path="/stats" element={<Stats />} />

@@ -1,5 +1,6 @@
 import { useWheelSize } from '../thumbZoom';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
 import { BulkEdit } from '../components/BulkEdit';
@@ -79,6 +80,7 @@ export const isDue = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new
  */
 export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { ids: number[]; photos: PhotoLite[]; shoots: Shoot[]; onClear: () => void; onChanged: () => void; say: (t: string, undo?: () => void) => void }) {
   const { refreshSummary, settings } = useStore();
+  const nav = useNavigate();
   const [scanning, setScanning] = useState(false);
   const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove' | 'edit' | 'carousel'>(null);
   const [err, setErr] = useState('');
@@ -93,6 +95,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
   const move = async (to: Shoot) => { try { await api(`/shoots/${to.id}/move`, { body: { photoIds: ids } }); setDlg(null); onClear(); onChanged(); say(`Moved ${ids.length} to “${to.name}”`); } catch (e) { setErr((e as Error).message); } };
   const scan = async () => { setErr(''); setScanning(true); try { await api('/ai/run', { method: 'POST', body: { photoIds: ids } }); say(`Scanning ${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'} with AI`); onClear(); } catch (e) { setErr((e as Error).message); } finally { setScanning(false); } };
   const remove = async () => { try { await api('/photos/remove', { body: { ids: removable, originals: 'keep' } }); setDlg(null); onClear(); onChanged(); refreshSummary(); say(`Moved ${removable.length} to Recently removed${blocked.length ? ` · ${blocked.length} protected, kept` : ''}`); } catch (e) { setErr((e as Error).message); setDlg(null); } };
+  const zine = async () => { try { const z = await api<{ id: number }>('/zines', { body: { name: 'Untitled zine', photoIds: ids } }); nav(`/zines/${z.id}`); } catch (e) { setErr((e as Error).message); } };
   const plain = { height: 32, padding: '0 12px', color: 'var(--text)' } as const;
   const pill = { height: 40, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)' } as const;
   return (
@@ -105,6 +108,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
         <i aria-hidden style={{ width: 1, height: 20, background: 'var(--hair)' }} />
         <button onClick={() => { setErr(''); setDlg('edit'); }} title="Set camera, lens, film, place, date, tags and more on every selected photograph" style={plain}>Edit details…</button>
         <button onClick={() => { setErr(''); setDlg('move'); }} style={plain}>Move to shoot…</button>
+        <button onClick={() => void zine()} title="Start a zine with these, one photo a page, in the order you picked them" style={plain}>Zine…</button>
         <button onClick={() => setDlg('carousel')} title="Make Instagram carousel slides from these, in the order you picked them" style={plain}>Carousel…</button>
         {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={plain}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
         <button onClick={() => setDlg('comp')} style={{ height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Add to composition…</button>

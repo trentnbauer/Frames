@@ -149,6 +149,7 @@ export function MobileLibrary() {
         <Sheet title={`Add ${sel.size} ${sel.size === 1 ? 'photo' : 'photos'} to…`} onClose={() => setSheet(null)}>
           <Row label="A shoot" sub="Moves them out of their current shoot" onClick={() => { setErr(''); setSheet('move'); }} />
           <Row label="A composition" sub="Adds them as candidates; they stay in their shoot" onClick={() => setSheet('comp')} />
+          <Row label="A new zine" sub="One photo a page, in the order you picked them" onClick={() => void api<{ id: number }>('/zines', { body: { name: 'Untitled zine', photoIds: ids } }).then((z) => nav(`/zines/${z.id}`)).catch((e: Error) => { setSheet(null); setNote(e.message); })} />
           <Row label="An Instagram carousel" sub="Bordered slides, in the order you picked them" onClick={() => setSheet('carousel')} />
         </Sheet>
       )}

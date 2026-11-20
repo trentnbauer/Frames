@@ -65,6 +65,7 @@ export function PhoneMeSheet({ name, onClose }: { name: string; onClose: () => v
     { label: 'Add photos', sub: status.data?.storage.local ? (status.data.storage.cloud ? 'Upload from this phone or sync from the cloud' : 'Upload from this phone') : status.data?.storage.cloud ? 'Sync from the cloud' : 'Storage is not set up yet', act: go('/library?add=1') },
     { label: 'Organise uploads', sub: 'Name new batches as shoots', meta: batches.data?.left ? String(batches.data.left) : '', act: go('/organise') },
     { label: 'Stats', act: go('/stats'), gap: true },
+    { label: 'Zines', act: go('/zines') },
     { label: 'Recently removed', meta: Array.isArray(removed.data) && removed.data.length ? String(removed.data.length) : '', act: go('/activity') },
     { label: 'View portfolio', meta: '↗', act: () => { onClose(); void openPortfolio(); } },
     { label: 'Settings', act: go('/settings'), gap: true },

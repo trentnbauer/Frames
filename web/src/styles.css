@@ -997,3 +997,7 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 /* A panel that scrolls but shows no scrollbar (the photo page's side panel). */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Zine editor: the page panel follows the pages on a wide screen, and sits above them on a phone. */
+.zine-panel { position: sticky; top: calc(var(--app-header-height, 72px) + 16px); }
+@media (max-width: 767px) { .zine-panel { position: static; flex-basis: 100% !important; } }
