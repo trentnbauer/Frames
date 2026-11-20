@@ -9,6 +9,7 @@ import ProtoCompositions from '../proto/ProtoCompositions';
 import { CompositionPreview } from '../components/CompositionPreview';
 import { usePhoneWidth } from '../usePhoneWidth';
 import { MobileCompositions } from '../mobile/Compositions';
+import { ZineList } from './Zines';
 
 type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
@@ -93,6 +94,7 @@ function DesktopCompositions() {
           start: async () => { const c = await api<Collection>('/collections', { body: { name: s0.name, photoIds: s0.photoIds } }); await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s0.photoIds, verdict: 'accept' } }); nav(`/collections/${c.id}`); },
         } : null}
       />
+      <div style={{ marginTop: 56 }}><ZineList heading={<h2 style={{ font: "400 36px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Zines</h2>} /></div>
     </div>
   );
 }

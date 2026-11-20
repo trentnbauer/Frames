@@ -14,10 +14,11 @@ export function CarouselMaker({ ids }: { ids: number[] }) {
   const [ratio, setRatio] = useState<(typeof RATIOS)[number]>('4:5');
   const [border, setBorder] = useState(5), [settled, setSettled] = useState(5);
   const [colour, setColour] = useState('ffffff');
-  const [split, setSplit] = useState(false);
+  const [per, setPer] = useState<'one' | 'two' | 'split'>('one'); // per slide: one photo, two photos, or wide ones split across slides
   const [sharing, setSharing] = useState(false), [err, setErr] = useState('');
   useEffect(() => { const t = window.setTimeout(() => setSettled(border), 300); return () => window.clearTimeout(t); }, [border]);
-  const q = new URLSearchParams({ ids: ids.slice(0, 20).join(','), ratio, border: String(settled), colour, split: String(split) }).toString();
+  const most = per === 'two' ? 40 : 20;
+  const q = new URLSearchParams({ ids: ids.slice(0, most).join(','), ratio, border: String(settled), colour, split: String(per === 'split'), pair: String(per === 'two') }).toString();
   const plan = useApi<Plan>(`/carousel?${q}`);
   const slides = plan.data?.slides ?? [];
   const canShare = typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([], 'x.jpg', { type: 'image/jpeg' })] });
@@ -38,7 +39,7 @@ export function CarouselMaker({ ids }: { ids: number[] }) {
   const row = { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' } as const;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, accentColor: 'var(--text)' }}>
-      {ids.length > 20 && <p className="muted" style={{ margin: 0, fontSize: 13 }}>A carousel holds 20 slides, so only the first 20 photographs are used.</p>}
+      {ids.length > most && <p className="muted" style={{ margin: 0, fontSize: 13 }}>A carousel holds 20 slides, so only the first {most} photographs are used.</p>}
       <div style={row}><span style={label}>Shape</span>
         <div className="seg" role="group" aria-label="Slide shape"><SegSlider />{RATIOS.map((r) => <button key={r} type="button" className={ratio === r ? 'on' : ''} aria-pressed={ratio === r} onClick={() => setRatio(r)}>{r}</button>)}</div>
       </div>
@@ -49,7 +50,11 @@ export function CarouselMaker({ ids }: { ids: number[] }) {
       <div style={row}><span style={label}>Colour</span>
         <div className="seg" role="group" aria-label="Border colour"><SegSlider />{COLOURS.map(([c, n]) => <button key={c} type="button" className={colour === c ? 'on' : ''} aria-pressed={colour === c} onClick={() => setColour(c)}><span aria-hidden style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 999, background: `#${c}`, boxShadow: 'inset 0 0 0 1px var(--outline)', marginRight: 6, verticalAlign: -1 }} />{n}</button>)}</div>
       </div>
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 14, cursor: 'pointer' }}><input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} style={{ flex: 'none', width: 16, height: 16, margin: '2px 0 0' }} /><span style={{ flex: 1 }}>Split wide photos across slides, so a panorama scrolls as one picture</span></label>
+      <div style={row}><span style={label}>Per slide</span>
+        <div className="seg" role="group" aria-label="Photos per slide" style={{ flexWrap: 'wrap' }}><SegSlider />{([['one', 'One photo'], ['two', 'Two photos'], ['split', 'Split wide photos']] as const).map(([k, n]) => <button key={k} type="button" className={per === k ? 'on' : ''} aria-pressed={per === k} onClick={() => setPer(k)}>{n}</button>)}</div>
+      </div>
+      {per === 'split' && <p className="muted" style={{ margin: 0, fontSize: 13 }}>A wide photo is laid across as many slides as it fills, so a panorama scrolls as one picture.</p>}
+      {per === 'two' && <p className="muted" style={{ margin: 0, fontSize: 13 }}>Photos are paired in the order you picked them: two landscapes one above the other, two portraits side by side.</p>}
       <div aria-label="Slides" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, minHeight: 160 }}>
         {plan.error && <p role="alert">{plan.error}</p>}
         {!plan.data && !plan.error && <p className="muted">Making slides…</p>}

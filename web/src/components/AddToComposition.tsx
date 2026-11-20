@@ -3,14 +3,80 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
 import { useUi } from '../ui';
 import { Modal } from './Modal';
+import { CarouselMaker } from './CarouselMaker';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * The one composition picker, used by the photo page, the library's selection, search and review.
  * Existing: search a long list; with no search, the compositions these photographs are already in (ticked) come first, then the 5 most
  * recently edited. Printed ones are hidden. Ticking adds the photographs as candidates (never straight into a print); unticking removes them.
  * New: a name, then New composition opens with the photographs loaded.
+ * It first asks what is being made: a composition (this picker), an Instagram carousel or a zine.
  */
 export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void }) {
+  type Kind = 'wall' | 'carousel' | 'zine';
+  const [kind, setKind] = useState<Kind | null>(null);
+  const back = () => setKind(null);
+  const what = ids.length === 1 ? 'this photo' : `${ids.length} photos`;
+  if (kind === 'wall') return <WallPicker ids={ids} onClose={onClose} onDone={onDone} onBack={back} />;
+  if (kind === 'carousel') return <Modal title="Instagram carousel" sub={`${ids.length === 1 ? '1 photo' : `${ids.length} photos`}, in the order you picked them`} width={760} onClose={onClose}><CarouselMaker ids={ids} /><BackRow onBack={back} /></Modal>;
+  if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} />;
+  // First, what is being made: the same photographs can go on a wall, into a carousel or into a zine.
+  const kinds: [Kind, string, string][] = [['wall', 'Composition', 'Prints arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
+  return (
+    <Modal title={`Add ${what} to…`} width={560} onClose={onClose}>
+      <div role="group" aria-label="What to make" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {kinds.map(([k, label, sub]) => (
+          <button key={k} type="button" onClick={() => setKind(k)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 64, padding: '0 16px', borderRadius: 12, textAlign: 'left', boxShadow: 'inset 0 0 0 1px var(--outline)' }}>
+            <span style={{ flex: 1 }}><span style={{ display: 'block', fontSize: 15, fontWeight: 500 }}>{label}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span></span>
+            <span aria-hidden style={{ color: 'var(--muted)' }}>›</span>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+const BackRow = ({ onBack }: { onBack: () => void }) => <div style={{ paddingTop: 10 }}><button className="btn" onClick={onBack}>← Back</button></div>;
+
+/** Add the photographs to a zine, one a page at the end, or start a new zine with them; then open it to lay them out. */
+function ZinePicker({ ids, onClose, onBack }: { ids: number[]; onClose: () => void; onBack: () => void }) {
+  type Zine = { id: number; name: string; printedCount: number; coverId: number | null };
+  const zines = useApi<Zine[]>('/zines');
+  const nav = useNavigate();
+  const [err, setErr] = useState(''), [busy, setBusy] = useState(false);
+  // The photographs become candidates, as in a composition; they are laid out on the pages in the zine.
+  const go = async (z: Zine | null, pageCount = 8) => {
+    setBusy(true); setErr('');
+    try {
+      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { name: 'Untitled zine', photoIds: ids, pageCount } });
+      onClose(); nav(`/zines/${made.id}`);
+    } catch (e) { setErr((e as Error).message); setBusy(false); }
+  };
+  return (
+    <Modal title="Add to a zine" sub="They become candidates, ready to drag onto the pages" width={560} onClose={onClose}>
+      <div role="group" aria-label="Zines" style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', flexWrap: 'wrap' }}>
+          <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--muted)' }}>+</span>
+          <span style={{ fontWeight: 500, flex: 1 }}>New zine</span>
+          <div className="seg" role="group" aria-label="New zine with this many pages">{[8, 16, 24].map((n) => <button key={n} type="button" disabled={busy} onClick={() => void go(null, n)}>{n} pages</button>)}</div>
+        </div>
+        {zines.error && <div role="alert" className="reason">{zines.error}</div>}
+        {zines.data?.map((z) => (
+          <button key={z.id} type="button" disabled={busy} onClick={() => void go(z)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', borderRadius: 10, textAlign: 'left' }}>
+            <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, background: z.coverId != null ? `url(${imgUrl(z.coverId, 'thumb')}) center/cover var(--surface)` : 'var(--surface)' }} />
+            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 15, overflowWrap: 'anywhere' }}>{z.name}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{z.printedCount} pages</span></span>
+          </button>
+        ))}
+      </div>
+      {err && <div role="alert" className="reason">{err}</div>}
+      <BackRow onBack={onBack} />
+    </Modal>
+  );
+}
+
+/** Prints on a wall: tick existing compositions, or name a new one. */
+function WallPicker({ ids, onClose, onDone, onBack }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void; onBack: () => void }) {
   const colls = useApi<Collection[]>('/collections');
   const { openNew } = useUi();
   const [q, setQ] = useState('');
@@ -82,6 +148,7 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6, borderTop: '1px solid var(--hair)' }}>
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{changes.length ? `${changes.length} change${changes.length === 1 ? '' : 's'}` : ''}</span>
           <span style={{ flex: 1 }} />
+          <button className="btn" onClick={onBack}>← Back</button>
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={apply} disabled={!changes.length || busy}>Add</button>
         </div>

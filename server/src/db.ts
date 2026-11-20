@@ -472,6 +472,8 @@ export const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { db.exec("DELETE FROM tags WHERE EXISTS (SELECT 1 FROM photos p WHERE p.id = tags.photo_id AND lower(tags.name) IN (lower(p.camera), lower(p.lens), lower(p.raw_camera), lower(p.raw_lens), lower(p.film)) AND tags.name != '')"); },
   // Zines: a printable booklet of pages, each holding one or two photographs, or a photograph spread across two facing pages.
   (db) => { db.exec("CREATE TABLE IF NOT EXISTS zines (id INTEGER PRIMARY KEY, name TEXT NOT NULL, page_size TEXT NOT NULL DEFAULT 'a5', margin REAL NOT NULL DEFAULT 6, pages TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"); },
+  // A zine has a set number of pages (8, 16 or 24; 0 for one made before, which grows with its pages) and candidates, the photographs to lay out, as a composition has.
+  (db) => { addColumn(db, 'zines', 'page_count', 'INTEGER NOT NULL DEFAULT 0'); addColumn(db, 'zines', 'candidates', "TEXT NOT NULL DEFAULT '[]'"); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */
