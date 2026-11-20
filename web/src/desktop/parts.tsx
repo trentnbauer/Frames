@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { CompPicker } from '../components/AddToComposition';
 import { BulkEdit } from '../components/BulkEdit';
+import { CarouselMaker } from '../components/CarouselMaker';
 import { WarningIcon } from '../components/WarningIcon';
 import { ToastSlot } from '../components/Toast';
 import { MoveToShoot } from '../components/MoveToShoot';
@@ -73,13 +74,13 @@ export function JustifiedGrid({ photos, selecting, picked, onClick, due, badge }
 export const isDue = (p: PhotoLite) => !!p.nextReviewAt && p.nextReviewAt <= new Date().toISOString();
 
 /**
- * The floating bar over a selection: how many, Clear, Move to shoot…, Remove (or Protected when every one is in a protected shoot), Add to composition.
+ * The floating bar over a selection: how many, Clear, Move to shoot…, Carousel…, Remove (or Protected when every one is in a protected shoot), Add to composition.
  * Moving and removing are done here; the page reloads through onChanged.
  */
 export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { ids: number[]; photos: PhotoLite[]; shoots: Shoot[]; onClear: () => void; onChanged: () => void; say: (t: string, undo?: () => void) => void }) {
   const { refreshSummary, settings } = useStore();
   const [scanning, setScanning] = useState(false);
-  const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove' | 'edit'>(null);
+  const [dlg, setDlg] = useState<null | 'move' | 'comp' | 'remove' | 'edit' | 'carousel'>(null);
   const [err, setErr] = useState('');
   if (ids.length === 0) return null;
   const protectedIds = new Set(shoots.filter((s) => s.protected).map((s) => s.id));
@@ -104,6 +105,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
         <i aria-hidden style={{ width: 1, height: 20, background: 'var(--hair)' }} />
         <button onClick={() => { setErr(''); setDlg('edit'); }} title="Set camera, lens, film, place, date, tags and more on every selected photograph" style={plain}>Edit details…</button>
         <button onClick={() => { setErr(''); setDlg('move'); }} style={plain}>Move to shoot…</button>
+        <button onClick={() => setDlg('carousel')} title="Make Instagram carousel slides from these, in the order you picked them" style={plain}>Carousel…</button>
         {settings && settings.ai !== 'off' && <button onClick={scan} disabled={scanning} title="Describe and tag the selected photographs with AI" style={plain}>{scanning ? 'Starting…' : <>✦ Scan with AI</>}</button>}
         <button onClick={() => setDlg('comp')} style={{ height: 40, padding: '0 20px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500 }}>Add to composition…</button>
       </div>
@@ -113,6 +115,7 @@ export function PickedBar({ ids, photos, shoots, onClear, onChanged, say }: { id
           <MoveToShoot count={ids.length} shoots={shoots} canOrphan={picked.some((p) => !p.orphaned)} busy={false} error={err} onAdd={move} onCreate={create} onOrphan={orphan} onClose={() => setDlg(null)} />
         </Modal>
       )}
+      {dlg === 'carousel' && <Modal title="Instagram carousel" sub={`${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}, in the order you picked them`} width={760} onClose={() => setDlg(null)}><CarouselMaker ids={ids} /></Modal>}
       {dlg === 'edit' && <BulkEdit ids={ids} onClose={() => setDlg(null)} onDone={onChanged} />}
       {dlg === 'comp' && <CompPicker ids={ids} onClose={() => setDlg(null)} onDone={(m) => { setDlg(null); onClear(); say(m); }} />}
       {dlg === 'remove' && <ConfirmDialog title={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}?`} thumbs={picked.filter((p) => removable.includes(p.id)).map((p) => imgUrl(p.id, 'thumb'))} sub="They’re removed from Frames and go to Recently removed, where you can restore them. The original files stay where they are." cta={`Remove ${removable.length} ${removable.length === 1 ? 'photo' : 'photos'}`} onGo={remove} onClose={() => setDlg(null)} />}
