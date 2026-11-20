@@ -404,6 +404,7 @@ export function registerLibrary(app: FastifyInstance, x: Ctx) {
       // Polymorphic shares need removal before their target rows disappear.
       db.prepare("DELETE FROM shares WHERE kind IN ('shoot', 'collection', 'photo')").run();
       db.prepare('DELETE FROM collections').run();
+      db.prepare('DELETE FROM zines').run();
       // Old non-FK history tables are cleared explicitly as well.
       for (const table of ['dismissed', 'feedback', 'dup_ignored', 'xmp_conflicts', 'removal_kept', 'portfolio_marks'])
         db.prepare(`DELETE FROM ${table}`).run();
