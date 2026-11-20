@@ -55,3 +55,13 @@ it('leaves a protected shoot out of low-rating suggestions, automatic removal an
   expect((await a.post('/api/review/rate', { photoId: id, bin: true })).status).toBe(200);
   expect((await a.get('/api/photos')).body.photos).toHaveLength(1); // not removed by the bin vote or by automatic removal
 });
+
+it('takes a bin-voted photograph in a protected shoot out of review instead of scheduling it again', async () => {
+  await a.put('/api/settings', { sessions: 5, binVotes: 1 });
+  await protect(true);
+  await a.post('/api/review/start', { photoIds: [id] });
+  expect((await a.post('/api/review/rate', { photoId: id, bin: true })).status).toBe(200);
+  expect((await a.get('/api/photos')).body.photos).toHaveLength(1); // protection kept it
+  expect((await a.get('/api/review/session')).body.queue).toEqual([]);
+  expect((env.db.prepare('SELECT next_review_at n FROM photos WHERE id = ?').get(id) as { n: string | null }).n).toBeNull();
+});
