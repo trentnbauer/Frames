@@ -111,7 +111,9 @@ export function MobilePhoto() {
             {row('description', 'Description', p.description || '', 'Add a description', p.descSource === 'ai')}
             {row('place', 'Place', p.place, 'Add a place')}
             {row(null, 'Shoot', p.orphaned ? 'No shoot' : shoot?.name ?? '', '—', false, { label: 'Move', run: () => setSheet('move') })}
-            {row(null, p.dateEdit ? 'Date (edited)' : p.capturedAt ? 'Date taken' : 'Date added', fmtDate(p.dateEdit ?? p.capturedAt ?? p.addedAt, { day: 'numeric', month: 'short', year: 'numeric' }), '—')}
+            {p.dateEdit && row(null, 'Date (edited)', fmtDate(p.dateEdit, { day: 'numeric', month: 'short', year: 'numeric' }), '—')}
+            {row(null, 'Taken', p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '', 'Unknown')}
+            {row(null, 'Uploaded', fmtDate(p.addedAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }), '—')}
             {row(null, 'Camera', p.camera, '—')}
             {row(null, 'Lens', p.lens, '—')}
             {p.film ? row(null, 'Film', p.film, '—') : null}

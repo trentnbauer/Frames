@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
+import { fmtDate } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
 import { useStore } from '../store';
@@ -133,6 +134,7 @@ function DesktopPhoto() {
         title={title} onTitle={(v: string) => { setTitle(v); clearTimeout((window as unknown as { __tt?: number }).__tt); (window as unknown as { __tt?: number }).__tt = window.setTimeout(() => { void patch({ title: v }); }, 700); }}
         dateVal={dateVal} dateTitle="Click to edit the date" dateEdited={!!p.dateEdit} onDate={(v: string) => patch({ dateEdit: v || null })} onResetDate={() => patch({ dateEdit: null })}
         dateSrc={p.dateEdit ? 'Date edited by you' : camera ? 'Date taken, from camera data' : 'No camera date · using the upload date'}
+        taken={p.capturedAt ? fmtDate(p.capturedAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Unknown'} uploaded={fmtDate(p.addedAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
         season={season ? cap(season) : 'No season'} seasonDot={season ? SEASON_DOT[season] : 'transparent'} seasonTitle={hemi === 'none' ? 'Seasons are turned off in Settings' : `${cap(hemi)}ern hemisphere`}
         palette={(p.palette ?? []).map((c) => ({ title: `${c.name} · ${Math.round(c.pct)}%`, pct: Math.max(1, Math.round(c.pct)), hex: c.hex }))} paletteNames={[...new Set((p.palette ?? []).map((c) => c.name))].slice(0, 5).join(', ')}
         score={score !== null ? score.toFixed(1) : '–'} you={avg !== null ? avg.toFixed(1) : '–'} guests={g?.avg != null ? `${g.avg.toFixed(1)} (${g.n})` : '–'}
