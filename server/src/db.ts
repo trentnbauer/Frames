@@ -474,6 +474,8 @@ export const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { db.exec("CREATE TABLE IF NOT EXISTS zines (id INTEGER PRIMARY KEY, name TEXT NOT NULL, page_size TEXT NOT NULL DEFAULT 'a5', margin REAL NOT NULL DEFAULT 6, pages TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"); },
   // A zine has a set number of pages (8, 16 or 24; 0 for one made before, which grows with its pages) and candidates, the photographs to lay out, as a composition has.
   (db) => { addColumn(db, 'zines', 'page_count', 'INTEGER NOT NULL DEFAULT 0'); addColumn(db, 'zines', 'candidates', "TEXT NOT NULL DEFAULT '[]'"); },
+  // An Instagram carousel is laid out like a zine (slides for pages), so it is kept with them: its kind, and the colour round its photographs.
+  (db) => { addColumn(db, 'zines', 'kind', "TEXT NOT NULL DEFAULT 'zine'"); addColumn(db, 'zines', 'colour', "TEXT NOT NULL DEFAULT 'ffffff'"); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */

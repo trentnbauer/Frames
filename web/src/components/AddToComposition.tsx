@@ -3,7 +3,6 @@ import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
 import { useUi } from '../ui';
 import { Modal } from './Modal';
-import { CarouselMaker } from './CarouselMaker';
 import { useNavigate } from 'react-router-dom';
 
 /**
@@ -19,7 +18,7 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
   const back = () => setKind(null);
   const what = ids.length === 1 ? 'this photo' : `${ids.length} photos`;
   if (kind === 'wall') return <WallPicker ids={ids} onClose={onClose} onDone={onDone} onBack={back} />;
-  if (kind === 'carousel') return <Modal title="Instagram carousel" sub={`${ids.length === 1 ? '1 photo' : `${ids.length} photos`}, in the order you picked them`} width={760} onClose={onClose}><CarouselMaker ids={ids} /><BackRow onBack={back} /></Modal>;
+  if (kind === 'carousel') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind="carousel" />;
   if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} />;
   // First, what is being made: the same photographs can go on a wall, into a carousel or into a zine.
   const kinds: [Kind, string, string][] = [['wall', 'Composition', 'Prints arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
@@ -39,9 +38,10 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
 
 const BackRow = ({ onBack }: { onBack: () => void }) => <div style={{ paddingTop: 10 }}><button className="btn" onClick={onBack}>← Back</button></div>;
 
-/** Add the photographs to a zine, one a page at the end, or start a new zine with them; then open it to lay them out. */
-function ZinePicker({ ids, onClose, onBack }: { ids: number[]; onClose: () => void; onBack: () => void }) {
-  type Zine = { id: number; name: string; printedCount: number; coverId: number | null };
+/** Add the photographs to a zine or carousel as candidates, or start a new one with them; then open it to lay them out. */
+function ZinePicker({ ids, onClose, onBack, kind = 'zine' }: { ids: number[]; onClose: () => void; onBack: () => void; kind?: 'zine' | 'carousel' }) {
+  type Zine = { id: number; kind?: string; name: string; printedCount: number; coverId: number | null };
+  const carousel = kind === 'carousel';
   const zines = useApi<Zine[]>('/zines');
   const nav = useNavigate();
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false);
@@ -49,23 +49,23 @@ function ZinePicker({ ids, onClose, onBack }: { ids: number[]; onClose: () => vo
   const go = async (z: Zine | null) => {
     setBusy(true); setErr('');
     try {
-      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { name: 'Untitled zine', photoIds: ids } });
+      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { kind, photoIds: ids } });
       onClose(); nav(`/zines/${made.id}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   return (
-    <Modal title="Add to a zine" sub="They become candidates, ready to drag onto the pages" width={560} onClose={onClose}>
+    <Modal title={carousel ? 'Add to a carousel' : 'Add to a zine'} sub={carousel ? 'A new carousel starts with a slide a photo, in the order you picked them' : 'They become candidates, ready to drag onto the pages'} width={560} onClose={onClose}>
       <div role="group" aria-label="Zines" style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', flexWrap: 'wrap' }}>
           <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--muted)' }}>+</span>
-          <span style={{ fontWeight: 500, flex: 1 }}>New zine</span>
+          <span style={{ fontWeight: 500, flex: 1 }}>New {kind}</span>
           <button className="btn outline" style={{ height: 32, paddingInline: 14 }} disabled={busy} onClick={() => void go(null)}>Create</button>
         </div>
         {zines.error && <div role="alert" className="reason">{zines.error}</div>}
-        {zines.data?.map((z) => (
+        {zines.data?.filter((z) => (z.kind ?? 'zine') === kind).map((z) => (
           <button key={z.id} type="button" disabled={busy} onClick={() => void go(z)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', borderRadius: 10, textAlign: 'left' }}>
             <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, background: z.coverId != null ? `url(${imgUrl(z.coverId, 'thumb')}) center/cover var(--surface)` : 'var(--surface)' }} />
-            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 15, overflowWrap: 'anywhere' }}>{z.name}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{z.printedCount} pages</span></span>
+            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 15, overflowWrap: 'anywhere' }}>{z.name}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{z.printedCount} {carousel ? 'slides' : 'pages'}</span></span>
           </button>
         ))}
       </div>

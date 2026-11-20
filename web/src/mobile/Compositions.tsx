@@ -75,6 +75,7 @@ export function MobileCompositions() {
         {colls.data && list.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13.5, color: 'var(--muted)' }}>{all.length === 0 ? 'No compositions yet. Tap + to start one.' : 'No compositions in this stage.'}</div>}
       </div>
       <ZineList heading={<h2 style={{ font: '400 32px/1 var(--serif)', margin: 0 }}>Zines</h2>} />
+      <ZineList kind="carousel" heading={<h2 style={{ font: '400 32px/1 var(--serif)', margin: 0 }}>Carousels</h2>} />
     </div>
   );
 }
