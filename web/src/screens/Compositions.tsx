@@ -91,7 +91,7 @@ function DesktopCompositions() {
         sugg={s0 && !needle ? {
           aiAssisted: !!s0.aiAssisted, name: s0.name, why: s0.reason, thumbs: s0.photos.slice(0, 3).map((p) => imgUrl(p.id, 'thumb')), pos: `${(si % (sug.data?.length ?? 1)) + 1} of ${sug.data?.length ?? 1}`,
           next: () => setSi(si + 1),
-          start: async () => { const c = await api<Collection>('/collections', { body: { name: s0.name, photoIds: s0.photoIds } }); await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s0.photoIds, verdict: 'accept' } }); nav(`/collections/${c.id}`); },
+          start: async () => { await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s0.photoIds, verdict: 'accept' } }); openNew({ name: s0.name, photoIds: s0.photoIds }); },
         } : null}
       />
       <div style={{ marginTop: 56 }}><ZineList heading={<h2 style={{ font: "400 36px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Zines</h2>} /></div>

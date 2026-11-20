@@ -1,4 +1,5 @@
 import { HomeWishlist } from '../components/HomeWishlist';
+import { useUi } from '../ui';
 import { HomeNotes } from '../components/HomeNotes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -53,6 +54,7 @@ export function Home() {
 function DesktopHome() {
   const { summary: s, me } = useStore();
   const nav = useNavigate();
+  const { openNew } = useUi();
   const status = useStatus();
   const recs = useApi<SuggestedSet[]>('/collections/suggestions');
   const comps = useApi<Collection[]>('/collections');
@@ -114,9 +116,8 @@ function DesktopHome() {
     sFade: ci.fade, sDots: ideas.map((_, k) => ({ bg: k === ci.i ? 'var(--text)' : 'var(--outline)', go: () => ci.go(k) })), sPrev: () => ci.go(ci.i - 1), sNext: () => ci.go(ci.i + 1),
     startIdea: async () => {
       if (!idea) return;
-      const c = await api<Collection>('/collections', { body: { name: idea.name, photoIds: idea.photoIds } });
       await api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'accept' } });
-      nav(`/collections/${c.id}`);
+      openNew({ name: idea.name, photoIds: idea.photoIds }); // asks what to make with the set first
     },
     notMe: () => { if (!idea) return; api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'reject' } }).catch(() => undefined); setDismissed((d) => new Set(d).add(idea.name)); },
     pause: () => { cw.pause(); ci.pause(); }, resume: () => { cw.resume(); ci.resume(); },

@@ -136,9 +136,8 @@ export function Today() {
 
   const begin = () => nav(s && s.due === 0 && !s.resumable && s.early > 0 ? '/review?early' : '/review');
   const startIdea = async (x: SuggestedSet) => {
-    const c = await api<Collection>('/collections', { body: { name: x.name, photoIds: x.photoIds } });
     await api('/recommendations/feedback', { body: { kind: 'together', photoIds: x.photoIds, verdict: 'accept' } });
-    nav(`/collections/${c.id}`);
+    openNew({ name: x.name, photoIds: x.photoIds }); // asks what to make with the set first
   };
   const notMe = (x: SuggestedSet) => { api('/recommendations/feedback', { body: { kind: 'together', photoIds: x.photoIds, verdict: 'reject' } }).catch(() => undefined); setDismissed((d) => new Set(d).add(x.name)); };
 

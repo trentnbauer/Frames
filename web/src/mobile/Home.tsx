@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useUi } from '../ui';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite, Shoot } from '../data';
@@ -19,6 +20,7 @@ const thumb = (id: number) => imgUrl(id, 'thumb');
 /** Home on a phone: greeting, the review due, notes, swipeable ideas, batches to organise, a composition to finish, community review and the wishlist. */
 export function MobileHome() {
   const nav = useNavigate();
+  const { openNew } = useUi();
   const { summary: s, me } = useStore();
   const recs = useApi<Idea[]>('/collections/suggestions');
   const comps = useApi<Collection[]>('/collections');
@@ -37,9 +39,8 @@ export function MobileHome() {
   const startIdea = async (idea: Idea) => {
     setErr('');
     try {
-      const c = await api<Collection>('/collections', { body: { name: idea.name, photoIds: idea.photoIds } });
       await api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'accept' } });
-      nav(`/collections/${c.id}`);
+      openNew({ name: idea.name, photoIds: idea.photoIds }); // asks what to make with the set first
     } catch (e) { setErr((e as Error).message); }
   };
   const notMe = (idea: Idea) => { api('/recommendations/feedback', { body: { kind: 'together', photoIds: idea.photoIds, verdict: 'reject' } }).catch(() => undefined); setDismissed((d) => new Set(d).add(idea.name)); };

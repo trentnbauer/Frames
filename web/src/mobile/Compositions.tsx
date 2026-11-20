@@ -28,9 +28,8 @@ export function MobileCompositions() {
   const start = async (i: Idea) => {
     setErr('');
     try {
-      const c = await api<Collection>('/collections', { body: { name: i.name, photoIds: i.photoIds } });
       await api('/recommendations/feedback', { body: { kind: 'together', photoIds: i.photoIds, verdict: 'accept' } });
-      nav(`/collections/${c.id}`);
+      openNew({ name: i.name, photoIds: i.photoIds }); // asks what to make with the set first
     } catch (e) { setErr((e as Error).message); }
   };
   const status = (c: Collection) => c.stage === 'done' ? (c.printedAt ? 'Printed' : 'Ready to print') : chosenCount(c) === 0 ? 'No prints chosen' : `${chosenCount(c)} of ${slotsOf(c)} chosen`;
