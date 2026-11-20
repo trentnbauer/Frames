@@ -7,6 +7,7 @@ import { usePinchColumns } from '../thumbZoom';
 import { setPhotoWalk } from '../photoWalk';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { BulkEdit } from '../components/BulkEdit';
+import { CarouselMaker } from '../components/CarouselMaker';
 import { Sheet } from '../components/Sheet';
 import { type PhotoLite, type Shoot } from '../data';
 import { useStore } from '../store';
@@ -27,7 +28,7 @@ export function MobileLibrary() {
   const [adding, setAdding] = useState(sp.get('add') === '1');
   const [selecting, setSelecting] = useState(sp.get('select') === '1');
   const [sel, setSel] = useState<Set<number>>(new Set());
-  const [sheet, setSheet] = useState<null | 'addto' | 'move' | 'comp'>(null);
+  const [sheet, setSheet] = useState<null | 'addto' | 'move' | 'comp' | 'carousel'>(null);
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
@@ -148,6 +149,7 @@ export function MobileLibrary() {
         <Sheet title={`Add ${sel.size} ${sel.size === 1 ? 'photo' : 'photos'} to…`} onClose={() => setSheet(null)}>
           <Row label="A shoot" sub="Moves them out of their current shoot" onClick={() => { setErr(''); setSheet('move'); }} />
           <Row label="A composition" sub="Adds them as candidates; they stay in their shoot" onClick={() => setSheet('comp')} />
+          <Row label="An Instagram carousel" sub="Bordered slides, in the order you picked them" onClick={() => setSheet('carousel')} />
         </Sheet>
       )}
       {sheet === 'move' && (
@@ -157,6 +159,7 @@ export function MobileLibrary() {
             onOrphan={async () => { setBusy(true); setErr(''); try { await api('/photos/orphan', { body: { photoIds: ids } }); done(`Took ${ids.length} out of their shoots`); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } }} />
         </Sheet>
       )}
+      {sheet === 'carousel' && <Sheet title="Instagram carousel" sub={`${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}, in the order you picked them`} onClose={() => setSheet(null)}><CarouselMaker ids={ids} /></Sheet>}
       {sheet === 'comp' && <CompPicker ids={ids} onClose={() => setSheet(null)} onDone={done} />}
       {editing && <BulkEdit ids={ids} onClose={() => setEditing(false)} onDone={() => { setEditing(false); done(`Updated ${ids.length} ${ids.length === 1 ? 'photograph' : 'photographs'}`); }} />}
       {adding && <AddPhotosModal onClose={() => { setAdding(false); if (sp.get('add')) set('add', null); }} onDone={() => { list.reload(); shoots.reload(); }} />}

@@ -6,6 +6,7 @@ import { registerWorkflow } from './routes/workflow.js';
 import { pruneRecovery } from './workflowCore.js';
 import { autoRemoveLowRated, removeIfBinned } from './remove.js';
 import { DUE_REVIEW_SQL } from './reviewEligibility.js';
+import { registerCarousel } from './carousel.js';
 import { noteUse } from './activity.js';
 import { ensureDeriv } from './cache.js';
 import crypto from 'node:crypto';
@@ -628,6 +629,7 @@ export function buildApp(ownerDb: DB, baseCfg: AppCfg) {
   registerTodo(app, ctx);
   registerBackground(app, ctx);
   registerMap(app, ctx);
+  registerCarousel(app, ctx);
   registerShare(app, ctx);
   registerPortfolio(app, ctx, async (req) => { const v = await auth.verify(req); return v.ok && v.user.role !== 'guest' ? v.user.id : null; });
   registerAuth(app, ctx, auth);
