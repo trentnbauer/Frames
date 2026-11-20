@@ -33,7 +33,7 @@ export function CompPicker({ ids, onClose, onDone, fresh, wall }: { ids: number[
   if (kind === 'carousel') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind="carousel" name={fresh?.name} />;
   if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} name={fresh?.name} />;
   // First, what is being made: the same photographs can go on a wall, into a carousel or into a zine.
-  const kinds: [Kind, string, string][] = [['wall', 'Composition', 'Prints arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
+  const kinds: [Kind, string, string][] = [['wall', 'Frames', 'Framed prints of your artwork, arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
   return (
     <Modal title={fresh ? 'What are you making?' : `Add ${what} to…`} sub={fresh && ids.length ? `With ${what}` : undefined} width={560} onClose={onClose}>
       <div role="group" aria-label="What to make" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
