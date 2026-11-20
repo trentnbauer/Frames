@@ -178,7 +178,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
   }
 
   /** The person Cloudflare Access signed in, from the signed token it adds to each request. The signature, issuer, audience and expiry are all checked. */
-  async function cloudflareIdentity(p: Provider, req: FastifyRequest): Promise<Identity> {
+  async function cloudflareIdentity(p: Provider, req: FastifyRequest): Promise<Identity & { iat?: number }> {
     const token = String(req.headers['cf-access-jwt-assertion'] ?? '');
     if (!token) throw new Error('Cloudflare Access did not pass a login to Frames. Open Frames through the address that Cloudflare Access protects.');
     try {
@@ -188,7 +188,7 @@ export function createAuth(db: DB, cfg: AppCfg) {
       const { payload } = await jwtVerify(token, jwks, { issuer: `https://${p.teamDomain}`, audience: p.aud });
       const email = String(payload.email ?? '').toLowerCase();
       if (!email) throw new Error('no email');
-      return { provider: p.id, sub: String(payload.sub ?? email), email, emailVerified: true, name: String(payload.name ?? '') || email };
+      return { provider: p.id, sub: String(payload.sub ?? email), email, emailVerified: true, name: String(payload.name ?? '') || email, iat: payload.iat };
     } catch { throw new Error('Cloudflare Access did not give a valid login for this Frames. Check the team domain and audience tag under Settings, Sign-in & access.'); }
   }
 
@@ -372,7 +372,21 @@ export function createAuth(db: DB, cfg: AppCfg) {
     return rep.code(401).header('WWW-Authenticate', 'Basic realm="Frames", charset="UTF-8"').send({ error: 'Authentication required' });
   }
 
-  return { baseUrl, isSecure, begin, finish, verify, deny, oauthOn, protectedNow, signinPage, messagePage, issuerOf, checkPassword };
+  /**
+   * For someone who signed in through Cloudflare Access: how long ago Access signed them in, from the token it adds to this request.
+   * Access signs them back in by itself, so a fresh Frames session says nothing; this is the sign-in to judge. 'no-token' when this
+   * request did not come through Access (or its token is not theirs), and null when they did not sign in through Access at all.
+   */
+  async function accessAgeMs(req: FastifyRequest, user: User): Promise<number | 'no-token' | null> {
+    const p = loadAuth(db).providers.find((v) => v.id === user.provider && v.type === 'cloudflare' && !v.off);
+    if (!p) return null;
+    try {
+      const who = await cloudflareIdentity(p, req);
+      return who.sub === user.sub && typeof who.iat === 'number' ? Math.max(0, Date.now() - who.iat * 1000) : 'no-token';
+    } catch { return 'no-token'; }
+  }
+
+  return { baseUrl, isSecure, begin, finish, verify, deny, oauthOn, protectedNow, signinPage, messagePage, issuerOf, checkPassword, accessAgeMs };
 }
 export type Auth = ReturnType<typeof createAuth>;
 
