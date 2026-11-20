@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { parsePages, printedPages, renderPage, type ZinePage } from './zine.js';
+import { FOLD_ORDER, imposeFold, parsePages, printedPages, renderPage, type ZinePage } from './zine.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, a: ReturnType<typeof api>, ids: number[];
@@ -49,7 +49,7 @@ it('splits a spread so the two halves meet at the fold', async () => {
 
 it('saves a zine and exports it as a PDF with one page per printed page', async () => {
   // The chosen photographs become candidates; the pages start empty, as many as asked for.
-  const made = await a.post('/api/zines', { name: 'Summer', photoIds: [...ids, ids[0], 'x'], pageCount: 8 });
+  const made = await a.post('/api/zines', { name: 'Summer', photoIds: [...ids, ids[0], 'x'], pageCount: 8, pageSize: 'a5' });
   expect(made.status).toBe(201);
   expect(made.body).toMatchObject({ candidates: ids, pageCount: 8, printedCount: 8 });
   expect(made.body.pages).toEqual(Array(8).fill({ layout: 'one', photos: [null] }));
@@ -87,4 +87,30 @@ it('saves a zine and exports it as a PDF with one page per printed page', async 
   expect((await a.del(`/api/zines/${id}`)).status).toBe(200);
   expect((await a.get(`/api/zines/${id}`)).status).toBe(404);
   expect((await a.get(`/api/zines/${id}/pdf`)).status).toBe(404);
+});
+
+it('lays the 8 pages of a one-sheet zine out for folding, the top row upside down', async () => {
+  expect(FOLD_ORDER.flat().sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  // Each page a different grey, with a black mark in its top-left corner.
+  const page = (n: number) => sharp({ create: { width: 40, height: 60, channels: 3, background: { r: n * 25, g: n * 25, b: n * 25 } } }).composite([{ input: { create: { width: 8, height: 8, channels: 3, background: '#000' } }, left: 0, top: 0 }]).png().toBuffer();
+  const sheet = await imposeFold(await Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map(page)), 40, 60);
+  expect([sheet.w, sheet.h]).toEqual([160, 120]);
+  const { data, info } = await sharp(sheet.data).raw().toBuffer({ resolveWithObject: true });
+  const at = (x: number, y: number) => Math.round(data[(y * info.width + x) * info.channels] / 25);
+  FOLD_ORDER.forEach((row, r) => row.forEach((n, c) => expect(at(c * 40 + 20, r * 60 + 30), `page ${n}`).toBe(n)));
+  expect(at(122, 62)).toBe(0); // page 1, the cover, bottom right, upright: its mark top-left
+  expect(at(36, 56)).toBe(0); // page 5, top left, upside down: its mark bottom-right
+});
+
+it('makes a new zine a one-sheet A3 zine of 8 pages, and prints it on one sheet', async () => {
+  const z = (await a.post('/api/zines', { photoIds: ids })).body;
+  expect(z).toMatchObject({ pageSize: 'a3-fold', pageCount: 8, printedCount: 8 });
+  expect((await a.post('/api/zines', { pageCount: 16 })).body.error).toMatch(/8 pages/);
+  expect((await a.put(`/api/zines/${z.id}`, { pageCount: 16, pages: Array(16).fill({ layout: 'one', photos: [null] }) })).body.error).toMatch(/8 pages/);
+  await a.put(`/api/zines/${z.id}`, { pages: [{ layout: 'one', photos: [ids[0]] }, { layout: 'spread', photos: [ids[1]] }] });
+  const pdf = await a.get(`/api/zines/${z.id}/pdf`);
+  const text = (pdf.body as Buffer).toString('latin1');
+  expect(text.match(/\/Type \/Page /g)).toHaveLength(1);
+  expect(text).toContain('/MediaBox [0 0 1190.55 841.89]'); // A3, landscape
+  try { expect(execFileSync('pdfinfo', ['-'], { input: pdf.body as Buffer, stdio: ['pipe', 'pipe', 'pipe'] }).toString()).toMatch(/Pages:\s+1/); } catch (e) { if ((e as { code?: string }).code !== 'ENOENT') throw e; }
 });

@@ -14,8 +14,15 @@ export const LAYOUTS = { one: 1, two: 2, spread: 1, blank: 0 } as const;
 export type Layout = keyof typeof LAYOUTS;
 export type ZinePage = { layout: Layout; photos: (number | null)[] };
 /** Page sizes in millimetres. */
-export const SIZES = { a5: [148, 210], a6: [105, 148], square: [200, 200] } as const;
+export const SIZES = { 'a3-fold': [105, 148.5], 'a4-fold': [74.25, 105], a5: [148, 210], a6: [105, 148], square: [200, 200] } as const;
 export type PageSize = keyof typeof SIZES;
+/**
+ * A one-sheet zine: printed on one side of a sheet (landscape, in millimetres), cut along the middle and folded into 8 pages, each an
+ * eighth of the sheet. The page sizes a5, a6 and square are kept for zines made before, which print one page per PDF page.
+ */
+export const SHEETS: Partial<Record<PageSize, [number, number]>> = { 'a3-fold': [420, 297], 'a4-fold': [297, 210] };
+/** Where each page goes on the sheet, by printed page number: the top row upside down, so the pages read in order once folded. */
+export const FOLD_ORDER = [[5, 4, 3, 2], [6, 7, 8, 1]] as const;
 export const MAX_PAGES = 100; // entries a person lays out; with spreads and padding, at most about 200 printed pages
 const DPI = 300;
 
@@ -83,6 +90,19 @@ export async function renderPage(p: Printed, size: PageSize, marginPct: number, 
   return sharp({ create: { width: W, height: H, channels: 3, background: '#ffffff' } }).composite(layers).jpeg({ quality: 88 }).toBuffer();
 }
 
+/** The 8 pages (in reading order) laid on one sheet for folding, as FOLD_ORDER says, the top row turned upside down. */
+export async function imposeFold(pages: Buffer[], pw: number, ph: number): Promise<{ data: Buffer; w: number; h: number }> {
+  const layers = await Promise.all(FOLD_ORDER.flatMap((row, r) => row.map(async (n, c) => {
+    const page = pages[n - 1];
+    const input = page ? (r === 0 ? await sharp(page).rotate(180).toBuffer() : page) : await sharp({ create: { width: pw, height: ph, channels: 3, background: '#ffffff' } }).png().toBuffer();
+    return { input, left: c * pw, top: r * ph };
+  })));
+  // The one cut: along the middle of the sheet, across the centre two pages' width. A thin grey line, gone once cut.
+  const cut = { input: { create: { width: pw * 2, height: Math.max(2, Math.round(ph / 600)), channels: 3 as const, background: '#9a9a9a' } }, left: pw, top: ph - Math.max(1, Math.round(ph / 1200)) };
+  const data = await sharp({ create: { width: pw * 4, height: ph * 2, channels: 3, background: '#ffffff' } }).composite([...layers, cut]).jpeg({ quality: 88 }).toBuffer();
+  return { data, w: pw * 4, h: ph * 2 };
+}
+
 /** A PDF with one full-page JPEG on each page. */
 export function pdfOf(jpegs: { data: Buffer; w: number; h: number }[], ptW: number, ptH: number): Buffer {
   const chunks: Buffer[] = [], offsets: number[] = [];
@@ -130,10 +150,13 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     const b = (req.body ?? {}) as Row;
     const count = b.pageCount === undefined ? 8 : b.pageCount;
     if (!PAGE_COUNTS.includes(count as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' });
+    const size = b.pageSize === undefined ? 'a3-fold' : b.pageSize;
+    if (typeof size !== 'string' || !(size in SIZES)) return rep.code(400).send({ error: 'Choose the sheet to print on: a3-fold or a4-fold.' });
+    if (SHEETS[size as PageSize] && count !== 8) return rep.code(400).send({ error: 'A zine folded from one sheet has 8 pages.' });
     // The chosen photographs become candidates to lay out, as in a composition; the pages start empty.
     const ids = parseIds(b.photoIds) ?? [];
     const now = new Date().toISOString();
-    const id = Number(db.prepare('INSERT INTO zines(name, pages, page_count, candidates, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)').run(name(b.name) ?? 'Untitled zine', JSON.stringify(emptyPages(count as number)), count, JSON.stringify(ids), now, now).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO zines(name, page_size, pages, page_count, candidates, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)').run(name(b.name) ?? 'Untitled zine', size, JSON.stringify(emptyPages(count as number)), count, JSON.stringify(ids), now, now).lastInsertRowid);
     return rep.code(201).send(dto(get(id)!));
   });
   app.get('/api/zines/:id', async (req, rep) => { const z = get((req.params as Row).id); return z ? dto(z) : notFound(rep); });
@@ -142,7 +165,7 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     if (!z) return notFound(rep);
     const b = (req.body ?? {}) as Row, set: Partial<ZineRow> = {};
     if (b.name !== undefined) { const n = name(b.name); if (!n) return rep.code(400).send({ error: 'Give the zine a name.' }); set.name = n; }
-    if (b.pageSize !== undefined) { if (typeof b.pageSize !== 'string' || !(b.pageSize in SIZES)) return rep.code(400).send({ error: 'The page size must be a5, a6 or square.' }); set.page_size = b.pageSize as PageSize; }
+    if (b.pageSize !== undefined) { if (typeof b.pageSize !== 'string' || !(b.pageSize in SIZES)) return rep.code(400).send({ error: 'Choose the sheet to print on: a3-fold or a4-fold.' }); set.page_size = b.pageSize as PageSize; }
     if (b.margin !== undefined) { if (typeof b.margin !== 'number' || !Number.isFinite(b.margin) || b.margin < 0 || b.margin > 20) return rep.code(400).send({ error: 'The margin must be from 0 to 20 per cent.' }); set.margin = b.margin; }
     if (b.pages !== undefined) { const p = parsePages(b.pages); if (typeof p === 'string') return rep.code(400).send({ error: p }); set.pages = JSON.stringify(p); }
     if (b.pageCount !== undefined) { if (!PAGE_COUNTS.includes(b.pageCount as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' }); set.page_count = b.pageCount as number; }
@@ -150,6 +173,7 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     // Adding photographs (from Add to… Zine) puts them at the end of the candidates.
     if (b.addCandidates !== undefined) { const c = parseIds(b.addCandidates); if (!c) return rep.code(400).send({ error: 'List the photographs by number.' }); set.candidates = JSON.stringify([...new Set([...readIds(set.candidates ?? z.candidates), ...c])].slice(0, MAX_CANDIDATES)); }
     const next = { ...z, ...set, updated_at: new Date().toISOString() };
+    if (SHEETS[next.page_size] && next.page_count !== 8) return rep.code(400).send({ error: 'A zine folded from one sheet has 8 pages.' });
     if (next.page_count && printedPages(readPages(next.pages), next.page_count).length > next.page_count)
       return rep.code(400).send({ error: `That needs more than ${next.page_count} pages. Remove a page, or choose more pages.` });
     db.prepare('UPDATE zines SET name = ?, page_size = ?, margin = ?, pages = ?, page_count = ?, candidates = ?, updated_at = ? WHERE id = ?').run(next.name, next.page_size, next.margin, next.pages, next.page_count, next.candidates, next.updated_at, z.id);
@@ -170,6 +194,8 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     const jpegs = [];
     for (const p of printed) jpegs.push({ data: await renderPage(p, z.page_size, z.margin, file), w: px(mmW), h: px(mmH) });
     const safe = z.name.replace(/[^\w .-]+/g, '_').slice(0, 80) || 'zine';
-    return rep.type('application/pdf').header('Content-Disposition', `attachment; filename="${safe}.pdf"`).header('Cache-Control', 'no-store').send(pdfOf(jpegs, (mmW / 25.4) * 72, (mmH / 25.4) * 72));
+    const sheet = SHEETS[z.page_size];
+    const pdf = sheet ? pdfOf([await imposeFold(jpegs.map((j) => j.data), px(mmW), px(mmH))], (sheet[0] / 25.4) * 72, (sheet[1] / 25.4) * 72) : pdfOf(jpegs, (mmW / 25.4) * 72, (mmH / 25.4) * 72);
+    return rep.type('application/pdf').header('Content-Disposition', `attachment; filename="${safe}.pdf"`).header('Cache-Control', 'no-store').send(pdf);
   });
 }

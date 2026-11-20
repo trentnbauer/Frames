@@ -46,10 +46,10 @@ function ZinePicker({ ids, onClose, onBack }: { ids: number[]; onClose: () => vo
   const nav = useNavigate();
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false);
   // The photographs become candidates, as in a composition; they are laid out on the pages in the zine.
-  const go = async (z: Zine | null, pageCount = 8) => {
+  const go = async (z: Zine | null) => {
     setBusy(true); setErr('');
     try {
-      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { name: 'Untitled zine', photoIds: ids, pageCount } });
+      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { name: 'Untitled zine', photoIds: ids } });
       onClose(); nav(`/zines/${made.id}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
@@ -59,7 +59,7 @@ function ZinePicker({ ids, onClose, onBack }: { ids: number[]; onClose: () => vo
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', flexWrap: 'wrap' }}>
           <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--muted)' }}>+</span>
           <span style={{ fontWeight: 500, flex: 1 }}>New zine</span>
-          <div className="seg" role="group" aria-label="New zine with this many pages">{[8, 16, 24].map((n) => <button key={n} type="button" disabled={busy} onClick={() => void go(null, n)}>{n} pages</button>)}</div>
+          <button className="btn outline" style={{ height: 32, paddingInline: 14 }} disabled={busy} onClick={() => void go(null)}>Create</button>
         </div>
         {zines.error && <div role="alert" className="reason">{zines.error}</div>}
         {zines.data?.map((z) => (
