@@ -72,7 +72,8 @@ export function deleteSuggestions(db: DB, sessions: number, below: number, limit
 
 /**
  * A photograph that has had enough bin votes (the setting, 3 by default; 0 is off) is removed from Frames. Only the person who owns the
- * library can vote (the vote goes through the signed-in review), and the original file is always kept. Returns whether it was removed.
+ * library can vote (the vote goes through the signed-in review), and the original file is always kept. Returns whether it was removed;
+ * one in a protected shoot stays, but leaves the review queue and schedule.
  */
 export function removeIfBinned(db: DB, cfg: Cfg, photoId: number): boolean {
   const need = loadSettings(db).binVotes;
@@ -80,14 +81,16 @@ export function removeIfBinned(db: DB, cfg: Cfg, photoId: number): boolean {
   const votes = (db.prepare('SELECT COUNT(*) n FROM reviews WHERE photo_id = ? AND bin = 1').get(photoId) as { n: number }).n;
   if (votes < need) return false;
   return db.transaction(() => {
-    removePhotos(db, cfg, [photoId], 'keep');
+    const removed = removePhotos(db, cfg, [photoId], 'keep').removed > 0;
+    // A protected shoot blocks the removal: stop scheduling the photograph so it no longer comes back for review.
+    if (!removed) db.prepare('UPDATE photos SET next_review_at = NULL WHERE id = ?').run(photoId);
     const session = getSetting<{ queue: { id: number }[]; index: number } | null>(db, 'reviewSession', null);
     if (session) {
       const before = session.queue.slice(0, session.index).filter((photo) => photo.id === photoId).length;
       session.queue = session.queue.filter((photo) => photo.id !== photoId); session.index = Math.max(0, session.index - before);
       setSetting(db, 'reviewSession', session);
     }
-    return true;
+    return removed;
   })();
 }
 
