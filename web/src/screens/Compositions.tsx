@@ -95,6 +95,7 @@ function DesktopCompositions() {
         } : null}
       />
       <div style={{ marginTop: 56 }}><ZineList heading={<h2 style={{ font: "400 36px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Zines</h2>} /></div>
+      <div style={{ marginTop: 56 }}><ZineList kind="carousel" heading={<h2 style={{ font: "400 36px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Carousels</h2>} /></div>
     </div>
   );
 }

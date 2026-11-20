@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { FOLD_ORDER, imposeFold, parsePages, printedPages, renderPage, type ZinePage } from './zine.js';
+import { FOLD_ORDER, imposeFold, pairBoxes, parsePages, printedPages, renderPage, type ZinePage } from './zine.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, a: ReturnType<typeof api>, ids: number[];
@@ -113,4 +113,36 @@ it('makes a new zine a one-sheet A3 zine of 8 pages, and prints it on one sheet'
   expect(text.match(/\/Type \/Page /g)).toHaveLength(1);
   expect(text).toContain('/MediaBox [0 0 1190.55 841.89]'); // A3, landscape
   try { expect(execFileSync('pdfinfo', ['-'], { input: pdf.body as Buffer, stdio: ['pipe', 'pipe', 'pipe'] }).toString()).toMatch(/Pages:\s+1/); } catch (e) { if ((e as { code?: string }).code !== 'ENOENT') throw e; }
+});
+
+it('puts two photographs on a page one above the other or side by side, whichever shows more of them', () => {
+  expect(pairBoxes({ w: 3, h: 2 }, { w: 3, h: 2 }, 1080, 1350, 54).map((b) => b[0])).toEqual([54, 54]); // landscapes stack: same left edge
+  expect(pairBoxes({ w: 2, h: 3 }, { w: 2, h: 3 }, 1080, 1350, 54).map((b) => b[1])).toEqual([54, 54]); // portraits side by side: same top edge
+});
+
+it('makes a carousel: a slide a photograph, slides in a row with no cover or padding, and a zip of them', async () => {
+  const c = (await a.post('/api/zines', { kind: 'carousel', photoIds: ids })).body;
+  expect(c).toMatchObject({ kind: 'carousel', pageSize: '4:5', colour: 'ffffff', candidates: ids, printedCount: 2 });
+  expect(c.pages).toEqual(ids.map((id) => ({ layout: 'one', photos: [id] })));
+  expect((await a.post('/api/zines', { kind: 'poster' })).status).toBe(400);
+  expect((await a.post('/api/zines', { kind: 'carousel', pageSize: 'a5' })).status).toBe(400);
+  expect((await a.put(`/api/zines/${c.id}`, { pageSize: 'a3-fold' })).status).toBe(400);
+  expect((await a.put(`/api/zines/${c.id}`, { colour: 'red' })).status).toBe(400);
+  // A photograph across two slides starts right where it is: no blank slide, no padding.
+  const saved = (await a.put(`/api/zines/${c.id}`, { pageSize: '1:1', colour: '#FF0000', margin: 10, pages: [{ layout: 'one', photos: [ids[0]] }, { layout: 'spread', photos: [ids[1]] }] })).body;
+  expect(saved).toMatchObject({ pageSize: '1:1', colour: 'ff0000', printedCount: 3 });
+  expect((await a.put(`/api/zines/${c.id}`, { pages: Array(21).fill({ layout: 'one', photos: [null] }) })).body.error).toMatch(/20 slides/);
+  const zip = await a.get(`/api/zines/${c.id}/zip`);
+  expect(zip.headers['content-type']).toBe('application/zip');
+  expect((zip.body as Buffer).toString('latin1').match(/slide-0\d\.jpg/g)).toHaveLength(6); // three names, each in the entry and the directory
+  // The first slide is 1080 square, with the red border in its corner.
+  const at = (zip.body as Buffer).indexOf(Buffer.from([0xff, 0xd8, 0xff]));
+  const first = sharp((zip.body as Buffer).subarray(at));
+  expect(await first.metadata()).toMatchObject({ width: 1080, height: 1080 });
+  const { data } = await first.raw().toBuffer({ resolveWithObject: true });
+  expect([data[0], data[1], data[2]].map((v) => Math.round(v / 32))).toEqual([8, 0, 0]);
+  expect((await a.get(`/api/zines/${c.id}/pdf`)).status).toBe(404);
+  const zine = (await a.post('/api/zines', {})).body;
+  expect(zine.kind).toBe('zine');
+  expect((await a.get(`/api/zines/${zine.id}/zip`)).status).toBe(404);
 });
