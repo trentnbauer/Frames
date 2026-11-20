@@ -10,14 +10,17 @@ import type { PhotoLite } from '../data';
 
 type Layout = 'one' | 'two' | 'spread' | 'blank';
 type ZinePage = { layout: Layout; photos: (number | null)[] };
-type PageSize = 'a5' | 'a6' | 'square';
+type PageSize = 'a3-fold' | 'a4-fold' | 'a5' | 'a6' | 'square';
 export type Zine = { id: number; name: string; pageSize: PageSize; margin: number; pages: ZinePage[]; pageCount: number; candidates: number[]; printedCount: number; coverId: number | null; updatedAt: string };
 export const PAGE_COUNTS = [8, 16, 24] as const;
 type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
 
 const SLOTS: Record<Layout, number> = { one: 1, two: 2, spread: 1, blank: 0 };
 const LAYOUTS: [Layout, string][] = [['one', 'One photo'], ['two', 'Two photos'], ['spread', 'Across two pages'], ['blank', 'Blank']];
-const SIZES: [PageSize, string, number][] = [['a5', 'A5', 148 / 210], ['a6', 'A6', 105 / 148], ['square', 'Square', 1]];
+// The sheet a zine is printed on, folded into 8 pages (A3 makes A6 pages, A4 makes A7). A5, A6 and Square are for zines made before, one page per PDF page.
+const SHEETS: [PageSize, string][] = [['a3-fold', 'A3 sheet'], ['a4-fold', 'A4 sheet']];
+const SIZES: [PageSize, string, number][] = [['a3-fold', 'A3 sheet', 105 / 148.5], ['a4-fold', 'A4 sheet', 74.25 / 105], ['a5', 'A5', 148 / 210], ['a6', 'A6', 105 / 148], ['square', 'Square', 1]];
+export const isSheet = (s: PageSize) => s === 'a3-fold' || s === 'a4-fold';
 const serif = "'Instrument Serif',Georgia,serif";
 
 /** The same page flow as the server's printedPages (server/src/zine.ts): the cover alone, spreads on facing pages, padded to `count` (or fours). */
@@ -56,13 +59,12 @@ export function ZineList({ heading }: { heading: React.ReactNode }) {
   const nav = useNavigate();
   const list = useApi<Zine[]>('/zines');
   const [err, setErr] = useState('');
-  const make = async (pageCount: number) => { try { const z = await api<Zine>('/zines', { body: { name: 'Untitled zine', pageCount } }); nav(`/zines/${z.id}`); } catch (e) { setErr((e as Error).message); } };
+  const make = async () => { try { const z = await api<Zine>('/zines', { body: { name: 'Untitled zine' } }); nav(`/zines/${z.id}`); } catch (e) { setErr((e as Error).message); } };
   return (
     <section aria-label="Zines">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flex: 1 }}>{heading}<span style={{ fontSize: 13, color: 'var(--muted)' }}>Printable booklets of your photographs</span></div>
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>New zine</span>
-        <div className="seg" role="group" aria-label="New zine with this many pages"><SegSlider />{PAGE_COUNTS.map((n) => <button key={n} type="button" onClick={() => void make(n)}>{n} pages</button>)}</div>
+        <button className="btn outline" onClick={() => void make()}>New zine</button>
       </div>
       {err && <p role="alert">{err}</p>}
       {list.error && <p role="alert">{list.error}</p>}
@@ -106,6 +108,11 @@ export function ZineEditor() {
   // A zine with a set number of pages keeps exactly that many: a page taken out is made up with an empty one at the end.
   const setPages = (pages: ZinePage[]) => save({ pages: z.pageCount ? fitTo(pages, z.pageCount) : pages });
   const placed = new Map<number, number[]>(); printedPages(z.pages, z.pageCount).forEach((p, i) => p.photos.forEach((id) => { if (id != null && p.layout !== 'right') placed.set(id, [...(placed.get(id) ?? []), i + 1]); }));
+  const setSheet = async (k: PageSize) => {
+    const next = fitTo(z.pages, 8), kept = new Set(next.flatMap((p) => p.photos));
+    if (z.pages.some((p) => p.photos.some((id) => id != null && !kept.has(id))) && !(await confirmAction(`Print on one sheet?\n\nA zine folded from one sheet has 8 pages. Photos on the pages past 8 come off them; they stay candidates.`, { confirm: 'Print on one sheet' }))) return;
+    save({ pageSize: k, pageCount: 8, pages: next });
+  };
   const setCount = async (n: number) => {
     const next = fitTo(z.pages, n), kept = new Set(next.flatMap((p) => p.photos));
     if (z.pages.some((p) => p.photos.some((id) => id != null && !kept.has(id))) && !(await confirmAction(`Make this zine ${n} pages?\n\nPhotos on the pages past ${n} come off them. They stay candidates.`, { confirm: `${n} pages` }))) return;
@@ -203,13 +210,17 @@ export function ZineEditor() {
             </section>
           ) : <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>Choose a page to set its layout: one photo, two photos, or one photo across two facing pages. Page 1 is the cover.</p>}
           <section aria-label="Zine settings" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="seg" role="group" aria-label="Number of pages"><SegSlider />{PAGE_COUNTS.map((n) => <button key={n} type="button" className={z.pageCount === n ? 'on' : ''} aria-pressed={z.pageCount === n} onClick={() => void setCount(n)}>{n} pages</button>)}</div>
-            <div className="seg" role="group" aria-label="Page size"><SegSlider />{SIZES.map(([k, label]) => <button key={k} type="button" className={z.pageSize === k ? 'on' : ''} aria-pressed={z.pageSize === k} onClick={() => save({ pageSize: k })}>{label}</button>)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--muted)' }}>Print on
+              <div className="seg" role="group" aria-label="Sheet to print on"><SegSlider />{SHEETS.map(([k, label]) => <button key={k} type="button" className={z.pageSize === k ? 'on' : ''} aria-pressed={z.pageSize === k} onClick={() => void setSheet(k)}>{label}</button>)}</div>
+            </div>
+            {!isSheet(z.pageSize) && <div className="seg" role="group" aria-label="Number of pages"><SegSlider />{PAGE_COUNTS.map((n) => <button key={n} type="button" className={z.pageCount === n ? 'on' : ''} aria-pressed={z.pageCount === n} onClick={() => void setCount(n)}>{n} pages</button>)}</div>}
             <label style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--muted)', accentColor: 'var(--text)' }}>Margin
               <input type="range" min={0} max={20} step={1} value={z.margin} onChange={(e) => setZ({ ...z, margin: Number(e.target.value) })} onPointerUp={(e) => save({ margin: Number((e.target as HTMLInputElement).value) })} onKeyUp={(e) => save({ margin: Number((e.target as HTMLInputElement).value) })} style={{ flex: 1 }} />
               <span className="mono" style={{ fontSize: 12, width: 32, textAlign: 'right', color: 'var(--text)' }}>{z.margin}%</span>
             </label>
-            <p className="faint" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>The PDF has one page per page, at 300 dpi, in reading order. Print it as a booklet from your PDF viewer.</p>
+            <p className="faint" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>{isSheet(z.pageSize)
+              ? `The PDF is one ${z.pageSize === 'a3-fold' ? 'A3' : 'A4'} sheet with the 8 pages placed for folding. Print it on one side at actual size. Crease it into eighths, cut along the grey line in the middle, then fold it into a booklet with page 1 on the front.`
+              : 'The PDF has one page per page, at 300 dpi, in reading order. Print it as a booklet from your PDF viewer.'}</p>
             <button className="btn" style={{ alignSelf: 'flex-start', height: 32, paddingInline: 12, color: 'var(--danger)' }} onClick={() => void removeZine()}><WarningIcon />Remove zine…</button>
           </section>
         </aside>
