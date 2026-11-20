@@ -12,6 +12,7 @@ import { Header, BottomNav, EnvBanner, ShellModals, TabBar, Footer } from './com
 import { Search } from './components/Search';
 import { ShortcutHelp } from './components/shortcuts';
 import { NewComposition } from './components/NewComposition';
+import { CompPicker } from './components/AddToComposition';
 import { UiContext, type NewCompositionStart } from './ui';
 import { TodoPage as Todo } from './screens/Todo';
 import { Home } from './screens/Home';
@@ -56,6 +57,7 @@ function Shell() {
   const [searching, setSearching] = useState(false);
   const [help, setHelp] = useState(false);
   const [creating, setCreating] = useState<NewCompositionStart | null>(null);
+  const [starting, setStarting] = useState<NewCompositionStart | null>(null); // the picker: what is being made
   const { refreshSummary, summary } = useStore();
   const loc = useLocation();
   const nav = useNavigate();
@@ -94,7 +96,7 @@ function Shell() {
       const map: Record<string, string> = { home: '/', shoots: '/shoots', library: '/library', compositions: '/collections', review: '/review', community: '/community', settings: '/settings', gear: '/gear', stats: '/stats', todo: '/todo', welcome: '/welcome', dupes: '/duplicates', compare: '/compare', editor: '/collections' };
       if (to === 'search') setSearching(true); else if (to === 'portfolio') void openPortfolio(); else if (to.startsWith('/')) nav(to); else if (map[to]) nav(map[to]);
     }}>
-    <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
+    <UiContext.Provider value={{ openSearch: () => setSearching(true), openNew: (s) => { setSearching(false); setStarting(s ?? {}); }, openComposition: (s) => { setSearching(false); setCreating(s ?? {}); } }}>
       {!inReview && <EnvBanner />}
       {!inReview && <div className="app-header"><Header /></div>}
       <div className="app-content"><Routes>
@@ -134,6 +136,7 @@ function Shell() {
       <UndoNotice />
       {searching && <Search onClose={() => setSearching(false)} />}
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
+      {starting && <CompPicker ids={starting.photoIds ?? []} fresh={starting} onClose={() => setStarting(null)} onDone={() => setStarting(null)} />}
       {creating && <NewComposition start={creating} onClose={() => setCreating(null)} />}
     </UiContext.Provider>
     </GoContext.Provider>

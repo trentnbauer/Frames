@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection } from '../data';
-import { useUi } from '../ui';
+import { useUi, type NewCompositionStart } from '../ui';
 import { Modal } from './Modal';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,26 +12,39 @@ import { useNavigate } from 'react-router-dom';
  * New: a name, then New composition opens with the photographs loaded.
  * It first asks what is being made: a composition (this picker), an Instagram carousel or a zine.
  */
-export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void }) {
+export function CompPicker({ ids, onClose, onDone, fresh, wall }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void; fresh?: NewCompositionStart; wall?: () => ReactNode }) {
   type Kind = 'wall' | 'carousel' | 'zine';
   const [kind, setKind] = useState<Kind | null>(null);
+  const [err, setErr] = useState('');
+  const { openComposition } = useUi();
+  const nav = useNavigate();
   const back = () => setKind(null);
   const what = ids.length === 1 ? 'this photo' : `${ids.length} photos`;
-  if (kind === 'wall') return <WallPicker ids={ids} onClose={onClose} onDone={onDone} onBack={back} />;
-  if (kind === 'carousel') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind="carousel" />;
-  if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} />;
+  const choose = async (k: Kind) => {
+    // Starting something new (fresh): a composition goes straight to New composition; with no photographs, a zine or carousel is made at once.
+    if (fresh && k === 'wall') { onClose(); openComposition(fresh); return; }
+    if (fresh && !ids.length) {
+      try { const made = await api<{ id: number }>('/zines', { body: { kind: k, ...(fresh.name ? { name: fresh.name } : {}) } }); onClose(); nav(`/zines/${made.id}`); } catch (e) { setErr((e as Error).message); }
+      return;
+    }
+    setKind(k);
+  };
+  if (kind === 'wall') return wall ? <>{wall()}</> : <WallPicker ids={ids} onClose={onClose} onDone={onDone} onBack={back} />;
+  if (kind === 'carousel') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind="carousel" name={fresh?.name} />;
+  if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} name={fresh?.name} />;
   // First, what is being made: the same photographs can go on a wall, into a carousel or into a zine.
   const kinds: [Kind, string, string][] = [['wall', 'Composition', 'Prints arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
   return (
-    <Modal title={`Add ${what} to…`} width={560} onClose={onClose}>
+    <Modal title={fresh ? 'What are you making?' : `Add ${what} to…`} sub={fresh && ids.length ? `With ${what}` : undefined} width={560} onClose={onClose}>
       <div role="group" aria-label="What to make" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {kinds.map(([k, label, sub]) => (
-          <button key={k} type="button" onClick={() => setKind(k)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 64, padding: '0 16px', borderRadius: 12, textAlign: 'left', boxShadow: 'inset 0 0 0 1px var(--outline)' }}>
+          <button key={k} type="button" onClick={() => void choose(k)} style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 64, padding: '0 16px', borderRadius: 12, textAlign: 'left', boxShadow: 'inset 0 0 0 1px var(--outline)' }}>
             <span style={{ flex: 1 }}><span style={{ display: 'block', fontSize: 15, fontWeight: 500 }}>{label}</span><span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)' }}>{sub}</span></span>
             <span aria-hidden style={{ color: 'var(--muted)' }}>›</span>
           </button>
         ))}
       </div>
+      {err && <div role="alert" className="reason" style={{ marginTop: 10 }}>{err}</div>}
     </Modal>
   );
 }
@@ -39,7 +52,7 @@ export function CompPicker({ ids, onClose, onDone }: { ids: number[]; onClose: (
 const BackRow = ({ onBack }: { onBack: () => void }) => <div style={{ paddingTop: 10 }}><button className="btn" onClick={onBack}>← Back</button></div>;
 
 /** Add the photographs to a zine or carousel as candidates, or start a new one with them; then open it to lay them out. */
-function ZinePicker({ ids, onClose, onBack, kind = 'zine' }: { ids: number[]; onClose: () => void; onBack: () => void; kind?: 'zine' | 'carousel' }) {
+function ZinePicker({ ids, onClose, onBack, kind = 'zine', name }: { ids: number[]; onClose: () => void; onBack: () => void; kind?: 'zine' | 'carousel'; name?: string }) {
   type Zine = { id: number; kind?: string; name: string; printedCount: number; coverId: number | null };
   const carousel = kind === 'carousel';
   const zines = useApi<Zine[]>('/zines');
@@ -49,7 +62,7 @@ function ZinePicker({ ids, onClose, onBack, kind = 'zine' }: { ids: number[]; on
   const go = async (z: Zine | null) => {
     setBusy(true); setErr('');
     try {
-      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { kind, photoIds: ids } });
+      const made = z ? await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { addCandidates: ids } }) : await api<Zine>('/zines', { body: { kind, photoIds: ids, ...(name ? { name } : {}) } });
       onClose(); nav(`/zines/${made.id}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
@@ -78,7 +91,7 @@ function ZinePicker({ ids, onClose, onBack, kind = 'zine' }: { ids: number[]; on
 /** Prints on a wall: tick existing compositions, or name a new one. */
 function WallPicker({ ids, onClose, onDone, onBack }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void; onBack: () => void }) {
   const colls = useApi<Collection[]>('/collections');
-  const { openNew } = useUi();
+  const { openComposition } = useUi();
   const [q, setQ] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,7 +122,7 @@ function WallPicker({ ids, onClose, onDone, onBack }: { ids: number[]; onClose: 
       onClose();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
-  const create = () => { if (!name.trim()) return; onClose(); openNew({ name: name.trim(), photoIds: ids }); };
+  const create = () => { if (!name.trim()) return; onClose(); openComposition({ name: name.trim(), photoIds: ids }); };
   const what = ids.length === 1 ? 'photograph' : `${ids.length} photographs`;
   const needle = q.trim();
   const label = needle ? (shown.length ? `${shown.length} matching ${shown.length === 1 ? 'composition' : 'compositions'}` : 'No composition matches') : ids.some((id) => open.some((c) => c.photoIds.includes(id))) ? 'Already in · most recent' : 'Recent compositions';
