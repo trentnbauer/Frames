@@ -476,6 +476,8 @@ export const MIGRATIONS: ((db: DB) => void)[] = [
   (db) => { addColumn(db, 'zines', 'page_count', 'INTEGER NOT NULL DEFAULT 0'); addColumn(db, 'zines', 'candidates', "TEXT NOT NULL DEFAULT '[]'"); },
   // An Instagram carousel is laid out like a zine (slides for pages), so it is kept with them: its kind, and the colour round its photographs.
   (db) => { addColumn(db, 'zines', 'kind', "TEXT NOT NULL DEFAULT 'zine'"); addColumn(db, 'zines', 'colour', "TEXT NOT NULL DEFAULT 'ffffff'"); },
+  // Zines and carousels share a composition's Progress → Review → Done stages; Done is read-only.
+  (db) => { addColumn(db, 'zines', 'stage', "TEXT NOT NULL DEFAULT 'progress'"); },
 ];
 
 /** The id of the hidden shoot that holds photographs that belong to no photoshoot, made the first time it is needed. */
