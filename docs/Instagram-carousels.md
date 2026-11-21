@@ -1,8 +1,4 @@
-# Wiki draft: Instagram carousel
-
-A new section for the *Compositions* guide (or a page of its own linked from it):
-
-## Instagram carousels
+# Instagram carousels
 
 Carousels are listed on the **Compositions** page, under your compositions and zines. Start one there with **New carousel**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Instagram carousel**, and either **Create** a new carousel or pick one you already have. A new carousel starts with one slide per photo, in the order you picked them. Photos added to an existing carousel become candidates.
 
@@ -23,4 +19,4 @@ A carousel opens in the same editor as a composition and a zine: the name and bi
 
 The slides are made from each photograph's preview (2400 px on its longest side by default, see *Preview quality*), which is already the right way up and developed from RAW. Your originals are never changed. The bin by the name removes the carousel; your photographs stay in Frames.
 
-Posting to Instagram from Frames is not available yet (issue #489).
+Posting to Instagram from Frames is not available yet ([issue #489](https://github.com/trentnbauer/Frames/issues/489)).
