@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { FOLD_ORDER, imposeFold, pairBoxes, parsePages, printedPages, renderPage, type ZinePage } from './zine.js';
+import { FOLD_ORDER, imposeFold, pairBoxes, parsePages, printedPages, renderPage, textLayer, threeBoxes, type ZinePage } from './zine.js';
 import { api, cleanup, jpg, makeEnv, svg, type Env } from './testutil.js';
 
 let env: Env, a: ReturnType<typeof api>, ids: number[];
@@ -30,21 +30,62 @@ it('puts a spread on facing pages, adding a blank page before it when needed, an
 it('refuses pages it cannot use and fills or trims photo slots to the layout', () => {
   expect(parsePages('x')).toMatch(/100/);
   expect(parsePages(Array(101).fill({ layout: 'one', photos: [] }))).toMatch(/100/);
-  expect(parsePages([{ layout: 'three', photos: [] }])).toMatch(/layout/);
+  expect(parsePages([{ layout: 'four', photos: [] }])).toMatch(/layout/);
+  expect(parsePages([{ layout: 'three', photos: [1, 2, 3, 4] }])).toMatch(/number/);
   expect(parsePages([{ layout: 'one', photos: ['a'] }])).toMatch(/number/);
   expect(parsePages([{ layout: 'two', photos: [5] }, { layout: 'blank', photos: [5] }])).toEqual([{ layout: 'two', photos: [5, null] }, { layout: 'blank', photos: [] }]);
 });
 
 it('splits a spread so the two halves meet at the fold', async () => {
   const file = path.join(os.tmpdir(), `zine-half-${process.pid}.png`);
-  // Left half red, right half blue: each printed page is one colour, edge to edge.
+  // Left half red, right half blue: each printed page is one colour up to the fold, and keeps the paper margin on its outer edge.
   await sharp({ create: { width: 400, height: 200, channels: 3, background: '#ff0000' } }).composite([{ input: { create: { width: 200, height: 200, channels: 3, background: '#0000ff' } }, left: 200, top: 0 }]).png().toFile(file);
   const colour = async (b: Buffer) => { const { data, info } = await sharp(b).raw().toBuffer({ resolveWithObject: true }); const at = (x: number) => [...data.subarray((Math.floor(info.height / 2) * info.width + x) * 3, (Math.floor(info.height / 2) * info.width + x) * 3 + 3)].map((v) => Math.round(v / 255)); return [at(0), at(info.width - 1)]; };
   const left = await renderPage({ layout: 'left', photos: [1], entry: 0 }, 'square', 6, () => file);
   const right = await renderPage({ layout: 'right', photos: [1], entry: 0 }, 'square', 6, () => file);
-  expect(await colour(left)).toEqual([[1, 0, 0], [1, 0, 0]]);
-  expect(await colour(right)).toEqual([[0, 0, 1], [0, 0, 1]]);
+  expect(await colour(left)).toEqual([[1, 1, 1], [1, 0, 0]]);
+  expect(await colour(right)).toEqual([[0, 0, 1], [1, 1, 1]]);
   fs.rmSync(file, { force: true });
+});
+
+it('reads three-photo pages with their arrangement, and page text', () => {
+  const text = { on: true, body: 'Field Notes', pos: 'bottom', font: 'serif' };
+  expect(parsePages([{ layout: 'three', photos: [5], arrange: 'landscape-top', text }])).toEqual([{ layout: 'three', photos: [5, null, null], arrange: 'landscape-top', text }]);
+  expect(parsePages([{ layout: 'one', photos: [], arrange: 'sideways' }])).toMatch(/portraits-top/);
+  expect(parsePages([{ layout: 'one', photos: [], text: { ...text, pos: 'left' } }])).toMatch(/top, middle or bottom/);
+  expect(parsePages([{ layout: 'one', photos: [], text: { ...text, body: 'x'.repeat(281) } }])).toMatch(/280/);
+  expect(parsePages([{ layout: 'one', photos: [], text: null }])).toEqual([{ layout: 'one', photos: [null] }]);
+});
+
+it('puts the two portraits and the landscape of a three-photo page in halves, either way up', () => {
+  // [portrait, portrait, landscape]: a 100 × 200 page with a margin of 10.
+  expect(threeBoxes(100, 200, 10)).toEqual([[10, 10, 35, 85], [55, 10, 35, 85], [10, 105, 80, 85]]);
+  expect(threeBoxes(100, 200, 10, 'landscape-top')).toEqual([[10, 105, 35, 85], [55, 105, 35, 85], [10, 10, 80, 85]]);
+});
+
+it('draws page text only when it is on, escaped, with a paper band over photos', () => {
+  const t = { on: true, body: 'Fish & <chips>', pos: 'top' as const, font: 'mono' as const };
+  expect(textLayer({ ...t, on: false }, 100, 100, '#ffffff', false)).toBeNull();
+  expect(textLayer({ ...t, body: '  ' }, 100, 100, '#ffffff', false)).toBeNull();
+  const svgText = textLayer(t, 1000, 1400, '#ffffff', true)!.toString();
+  expect(svgText).toContain('FISH &amp; &lt;CHIPS&gt;');
+  expect(svgText).toContain('<rect');
+  expect(svgText).toContain('fill="#1a1a1a"');
+  expect(textLayer(t, 1000, 1400, '#000000', false)!.toString()).toContain('fill="#ffffff"');
+});
+
+it('keeps a zine at a stage, and refuses changes other than the stage while it is done', async () => {
+  const id = (await a.post('/api/zines', { name: 'Stages', photoIds: ids, pageCount: 8 })).body.id;
+  expect((await a.get('/api/zines')).body[0].stage).toBe('progress');
+  expect((await a.put(`/api/zines/${id}`, { stage: 'finished' })).status).toBe(400);
+  expect((await a.put(`/api/zines/${id}`, { stage: 'done' })).body.stage).toBe('done');
+  const locked = await a.put(`/api/zines/${id}`, { name: 'Renamed' });
+  expect(locked.status).toBe(409);
+  expect(locked.body.error).toMatch(/Progress or Review/);
+  // Reopening and changing in one request is allowed; moving to Done along with a change is not.
+  expect((await a.put(`/api/zines/${id}`, { stage: 'review', name: 'Renamed' })).body).toMatchObject({ stage: 'review', name: 'Renamed' });
+  expect((await a.put(`/api/zines/${id}`, { stage: 'done', margin: 3 })).status).toBe(409);
+  expect((await a.get(`/api/zines/${id}/pdf`)).status).toBe(200);
 });
 
 it('saves a zine and exports it as a PDF with one page per printed page', async () => {
