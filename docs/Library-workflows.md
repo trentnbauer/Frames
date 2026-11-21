@@ -9,4 +9,4 @@
 - [Import history](Import-history): transfer/processing results and retry limits.
 - [Wishlist history](Wishlist-history): bought/declined decisions and restoration.
 
-All workflow records are private to the signed-in person's library. Recovery and import history start with new removals/runs; existing deleted ratings cannot be reconstructed. See the [manual testing checklist](https://github.com/trentnbauer/Frames/blob/main/docs/testing/library-workflows.md).
+All workflow records are private to the signed-in person's library. Recovery and import history start with new removals/runs; existing deleted ratings cannot be reconstructed. See the [manual testing checklist](Testing-library-workflows).
