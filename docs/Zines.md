@@ -1,8 +1,4 @@
-# Wiki draft: Zines
-
-A new guide page, linked from the guide index:
-
-## Zines
+# Zines
 
 A zine is a printable booklet. Zines are listed on the **Compositions** page, under your compositions. Start one there with **New zine**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Zine**. Start a new zine, or pick an existing one to add the photos to.
 
@@ -12,7 +8,7 @@ The photographs you add become **candidates**, as in a composition. They're show
 
 A zine is printed on **one sheet**, A3 or A4, and folds into **8 pages**. Removing a page adds an empty one at the end; **Undo** in the message puts it back. Changing a page to *Across two pages* can push pages off the end; their photos stay candidates.
 
-### Pages and spreads
+## Pages and spreads
 
 The wall shows the zine in book order, the way a reader sees it: page 1, the cover, on its own on the right, then each pair of facing pages, two spreads a row, then the back cover on its own on the left.
 
@@ -28,7 +24,7 @@ Click a photograph on the chosen page, or press **Choose** or **Change** in the 
 
 **Text.** Each page can carry a title or caption: turn **Text** on in the panel, type it (up to 280 characters), and choose **Top**, **Middle** or **Bottom** and **Serif** or **Mono**. Over a photograph the text sits on a band of the paper colour so it stays readable. Turning text off hides it but keeps what you typed. On a spread, the text goes on the left page. In the PDF the text uses Instrument Serif and IBM Plex Mono if they are installed on the server, otherwise Georgia and a plain monospace font.
 
-### Size, margin and the PDF
+## Size, margin and the PDF
 
 - **Print on**: an A3 sheet (8 A6 pages, 105 × 148 mm) or an A4 sheet (8 A7 pages, 74 × 105 mm). Zines made before this change keep their page size (A5, A6 or Square), with 8, 16 or 24 pages, and print one page per PDF page.
 - **Border colour**: white, black or paper. It is the paper colour of every page, in the editor and the PDF. On black, page text is white.

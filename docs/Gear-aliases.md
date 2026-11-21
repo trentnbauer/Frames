@@ -1,0 +1,3 @@
+# Gear aliases
+
+**Gear aliases.** Gear → **Gear name aliases** maps an exact metadata name to an owned camera or lens. Preview existing matches before confirming. Matching ignores case, spaces and punctuation; camera and lens aliases remain separate. Raw strings stay in private photo metadata and original EXIF remains untouched. Owned names drive display, discovery, filters and counts for existing and future imports. Renaming owned gear updates its aliases; removing an alias returns to the retained raw name. Adding/removing aliases supports Undo. Conflicting assignments are refused. The blocklist wins over both raw and canonical names. Removing a blocklist entry permits retained raw values to reappear when gear metadata is next resolved.

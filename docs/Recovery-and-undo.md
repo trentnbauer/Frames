@@ -1,0 +1,7 @@
+# Recovery and undo
+
+**Recently removed & Undo.** Library links to **Recently removed & changes**. Removal hides the photo from active library queries, review, counts and public links, but retains a private metadata, tag, description and personal-rating snapshot. Originals are never deleted or moved, including uploads and cloud copies. Restore rebuilds previews when the same original is available; disconnected originals restore as missing. A replaced original is refused. Recovery defaults to 30 days and can be changed to 1–365 days on that screen; reducing it expires older entries. Expiry removes recovery metadata and its thumbnail, never the original. Existing removals made before this update cannot recover lost ratings. Restoring does not reactivate share links, restore composition membership, or reconnect child variants. The latest 500 removed entries are listed. Snapshots live in the library database and are included in its backups.
+
+Manual metadata edits, bulk edits, review-date changes, owned-gear edits and alias changes offer **Undo**, also available in the changes list for 30 days. Undo checks original identity and later field/tag changes before making any writes; conflicting newer work is preserved. It is not a general filesystem or server-settings rollback.
+
+A removed photograph keeps a small copy for the recovery period, shown next to its Restore button. The copy is deleted with the entry.

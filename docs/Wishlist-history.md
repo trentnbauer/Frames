@@ -1,0 +1,3 @@
+# Wishlist history
+
+**Wishlist history.** Gear → **Wishlist history** shows Bought and Didn't buy decisions without expanding the compact active wishlist. Purchases save the original estimate, paid amount, currency, date and listing with the owned-item transition. Edit paid/date/notes later; currency and estimate stay as recorded. Declining retains the wish's details. Restore either kind to the wishlist; Undo a purchase removes its owned item only if it is unchanged and unused by photos or aliases. Otherwise restore the wish while keeping owned gear. Restores are single-use and join the end of the active priority list. Home shows only active wishes. The latest 200 decisions per kind are listed.
