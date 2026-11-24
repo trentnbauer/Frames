@@ -5,6 +5,7 @@ import { AddPhotosModal } from '../components/AddPhotos';
 import { CompPicker } from '../components/AddToComposition';
 import { usePinchColumns } from '../thumbZoom';
 import { setPhotoWalk } from '../photoWalk';
+import { useScrollRestore } from '../useScrollRestore';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { BulkEdit } from '../components/BulkEdit';
 import { Sheet } from '../components/Sheet';
@@ -42,6 +43,7 @@ export function MobileLibrary() {
   if (filter === 'loved') server.set('rating', '4+');
   const list = useApi<{ total: number; photos: PhotoLite[] }>(`/photos?${server.toString()}`);
   const shoots = useApi<Shoot[]>('/shoots');
+  useScrollRestore(!!list.data && !!shoots.data);
   const aiIds = useMemo(() => new Set(todoItems.filter((i) => i.key === 'ai-tags' || i.key === 'ai-description').flatMap((i) => i.ids ?? [])), [todoItems]);
   const photos = (list.data?.photos ?? []).filter((p) => (filter === 'ai' ? aiIds.has(p.id) : filter === 'noplace' ? p.lat === null && !p.place : filter === 'noshoot' ? p.orphaned : true));
   const shootName = (id: number) => shoots.data?.find((s) => s.id === id)?.name ?? 'Photos';
