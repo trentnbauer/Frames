@@ -1,5 +1,5 @@
 import { usePinchColumns } from '../thumbZoom';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import { AddPhotosModal } from '../components/AddPhotos';
@@ -9,6 +9,7 @@ import type { PhotoLite, Shoot } from '../data';
 import { reviewUrl } from '../reviewScope';
 import { useStore } from '../store';
 import { primaryBtn } from './ui';
+import { useScrollRestore } from '../useScrollRestore';
 
 /** One photoshoot on a phone: a cover collage, its name and stats, Review due, Rename, Protect from deletion, and its photographs. */
 export function MobileShoot() {
@@ -18,6 +19,8 @@ export function MobileShoot() {
   const { settings, refreshSummary } = useStore();
   const shoot = useApi<Shoot>(`/shoots/${id}`);
   const list = useApi<{ photos: PhotoLite[] }>(`/photos?shoot=${id}`);
+  const box = useRef<HTMLDivElement>(null); // this page scrolls inside its own panel, not the window
+  useScrollRestore(!!shoot.data && !!list.data, box);
   const [sheet, setSheet] = useState<null | 'more' | 'rename' | 'delete'>(null);
   const [sharing, setSharing] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -35,7 +38,7 @@ export function MobileShoot() {
   const pct = Math.round(s.reviewPct);
 
   return (
-    <div className="ppage flush" data-screen-label="Shoot" style={{ padding: 0 }}>
+    <div ref={box} className="ppage flush" data-screen-label="Shoot" style={{ padding: 0 }}>
       <div style={{ padding: 'max(16px, env(safe-area-inset-top)) 16px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={() => { if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav('/library?view=shoots'); }} aria-label="Back" style={{ background: 'var(--surface)', borderRadius: '50%', width: 44, height: 44, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 18 }}>←</button>

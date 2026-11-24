@@ -14,6 +14,7 @@ import { ZineList, type Zine } from './Zines';
 import { SegSlider } from '../components/SegSlider';
 import { Kbd, useShortcuts } from '../components/shortcuts';
 import { useToast } from '../desktop/parts';
+import { useScrollRestore } from '../useScrollRestore';
 
 type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
@@ -48,6 +49,7 @@ function DesktopCompositions() {
   const colls = useApi<Collection[]>('/collections');
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const sug = useApi<SuggestedSet[]>('/collections/suggestions');
+  useScrollRestore(!!colls.data && !!zines.data && !!lib.data && !!sug.data); // the suggestion card sits above the list
   const [si, setSi] = useState(0);
   const byId = new Map((lib.data?.photos ?? []).map((p) => [p.id, p]));
   const all = colls.data ?? [];

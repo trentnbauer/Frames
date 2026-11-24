@@ -9,6 +9,7 @@ import { useStore } from '../store';
 import { useUi } from '../ui';
 import { DeleteShootDialog, JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
 import { isUntitled } from './LibraryPage';
+import { useScrollRestore } from '../useScrollRestore';
 
 const mono = "'IBM Plex Mono',monospace";
 const key = { font: `400 11px ${mono}`, opacity: 0.55 } as const;
@@ -22,6 +23,7 @@ export function ShootPage() {
   const shoot = useApi<Shoot>(`/shoots/${id}`);
   const list = useApi<{ photos: PhotoLite[] }>(`/photos?shoot=${id}`);
   const all = useApi<Shoot[]>('/shoots');
+  useScrollRestore(!!shoot.data && !!list.data);
   const [menu, setMenu] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [confirm, setConfirm] = useState(false);

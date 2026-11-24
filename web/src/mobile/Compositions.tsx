@@ -8,6 +8,7 @@ import { KINDS, STAGES, listOrder, useCompositionsQuery, zineKindOf, type ListKi
 import { useUi } from '../ui';
 import { MiniWall } from './MiniWall';
 import { Eyebrow, Seg } from './ui';
+import { useScrollRestore } from '../useScrollRestore';
 
 type Idea = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: (PhotoLite & { ar: number })[] };
 const STAGE_LABEL = { progress: ['progress', 'Progress'], review: ['review', 'Review'], done: ['done', 'Done'] } as const;
@@ -22,6 +23,7 @@ export function MobileCompositions() {
   const colls = useApi<Collection[]>('/collections');
   const zines = useApi<Zine[]>('/zines');
   const sug = useApi<Idea[]>('/collections/suggestions');
+  useScrollRestore(!!colls.data && !!zines.data && !!sug.data); // the suggestion card sits above the list
   const [si, setSi] = useState(0);
   const [err, setErr] = useState('');
   const needle = q.trim().toLowerCase();

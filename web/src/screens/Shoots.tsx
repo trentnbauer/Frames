@@ -17,6 +17,7 @@ import { SharePanel } from '../components/SharePanel';
 import { MoveToShoot } from '../components/MoveToShoot';
 import { Modal } from '../components/Modal';
 import { ShootDate } from '../components/ShootDate';
+import { useScrollRestore } from '../useScrollRestore';
 
 type Conn = { id: string; provider: string; account: string; folderId: unknown; enabled: boolean; needsReconnect?: boolean };
 type ScanResult = { shootId?: number | null; imported: number; duplicates: number; shootName: string | null; photoIds?: number[] };
@@ -73,6 +74,7 @@ function DesktopShoots() {
   const lib = useApi<{ photos: PhotoLite[] }>('/photos');
   const cloud = useApi<{ connections: Conn[] }>(status.data?.storage.cloud || status.data?.cloudProviders.length ? '/cloud' : null);
   const shootPhotos = useApi<{ photos: PhotoLite[] }>(sid ? `/photos?shoot=${sid}&order=oldest` : null);
+  useScrollRestore(!shoots.loading && !pending.loading && !sugg.loading && (!sid || !shootPhotos.loading));
   const [shareId, setShareId] = useState<number | null>(null);
   const [moving, setMoving] = useState<{ ids: number[]; done: () => void } | null>(null);
   const [moveErr, setMoveErr] = useState('');
