@@ -19,7 +19,7 @@
   "dependencies": {
     "@fastify/multipart": "^10.1.8",
     "@fastify/rate-limit": "^11.2.2",
-    "@fastify/static": "^10.1.11",
+    "@fastify/static": "^10.1.12",
     "@simplewebauthn/server": "^14.1.0",
     "better-sqlite3": "^11.10.0",
     "exifr": "^7.1.3",
