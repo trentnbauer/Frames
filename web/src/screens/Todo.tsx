@@ -79,7 +79,8 @@ function TodoTasks() {
   useEffect(() => {
     if (!p) return;
     setCam([p.camera, p.lens, p.aperture ? `f/${p.aperture}` : '', p.shutter, p.iso ? String(p.iso) : '', p.film]);
-    setDesc(p.description || '');
+    // Accepting an AI description starts from the suggestion itself, so the answer is just Accept or Reject (or edit it first).
+    setDesc(p.description || (r === 'ai-desc' ? p.aiSuggestion?.description ?? '' : ''));
     setNotes({ light: p.aiSuggestion?.lighting ?? '', mood: p.aiSuggestion?.mood ?? '' });
   }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -137,7 +138,9 @@ function TodoTasks() {
     if (cam[5] !== p.film) body.film = cam[5];
     const ap = Number(cam[2].replace(/^f\//i, '')); if (cam[2] && ap && ap !== p.aperture) body.aperture = ap;
     const iso = Number(cam[4]); if (cam[4] && iso && iso !== p.iso) body.iso = iso;
-    if (desc !== (p.description || '')) body.description = desc;
+    const suggested = r === 'ai-desc' && !!desc && desc === p.aiSuggestion?.description;
+    if (suggested) body.acceptAiDescription = true; // the photo page's own Accept: it also drops the ✦ mark
+    else if (desc !== (p.description || '')) body.description = desc;
     if (notes.light !== (p.aiSuggestion?.lighting ?? '')) body.lighting = notes.light;
     if (notes.mood !== (p.aiSuggestion?.mood ?? '')) body.mood = notes.mood;
     if (Object.keys(body).length) await api(`/photos/${p.id}`, { method: 'PATCH', body });
@@ -148,6 +151,7 @@ function TodoTasks() {
     if (answered) setDone((d) => d + 1);
     skip(); reload();
   };
+  const reject = async () => { if (!p) return; await api(`/photos/${p.id}`, { method: 'PATCH', body: { rejectAiDescription: true } }); setDone((d) => d + 1); skip(); reload(); };
   const camMissing = cam.filter((x) => !x).length;
   const meta = taskMeta(r!)!;
   const v = {
@@ -166,7 +170,8 @@ function TodoTasks() {
     tAiLabel: busy ? 'Analysing…' : '✦ Analyse with AI', tAiFg: busy ? 'var(--text2)' : 'var(--ai-active)', tAiSpin: null,
     tAnalyze: async () => { if (busy || !p || !ai) return; setBusy(true); try { await api(`/photos/${p.id}/recheck`, { body: {} }); photo.reload(); } finally { setBusy(false); } },
     openMap: () => setMapOpen(true), mapLabel: p && p.lat !== null && p.lon !== null ? p.place.trim() || `On the map · ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : 'Pick on the map',
-    tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: () => { const sg = p?.aiSuggestion?.description; if (sg) setDesc(sg); },
+    tDesc: desc, onDesc: (e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value), tDescHint: 'Describe the photograph in a sentence', useDesc: r === 'ai-desc' ? null : () => { const sg = p?.aiSuggestion?.description; if (sg) setDesc(sg); },
+    tDescLabel: r === 'ai-desc' ? '✦ Suggested description' : 'Description', tSaveLabel: r === 'ai-desc' ? 'Accept' : 'Save & next', tReject: r === 'ai-desc' ? reject : null,
     addTag: (name: string) => tagAct(name, 'tag', 'accept'),
     skipTodo: skip, saveTodo: () => save(),
   };
