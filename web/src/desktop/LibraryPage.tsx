@@ -9,6 +9,7 @@ import { LibraryMore } from '../components/LibraryMore';
 import { useLibraryFilters } from '../components/LibraryFilters';
 import type { PhotoLite, Shoot } from '../data';
 import { JustifiedGrid, Lock, PickedBar, isDue, serif, useToast } from './parts';
+import { useScrollRestore } from '../useScrollRestore';
 
 const mono = "'IBM Plex Mono',monospace";
 const SHOOT_CHIPS: [string, string][] = [['due', 'Has photos due'], ['prot', 'Protected'], ['untitled', 'Untitled']];
@@ -50,6 +51,7 @@ export function LibraryPage() {
   useEffect(() => { setLibraryReturn(sp.toString()); }, [sp]);
   const filters = useLibraryFilters(shoots.data ?? []);
   const pending = useApi<{ count: number }>('/library/pending');
+  useScrollRestore(!photos.loading && !shoots.loading && !pending.loading); // the new-files banner sits above the list
   const toast = useToast();
   const all = shoots.data ?? [];
   const list = photos.data?.photos ?? [];
