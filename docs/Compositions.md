@@ -1,6 +1,8 @@
 # Compositions
 
-A composition is a wall of prints planned to scale: print sizes, frames, mats, crops, stacked photographs and the candidates that might fill them. Open **Compositions** to see **Progress → Review → Done**, shown with **circle → diamond → square**. The list title, New composition, workflow tabs, search and sort stay visible below the app header while scrolling.
+A composition is a wall of prints planned to scale: print sizes, frames, mats, crops, stacked photographs and the candidates that might fill them. Open **Compositions** to see **Progress → Review → Done**, shown with **circle → diamond → square**.
+
+On a computer or tablet, the bar under the title chooses what is listed: **Frames**, **Zines** or **Carousels** (each with its count), a search, the stage (**Progress**, **Review**, **Done**, with how many of the chosen kind are in each), **Created** or **Updated** order, and the arrow for newest or oldest first. Created follows the order things were made in. The choices stay in the page address, so coming back from a composition shows the same list. The title, New composition and this bar stay visible below the app header while scrolling. On the Zines or Carousels view, the main button (and N) reads **New zine** or **New carousel** and starts one of those. On a phone, zines and carousels are listed under the compositions.
 
 Composition cards show the saved layout, orientation, frames, mats, crops and both photographs in stacked prints, fitted closely to the preview. Candidate grids use thumbnails; the wall uses larger previews.
 

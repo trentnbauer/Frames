@@ -1,6 +1,6 @@
 # Instagram carousels
 
-Carousels are listed on the **Compositions** page, under your compositions and zines. Start one there with **New carousel**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Instagram carousel**, and either **Create** a new carousel or pick one you already have. A new carousel starts with one slide per photo, in the order you picked them. Photos added to an existing carousel become candidates.
+Carousels are listed on the **Compositions** page: choose **Carousels** in the bar under the title (on a phone, they are listed under your compositions and zines). Start one there with **New carousel**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Instagram carousel**, and either **Create** a new carousel or pick one you already have. A new carousel starts with one slide per photo, in the order you picked them. Photos added to an existing carousel become candidates.
 
 A carousel opens in the same editor as a composition and a zine: the name and bin on the left, **Progress · Review · Done** on the right, the slides on the wall, the panel beside it and the candidates below. Photos past the 20th slide stay candidates, and the candidates say how many didn't fit.
 

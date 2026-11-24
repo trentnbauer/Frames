@@ -20,7 +20,7 @@ export type Arrange = 'portraits-top' | 'landscape-top';
 type ZinePage = { layout: Layout; photos: (number | null)[]; text?: PageText; arrange?: Arrange };
 type PageSize = 'a3-fold' | 'a4-fold' | 'a5' | 'a6' | 'square' | '4:5' | '3:4' | '1:1';
 type Kind = 'zine' | 'carousel';
-export type Zine = { id: number; kind: Kind; colour: string; name: string; pageSize: PageSize; margin: number; pages: ZinePage[]; pageCount: number; candidates: number[]; printedCount: number; coverId: number | null; stage: CompositionStageName; updatedAt: string };
+export type Zine = { id: number; kind: Kind; colour: string; name: string; pageSize: PageSize; margin: number; pages: ZinePage[]; pageCount: number; candidates: number[]; printedCount: number; coverId: number | null; stage: CompositionStageName; createdAt?: string; updatedAt: string };
 export const PAGE_COUNTS = [8, 16, 24] as const;
 type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
 
@@ -90,22 +90,27 @@ const sizeLabel = (s: PageSize) => SIZES.find(([k]) => k === s)?.[1] ?? 'A5';
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** The zines, or the carousels, as a section of Compositions, with New. */
-export function ZineList({ heading, kind = 'zine' }: { heading: React.ReactNode; kind?: Kind }) {
+/** Zines or carousels. With `stage`, `find` or `order` (the Compositions bar), only those that match, in that order, and no heading row. */
+export function ZineList({ heading, kind = 'zine', stage, find = '', order }: { heading?: React.ReactNode; kind?: Kind; stage?: CompositionStageName; find?: string; order?: (a: Zine, b: Zine) => number }) {
   const nav = useNavigate();
   const list = useApi<Zine[]>('/zines');
   const [err, setErr] = useState('');
   const carousel = kind === 'carousel', what = carousel ? 'carousel' : 'zine';
   const make = async () => { try { const z = await api<Zine>('/zines', { body: { kind } }); nav(`/zines/${z.id}`); } catch (e) { setErr((e as Error).message); } };
-  const mine = list.data?.filter((z) => (z.kind ?? 'zine') === kind);
+  const ofKind = list.data?.filter((z) => (z.kind ?? 'zine') === kind);
+  const needle = find.trim().toLowerCase();
+  const mine = ofKind?.filter((z) => (!stage || (z.stage ?? 'progress') === stage) && (!needle || z.name.toLowerCase().includes(needle)));
+  if (order) mine?.sort(order);
   return (
     <section aria-label={carousel ? 'Carousels' : 'Zines'}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+      {heading && <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flex: 1 }}>{heading}<span style={{ fontSize: 13, color: 'var(--muted)' }}>{carousel ? 'Instagram carousels of your photographs' : 'Printable booklets of your photographs'}</span></div>
         <button className="btn outline" onClick={() => void make()}>New {what}</button>
-      </div>
+      </div>}
       {err && <p role="alert">{err}</p>}
       {list.error && <p role="alert">{list.error}</p>}
-      {mine?.length === 0 && <p className="muted" style={{ maxWidth: 520, lineHeight: 1.5 }}>No {what}s yet. Start one here, or select photographs in the Library, choose <b style={{ fontWeight: 500 }}>Add to composition…</b>, then <b style={{ fontWeight: 500 }}>{carousel ? 'Instagram carousel' : 'Zine'}</b>.</p>}
+      {ofKind?.length === 0 && <p className="muted" style={{ maxWidth: 520, lineHeight: 1.5 }}>No {what}s yet. Start one here, or select photographs in the Library, choose <b style={{ fontWeight: 500 }}>Add to composition…</b>, then <b style={{ fontWeight: 500 }}>{carousel ? 'Instagram carousel' : 'Zine'}</b>.</p>}
+      {!!ofKind?.length && mine?.length === 0 && <p className="muted">No {what}s here. Try another stage or search.</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 24 }}>
         {mine?.map((z) => (
           <button key={z.id} onClick={() => nav(`/zines/${z.id}`)} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left' }}>
