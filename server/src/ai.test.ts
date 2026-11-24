@@ -11,7 +11,7 @@ const DESCRIPTIONS = [
   { description: 'Sunlit desert dunes with long shadows', subjects: ['desert', 'dunes'], tags: ['warm', 'minimal'] },
   { description: 'Dense green forest after rain', subjects: ['forest'], tags: ['green', 'moody'] },
 ];
-const seen = { chat: 0, embed: 0, auth: [] as string[], xkeys: [] as string[], images: 0, paths: [] as string[], failNext: 0 };
+const seen = { chat: 0, embed: 0, auth: [] as string[], xkeys: [] as string[], images: 0, paths: [] as string[], failNext: 0, prompts: [] as string[], temps: [] as unknown[] };
 const vec = (text: string) => {
   const v = new Array(24).fill(0);
   for (const w of text.toLowerCase().split(/[^a-z]+/).filter(Boolean)) { let h = 0; for (const c of w) h = (h * 31 + c.charCodeAt(0)) % 24; v[h] += 1; }
@@ -35,6 +35,8 @@ beforeAll(async () => {
       const hasImage = !!j.messages?.[0]?.images?.length || Array.isArray(chatText);
       if (req.url === '/api/chat' || req.url === '/v1/chat/completions' || req.url === '/v1/messages' || req.url === '/v1beta/openai/chat/completions') {
         seen.chat++;
+        seen.prompts.push(prompt);
+        if (req.url === '/api/chat') seen.temps.push(j.options?.temperature);
         if (hasImage) seen.images++;
         let out: unknown;
         if (prompt.startsWith('Convert this photo-library search')) out = { text: 'fog', subjects: ['harbour'], exclude: ['people'], colours: [], time: { from: '05:00', to: '08:00' } };
@@ -119,6 +121,10 @@ describe('local provider', () => {
     const r = await A.raw('POST', '/api/ai/run?wait=1', {});
     expect(r.body).toMatchObject({ enabled: true, pending: 0, done: 3, failed: 0 });
     expect(seen.images).toBe(3);
+    // The description must be factual (a colour photo once came back as "black and white ... at dusk"), from a local model run without randomness.
+    expect(seen.prompts.find((t) => t.startsWith('You are cataloguing'))).toMatch(/only if it has no colour at all.*Do not state the time of day/s);
+    expect(seen.temps.length).toBeGreaterThan(0);
+    expect(seen.temps.every((t) => t === 0)).toBe(true);
     const p = (await photos())[0];
     const full = (await A.get(`/api/photos/${p.id}`)).body;
     expect(full.aiStatus).toBe('done');
