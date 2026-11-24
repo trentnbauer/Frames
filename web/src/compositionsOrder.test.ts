@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listOrder } from './screens/Compositions';
+import { listOrder } from './screens/compositionsList';
 
 describe('Compositions list order', () => {
   const items = [{ id: 1, updatedAt: '2026-03-01' }, { id: 3, updatedAt: '2026-01-01' }, { id: 2, updatedAt: '2026-02-01' }];
