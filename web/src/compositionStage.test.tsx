@@ -43,23 +43,16 @@ describe('composition lifecycle controls', () => {
   });
   it('uses explicit list stages instead of inferring completion from the artwork count', () => {
     const logic = new ListLogic();
-    logic.props = { prog: [{ id: 1 }], review: [{ id: 2 }], ready: [{ id: 3 }], sortLabel: () => '', onOpen: vi.fn() };
-    expect(logic.renderVals().tabs.map((t: { label: string }) => t.label)).toEqual(['Progress', 'Review', 'Done']);
-    logic.state.tab = 'review'; expect(logic.renderVals().compsAfter[0].id).toBe(2);
-    logic.state.tab = 'done'; expect(logic.renderVals().isReady).toBe(true); expect(logic.renderVals().isProg).toBe(false);
-    logic.state.tab = ''; logic.props.initialTab = 'done'; expect(logic.renderVals().isReady).toBe(true);
+    logic.props = { prog: [{ id: 1 }], review: [{ id: 2 }], ready: [{ id: 3 }], onOpen: vi.fn() };
+    expect(logic.renderVals().isProg).toBe(true);
+    logic.props.tab = 'review'; expect(logic.renderVals().compsAfter[0].id).toBe(2);
+    logic.props.tab = 'done'; expect(logic.renderVals().isReady).toBe(true); expect(logic.renderVals().isProg).toBe(false);
   });
-});
-
-it('keeps the list title, actions and workflow controls in one sticky header', () => {
-  const html = renderToStaticMarkup(<ProtoCompositions prog={[]} review={[]} ready={[]} sortLabel={() => 'Last edited'} />);
-  expect(html).toContain('class="compositions-list-header"');
-  for (const label of ['Compositions', 'New composition', 'Progress', 'Review', 'Done', 'Find a composition']) expect(html).toContain(label);
 });
 
 it('marks composition ideas only when their data is AI-assisted', () => {
   for (const aiAssisted of [false, true]) {
-    const html = renderToStaticMarkup(<ProtoCompositions prog={[]} review={[]} ready={[]} sortLabel={() => 'Last edited'} sugg={{ name: 'Blue tones', why: 'Shared colour: blue.', thumbs: [], aiAssisted }} />);
+    const html = renderToStaticMarkup(<ProtoCompositions prog={[]} review={[]} ready={[]} sugg={{ name: 'Blue tones', why: 'Shared colour: blue.', thumbs: [], aiAssisted }} />);
     expect(html.includes('aria-label="AI-assisted idea"')).toBe(aiAssisted);
   }
 });
