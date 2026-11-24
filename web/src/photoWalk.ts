@@ -15,3 +15,12 @@ export function getPhotoWalk(): number[] | null {
     return Array.isArray(ids) && ids.every((i) => typeof i === 'number') ? (ids as number[]) : null;
   } catch { return null; }
 }
+
+/** The Library address (with its search and filters) last shown in this tab, so leaving a photograph returns to it. */
+const LIBRARY = 'frames.libraryReturn';
+export function setLibraryReturn(search: string) {
+  try { sessionStorage.setItem(LIBRARY, search); } catch { /* storage blocked: the Library opens unfiltered */ }
+}
+export function libraryReturn(): string {
+  try { const s = sessionStorage.getItem(LIBRARY); return s ? `/library?${s}` : '/library'; } catch { return '/library'; }
+}

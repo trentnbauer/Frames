@@ -1013,3 +1013,14 @@ html:not([data-theme=light]) .map-tile { filter: invert(1) hue-rotate(180deg) br
 /* Zine editor: the page panel follows the pages on a wide screen, and sits above them on a phone. */
 .zine-panel { position: sticky; top: calc(var(--app-header-height, 72px) + 16px); }
 @media (max-width: 767px) { .zine-panel { position: static; flex-basis: 100% !important; } }
+
+/* A screen's own toolbar (search, view, sort, Select) stays pinned under the app header while the page scrolls. */
+.pin-toolbar { position: sticky; top: calc(var(--app-header-height) + var(--env-banner-height, 0px)); z-index: 30; background: var(--page); padding-block: 12px; margin-top: -12px; }
+
+/* The photo page fills the window under the header; only its sidebar scrolls. Content clears the floating bottom nav (26px off the bottom, about 50px tall). */
+.app-layout { --bnav-clear: 92px; }
+@media (min-width: 1200px) {
+  .app-content > .page-shell.photo-page { height: calc(100dvh - var(--app-header-height) - var(--env-banner-height, 0px)); min-height: 0; padding-bottom: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .photo-page > .photo-root { flex: 1; min-height: 0; }
+  .photo-page .photo-viewer, .photo-page .photo-aside { padding-bottom: var(--bnav-clear); }
+}

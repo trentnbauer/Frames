@@ -14,6 +14,7 @@ export class Logic extends DCLogic {
   componentDidMount() { this.offKeys = addShortcuts(() => [
     { key: 'ArrowLeft', label: 'Previous photo', run: () => this.props.onStep(-1) },
     { key: 'ArrowRight', label: 'Next photo', run: () => this.props.onStep(1) },
+    { key: 'Escape', label: 'Close the photo', run: () => (this.state.more ? this.setState({ more: false }) : this.props.onBack()) },
   ]); }
   componentWillUnmount() { this.offKeys?.(); clearTimeout(this.tT); clearTimeout(this.mT); }
   ptoast(t) { this.setState({ toast: t, tOp: 1 }); clearTimeout(this.tT); this.tT = setTimeout(() => this.setState({ tOp: 0 }), 2400); }
