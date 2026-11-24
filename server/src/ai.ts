@@ -144,15 +144,17 @@ async function askJson(c: AiCfg, prompt: string, jpeg?: Buffer): Promise<any> {
     return parseJson(String((j?.content ?? []).find((b: any) => b?.type === 'text')?.text ?? ''));
   }
   if (c.protocol === 'ollama') {
-    const j = await post(c, '/api/chat', { model: c.model, stream: false, format: 'json', messages: [{ role: 'user', content: prompt, ...(jpeg ? { images: [jpeg.toString('base64')] } : {}) }] }, 180_000);
+    const j = await post(c, '/api/chat', { model: c.model, stream: false, format: 'json', options: { temperature: 0 }, messages: [{ role: 'user', content: prompt, ...(jpeg ? { images: [jpeg.toString('base64')] } : {}) }] }, 180_000);
     return parseJson(String(j?.message?.content ?? ''));
   }
-  const content: unknown = jpeg ? [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg.toString('base64')}` } }] : prompt;
+  const content: unknown = jpeg ? [{ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg.toString('base64')}` } }, { type: 'text', text: prompt }] : prompt;
   const j = await post(c, '/chat/completions', { model: c.model, response_format: { type: 'json_object' }, messages: [{ role: 'user', content }] }, 180_000);
   return parseJson(String(j?.choices?.[0]?.message?.content ?? ''));
 }
 
-const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words", "light_leak": true or false, "lens_flare": true or false}. light_leak is true only for a light leak: a wash or streak of colour, often red, orange or yellow, coming in from an edge or across the frame, as on film. lens_flare is true only for flare: bright spots, rings, streaks or a washed-out haze from a light shining into the lens. Do not guess names of people.';
+const DESCRIBE = 'You are cataloguing a photographer\'s portfolio. Look at the photograph and answer with JSON only, in exactly this shape: {"description": "one or two plain sentences", "subjects": ["main things in the picture, lowercase"], "tags": ["style, mood, setting, lowercase"], "environment": "where/what kind of scene", "composition": "short note on framing and composition", "lighting": "short note on the light", "mood": "one or two words", "light_leak": true or false, "lens_flare": true or false}. light_leak is true only for a light leak: a wash or streak of colour, often red, orange or yellow, coming in from an edge or across the frame, as on film. lens_flare is true only for flare: bright spots, rings, streaks or a washed-out haze from a light shining into the lens. Do not guess names of people. ' +
+  // Small vision models embellish ("a black and white photo ... the sky fades from orange to blue"): hold every field to what is in the frame.
+  'Be strictly factual: write only what you can clearly see in this photograph, in plain words, with no atmosphere or storytelling. Call it black and white only if it has no colour at all; if it has colour, never call it black and white. Do not state the time of day, weather, season, sky or place unless it is plainly visible. Do not add objects, people or light that are not there, and do not count things you cannot count. If you are unsure of something, leave it out. Every field must agree with the photograph and with the other fields.';
 const yes = (v: unknown) => v === true || v === 'true';
 
 export async function describePhoto(c: AiCfg, jpeg: Buffer): Promise<Analysis> {
