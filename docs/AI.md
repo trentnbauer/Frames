@@ -27,7 +27,7 @@ If status cannot be loaded, the indicator reads **AI status unavailable** rather
 
 Each AI provider can have a separate colour. Open its configuration in Settings → AI, choose **Provider colour**, select one of eight muted swatches, and **Save changes**. The default grey swatch retains neutral styling.
 
-While a generated tag or subject awaits a decision, its chip is tinted with the colour of the AI that proposed it. Accepting or rejecting the suggestion clears the stored attribution. An AI description awaiting approval shows a tinted card with the provider name, **Use suggestion**, and **Dismiss**. Accepted descriptions and tags use Frames’ regular styling.
+While a generated tag or subject awaits a decision, its chip is tinted with the colour of the AI that proposed it. Accepting or rejecting the suggestion clears the stored attribution. An AI description awaiting approval shows a tinted card with the provider name, **Use suggestion**, and **Dismiss**. In **To do**, *Accept AI description* opens with the suggestion already in the box under **✦ Suggested description**: choose **Accept** to keep it (edit it first if you like) or **Reject** to turn it down for good; **Skip** leaves it for later. Accepted descriptions and tags use Frames’ regular styling.
 
 Generated Light and Mood hints use the provider tint when their analysis has source information. The header's ✦ working icon and progress indicator use the colour of the provider processing the current task, including between photos in a batch. When multiple providers work simultaneously, the header uses the first reported provider. Colours are visual hints, not the only indication of provenance; AI suggestions still include ✦ and readable labels.
 
