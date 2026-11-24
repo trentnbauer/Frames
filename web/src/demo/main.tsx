@@ -1,5 +1,5 @@
 /** GitHub Pages mounts the production Frames app, not a second demo UI.
- * All data comes from synthetic fixtures; writes are rejected in api.ts.
+ * All data comes from synthetic fixtures; api.ts keeps composition, zine and carousel edits in memory and rejects every other write.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -39,7 +39,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <div className="frames-demo-notice" role="status">
       <strong>Frames demo</strong>
-      <span>Actual app interface · Example photographs · Read-only (changes disabled)</span>
+      <span>Actual app interface · Example photographs · Edits to compositions, zines and carousels stay in this tab and nothing is saved</span>
       <a href="https://github.com/trentnbauer/Frames" target="_blank" rel="noreferrer">View on GitHub ↗</a>
     </div>
     <BrowserRouter basename="/Frames">

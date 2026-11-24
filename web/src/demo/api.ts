@@ -4,6 +4,7 @@
 import type { Collection, PhotoFull, PhotoLite, Shoot } from '../data';
 import type { Settings, Me, Summary } from '../store';
 import { arrange, bounds, nextUp, type Mode, type Orientation, type Print } from '../layout';
+import { printedPages, type Zine } from '../screens/Zines';
 
 // Stable public sample photographs (not private Frames content). The same ID
 // maps to the same picture everywhere: Library, Photoshoots, detail and walls.
@@ -136,6 +137,8 @@ function read(path:string):unknown {
   if(/^\/photos\/\d+\/guests$/.test(p))return {avg:null,n:0};
   if(/^\/photos\/\d+$/.test(p))return photos.find(x=>x.id===Number(p.split('/')[2]))??null;
   if(p==='/collections')return collections;
+  if(p==='/zines')return zines;
+  if(/^\/zines\/\d+$/.test(p)){const z=zines.find(x=>x.id===Number(p.slice(7)));if(!z)throw new Error('Sample zine not found.');return z;}
   if(p==='/collections/suggestions')return ideas;
   if(/^\/collections\/\d+\/ranking$/.test(p))return {weight:1,guests:0,items:[]};
   if(/^\/collections\/\d+\/(suggestions|frame-suggestions|layout-suggestions)$/.test(p))return {suggestions:[]};
@@ -211,10 +214,61 @@ function updateDemoCollection(path: string, body: unknown): Collection {
   return next;
 }
 
+/** Sample zines and a carousel. Like the compositions, edits live only in this tab's memory and a refresh restores these. */
+type Pages = Zine['pages'];
+const zineOf = (z: Omit<Zine, 'printedCount' | 'coverId' | 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }): Zine => ({
+  ...z, createdAt: z.createdAt ?? now, updatedAt: z.updatedAt ?? now,
+  printedCount: printedPages(z.pages, z.pageCount, z.kind).length, coverId: z.pages.flatMap(p => p.photos).find(id => id != null) ?? null,
+});
+const one = (id: number | null): Pages[number] => ({ layout: 'one', photos: [id] });
+let zines: Zine[] = [
+  zineOf({ id: 1, kind: 'zine', colour: 'ffffff', name: 'Coast notes', pageSize: 'a3-fold', margin: 6, pageCount: 8, stage: 'progress', candidates: [5, 6, 7, 8, 9, 10, 11, 12],
+    pages: [one(8), { layout: 'two', photos: [9, 10] }, { layout: 'spread', photos: [12] }, one(11), one(null)] }),
+  zineOf({ id: 2, kind: 'zine', colour: 'f4f1ea', name: 'After dark', pageSize: 'a4-fold', margin: 6, pageCount: 8, stage: 'done', candidates: [13, 14, 15, 16, 18],
+    pages: [one(13), one(14), { layout: 'two', photos: [15, 16] }, one(18)] }),
+  zineOf({ id: 3, kind: 'carousel', colour: 'ffffff', name: 'Mountain light', pageSize: '4:5', margin: 5, pageCount: 0, stage: 'progress', candidates: [1, 2, 3, 4, 6],
+    pages: [one(1), one(2), one(3), { layout: 'spread', photos: [4] }] }),
+];
+const MAX_SLIDES = 20;
+const zineError = (m: string) => { throw new Error(m); };
+/** The checks the server makes that the editor relies on (Done is read-only, page and slide limits); the rest is the editor's own input. */
+function saveDemoZine(id: number, body: Record<string, unknown>): Zine {
+  const z = zines.find(x => x.id === id) ?? zineError('Sample zine not found.');
+  const stage = body.stage as Zine['stage'] | undefined;
+  if (stage !== undefined && !['progress', 'review', 'done'].includes(stage)) zineError('The stage is progress, review or done.');
+  if (Object.keys(body).some(k => k !== 'stage') && (stage ?? z.stage) === 'done') zineError(`This ${z.kind} is done. Choose Progress or Review to change it.`);
+  const ids = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((n): n is number => Number.isInteger(n) && n > 0))] : zineError('List the photographs by number.');
+  const keep = ['name', 'pageSize', 'colour', 'margin', 'pages', 'pageCount'] as const;
+  const next: Zine = { ...z, ...Object.fromEntries(keep.filter(k => body[k] !== undefined).map(k => [k, body[k]])), ...(stage ? { stage } : {}) };
+  if (body.candidates !== undefined) next.candidates = ids(body.candidates);
+  if (body.addCandidates !== undefined) next.candidates = [...new Set([...next.candidates, ...ids(body.addCandidates)])];
+  if (typeof next.name !== 'string' || !next.name.trim()) zineError('Give the zine a name.');
+  if (next.kind === 'carousel' && printedPages(next.pages, 0, 'carousel').length > MAX_SLIDES) zineError(`A carousel holds ${MAX_SLIDES} slides.`);
+  if (next.kind === 'zine' && printedPages(next.pages, next.pageCount).length > next.pageCount) zineError(`That needs more than ${next.pageCount} pages. Remove a page, or choose more pages.`);
+  const saved = zineOf({ ...next, updatedAt: new Date().toISOString() });
+  zines = zines.map(x => x.id === id ? saved : x);
+  return saved;
+}
+function createDemoZine(body: Record<string, unknown>): Zine {
+  const kind = body.kind === 'carousel' ? 'carousel' : body.kind === undefined || body.kind === 'zine' ? 'zine' : zineError('Make a zine or a carousel.');
+  const photoIds = Array.isArray(body.photoIds) ? [...new Set(body.photoIds.filter((n): n is number => Number.isInteger(n) && n > 0))] : [];
+  const carousel = kind === 'carousel', stamp = new Date().toISOString();
+  const z = zineOf({ id: Math.max(0, ...zines.map(x => x.id)) + 1, kind, colour: 'ffffff', name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : carousel ? 'Untitled carousel' : 'Untitled zine',
+    pageSize: carousel ? '4:5' : 'a3-fold', margin: carousel ? 5 : 6, pageCount: carousel ? 0 : 8, stage: 'progress', candidates: photoIds,
+    pages: carousel ? photoIds.slice(0, MAX_SLIDES).map(one) : Array.from({ length: 8 }, () => one(null)), createdAt: stamp, updatedAt: stamp });
+  zines = [z, ...zines];
+  return z;
+}
+
 /** Only isolated in-memory composition changes are allowed; all other writes fail. */
 export async function demoApi<T>(path:string,init?:{method?:string;body?:unknown}):Promise<T>{
   const method=(init?.method??(init?.body!==undefined?'POST':'GET')).toUpperCase();
   if(method==='PATCH' && path.startsWith('/collections/') && /^\d+$/.test(path.split('?')[0].slice('/collections/'.length))) return updateDemoCollection(path, init?.body) as T;
+  const zinePath=/^\/zines(?:\/(\d+))?$/.exec(path.split('?')[0]);
+  const zineBody=(init?.body&&typeof init.body==='object'?init.body:{}) as Record<string,unknown>;
+  if(zinePath&&method==='POST'&&!zinePath[1])return createDemoZine(zineBody) as T;
+  if(zinePath&&method==='PUT'&&zinePath[1])return saveDemoZine(Number(zinePath[1]),zineBody) as T;
+  if(zinePath&&method==='DELETE'&&zinePath[1]){zines=zines.filter(z=>z.id!==Number(zinePath[1]));return {ok:true} as T;}
   if(method!=='GET'||init?.body!==undefined)throw new Error('Read-only demo: changes are disabled.');
   if(path.split('?')[0]==='/releases')return demoReleases() as Promise<T>;
   return read(path) as T;
