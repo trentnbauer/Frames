@@ -1,30 +1,39 @@
 import { useState } from 'react';
-import { ZineList } from '../screens/Zines';
+import { ZineList, type Zine } from '../screens/Zines';
 import { useNavigate } from 'react-router-dom';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { printsSummary, slotsOf, chosenCount } from '../screens/walls';
+import { KINDS, STAGES, listOrder, useCompositionsQuery, zineKindOf, type ListKind } from '../screens/compositionsList';
 import { useUi } from '../ui';
 import { MiniWall } from './MiniWall';
-import { Eyebrow } from './ui';
+import { Eyebrow, Seg } from './ui';
 
 type Idea = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: (PhotoLite & { ar: number })[] };
-type Stage = 'all' | 'progress' | 'review' | 'done';
-const STAGES: [Stage, string, string][] = [['all', 'All', ''], ['progress', 'Progress', 'progress'], ['review', 'Review', 'review'], ['done', 'Done', 'done']];
 const STAGE_LABEL = { progress: ['progress', 'Progress'], review: ['review', 'Review'], done: ['done', 'Done'] } as const;
+const SORTS = [['updated-desc', 'Updated · newest first'], ['updated-asc', 'Updated · oldest first'], ['created-desc', 'Created · newest first'], ['created-asc', 'Created · oldest first']] as const;
+const count = { font: '400 11px var(--mono)', color: 'var(--faint)' };
 
-/** The Compositions tab: stage filter, ideas, and each composition as its wall with its stage and how far it is. */
+/** The Compositions tab: search, Frames / Zines / Carousels, the stage, the order, a suggestion, then each composition as its wall. */
 export function MobileCompositions() {
   const nav = useNavigate();
   const { openNew } = useUi();
+  const { kind, stage, created, asc, q, set, setAll } = useCompositionsQuery();
   const colls = useApi<Collection[]>('/collections');
+  const zines = useApi<Zine[]>('/zines');
   const sug = useApi<Idea[]>('/collections/suggestions');
-  const [stage, setStage] = useState<Stage>('all');
-  const [gone, setGone] = useState<Set<string>>(new Set());
+  const [si, setSi] = useState(0);
   const [err, setErr] = useState('');
-  const all = [...(colls.data ?? [])].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || b.id - a.id);
-  const list = all.filter((c) => stage === 'all' || c.stage === stage);
-  const ideas = (sug.data ?? []).filter((i) => !gone.has(i.name));
+  const needle = q.trim().toLowerCase();
+  const all = colls.data ?? [], zineList = zines.data ?? [];
+  const ofKind = (k: ListKind) => (k === 'frames' ? all : zineList.filter((z) => (z.kind ?? 'zine') === zineKindOf(k)));
+  const inStage = (st: string) => ofKind(kind).filter((c) => (c.stage ?? 'progress') === st && (!needle || c.name.toLowerCase().includes(needle))).length;
+  const list = all.filter((c) => c.stage === stage && (!needle || c.name.toLowerCase().includes(needle))).sort(listOrder(created, asc));
+  const ideas = sug.data ?? [];
+  const idea = ideas.length ? ideas[si % ideas.length] : null;
+  const shown = inStage(stage);
+  const noun = kind === 'frames' ? (shown === 1 ? 'composition' : 'compositions') : `${zineKindOf(kind)}${shown === 1 ? '' : 's'}`;
+  const make = () => { setErr(''); if (kind === 'frames') { openNew(); return; } api<Zine>('/zines', { body: { kind: zineKindOf(kind) } }).then((z) => nav(`/zines/${z.id}`), (e: Error) => setErr(e.message)); };
   const start = async (i: Idea) => {
     setErr('');
     try {
@@ -36,45 +45,55 @@ export function MobileCompositions() {
   return (
     <div className="pscreen ptab headless" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Compositions</h1><span style={{ font: '400 12px var(--mono)', color: 'var(--faint)' }}>{all.length}</span></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => openNew()} aria-label="New composition" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1 }}>+</button></div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><h1 style={{ font: '400 44px/1 var(--serif)', margin: 0 }}>Compositions</h1><span style={count}>{all.length + zineList.length}</span></div>
+        <button onClick={make} aria-label={kind === 'frames' ? 'New composition' : `New ${zineKindOf(kind)}`} style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--btn-bg)', color: 'var(--btn-fg)', display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1 }}>+</button>
       </div>
-      <div role="group" aria-label="Stage" style={{ display: 'flex', padding: 3, borderRadius: 999, background: 'var(--surface)' }}>
-        {STAGES.map(([k, l, shape]) => <button key={k} aria-pressed={stage === k} onClick={() => setStage(k)} style={{ flex: 1, height: 36, borderRadius: 999, background: stage === k ? 'var(--btn-bg)' : 'transparent', color: stage === k ? 'var(--btn-fg)' : 'var(--text2)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>{shape && <span aria-hidden className={`stage-shape ${shape}`} />}{l}</button>)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 16px', borderRadius: 999, background: 'var(--surface)' }}>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.4" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.6" /><path d="m10.4 10.4 3.4 3.4" /></svg>
+        <input value={q} onChange={(e) => set('find', e.target.value)} placeholder="Find a composition" aria-label="Find a composition" style={{ flex: 1, minWidth: 0, background: 'none', border: 0, outline: 'none', color: 'var(--text)', fontSize: 15 }} />
+      </div>
+      <div role="tablist" aria-label="Kind" className="ptabs">
+        {KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={kind === k} onClick={() => set('kind', k === 'frames' ? null : k)}>{l} <span style={count}>{ofKind(k).length}</span></button>)}
+      </div>
+      <Seg label="Stage" value={stage} onPick={(k) => set('stage', k === 'progress' ? null : k)}
+        options={STAGES.map(([k, l]) => [k, <><span aria-hidden className={`stage-shape ${k}`} />{l} <span style={{ ...count, color: 'inherit', opacity: 0.6 }}>{inStage(k)}</span></>])} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text2)', marginTop: -4 }}>
+        <span>{shown} {noun} {stage === 'done' ? 'done' : `in ${stage}`}</span>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+          <select aria-label="Order" value={`${created ? 'created' : 'updated'}-${asc ? 'asc' : 'desc'}`} onChange={(e) => { const [s, d] = e.target.value.split('-'); setAll({ sort: s === 'created' ? s : null, dir: d === 'asc' ? d : null }); }}
+            className="plain-select">
+            {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <span aria-hidden style={{ fontSize: 10, color: 'var(--faint)' }}>▾</span>
+        </label>
       </div>
       {err && <div role="alert" className="reason">{err}</div>}
-      {ideas.length > 0 && stage !== 'done' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Eyebrow>IDEAS FOR YOU</Eyebrow>
-          <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 10, overflowX: 'auto', scrollSnapType: 'x mandatory', margin: '0 -20px', padding: '0 20px', scrollbarWidth: 'none' }}>
-            {ideas.map((i) => (
-              <div key={i.name} style={{ flexShrink: 0, width: 236, scrollSnapAlign: 'start', borderRadius: 12, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: 10, display: 'flex', flexDirection: 'column', gap: 10, boxSizing: 'border-box' }}>
-                <div style={{ height: 80, display: 'flex', gap: 2, borderRadius: 6, overflow: 'hidden' }}>{i.photos.slice(0, 4).map((p) => <div key={p.id} style={{ flex: `${p.ar || 1} 1 0`, minWidth: 0, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--hair)` }} />)}</div>
-                <span style={{ font: '400 21px/1.05 var(--serif)' }}>{i.aiAssisted && <span aria-label="AI-assisted idea">✦ </span>}{i.name}</span>
-                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <button onClick={() => start(i)} style={{ height: 36, padding: '0 14px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 13 }}>Start composition</button>
-                  <button onClick={() => { api('/recommendations/feedback', { body: { kind: 'together', photoIds: i.photoIds, verdict: 'reject' } }).catch(() => undefined); setGone((g) => new Set(g).add(i.name)); }} style={{ height: 36, padding: '0 10px', fontSize: 12.5, color: 'var(--text2)' }}>Skip idea</button>
-                </div>
-              </div>
-            ))}
+      {kind === 'frames' && stage === 'progress' && !needle && idea && (
+        <div style={{ borderRadius: 12, boxShadow: 'inset 0 0 0 1px var(--hair)', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <Eyebrow>SUGGESTED</Eyebrow>
+            {ideas.length > 1 && <button onClick={() => setSi(si + 1)} aria-label="Next suggestion" style={{ fontSize: 13, color: 'var(--text2)' }}>{(si % ideas.length) + 1} of {ideas.length} ›</button>}
           </div>
+          <div style={{ height: 64, display: 'flex', gap: 2, borderRadius: 4, overflow: 'hidden' }}>{idea.photos.slice(0, 3).map((p) => <div key={p.id} style={{ flex: `${p.ar || 1} 1 0`, minWidth: 0, background: `url(${imgUrl(p.id, 'thumb')}) center/cover var(--hair)` }} />)}</div>
+          <span style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.45 }}><b style={{ fontWeight: 500, color: 'var(--text)' }}>{idea.aiAssisted && <span aria-label="AI-assisted idea">✦ </span>}{idea.name}</b> · {idea.reason}</span>
+          <button onClick={() => start(idea)} style={{ alignSelf: 'flex-start', height: 44, padding: '0 18px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px var(--outline)', fontSize: 14 }}>Start composition →</button>
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-        {list.map((c) => (
-          <button key={c.id} onClick={() => nav(`/collections/${c.id}`)} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left' }}>
-            <MiniWall c={c} height={170} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: '400 25px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>{c.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{printsSummary(c)}</span></div>
-              <span style={{ flexShrink: 0, height: 26, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}><span aria-hidden className={`stage-shape ${STAGE_LABEL[c.stage][0]}`} />{STAGE_LABEL[c.stage][1]}</span>
-            </div>
-            <span style={{ fontSize: 13, color: 'var(--text2)' }}>{status(c)}</span>
-          </button>
-        ))}
-        {colls.data && list.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13.5, color: 'var(--muted)' }}>{all.length === 0 ? 'No compositions yet. Tap + to start one.' : 'No compositions in this stage.'}</div>}
-      </div>
-      <ZineList heading={<h2 style={{ font: '400 32px/1 var(--serif)', margin: 0 }}>Zines</h2>} />
-      <ZineList kind="carousel" heading={<h2 style={{ font: '400 32px/1 var(--serif)', margin: 0 }}>Carousels</h2>} />
+      {kind === 'frames' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {list.map((c) => (
+            <button key={c.id} onClick={() => nav(`/collections/${c.id}`)} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left' }}>
+              <MiniWall c={c} height={170} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}><span style={{ font: '400 25px/1.05 var(--serif)', overflowWrap: 'anywhere' }}>{c.name}</span><span style={{ font: '400 11.5px var(--mono)', color: 'var(--faint)' }}>{printsSummary(c)}</span></div>
+                <span style={{ flexShrink: 0, height: 26, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 10px', borderRadius: 999, background: 'var(--chip)', fontSize: 12 }}><span aria-hidden className={`stage-shape ${STAGE_LABEL[c.stage][0]}`} />{STAGE_LABEL[c.stage][1]}</span>
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--text2)' }}>{status(c)}</span>
+            </button>
+          ))}
+          {colls.data && list.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13.5, color: 'var(--muted)' }}>{all.length === 0 ? 'No compositions yet. Tap + to start one.' : 'No compositions here. Try another stage or search.'}</div>}
+        </div>
+      ) : <ZineList kind={zineKindOf(kind)} stage={stage} find={q} order={listOrder(created, asc)} />}
     </div>
   );
 }

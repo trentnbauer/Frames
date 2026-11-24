@@ -1,6 +1,6 @@
 # Zines
 
-A zine is a printable booklet. Zines are listed on the **Compositions** page: choose **Zines** in the bar under the title (on a phone, they are listed under your compositions). Start one there with **New zine**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Zine**. Start a new zine, or pick an existing one to add the photos to.
+A zine is a printable booklet. Zines are listed on the **Compositions** page: choose **Zines** in the bar under the title (on a phone, the **Zines** tab). Start one there with **New zine**. To start one from photographs, select them in the Library or a shoot, choose **Add to composition…**, then **Zine**. Start a new zine, or pick an existing one to add the photos to.
 
 A zine opens in the same editor as a composition: **← Compositions** and the name (click it to rename) on the left, the bin to remove it, and **Progress · Review · Done** on the right. The pages sit on the wall, the panel beside it shows the chosen page (or the zine's settings when no page is chosen), and the candidates are below.
 

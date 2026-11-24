@@ -70,6 +70,27 @@ describe('GitHub Pages demo API', () => {
     expect(photo.title).toBe('Mountain light');
   });
 
+  it('has sample zines and a carousel that can be opened, edited, made and deleted in memory', async () => {
+    type Z = { id: number; kind: string; name: string; stage: string; pages: { layout: string; photos: (number | null)[] }[]; candidates: number[]; printedCount: number; coverId: number | null };
+    const list = await demoApi<Z[]>('/zines');
+    expect(list.map(z => z.kind).sort()).toEqual(['carousel', 'zine', 'zine']);
+    const zine = list.find(z => z.kind === 'zine' && z.stage === 'progress')!;
+    expect((await demoApi<Z>(`/zines/${zine.id}`)).printedCount).toBe(8);
+    const renamed = await demoApi<Z>(`/zines/${zine.id}`, { method: 'PUT', body: { name: 'Renamed', addCandidates: [1] } });
+    expect(renamed.name).toBe('Renamed');
+    expect(renamed.candidates).toContain(1);
+    // The server's rules the editor relies on: a one-sheet zine has 8 pages, and Done is read-only.
+    await expect(demoApi(`/zines/${zine.id}`, { method: 'PUT', body: { pages: Array.from({ length: 9 }, () => ({ layout: 'one', photos: [1] })) } })).rejects.toThrow('more than 8 pages');
+    const done = list.find(z => z.stage === 'done')!;
+    await expect(demoApi(`/zines/${done.id}`, { method: 'PUT', body: { name: 'x' } })).rejects.toThrow('is done');
+    const made = await demoApi<Z>('/zines', { body: { kind: 'carousel', photoIds: [3, 4, 3] } });
+    expect(made).toMatchObject({ kind: 'carousel', name: 'Untitled carousel', candidates: [3, 4], coverId: 3 });
+    expect(made.pages).toHaveLength(2);
+    expect((await demoApi<Z[]>('/zines')).some(z => z.id === made.id)).toBe(true);
+    await demoApi(`/zines/${made.id}`, { method: 'DELETE' });
+    expect((await demoApi<Z[]>('/zines')).some(z => z.id === made.id)).toBe(false);
+  });
+
   it("lists the demo's own release first in What's new, and only that release when GitHub is unreachable", async () => {
     vi.stubEnv('VITE_DEMO_VERSION', 'v1.4.0');
     vi.resetModules();

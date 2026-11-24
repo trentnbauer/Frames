@@ -22,6 +22,8 @@ type PageSize = 'a3-fold' | 'a4-fold' | 'a5' | 'a6' | 'square' | '4:5' | '3:4' |
 type Kind = 'zine' | 'carousel';
 export type Zine = { id: number; kind: Kind; colour: string; name: string; pageSize: PageSize; margin: number; pages: ZinePage[]; pageCount: number; candidates: number[]; printedCount: number; coverId: number | null; stage: CompositionStageName; createdAt?: string; updatedAt: string };
 export const PAGE_COUNTS = [8, 16, 24] as const;
+// The demo has no server to render the PDF or slides.
+const DEMO = import.meta.env.VITE_FRAMES_DEMO === 'true';
 type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
 
 const SLOTS: Record<Layout, number> = { one: 1, two: 2, three: 3, spread: 1, blank: 0 };
@@ -450,7 +452,7 @@ export function ZineEditor() {
     <section aria-label="Done" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>Done · Read-only</h2>
       <p style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>{emptySlots ? `${emptySlots} empty ${emptySlots > 1 ? 'slots' : 'slot'} will print blank. ` : ''}{carousel ? 'Download the slides to post them.' : 'Download the PDF and print it on one sheet.'}<br /><br />Choose Progress or Review above to make changes.</p>
-      <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={z.pages.length ? `/api/zines/${z.id}/${carousel ? 'zip' : 'pdf'}` : undefined} aria-disabled={!z.pages.length} download>{carousel ? 'Download slides' : 'Download PDF'}</a>
+      <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={z.pages.length && !DEMO ? `/api/zines/${z.id}/${carousel ? 'zip' : 'pdf'}` : undefined} aria-disabled={!z.pages.length || DEMO} title={DEMO ? 'Downloads are made by a Frames server, so the demo cannot make one.' : undefined} download>{carousel ? 'Download slides' : 'Download PDF'}</a>
       <span style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>{settingsNote}</span>
     </section>
   );

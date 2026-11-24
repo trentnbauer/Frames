@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { KINDS, STAGES, listOrder, useCompositionsQuery, zineKindOf, type ListKind } from './compositionsList';
 import { api, imgUrl, useApi } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { ppiOf, sizeName } from '../layout';
@@ -13,7 +14,6 @@ import { ZineList, type Zine } from './Zines';
 import { SegSlider } from '../components/SegSlider';
 import { Kbd, useShortcuts } from '../components/shortcuts';
 import { useToast } from '../desktop/parts';
-import type { CompositionStageName } from '../components/CompositionStage';
 
 type SuggestedSet = { aiAssisted?: boolean; name: string; reason: string; photoIds: number[]; photos: { id: number }[] };
 
@@ -34,13 +34,6 @@ async function downloadOriginals(ids: number[]) {
   }
 }
 
-/** Created (by id: ids grow in creation order, and compositions keep no creation date) or Updated, newest first unless `asc`. */
-export const listOrder = (created: boolean, asc: boolean) => (a: { id: number; updatedAt?: string }, b: { id: number; updatedAt?: string }) =>
-  (asc ? 1 : -1) * (created ? a.id - b.id : (a.updatedAt ?? '').localeCompare(b.updatedAt ?? '') || a.id - b.id);
-
-const KINDS = [['frames', 'Frames'], ['zines', 'Zines'], ['carousels', 'Carousels']] as const;
-const STAGES = [['progress', 'Progress'], ['review', 'Review'], ['done', 'Done']] as const;
-
 /** Compositions: frames, zines and carousels, each by stage (Progress, Review, Done), from the design. */
 export function Compositions() {
   return usePhoneWidth() ? <MobileCompositions /> : <DesktopCompositions />;
@@ -48,13 +41,7 @@ export function Compositions() {
 
 function DesktopCompositions() {
   const nav = useNavigate();
-  // Kind, stage, search and sort live in the address, so coming back from a composition keeps them. ?filter= is the older link form.
-  const [sp, setSp] = useSearchParams();
-  const filter = sp.get('stage') ?? sp.get('filter');
-  const stage: CompositionStageName = filter === 'review' ? 'review' : ['done', 'ready', 'printed'].includes(filter ?? '') ? 'done' : 'progress';
-  const kind = KINDS.some(([k]) => k === sp.get('kind')) ? sp.get('kind')! : 'frames';
-  const created = sp.get('sort') === 'created', asc = sp.get('dir') === 'asc', q = sp.get('find') ?? '';
-  const set = (k: string, v: string | null) => setSp((cur) => { const n = new URLSearchParams(cur); n.delete('filter'); if (v) n.set(k, v); else n.delete(k); return n; }, { replace: true });
+  const { kind, stage, created, asc, q, set } = useCompositionsQuery();
   const zines = useApi<Zine[]>('/zines');
   const toast = useToast();
   const { openNew } = useUi();
@@ -95,11 +82,11 @@ function DesktopCompositions() {
 
   const zineList = zines.data ?? [];
   // New composition starts a frame wall; on the Zines or Carousels view it starts one of those, as their own lists used to.
-  const zineKind = kind === 'zines' ? 'zine' : 'carousel';
+  const zineKind = zineKindOf(kind);
   const make = () => { if (kind === 'frames') { openNew(); return; } api<Zine>('/zines', { body: { kind: zineKind } }).then((z) => nav(`/zines/${z.id}`), (e: Error) => toast.say(e.message)); };
   const makeLabel = kind === 'frames' ? 'New composition' : `New ${zineKind}`;
-  const ofKind = (k: string) => k === 'frames' ? all.length : zineList.filter((z) => (z.kind ?? 'zine') === (k === 'zines' ? 'zine' : 'carousel')).length;
-  const shown = kind === 'frames' ? all : zineList.filter((z) => (z.kind ?? 'zine') === (kind === 'zines' ? 'zine' : 'carousel'));
+  const ofKind = (k: ListKind) => k === 'frames' ? all.length : zineList.filter((z) => (z.kind ?? 'zine') === zineKindOf(k)).length;
+  const shown = kind === 'frames' ? all : zineList.filter((z) => (z.kind ?? 'zine') === zineKind);
   const inStage = (st: string) => shown.filter((c) => (c.stage ?? 'progress') === st && (!needle || c.name.toLowerCase().includes(needle))).length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   useShortcuts([{ key: 'n', label: makeLabel, run: make }]);
@@ -140,7 +127,7 @@ function DesktopCompositions() {
           next: () => setSi(si + 1),
           start: async () => { await api('/recommendations/feedback', { body: { kind: 'together', photoIds: s0.photoIds, verdict: 'accept' } }); openNew({ name: s0.name, photoIds: s0.photoIds }); },
         } : null}
-      /> : <ZineList kind={kind === 'zines' ? 'zine' : 'carousel'} stage={stage} find={q} order={order} />}
+      /> : <ZineList kind={zineKind} stage={stage} find={q} order={order} />}
     </div>
   );
 }
