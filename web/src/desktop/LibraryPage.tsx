@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { SegSlider } from '../components/SegSlider';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { imgUrl, useApi } from '../api';
-import { setPhotoWalk } from '../photoWalk';
+import { setLibraryReturn, setPhotoWalk } from '../photoWalk';
 import { AddPhotosModal } from '../components/AddPhotos';
 import { LibraryMore } from '../components/LibraryMore';
 import { useLibraryFilters } from '../components/LibraryFilters';
@@ -33,24 +33,28 @@ export function LibraryPage() {
   const nav = useNavigate();
   const [sp, setSp] = useSearchParams();
   // Every filter in the address (from the Filters menus, Search, Stats or "Find similar") goes to the server; the view's own keys do not.
-  const asked = new URLSearchParams(sp); for (const k of ['view', 'add', 'adv', 'select', 'f', 'sort', 'dir']) asked.delete(k);
+  const asked = new URLSearchParams(sp); for (const k of ['view', 'add', 'adv', 'select', 'f', 'sort', 'dir', 'find', 'chip']) asked.delete(k);
   const filtered = asked.toString() !== '';
   const photos = useApi<{ total: number; photos: PhotoLite[] }>(`/photos${filtered ? `?${asked}` : ''}`);
   // A link with filters (from Search, Stats or "Find similar") opens the Photos view.
   const view = sp.get('view') === 'photos' || (filtered && sp.get('view') !== 'shoots') ? 'photos' : 'shoots';
-  const [q, setQ] = useState('');
-  const [chip, setChip] = useState<string | null>(null);
+  // The search box and quick chip live in the address too, so coming back from a photograph keeps them.
+  const q = sp.get('find') ?? '', chip = sp.get('chip');
+  const setParam = (k: string, v: string | null) => setSp((cur) => { const n = new URLSearchParams(cur); if (v) n.set(k, v); else n.delete(k); return n; }, { replace: true });
+  const setQ = (v: string) => setParam('find', v);
+  const setChip = (v: string | null) => setParam('chip', v);
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(sp.get('add') === '1');
   const shoots = useApi<Shoot[]>('/shoots');
+  useEffect(() => { setLibraryReturn(sp.toString()); }, [sp]);
   const filters = useLibraryFilters(shoots.data ?? []);
   const pending = useApi<{ count: number }>('/library/pending');
   const toast = useToast();
   const all = shoots.data ?? [];
   const list = photos.data?.photos ?? [];
   const needle = q.trim().toLowerCase();
-  const setView = (v: string) => { const n = new URLSearchParams(sp); n.set('view', v); n.delete('add'); setSp(n, { replace: true }); setChip(null); setSelecting(false); setPicked(new Set()); };
+  const setView = (v: string) => { const n = new URLSearchParams(sp); n.set('view', v); n.delete('add'); n.delete('chip'); setSp(n, { replace: true }); setSelecting(false); setPicked(new Set()); };
   const reload = () => { shoots.reload(); photos.reload(); };
   // I imports the waiting files, and is listed in the ? sheet only while the banner shows.
   useShortcuts([{ key: 'i', label: 'Import new files', run: () => setAdding(true), off: (pending.data?.count ?? 0) === 0 }]);
@@ -100,7 +104,7 @@ export function LibraryPage() {
           <button className="btn outline" style={{ height: 32 }} onClick={() => setAdding(true)}>Import {pending.data!.count} {pending.data!.count === 1 ? 'file' : 'files'}</button><Kbd k="I" />
         </div>
       )}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
+      <div className="pin-toolbar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 28 }}>
         <div role="tablist" aria-label="Show" style={{ display: 'flex', flex: 'none', gap: 2, padding: 4, borderRadius: 999, background: 'var(--surface)' }}><SegSlider />
           {([['shoots', 'Shoots', all.length], ['photos', 'Photos', total]] as const).map(([k, l, n]) => <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 16px', borderRadius: 999, fontSize: 13.5, background: view === k ? 'var(--btn-bg)' : 'transparent', color: view === k ? 'var(--btn-fg)' : 'var(--text2)', fontWeight: view === k ? 500 : 400 }}>{l}<span style={{ font: `400 11px ${mono}`, color: view === k ? 'var(--btn-fg)' : 'var(--faint)', opacity: view === k ? 0.6 : 1 }}>{n}</span></button>)}
         </div>
@@ -130,7 +134,7 @@ export function LibraryPage() {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '-12px 0 24px' }}>
           {chip && <button onClick={() => setChip(null)} aria-label={`Remove filter ${PHOTO_CHIPS.find(([k]) => k === chip)?.[1]}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{PHOTO_CHIPS.find(([k]) => k === chip)?.[1]} <span aria-hidden style={{ color: 'var(--muted)' }}>×</span></button>}
           {filters.chips.map((c) => <button key={c.label} onClick={c.remove} aria-label={`Remove filter ${c.label}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px', borderRadius: 999, background: 'var(--chip)', fontSize: 13 }}>{c.label} <span aria-hidden style={{ color: 'var(--muted)' }}>×</span></button>)}
-          <button onClick={() => { setChip(null); filters.clear(); }} style={{ fontSize: 13, color: 'var(--text2)', marginLeft: 4 }}>Clear all</button>
+          <button onClick={filters.clear} style={{ fontSize: 13, color: 'var(--text2)', marginLeft: 4 }}>Clear all</button>
         </div>
       )}
 

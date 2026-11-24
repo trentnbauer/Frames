@@ -129,7 +129,7 @@ function Shell() {
         <Route path="/admin" element={<Navigate to={`/settings?section=access${window.location.search.replace(/^\?/, '&')}`} replace />} />
         <Route path="*" element={<Home />} />
       </Routes></div>
-      {!inReview && <Footer />}
+      {!inReview && !loc.pathname.startsWith('/photo/') && <Footer />}
       {!inReview && loc.pathname !== '/welcome' && <BottomNav />}
       {!inReview && <TabBar />}
       <ShellModals />

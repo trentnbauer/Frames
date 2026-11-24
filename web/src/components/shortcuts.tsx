@@ -38,7 +38,7 @@ export function useShortcuts(list: Shortcut[]) {
 export const Kbd = ({ k }: { k: string }) => <kbd className="kbd" aria-hidden="true">{k}</kbd>;
 
 const GLOBAL: [string, string][] = [['T', 'To do'], ['R', 'Review'], ['/ or ⌘K', 'Search'], ['?', 'This list'], ['Esc', 'Close a dialog']];
-const KEYNAME: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→' };
+const KEYNAME: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
 
 export function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const here = currentShortcuts();

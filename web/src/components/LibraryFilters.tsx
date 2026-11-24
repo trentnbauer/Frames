@@ -95,6 +95,6 @@ export function useLibraryFilters(shoots: Shoot[]) {
     </MenuState.Provider>
   ) : null;
 
-  const clear = () => { const n = new URLSearchParams(); for (const k of ['view']) if (sp.get(k)) n.set(k, sp.get(k)!); setSp(n, { replace: true }); setOpen(null); };
+  const clear = () => { const n = new URLSearchParams(); for (const k of ['view', 'find']) if (sp.get(k)) n.set(k, sp.get(k)!); setSp(n, { replace: true }); setOpen(null); };
   return { chips, panel: filtersPanel, filtersOpen, setFiltersOpen, clear };
 }

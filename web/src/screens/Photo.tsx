@@ -9,7 +9,7 @@ import { fmtDate } from '../data';
 import type { Hemisphere } from '../season';
 import { seasonOf } from '../season';
 import { useStore } from '../store';
-import { getPhotoWalk } from '../photoWalk';
+import { getPhotoWalk, libraryReturn } from '../photoWalk';
 import { CompPicker } from './CompPicker';
 import ProtoPhoto from '../proto/ProtoPhoto';
 import { PhotoColourVariants } from '../components/PhotoColourVariants';
@@ -62,7 +62,7 @@ function DesktopPhoto() {
   const step = (d: number) => { if (!stepIds.length) return; nav(`/photo/${stepIds[(idx + d + stepIds.length) % stepIds.length]}${todoKey ? `?todo=${todoKey}` : fromList ? '?in=list' : ''}`, { replace: true }); }; // stepping replaces the page, so Back goes to where the photo was opened from
   const shoot = shoots.data?.find((s) => s.id === p.shootId);
   const mates = libList.filter((x) => x.shootId === p.shootId);
-  const back = () => { if (!todoKey && !fromList && shoot && !window.location.search.includes('in=library')) nav(`/shoots/${shoot.id}`); else if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot ? `/shoots/${shoot.id}` : '/library'); }; // the label says the shoot, so Back goes there
+  const back = () => { if (!todoKey && !fromList && shoot && !window.location.search.includes('in=library')) nav(`/shoots/${shoot.id}`); else if ((window.history.state?.idx ?? 0) > 0) nav(-1); else nav(todoKey ? '/todo' : shoot && !fromList ? `/shoots/${shoot.id}` : libraryReturn()); }; // the label says the shoot, so Back goes there
   const patch = async (body: Record<string, unknown>) => { await api(`/photos/${p.id}`, { method: 'PATCH', body }); photo.reload(); };
   const tagAct = async (name: string, kind: string, action: string) => { await api(`/photos/${p.id}/tags`, { method: 'PUT', body: { name, kind, action } }); photo.reload(); refreshSummary(); };
   const ai = !!settings && settings.ai !== 'off';
@@ -108,7 +108,7 @@ function DesktopPhoto() {
   const mb = Math.round(p.sizeMb || 0);
 
   return (
-    <div className="page-shell">
+    <div className="page-shell photo-page">
 
       <ProtoPhoto
         colourVariants={<PhotoColourVariants key={p.id} photo={p} photos={libList} />}

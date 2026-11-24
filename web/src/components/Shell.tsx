@@ -13,6 +13,7 @@ import { Modal, Spinner } from './Modal';
 import { ClearSiteDataModal } from './ClearSiteDataModal';
 import { ThemeToggle } from './ThemeToggle';
 import { usePhoneWidth } from '../usePhoneWidth';
+import { libraryReturn } from '../photoWalk';
 import { PhoneMeSheet, PhoneTabBar } from '../mobile/Chrome';
 
 export function Mark({ w = 24 }: { w?: number }) {
@@ -240,7 +241,7 @@ export function BottomNav() {
       <SegSlider />
       {item('/', 'Home')}
       {/* One Library item: its Shoots and Photos views, a shoot and a photograph all belong to it. */}
-      <NavLink to="/library" className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>
+      <NavLink to={/^\/photo\//.test(here) ? libraryReturn() : '/library'} className={/^\/(library|shoots|photo)(\/|$)/.test(here) ? 'on' : ''}>Library</NavLink>
       {item('/collections', 'Compositions')}
       <i className="bdiv" />
       <button className="bsearch" onClick={ui.openSearch}>Search <span className="mono">⌘K</span></button>
