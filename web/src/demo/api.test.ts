@@ -73,7 +73,7 @@ describe('GitHub Pages demo API', () => {
   it('has sample zines and a carousel that can be opened, edited, made and deleted in memory', async () => {
     type Z = { id: number; kind: string; name: string; stage: string; pages: { layout: string; photos: (number | null)[] }[]; candidates: number[]; printedCount: number; coverId: number | null };
     const list = await demoApi<Z[]>('/zines');
-    expect(list.map(z => z.kind).sort()).toEqual(['carousel', 'zine', 'zine']);
+    expect(list.map(z => z.kind).sort()).toEqual(['carousel', 'notebook', 'zine', 'zine']);
     const zine = list.find(z => z.kind === 'zine' && z.stage === 'progress')!;
     expect((await demoApi<Z>(`/zines/${zine.id}`)).printedCount).toBe(8);
     const renamed = await demoApi<Z>(`/zines/${zine.id}`, { method: 'PUT', body: { name: 'Renamed', addCandidates: [1] } });

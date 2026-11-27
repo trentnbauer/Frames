@@ -187,3 +187,19 @@ it('makes a carousel: a slide a photograph, slides in a row with no cover or pad
   expect(zine.kind).toBe('zine');
   expect((await a.get(`/api/zines/${zine.id}/zip`)).status).toBe(404);
 });
+
+it('makes a notebook: each photograph on a right-hand page facing its number and note, with no PDF', async () => {
+  const n = (await a.post('/api/zines', { kind: 'notebook', photoIds: ids, name: 'The view' })).body;
+  expect(n).toMatchObject({ kind: 'notebook', pageSize: 'a6', pageCount: 0, candidates: ids, printedCount: 4 });
+  expect(printedPages(n.pages, 0, 'notebook').map((p) => p.layout)).toEqual(['note', 'photo', 'note', 'photo']);
+  expect((await a.post('/api/zines', { kind: 'notebook', pageSize: 'a3-fold' })).body.error).toMatch(/pocket, a6 or a5/);
+  expect((await a.post('/api/zines', { kind: 'zine', pageSize: 'pocket' })).status).toBe(400);
+  expect((await a.put(`/api/zines/${n.id}`, { pageCount: 8 })).status).toBe(400);
+  expect((await a.put(`/api/zines/${n.id}`, { pages: [{ layout: 'two', photos: [ids[0], ids[1]] }] })).body.error).toMatch(/one photograph/);
+  const text = { on: true, body: 'The view.', pos: 'bottom', font: 'serif' };
+  const saved = (await a.put(`/api/zines/${n.id}`, { pageSize: 'pocket', pages: [{ layout: 'one', photos: [ids[0]], text }, { layout: 'one', photos: [ids[1]], text: { ...text, on: false } }] })).body;
+  expect(saved).toMatchObject({ pageSize: 'pocket', printedCount: 4 });
+  expect((await a.get(`/api/zines/${n.id}/pdf`)).status).toBe(404); // exported as the originals, from the web app
+  expect((await a.get(`/api/zines/${n.id}/zip`)).status).toBe(404);
+});
+

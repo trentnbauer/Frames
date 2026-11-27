@@ -228,6 +228,8 @@ let zines: Zine[] = [
     pages: [one(13), one(14), { layout: 'two', photos: [15, 16] }, one(18)] }),
   zineOf({ id: 3, kind: 'carousel', colour: 'ffffff', name: 'Mountain light', pageSize: '4:5', margin: 5, pageCount: 0, stage: 'progress', candidates: [1, 2, 3, 4, 6],
     pages: [one(1), one(2), one(3), { layout: 'spread', photos: [4] }] }),
+  zineOf({ id: 4, kind: 'notebook', colour: 'ffffff', name: 'City walks', pageSize: 'pocket', margin: 6, pageCount: 0, stage: 'progress', candidates: [13, 14, 15],
+    pages: [{ ...one(13), text: { on: true, body: 'The view.', pos: 'bottom', font: 'serif' } }, one(14), one(15)] }),
 ];
 const MAX_SLIDES = 20;
 const zineError = (m: string) => { throw new Error(m); };
@@ -250,12 +252,12 @@ function saveDemoZine(id: number, body: Record<string, unknown>): Zine {
   return saved;
 }
 function createDemoZine(body: Record<string, unknown>): Zine {
-  const kind = body.kind === 'carousel' ? 'carousel' : body.kind === undefined || body.kind === 'zine' ? 'zine' : zineError('Make a zine or a carousel.');
+  const kind = body.kind === 'carousel' || body.kind === 'notebook' ? body.kind : body.kind === undefined || body.kind === 'zine' ? 'zine' : zineError('Make a zine, a carousel or a notebook.');
   const photoIds = Array.isArray(body.photoIds) ? [...new Set(body.photoIds.filter((n): n is number => Number.isInteger(n) && n > 0))] : [];
-  const carousel = kind === 'carousel', stamp = new Date().toISOString();
-  const z = zineOf({ id: Math.max(0, ...zines.map(x => x.id)) + 1, kind, colour: 'ffffff', name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : carousel ? 'Untitled carousel' : 'Untitled zine',
-    pageSize: carousel ? '4:5' : 'a3-fold', margin: carousel ? 5 : 6, pageCount: carousel ? 0 : 8, stage: 'progress', candidates: photoIds,
-    pages: carousel ? photoIds.slice(0, MAX_SLIDES).map(one) : Array.from({ length: 8 }, () => one(null)), createdAt: stamp, updatedAt: stamp });
+  const carousel = kind === 'carousel', notebook = kind === 'notebook', stamp = new Date().toISOString();
+  const z = zineOf({ id: Math.max(0, ...zines.map(x => x.id)) + 1, kind, colour: 'ffffff', name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : `Untitled ${kind}`,
+    pageSize: carousel ? '4:5' : notebook ? 'a6' : 'a3-fold', margin: carousel ? 5 : 6, pageCount: carousel || notebook ? 0 : 8, stage: 'progress', candidates: photoIds,
+    pages: carousel || notebook ? photoIds.slice(0, carousel ? MAX_SLIDES : 100).map(one) : Array.from({ length: 8 }, () => one(null)), createdAt: stamp, updatedAt: stamp });
   zines = [z, ...zines];
   return z;
 }

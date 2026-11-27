@@ -39,7 +39,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <div className="frames-demo-notice" role="status">
       <strong>Frames demo</strong>
-      <span>Actual app interface · Example photographs · Edits to compositions, zines and carousels stay in this tab and nothing is saved</span>
+      <span>Actual app interface · Example photographs · Edits to compositions, zines, carousels and notebooks stay in this tab and nothing is saved</span>
       <a href="https://github.com/trentnbauer/Frames" target="_blank" rel="noreferrer">View on GitHub ↗</a>
     </div>
     <BrowserRouter basename="/Frames">

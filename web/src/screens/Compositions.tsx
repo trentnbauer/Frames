@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KINDS, STAGES, listOrder, useCompositionsQuery, zineKindOf, type ListKind } from './compositionsList';
-import { api, imgUrl, useApi } from '../api';
+import { api, imgUrl, useApi, downloadOriginals } from '../api';
 import type { Collection, PhotoLite } from '../data';
 import { ppiOf, sizeName } from '../layout';
 import { useUi } from '../ui';
@@ -24,18 +24,8 @@ const ago = (iso: string | null | undefined) => {
   return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? `${d} days ago` : d < 14 ? 'last week' : new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-/** Hands each original to the browser's own downloader, in print order. The files are never altered. */
-async function downloadOriginals(ids: number[]) {
-  const pad = String(ids.length).length;
-  for (let i = 0; i < ids.length; i++) {
-    const a = document.createElement('a');
-    a.href = `/api/photos/${ids[i]}/original?n=${i + 1}&pad=${pad}`; a.download = '';
-    document.body.appendChild(a); a.click(); a.remove();
-    await new Promise((r) => setTimeout(r, 450)); // browsers drop downloads fired in the same instant
-  }
-}
 
-/** Compositions: frames, zines and carousels, each by stage (Progress, Review, Done), from the design. */
+/** Compositions: frames, zines, carousels and notebooks, each by stage (Progress, Review, Done), from the design. */
 export function Compositions() {
   return usePhoneWidth() ? <MobileCompositions /> : <DesktopCompositions />;
 }
@@ -94,7 +84,7 @@ function DesktopCompositions() {
   useShortcuts([{ key: 'n', label: makeLabel, run: make }]);
   const header = <>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}><h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Compositions</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{[plural(ofKind('frames'), 'frame', 'frames'), plural(ofKind('zines'), 'zine', 'zines'), plural(ofKind('carousels'), 'carousel', 'carousels')].join(' · ')}</span></div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}><h1 style={{ font: "400 48px/1 'Instrument Serif',Georgia,serif", margin: 0 }}>Compositions</h1><span style={{ fontSize: 13, color: 'var(--muted)' }}>{[plural(ofKind('frames'), 'frame', 'frames'), plural(ofKind('zines'), 'zine', 'zines'), plural(ofKind('carousels'), 'carousel', 'carousels'), plural(ofKind('notebooks'), 'notebook', 'notebooks')].join(' · ')}</span></div>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, flex: 'none' }}><button onClick={make} style={{ display: 'inline-flex', alignItems: 'center', height: 48, padding: '0 24px', borderRadius: 999, background: 'var(--btn-bg)', color: 'var(--btn-fg)', fontWeight: 500, fontSize: 15 }}>{makeLabel}</button><Kbd k="N" /></span>
     </div>
     <div className="comp-bar">
