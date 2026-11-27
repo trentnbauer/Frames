@@ -59,3 +59,14 @@ export async function openPortfolio() {
     w.location.href = h ? `${/^localhost(:|$)/.test(h) ? 'http' : 'https'}://${h}/` : d.handle ? `/${d.handle}/` : '/portfolio/';
   } catch { w.location.href = '/portfolio/'; }
 }
+
+/** Hands each original to the browser's own downloader, in print order. The files are never altered. */
+export async function downloadOriginals(ids: number[]) {
+  const pad = String(ids.length).length;
+  for (let i = 0; i < ids.length; i++) {
+    const a = document.createElement('a');
+    a.href = `/api/photos/${ids[i]}/original?n=${i + 1}&pad=${pad}`; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    await new Promise((r) => setTimeout(r, 450)); // browsers drop downloads fired in the same instant
+  }
+}

@@ -22,6 +22,7 @@ This wiki is the full documentation. The [README](https://github.com/trentnbauer
 - [Compositions](Compositions): the wall editor, room photo, print sheet and export.
 - [Zines](Zines): printable folded booklets.
 - [Instagram carousels](Instagram-carousels)
+- [Notebooks](Notebooks)
 - [Places, camera details and search](Places-and-camera): the map pin and its public precision, camera fields, ⌘K.
 - [Notifications, community and gear](Notifications-community-and-gear)
 - [Share links](Share-links): sharing a composition or a photoshoot, guests, ratings and suggestions.

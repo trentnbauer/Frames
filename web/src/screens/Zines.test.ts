@@ -43,3 +43,11 @@ it('adds a slide a photo to a carousel, up to 20', () => {
   expect(r.pages).toHaveLength(20);
   expect(r.placed).toBe(20);
 });
+
+it('lays a notebook out a pair of pages an entry, the note facing the photo, and fills it a page a photo', () => {
+  const pages = [{ layout: 'one' as const, photos: [1] }, { layout: 'one' as const, photos: [null] }];
+  expect(printedPages(pages, 0, 'notebook').map((p) => [p.layout, p.entry])).toEqual([['note', 0], ['photo', 0], ['note', 1], ['photo', 1]]);
+  const r = fillInOrder(pages, [1, 2, 3, 4], 'notebook');
+  expect(r.placed).toBe(3);
+  expect(r.pages.map((p) => p.photos[0])).toEqual([1, 2, 3, 4]);
+});

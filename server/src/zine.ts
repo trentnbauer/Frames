@@ -10,6 +10,8 @@ import { zipOf } from './carousel.js';
  * across two facing pages, borderless only at the fold. Page 1 is the cover, on its own on the right, so facing pages are 2–3, 4–5 and so on: a
  * spread that would start on a right-hand page gets a blank page before it, and the booklet is filled out with blank pages to a
  * multiple of four (a folded sheet holds four pages). Zine pages can carry a line or two of text. The PDF is made from the previews, at 300 dpi.
+ * A notebook is kept with them too: each entry is one photograph on a right-hand page, facing a left-hand page with its number and a note (or blank).
+ * It is exported as the original files, from the web app, so it has no PDF.
  */
 export const LAYOUTS = { one: 1, two: 2, three: 3, spread: 1, blank: 0 } as const;
 export type Layout = keyof typeof LAYOUTS;
@@ -17,15 +19,16 @@ export type PageText = { on: boolean; body: string; pos: 'top' | 'middle' | 'bot
 export type Arrange = 'portraits-top' | 'landscape-top';
 export type ZinePage = { layout: Layout; photos: (number | null)[]; text?: PageText; arrange?: Arrange };
 /** Page sizes in millimetres. Carousel slides are 1080 px wide, Instagram's width: 91.44 mm at 300 dpi. */
-export const SIZES = { 'a3-fold': [105, 148.5], 'a4-fold': [74.25, 105], a5: [148, 210], a6: [105, 148], square: [200, 200], '4:5': [91.44, 114.3], '3:4': [91.44, 121.92], '1:1': [91.44, 91.44] } as const;
-export const KINDS = ['zine', 'carousel'] as const;
+export const SIZES = { 'a3-fold': [105, 148.5], 'a4-fold': [74.25, 105], a5: [148, 210], a6: [105, 148], square: [200, 200], '4:5': [91.44, 114.3], '3:4': [91.44, 121.92], '1:1': [91.44, 91.44], pocket: [90, 140] } as const;
+export const KINDS = ['zine', 'carousel', 'notebook'] as const;
 export type Kind = (typeof KINDS)[number];
 /** The same three stages as a composition. Done is read-only: only the stage itself can change. */
 export const STAGES = ['progress', 'review', 'done'] as const;
 export type Stage = (typeof STAGES)[number];
-const SHAPES = ['4:5', '3:4', '1:1'];
-/** The page sizes each kind takes: a zine's sheet (or the sizes of zines made before), a carousel's slide shape. */
-const sizeOk = (kind: Kind, size: string) => (kind === 'carousel' ? SHAPES.includes(size) : size in SIZES && !SHAPES.includes(size));
+const SHAPES = ['4:5', '3:4', '1:1'], NOTEBOOK_SIZES = ['pocket', 'a6', 'a5'];
+/** The page sizes each kind takes: a zine's sheet (or the sizes of zines made before), a carousel's slide shape, a notebook's paper. */
+const sizeOk = (kind: Kind, size: string) => (kind === 'carousel' ? SHAPES.includes(size) : kind === 'notebook' ? NOTEBOOK_SIZES.includes(size) : size in SIZES && !SHAPES.includes(size) && size !== 'pocket');
+const sizeError = (kind: Kind) => (kind === 'carousel' ? 'The slide shape must be 4:5, 3:4 or 1:1.' : kind === 'notebook' ? 'The paper must be pocket, a6 or a5.' : 'Choose the sheet to print on: a3-fold or a4-fold.');
 export const MAX_SLIDES = 20; // Instagram's carousel limit
 export type PageSize = keyof typeof SIZES;
 /**
@@ -40,7 +43,7 @@ export const MAX_TEXT = 280;
 const DPI = 300;
 
 /** One printed page: what is on it, and whether Frames added it (a blank before a spread, or padding at the end). */
-export type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
+export type Printed = { layout: Layout | 'left' | 'right' | 'note' | 'photo'; photos: (number | null)[]; entry: number | null };
 
 export const PAGE_COUNTS = [8, 16, 24] as const;
 export const MAX_CANDIDATES = 500;
@@ -49,7 +52,9 @@ export const MAX_CANDIDATES = 500;
 export function printedPages(pages: ZinePage[], count = 0, kind: Kind = 'zine'): Printed[] {
   const out: Printed[] = [];
   pages.forEach((p, entry) => {
-    if (p.layout === 'spread') {
+    // A notebook entry is a facing pair: the note on the left, the photograph on the right (turned upright if it is landscape).
+    if (kind === 'notebook') out.push({ layout: 'note', photos: [], entry }, { layout: 'photo', photos: p.photos.slice(0, 1), entry });
+    else if (p.layout === 'spread') {
       // A carousel has no cover or facing pages: a photograph across two slides can start on any slide.
       if (kind === 'zine' && out.length % 2 === 0) out.push({ layout: 'blank', photos: [], entry: null });
       out.push({ layout: 'left', photos: p.photos, entry }, { layout: 'right', photos: p.photos, entry });
@@ -220,19 +225,19 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
   app.post('/api/zines', async (req, rep) => {
     const b = (req.body ?? {}) as Row;
     const kind = b.kind === undefined ? 'zine' : b.kind;
-    if (!KINDS.includes(kind as Kind)) return rep.code(400).send({ error: 'Make a zine or a carousel.' });
-    const carousel = kind === 'carousel';
-    const count = carousel ? 0 : b.pageCount === undefined ? 8 : b.pageCount;
-    if (!carousel && !PAGE_COUNTS.includes(count as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' });
-    const size = b.pageSize === undefined ? (carousel ? '4:5' : 'a3-fold') : b.pageSize;
-    if (typeof size !== 'string' || !sizeOk(kind as Kind, size)) return rep.code(400).send({ error: carousel ? 'The slide shape must be 4:5, 3:4 or 1:1.' : 'Choose the sheet to print on: a3-fold or a4-fold.' });
+    if (!KINDS.includes(kind as Kind)) return rep.code(400).send({ error: 'Make a zine, a carousel or a notebook.' });
+    const carousel = kind === 'carousel', notebook = kind === 'notebook';
+    const count = carousel || notebook ? 0 : b.pageCount === undefined ? 8 : b.pageCount;
+    if (kind === 'zine' && !PAGE_COUNTS.includes(count as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' });
+    const size = b.pageSize === undefined ? (carousel ? '4:5' : notebook ? 'a6' : 'a3-fold') : b.pageSize;
+    if (typeof size !== 'string' || !sizeOk(kind as Kind, size)) return rep.code(400).send({ error: sizeError(kind as Kind) });
     if (SHEETS[size as PageSize] && count !== 8) return rep.code(400).send({ error: 'A zine folded from one sheet has 8 pages.' });
     // The chosen photographs become candidates to lay out, as in a composition. A zine's pages start empty; a carousel starts with one
-    // slide a photograph, in the order they were picked, since that order is usually the point.
+    // slide a photograph, in the order they were picked, since that order is usually the point. So does a notebook, a page pair a photograph.
     const ids = parseIds(b.photoIds) ?? [];
-    const pages = carousel ? ids.slice(0, MAX_SLIDES).map((id): ZinePage => ({ layout: 'one', photos: [id] })) : emptyPages(count as number);
+    const pages = carousel || notebook ? ids.slice(0, carousel ? MAX_SLIDES : MAX_PAGES).map((id): ZinePage => ({ layout: 'one', photos: [id] })) : emptyPages(count as number);
     const now = new Date().toISOString();
-    const id = Number(db.prepare('INSERT INTO zines(kind, name, page_size, margin, pages, page_count, candidates, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)').run(kind, name(b.name) ?? (carousel ? 'Untitled carousel' : 'Untitled zine'), size, carousel ? 5 : 6, JSON.stringify(pages), count, JSON.stringify(ids), now, now).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO zines(kind, name, page_size, margin, pages, page_count, candidates, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)').run(kind, name(b.name) ?? `Untitled ${kind}`, size, carousel ? 5 : 6, JSON.stringify(pages), count, JSON.stringify(ids), now, now).lastInsertRowid);
     return rep.code(201).send(dto(get(id)!));
   });
   app.get('/api/zines/:id', async (req, rep) => { const z = get((req.params as Row).id); return z ? dto(z) : notFound(rep); });
@@ -244,12 +249,17 @@ export function registerZines(app: FastifyInstance, x: Ctx) {
     // Done is read-only, as for a composition: move it back to Progress or Review first.
     const editing = Object.keys(b).some((k) => k !== 'stage');
     if (editing && (set.stage ?? z.stage) === 'done') return rep.code(409).send({ error: `This ${z.kind} is done. Choose Progress or Review to change it.` });
-    if (b.name !== undefined) { const n = name(b.name); if (!n) return rep.code(400).send({ error: 'Give the zine a name.' }); set.name = n; }
-    if (b.pageSize !== undefined) { if (typeof b.pageSize !== 'string' || !sizeOk(z.kind, b.pageSize)) return rep.code(400).send({ error: z.kind === 'carousel' ? 'The slide shape must be 4:5, 3:4 or 1:1.' : 'Choose the sheet to print on: a3-fold or a4-fold.' }); set.page_size = b.pageSize as PageSize; }
+    if (b.name !== undefined) { const n = name(b.name); if (!n) return rep.code(400).send({ error: `Give the ${z.kind} a name.` }); set.name = n; }
+    if (b.pageSize !== undefined) { if (typeof b.pageSize !== 'string' || !sizeOk(z.kind, b.pageSize)) return rep.code(400).send({ error: sizeError(z.kind) }); set.page_size = b.pageSize as PageSize; }
     if (b.colour !== undefined) { const c = typeof b.colour === 'string' ? b.colour.replace(/^#/, '').toLowerCase() : ''; if (!/^[0-9a-f]{6}$/.test(c)) return rep.code(400).send({ error: 'The colour must be six hex digits, like ffffff.' }); set.colour = c; }
     if (b.margin !== undefined) { if (typeof b.margin !== 'number' || !Number.isFinite(b.margin) || b.margin < 0 || b.margin > 20) return rep.code(400).send({ error: 'The margin must be from 0 to 20 per cent.' }); set.margin = b.margin; }
-    if (b.pages !== undefined) { const p = parsePages(b.pages); if (typeof p === 'string') return rep.code(400).send({ error: p }); set.pages = JSON.stringify(p); }
-    if (b.pageCount !== undefined) { if (z.kind === 'carousel' || !PAGE_COUNTS.includes(b.pageCount as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' }); set.page_count = b.pageCount as number; }
+    if (b.pages !== undefined) {
+      const p = parsePages(b.pages);
+      if (typeof p === 'string') return rep.code(400).send({ error: p });
+      if (z.kind === 'notebook' && p.some((x) => x.layout !== 'one')) return rep.code(400).send({ error: 'A notebook page holds one photograph.' });
+      set.pages = JSON.stringify(p);
+    }
+    if (b.pageCount !== undefined) { if (z.kind !== 'zine' || !PAGE_COUNTS.includes(b.pageCount as 8)) return rep.code(400).send({ error: 'A zine has 8, 16 or 24 pages.' }); set.page_count = b.pageCount as number; }
     if (b.candidates !== undefined) { const c = parseIds(b.candidates); if (!c) return rep.code(400).send({ error: 'List the candidates by photograph number.' }); set.candidates = JSON.stringify(c); }
     // Adding photographs (from Add to… Zine) puts them at the end of the candidates.
     if (b.addCandidates !== undefined) { const c = parseIds(b.addCandidates); if (!c) return rep.code(400).send({ error: 'List the photographs by number.' }); set.candidates = JSON.stringify([...new Set([...readIds(set.candidates ?? z.candidates), ...c])].slice(0, MAX_CANDIDATES)); }

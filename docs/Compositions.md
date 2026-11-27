@@ -2,7 +2,7 @@
 
 A composition is a wall of prints planned to scale: print sizes, frames, mats, crops, stacked photographs and the candidates that might fill them. Open **Compositions** to see **Progress → Review → Done**, shown with **circle → diamond → square**.
 
-The bar under the title chooses what is listed: **Frames**, **Zines** or **Carousels** (each with its count), a search, the stage (**Progress**, **Review**, **Done**, with how many of the chosen kind are in each), **Created** or **Updated** order, and the arrow for newest or oldest first. Created follows the order things were made in. The choices stay in the page address, so coming back from a composition shows the same list. The title, New composition and this bar stay visible below the app header while scrolling. On the Zines or Carousels view, the main button (and N) reads **New zine** or **New carousel** and starts one of those. On a phone the same choices are a search, **Frames / Zines / Carousels** tabs, the stage, and an order menu (**Updated** or **Created**, newest or oldest first) beside the count; the + button starts whatever kind is showing.
+The bar under the title chooses what is listed: **Frames**, **Zines**, **Carousels** or **Notebooks** (each with its count), a search, the stage (**Progress**, **Review**, **Done**, with how many of the chosen kind are in each), **Created** or **Updated** order, and the arrow for newest or oldest first. Created follows the order things were made in. The choices stay in the page address, so coming back from a composition shows the same list. The title, New composition and this bar stay visible below the app header while scrolling. On the Zines, Carousels or Notebooks view, the main button (and N) reads **New zine**, **New carousel** or **New notebook** and starts one of those. On a phone the same choices are a search, **Frames / Zines / Carousels / Notebooks** tabs, the stage, and an order menu (**Updated** or **Created**, newest or oldest first) beside the count; the + button starts whatever kind is showing.
 
 Composition cards show the saved layout, orientation, frames, mats, crops and both photographs in stacked prints, fitted closely to the preview. Candidate grids use thumbnails; the wall uses larger previews.
 
@@ -45,4 +45,4 @@ The controls show only −/+; the help text runs beside them along the bottom.
 
 A shared composition can allow ratings, downloads and layout/photo/frame suggestions. Guest edits are a proposed copy: they change nothing until you approve them. See [Share links](Share-links).
 
-See also [saved arrangements and pinned versions](Composition-arrangements), [Zines](Zines) (printable booklets) and [Instagram carousels](Instagram-carousels), which open in the same editor.
+See also [saved arrangements and pinned versions](Composition-arrangements), [Zines](Zines) (printable booklets) and [Instagram carousels](Instagram-carousels) and [Notebooks](Notebooks), which open in the same editor.

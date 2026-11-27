@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, imgUrl, useApi } from '../api';
+import { api, downloadOriginals, imgUrl, useApi } from '../api';
 import { Modal } from '../components/Modal';
 import { SegSlider } from '../components/SegSlider';
 import { WarningIcon } from '../components/WarningIcon';
@@ -18,23 +18,26 @@ export type PageText = { on: boolean; body: string; pos: 'top' | 'middle' | 'bot
 /** Three photos: two portraits side by side with a landscape below, or the landscape on top. */
 export type Arrange = 'portraits-top' | 'landscape-top';
 type ZinePage = { layout: Layout; photos: (number | null)[]; text?: PageText; arrange?: Arrange };
-type PageSize = 'a3-fold' | 'a4-fold' | 'a5' | 'a6' | 'square' | '4:5' | '3:4' | '1:1';
-type Kind = 'zine' | 'carousel';
+type PageSize = 'a3-fold' | 'a4-fold' | 'a5' | 'a6' | 'square' | '4:5' | '3:4' | '1:1' | 'pocket';
+type Kind = 'zine' | 'carousel' | 'notebook';
 export type Zine = { id: number; kind: Kind; colour: string; name: string; pageSize: PageSize; margin: number; pages: ZinePage[]; pageCount: number; candidates: number[]; printedCount: number; coverId: number | null; stage: CompositionStageName; createdAt?: string; updatedAt: string };
 export const PAGE_COUNTS = [8, 16, 24] as const;
 // The demo has no server to render the PDF or slides.
 const DEMO = import.meta.env.VITE_FRAMES_DEMO === 'true';
-type Printed = { layout: Layout | 'left' | 'right'; photos: (number | null)[]; entry: number | null };
+type Printed = { layout: Layout | 'left' | 'right' | 'note' | 'photo'; photos: (number | null)[]; entry: number | null };
 
 const SLOTS: Record<Layout, number> = { one: 1, two: 2, three: 3, spread: 1, blank: 0 };
 const LAYOUTS: [Layout, string][] = [['one', 'One photo'], ['two', 'Two photos'], ['three', 'Three photos'], ['spread', 'Across two pages'], ['blank', 'Blank']];
 // The sheet a zine is printed on, folded into 8 pages (A3 makes A6 pages, A4 makes A7). A5, A6 and Square are for zines made before, one page per PDF page.
 const SHEETS: [PageSize, string, string][] = [['a4-fold', 'A4 sheet', '8 × A7 pages'], ['a3-fold', 'A3 sheet', '8 × A6 pages']];
-const SIZES: [PageSize, string, number][] = [['a3-fold', 'A3 sheet', 105 / 148.5], ['a4-fold', 'A4 sheet', 74.25 / 105], ['a5', 'A5', 148 / 210], ['a6', 'A6', 105 / 148], ['square', 'Square', 1], ['4:5', '4:5', 4 / 5], ['3:4', '3:4', 3 / 4], ['1:1', '1:1', 1]];
+const SIZES: [PageSize, string, number][] = [['a3-fold', 'A3 sheet', 105 / 148.5], ['a4-fold', 'A4 sheet', 74.25 / 105], ['a5', 'A5', 148 / 210], ['a6', 'A6', 105 / 148], ['square', 'Square', 1], ['4:5', '4:5', 4 / 5], ['3:4', '3:4', 3 / 4], ['1:1', '1:1', 1], ['pocket', 'Pocket', 90 / 140]];
+// A notebook's paper: each photograph on a right-hand page, its number and note facing it.
+const NOTEBOOK_SIZES: [PageSize, string, string][] = [['pocket', 'Pocket', '90 × 140 mm'], ['a6', 'A6', '105 × 148 mm'], ['a5', 'A5', '148 × 210 mm']];
 // A carousel's slide shapes, at Instagram's 1080 px width, and the colours round its photographs and pages.
 const SHAPES: [PageSize, string][] = [['4:5', '1080 × 1350'], ['3:4', '1080 × 1440'], ['1:1', '1080 × 1080']];
 const COLOURS: [string, string][] = [['ffffff', 'White'], ['000000', 'Black'], ['efede8', 'Paper']];
 const MAX_SLIDES = 20;
+const MAX_PAGES = 100; // the server's limit on laid-out pages
 const VISIBLE_SLIDES = 3; // a carousel shows one row of slides on the wall; the arrows step one slide at a time
 const DEFAULT_TEXT: PageText = { on: false, body: '', pos: 'bottom', font: 'serif' };
 const serif = "'Instrument Serif',Georgia,serif", mono = "'IBM Plex Mono',monospace";
@@ -53,7 +56,8 @@ export const isSheet = (s: PageSize) => s === 'a3-fold' || s === 'a4-fold';
 export function printedPages(pages: ZinePage[], count = 0, kind: Kind = 'zine'): Printed[] {
   const out: Printed[] = [];
   pages.forEach((p, entry) => {
-    if (p.layout === 'spread') {
+    if (kind === 'notebook') out.push({ layout: 'note', photos: [], entry }, { layout: 'photo', photos: p.photos.slice(0, 1), entry });
+    else if (p.layout === 'spread') {
       if (kind === 'zine' && out.length % 2 === 0) out.push({ layout: 'blank', photos: [], entry: null }); // a carousel's spread starts on any slide
       out.push({ layout: 'left', photos: p.photos, entry }, { layout: 'right', photos: p.photos, entry });
     } else out.push({ layout: p.layout, photos: p.photos, entry });
@@ -78,12 +82,13 @@ export function spreadsOf(printed: Printed[]): [number | null, number | null][] 
   return rows;
 }
 
-/** Fill in order: each empty slot takes the next unplaced candidate; a carousel then adds a slide a photo, up to 20. */
+/** Fill in order: each empty slot takes the next unplaced candidate; a carousel then adds a slide a photo, up to 20, and a notebook a page a photo. */
 export function fillInOrder(pages: ZinePage[], candidates: number[], kind: Kind): { pages: ZinePage[]; placed: number } {
   const used = new Set(pages.flatMap((p) => p.photos).filter((id): id is number => id != null));
   const queue = candidates.filter((id) => !used.has(id));
   let placed = 0;
   const next = pages.map((p) => ({ ...p, photos: p.photos.map((id) => (id == null && queue.length ? (placed++, queue.shift()!) : id)) }));
+  if (kind === 'notebook') while (queue.length && next.length < MAX_PAGES) { next.push({ layout: 'one', photos: [queue.shift()!] }); placed++; }
   if (kind === 'carousel') while (queue.length && printedPages(next, 0, kind).length < MAX_SLIDES) { next.push({ layout: 'one', photos: [queue.shift()!] }); placed++; }
   return { pages: next, placed };
 }
@@ -91,27 +96,27 @@ export function fillInOrder(pages: ZinePage[], candidates: number[], kind: Kind)
 const sizeLabel = (s: PageSize) => SIZES.find(([k]) => k === s)?.[1] ?? 'A5';
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-/** The zines, or the carousels, as a section of Compositions, with New. */
+/** The zines, carousels or notebooks, as a section of Compositions, with New. */
 /** Zines or carousels. With `stage`, `find` or `order` (the Compositions bar), only those that match, in that order, and no heading row. */
 export function ZineList({ heading, kind = 'zine', stage, find = '', order }: { heading?: React.ReactNode; kind?: Kind; stage?: CompositionStageName; find?: string; order?: (a: Zine, b: Zine) => number }) {
   const nav = useNavigate();
   const list = useApi<Zine[]>('/zines');
   const [err, setErr] = useState('');
-  const carousel = kind === 'carousel', what = carousel ? 'carousel' : 'zine';
+  const carousel = kind === 'carousel', what = kind;
   const make = async () => { try { const z = await api<Zine>('/zines', { body: { kind } }); nav(`/zines/${z.id}`); } catch (e) { setErr((e as Error).message); } };
   const ofKind = list.data?.filter((z) => (z.kind ?? 'zine') === kind);
   const needle = find.trim().toLowerCase();
   const mine = ofKind?.filter((z) => (!stage || (z.stage ?? 'progress') === stage) && (!needle || z.name.toLowerCase().includes(needle)));
   if (order) mine?.sort(order);
   return (
-    <section aria-label={carousel ? 'Carousels' : 'Zines'}>
+    <section aria-label={`${cap(kind)}s`}>
       {heading && <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flex: 1 }}>{heading}<span style={{ fontSize: 13, color: 'var(--muted)' }}>{carousel ? 'Instagram carousels of your photographs' : 'Printable booklets of your photographs'}</span></div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flex: 1 }}>{heading}<span style={{ fontSize: 13, color: 'var(--muted)' }}>{carousel ? 'Instagram carousels of your photographs' : kind === 'notebook' ? 'A photograph a page, with a note facing it' : 'Printable booklets of your photographs'}</span></div>
         <button className="btn outline" onClick={() => void make()}>New {what}</button>
       </div>}
       {err && <p role="alert">{err}</p>}
       {list.error && <p role="alert">{list.error}</p>}
-      {ofKind?.length === 0 && <p className="muted" style={{ maxWidth: 520, lineHeight: 1.5 }}>No {what}s yet. Start one here, or select photographs in the Library, choose <b style={{ fontWeight: 500 }}>Add to composition…</b>, then <b style={{ fontWeight: 500 }}>{carousel ? 'Instagram carousel' : 'Zine'}</b>.</p>}
+      {ofKind?.length === 0 && <p className="muted" style={{ maxWidth: 520, lineHeight: 1.5 }}>No {what}s yet. Start one here, or select photographs in the Library, choose <b style={{ fontWeight: 500 }}>Add to composition…</b>, then <b style={{ fontWeight: 500 }}>{carousel ? 'Instagram carousel' : cap(kind)}</b>.</p>}
       {!!ofKind?.length && mine?.length === 0 && <p className="muted">No {what}s here. Try another stage or search.</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 24 }}>
         {mine?.map((z) => (
@@ -156,7 +161,9 @@ export function ZineEditor() {
   if (!z) return <div className="page-shell"><p className="muted">Loading…</p></div>;
 
   // A carousel is laid out like a zine, slides for pages: no cover, no facing pages, at most 20, and a zip of JPEGs instead of a PDF.
-  const carousel = z.kind === 'carousel', zine = !carousel, word = carousel ? 'slide' : 'page', Word = carousel ? 'Slide' : 'Page';
+  // A notebook is a page pair an entry: the photograph on the right, its number and note on the left. It is numbered by entry, as its pages are.
+  const carousel = z.kind === 'carousel', notebook = z.kind === 'notebook', zine = z.kind === 'zine', word = carousel ? 'slide' : 'page', Word = carousel ? 'Slide' : 'Page';
+  const What = cap(z.kind);
   const readOnly = z.stage === 'done';
   const flash = (text: string, undo?: () => void) => { window.clearTimeout(toastTimer.current); setToast({ text, undo }); toastTimer.current = window.setTimeout(() => setToast(null), 7000); };
 
@@ -171,7 +178,8 @@ export function ZineEditor() {
   const printed = printedPages(z.pages, z.pageCount, z.kind);
   // Where each photograph is: "3", or "4–5" for one across two pages, once per place it is used.
   const placed = new Map<number, string[]>();
-  printed.forEach((p, i) => p.photos.forEach((pid) => { if (pid != null && p.layout !== 'right') placed.set(pid, [...(placed.get(pid) ?? []), p.layout === 'left' ? `${i + 1}–${i + 2}` : String(i + 1)]); }));
+  const noOf = (p: Printed, i: number) => (notebook && p.entry != null ? p.entry + 1 : i + 1);
+  printed.forEach((p, i) => p.photos.forEach((pid) => { if (pid != null && p.layout !== 'right') placed.set(pid, [...(placed.get(pid) ?? []), p.layout === 'left' ? `${i + 1}–${i + 2}` : String(noOf(p, i))]); }));
   const whereLabel = (at: string[]) => `${Word}${at.length > 1 || at[0].includes('–') ? 's' : ''} ${at.join(', ')}`;
   const unplaced = z.candidates.filter((c) => !placed.has(c)).length;
   const emptySlots = printed.reduce((n, p) => n + (p.layout === 'right' ? 0 : p.photos.filter((x) => x == null).length), 0);
@@ -204,7 +212,7 @@ export function ZineEditor() {
     setPages(prev.filter((_, i) => i !== entry)); setSel(null);
     flash(`${title} removed`, () => { setPages(prev); setSel(entry); setToast(null); });
   };
-  const addSlide = () => { setPages([...z.pages, { layout: 'one', photos: [null] }]); setSel(z.pages.length); setOff(Math.max(0, printed.length + 1 - (phone ? 1 : VISIBLE_SLIDES))); };
+  const addSlide = () => { setPages([...z.pages, { layout: 'one', photos: [null] }]); setSel(z.pages.length); if (carousel) setOff(Math.max(0, printed.length + 1 - (phone ? 1 : VISIBLE_SLIDES))); };
   const fill = () => {
     const r = fillInOrder(z.pages, z.candidates, z.kind);
     if (!r.placed) { flash('Every candidate is already placed.'); return; }
@@ -222,14 +230,14 @@ export function ZineEditor() {
     setPages(next); setSel(b.entry);
   };
   const choose = (photoId: number) => { if (!picking) return; put(picking, photoId); setPicking(null); };
-  const removeZine = async () => { if (!(await confirmAction(`Remove “${z.name}”?\n\nIts ${printed.length} ${word}s and layout can't be recovered. Your photographs stay in Frames.`, { danger: true, confirm: carousel ? 'Remove carousel' : 'Remove zine' }))) return; try { await api(`/zines/${z.id}`, { method: 'DELETE' }); nav('/collections'); } catch (e) { flash((e as Error).message); } };
+  const removeZine = async () => { if (!(await confirmAction(`Remove “${z.name}”?\n\nIts ${printed.length} ${word}s and layout can't be recovered. Your photographs stay in Frames.`, { danger: true, confirm: `Remove ${z.kind}` }))) return; try { await api(`/zines/${z.id}`, { method: 'DELETE' }); nav('/collections'); } catch (e) { flash((e as Error).message); } };
   const setStage = async (stage: CompositionStageName) => { try { const next = await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { stage } }); setZ(next); if (stage === 'done') setSel(null); } catch (e) { flash((e as Error).message); } };
 
   const paper = `#${z.colour}`, dark = z.colour === '000000';
   const ratio = SIZES.find(([k]) => k === z.pageSize)?.[2] ?? 148 / 210;
   const m = z.margin, pad = `${m}%`;
   const selPage = !readOnly && sel != null ? z.pages[sel] ?? null : null;
-  const pageNos = (entry: number) => printed.flatMap((p, i) => (p.entry === entry ? [i + 1] : []));
+  const pageNos = (entry: number) => (notebook ? [entry + 1] : printed.flatMap((p, i) => (p.entry === entry ? [i + 1] : [])));
   const nos = sel != null ? pageNos(sel) : [];
   const selTitle = nos.length > 1 ? `${Word}s ${nos[0]}–${nos[nos.length - 1]}` : `${Word} ${nos[0] ?? ''}`;
   const emptyRing = dark ? 'inset 0 0 0 1px rgba(255,255,255,.28)' : 'inset 0 0 0 1px #c9c6bf', emptyFg = dark ? 'rgba(255,255,255,.55)' : '#8f8c86';
@@ -264,6 +272,18 @@ export function ZineEditor() {
     const on = !readOnly && p.entry != null && p.entry === sel;
     let body: ReactNode = null, dir: CSSProperties['flexDirection'] = 'row', wrap: CSSProperties['flexWrap'] = 'nowrap', padding = pad;
     if (p.layout === 'one') body = slot(p.entry, 0, p.photos[0], { flex: 1 });
+    // A notebook's photo page turns a landscape photograph a quarter clockwise to fill the portrait page, as the PDF does.
+    if (p.layout === 'photo') { const pid = p.photos[0], turn = pid != null && (ars[pid] ?? 0) > 1; body = slot(p.entry, 0, pid, { flex: 1, containerType: 'size' }, (src) => <img src={src} alt="" onLoad={(e) => { const im = e.currentTarget; if (pid != null && !ars[pid] && im.naturalHeight) setArs((a) => ({ ...a, [pid]: im.naturalWidth / im.naturalHeight })); }} style={{ position: 'absolute', top: '50%', left: '50%', width: turn ? '100cqh' : '100%', height: turn ? '100cqw' : '100%', transform: `translate(-50%,-50%)${turn ? ' rotate(90deg)' : ''}`, objectFit: 'contain', maxWidth: 'none', display: 'block' }} />); }
+    if (p.layout === 'note' && p.entry != null && z.pages[p.entry]?.text?.on !== false) {
+      // As the PDF draws it (server/src/zine.ts noteLayer): the number big at the top left, the note small at the bottom left.
+      const t = z.pages[p.entry]?.text, isSerif = t?.font !== 'mono';
+      body = (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, padding: '10%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: dark ? '#fff' : '#1a1a1a', pointerEvents: 'none' }}>
+          <span style={{ font: `700 13cqw/1 ${mono}`, letterSpacing: '.08em' }}>{String(p.entry + 1).padStart(2, '0')}</span>
+          <span style={{ fontFamily: isSerif ? serif : mono, fontSize: isSerif ? '5cqw' : '3.6cqw', lineHeight: 1.3, textTransform: isSerif ? 'none' : 'uppercase', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t?.body ?? ''}</span>
+        </div>
+      );
+    }
     if (p.layout === 'two') { dir = stackPair(ars[p.photos[0] ?? -1] ?? 1, ars[p.photos[1] ?? -1] ?? 1, ratio, m) ? 'column' : 'row'; body = [0, 1].map((k) => slot(p.entry, k, p.photos[k], { flex: 1 })); }
     if (p.layout === 'three') {
       wrap = 'wrap';
@@ -278,12 +298,12 @@ export function ZineEditor() {
       body = slot(p.entry, 0, p.photos[0], { flex: 1, ...(p.photos[0] ? {} : L ? {} : { boxShadow: 'none' }) }, (src) => <img src={src} alt="" style={{ position: 'absolute', top: 0, height: '100%', width: '200%', left: L ? 0 : '-100%', objectFit: 'cover', maxWidth: 'none' }} />);
     }
     const n = i + 1;
-    let label = p.layout === 'left' ? `${n}–${n + 1}` : p.layout === 'right' ? '' : String(n);
+    let label = p.layout === 'left' ? `${n}–${n + 1}` : p.layout === 'right' || p.layout === 'note' ? '' : String(noOf(p, i));
     if (zine && n === 1) label = '1 · Cover';
     if (zine && n === printed.length) label = `${n} · Back`;
     if (p.entry == null) label = `${n} · blank`;
     return { label, on, node: (
-      <div role={p.entry == null ? undefined : 'button'} tabIndex={p.entry == null || readOnly ? undefined : 0} aria-label={p.entry == null ? `${Word} ${n}, blank` : `${Word} ${n}`} aria-pressed={p.entry == null ? undefined : on}
+      <div role={p.entry == null ? undefined : 'button'} tabIndex={p.entry == null || readOnly ? undefined : 0} aria-label={p.entry == null ? `${Word} ${n}, blank` : notebook ? `${Word} ${noOf(p, i)}, ${p.layout === 'note' ? 'note' : 'photo'}` : `${Word} ${n}`} aria-pressed={p.entry == null ? undefined : on}
         onClick={(e) => { e.stopPropagation(); if (p.entry != null && !readOnly) setSel(p.entry); }}
         onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && p.entry != null && !readOnly) { e.preventDefault(); setSel(p.entry); } }}
         style={{ position: 'relative', containerType: 'inline-size', aspectRatio: String(ratio), background: paper, padding, boxSizing: 'border-box', display: 'flex', flexDirection: dir, flexWrap: wrap, gap: pad, boxShadow: carousel ? '0 0 0 1px var(--outline)' : '0 0 0 1px var(--hair)', outline: on ? '2px solid var(--text)' : 'none', outlineOffset: 3, cursor: p.entry == null || readOnly ? 'default' : 'pointer' } as CSSProperties}>
@@ -306,6 +326,12 @@ export function ZineEditor() {
   const zineGrid = (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr)) 40px repeat(2,minmax(0,1fr))', gap: '44px 0', width: '100%', maxWidth: 760, margin: '0 auto' }}>
       {printed.map((p, i) => { const k = i + 1, ci = k % 4; return cell(p, i, { gridColumn: String([1, 2, 4, 5][ci]), gridRow: String(Math.floor(k / 4) + 1) }, ci % 2 ? 'right' : 'left'); })}
+    </div>
+  );
+  // Notebook: one entry a row, the note page on the left and the photograph on the right, as the open notebook shows them.
+  const notebookGrid = (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '44px 0', width: '100%', maxWidth: phone ? 520 : 600, margin: '0 auto' }}>
+      {printed.map((p, i) => cell(p, i, {}, p.layout === 'note' ? 'left' : 'right'))}
     </div>
   );
   // Carousel: one row of slides, stepped one slide at a time.
@@ -339,21 +365,24 @@ export function ZineEditor() {
     </label>
   );
   const settingsNote = carousel ? `Download saves a zip of JPEGs, 1080 px wide, in order. A carousel holds ${MAX_SLIDES} slides.`
+    : notebook ? 'Download saves the original of each photograph, numbered in page order. The files are not changed.'
     : isSheet(z.pageSize) ? `The PDF is one ${z.pageSize === 'a3-fold' ? 'A3' : 'A4'} sheet with the 8 pages placed for folding. Spreads keep the outer margin, so home printers won’t clip them.`
     : 'The PDF has one page per page, at 300 dpi, in reading order. Print it as a booklet from your PDF viewer.';
 
   const layoutNote = !selPage ? '' : fullCarousel && selPage.layout !== 'spread' ? `Full at ${MAX_SLIDES} slides. Remove a slide to make room for one across two.`
     : selPage.layout === 'spread' ? (carousel ? 'Runs across both slides as you swipe. The border stays on the outside edges; only the join is open.' : 'Fills both facing pages. The outer margin stays so it prints safely; only the fold is borderless.')
     : selPage.layout === 'two' ? 'Portraits sit side by side; landscapes stack.' : selPage.layout === 'three' ? 'Two portraits and one landscape. Choose which goes on top.' : selPage.layout === 'blank' ? `An empty ${word}.` : '';
-  const text = selPage?.text ?? DEFAULT_TEXT;
+  // A notebook page shows its number and note unless its facing page is set blank, so its text starts on.
+  const text = selPage?.text ?? (notebook ? { ...DEFAULT_TEXT, on: true } : DEFAULT_TEXT);
+  const noteOn = text.on;
   const setText = (patch: Partial<PageText>, persist = true) => { if (sel == null || !selPage) return; const pages = z.pages.map((p, i) => (i === sel ? { ...p, text: { ...text, ...patch } } : p)); if (persist) setPages(pages); else setZ({ ...z, pages }); };
   const layoutName = (k: Layout) => (k === 'spread' && carousel ? 'Across two slides' : LAYOUTS.find(([x]) => x === k)![1]);
   const segBtn = (on: boolean, label: string, go: () => void, key: string) => <button key={key} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={go}>{label}</button>;
 
   const selectionPanel = selPage && sel != null && (
     <section aria-label={`Chosen ${word}`} style={{ display: 'flex', flexDirection: 'column', gap: 18, flex: 1 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>{selTitle}</h2><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{zine && nos[0] === 1 ? 'Cover' : zine && nos[nos.length - 1] === printed.length ? 'Back cover' : layoutName(selPage.layout)}</span></div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>{selTitle}</h2><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{notebook ? 'Photo and note' : zine && nos[0] === 1 ? 'Cover' : zine && nos[nos.length - 1] === printed.length ? 'Back cover' : layoutName(selPage.layout)}</span></div>
+      {!notebook && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span style={eyebrow}>Layout</span>
         <div className="seg zine-seg" role="group" aria-label={`${Word} layout`} style={{ alignSelf: 'stretch' }}><SegSlider />
           {LAYOUTS.map(([k]) => { const dis = k === 'spread' && fullCarousel && selPage.layout !== 'spread'; return <button key={k} type="button" className={selPage.layout === k ? 'on' : ''} aria-pressed={selPage.layout === k} disabled={dis} title={dis ? `A carousel holds ${MAX_SLIDES} slides. Remove one first.` : undefined} onClick={() => relayout(sel, k)}>{layoutName(k)}</button>; })}
@@ -367,7 +396,7 @@ export function ZineEditor() {
           </div>
         )}
         <span style={{ minHeight: 36, fontSize: 12.5, lineHeight: 1.45, color: 'var(--muted)', textWrap: 'pretty' } as CSSProperties}>{layoutNote}</span>
-      </div>
+      </div>}
       {selPage.photos.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <span style={eyebrow}>Photos</span>
         {selPage.photos.map((photoId, i) => (
@@ -383,6 +412,18 @@ export function ZineEditor() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text2)', fontSize: 12.5 }}>Colour</span>{swatches}</div>
         {borderWidth('Width')}
       </div>
+      {notebook && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={eyebrow}>Facing page</span>
+            <div className="seg zine-seg compact" role="group" aria-label="Facing page"><SegSlider />{segBtn(noteOn, 'Number and note', () => setText({ on: true }), 'on')}{segBtn(!noteOn, 'Blank', () => setText({ on: false }), 'off')}</div>
+          </div>
+          {noteOn && <>
+            <textarea className="field-in" aria-label="Note" rows={3} maxLength={280} placeholder="A note about the photo" value={text.body} onChange={(e) => setText({ body: e.target.value }, false)} onBlur={(e) => setText({ body: e.target.value })} style={{ resize: 'vertical', fontSize: 13.5, lineHeight: 1.45 }} />
+            <div className="seg zine-seg compact" role="group" aria-label="Note style" style={{ alignSelf: 'flex-start' }}><SegSlider />{(['serif', 'mono'] as const).map((k) => segBtn(text.font === k, cap(k), () => setText({ font: k }), k))}</div>
+          </>}
+        </div>
+      )}
       {zine && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -405,7 +446,7 @@ export function ZineEditor() {
         <div style={{ display: 'flex', gap: 8 }}><button className="btn outline" style={pill} disabled={sel === 0} onClick={() => move(sel, -1)}>← Earlier</button><button className="btn outline" style={pill} disabled={sel === z.pages.length - 1} onClick={() => move(sel, 1)}>Later →</button></div>
       </div>
       <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid var(--hair)', paddingTop: 14, fontSize: 12.5 }}>
-        <button type="button" onClick={() => setSel(null)} style={{ color: 'var(--text2)' }}>{carousel ? 'Carousel settings' : 'Zine settings'}</button>
+        <button type="button" onClick={() => setSel(null)} style={{ color: 'var(--text2)' }}>{What} settings</button>
         <button type="button" onClick={() => removePage(sel, selTitle)} style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><WarningIcon />Remove this {word}</button>
       </div>
     </section>
@@ -419,11 +460,12 @@ export function ZineEditor() {
   );
   const settingsPanel = (
     <section aria-label="Settings" style={{ display: 'flex', flexDirection: 'column', gap: 18, flex: 1 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>{carousel ? 'Carousel' : 'Zine'}</h2><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Choose a {word} to edit it</span></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>{What}</h2><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Choose a {word} to edit it</span></div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={eyebrow}>{carousel ? 'Slide shape' : 'Print on'}</span>
+        <span style={eyebrow}>{carousel ? 'Slide shape' : notebook ? 'Paper' : 'Print on'}</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
           {carousel ? SHAPES.map(([k, sub]) => card(z.pageSize === k, k, sub, SIZES.find(([s]) => s === k)![2], () => save({ pageSize: k }), k))
+            : notebook ? NOTEBOOK_SIZES.map(([k, l, sub]) => card(z.pageSize === k, l, sub, SIZES.find(([s]) => s === k)![2], () => save({ pageSize: k }), k))
             : SHEETS.map(([k, l, sub]) => card(z.pageSize === k, l, sub, 1.414, () => void setSheet(k), k))}
         </div>
         {zine && !isSheet(z.pageSize) && <div className="seg" role="group" aria-label="Number of pages"><SegSlider />{PAGE_COUNTS.map((n) => segBtn(z.pageCount === n, `${n} pages`, () => void setCount(n), String(n)))}</div>}
@@ -451,14 +493,15 @@ export function ZineEditor() {
   const donePanel = (
     <section aria-label="Done" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <h2 style={{ font: `400 24px/1 ${serif}`, margin: 0 }}>Done · Read-only</h2>
-      <p style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>{emptySlots ? `${emptySlots} empty ${emptySlots > 1 ? 'slots' : 'slot'} will print blank. ` : ''}{carousel ? 'Download the slides to post them.' : 'Download the PDF and print it on one sheet.'}<br /><br />Choose Progress or Review above to make changes.</p>
-      <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={z.pages.length && !DEMO ? `/api/zines/${z.id}/${carousel ? 'zip' : 'pdf'}` : undefined} aria-disabled={!z.pages.length || DEMO} title={DEMO ? 'Downloads are made by a Frames server, so the demo cannot make one.' : undefined} download>{carousel ? 'Download slides' : 'Download PDF'}</a>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>{emptySlots ? `${emptySlots} empty ${emptySlots > 1 ? 'slots' : 'slot'} will print blank. ` : ''}{carousel ? 'Download the slides to post them.' : notebook ? 'Download the originals to print them.' : 'Download the PDF and print it on one sheet.'}<br /><br />Choose Progress or Review above to make changes.</p>
+      {notebook ? <button className="btn primary" style={{ alignSelf: 'flex-start' }} disabled={!placed.size || DEMO} title={DEMO ? 'Downloads are made by a Frames server, so the demo cannot make one.' : undefined} onClick={() => void downloadOriginals(z.pages.flatMap((p) => p.photos.slice(0, 1)).filter((x): x is number => x != null))}>Download originals</button> :
+      <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={z.pages.length && !DEMO ? `/api/zines/${z.id}/${carousel ? 'zip' : 'pdf'}` : undefined} aria-disabled={!z.pages.length || DEMO} title={DEMO ? 'Downloads are made by a Frames server, so the demo cannot make one.' : undefined} download>{carousel ? 'Download slides' : 'Download PDF'}</a>}
       <span style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>{settingsNote}</span>
     </section>
   );
 
-  const meta = carousel ? `${printed.length} slides · ${z.pageSize} · Instagram carousel` : `${printed.length} pages · ${sizeLabel(z.pageSize)} · Zine`;
-  const count = zine ? `${printed.length} pages${isSheet(z.pageSize) ? ` · folds from one ${sizeLabel(z.pageSize)}` : ''}` : `${printed.length ? `${visible > 1 ? `${first + 1}–${Math.min(first + visible, printed.length)}` : first + 1} · ` : ''}${printed.length} of ${MAX_SLIDES} slides · ${z.pageSize}`;
+  const meta = carousel ? `${printed.length} slides · ${z.pageSize} · Instagram carousel` : `${printed.length} pages · ${sizeLabel(z.pageSize)} · ${What}`;
+  const count = notebook ? `${z.pages.length} photo${z.pages.length === 1 ? '' : 's'} · ${printed.length} pages` : zine ? `${printed.length} pages${isSheet(z.pageSize) ? ` · folds from one ${sizeLabel(z.pageSize)}` : ''}` : `${printed.length ? `${visible > 1 ? `${first + 1}–${Math.min(first + visible, printed.length)}` : first + 1} · ` : ''}${printed.length} of ${MAX_SLIDES} slides · ${z.pageSize}`;
 
   return (
     <div className="page-shell">
@@ -470,7 +513,7 @@ export function ZineEditor() {
             : <EditableCompositionName name={z.name} onSave={async (name) => { setZ(await api<Zine>(`/zines/${z.id}`, { method: 'PUT', body: { name } })); }} />}
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>{meta}</span>
         </div>
-        <button type="button" onClick={() => void removeZine()} title={carousel ? 'Remove carousel' : 'Remove zine'} aria-label={carousel ? 'Remove carousel' : 'Remove zine'} className="zine-bin"
+        <button type="button" onClick={() => void removeZine()} title={`Remove ${z.kind}`} aria-label={`Remove ${z.kind}`} className="zine-bin"
           style={{ flex: 'none', width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: 999, color: 'var(--muted)' }}>
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ fill: 'none', stroke: 'currentColor', strokeWidth: 1.4 }}><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" /></svg>
         </button>
@@ -486,9 +529,10 @@ export function ZineEditor() {
           </div>
           <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 8 }}>
             {!readOnly && carousel && printed.length < MAX_SLIDES && <WallButton onClick={(e) => { e.stopPropagation(); addSlide(); }}>+ Slide</WallButton>}
+            {!readOnly && notebook && z.pages.length < MAX_PAGES && <WallButton onClick={(e) => { e.stopPropagation(); addSlide(); }}>+ Page</WallButton>}
             <WallButton disabled={readOnly || !unplaced} title={readOnly ? 'Done · read-only' : unplaced ? `Place ${unplaced} candidate${unplaced > 1 ? 's' : ''} in the empty slots, in order` : 'Every candidate is placed'} onClick={(e) => { e.stopPropagation(); fill(); }}>Fill in order</WallButton>
           </div>
-          {!z.pages.length ? <p className="muted" style={{ textAlign: 'center' }}>No {word}s yet. Add one, or use Fill in order.</p> : carousel ? carouselRow : zineGrid}
+          {!z.pages.length ? <p className="muted" style={{ textAlign: 'center' }}>No {word}s yet. Add one, or use Fill in order.</p> : carousel ? carouselRow : notebook ? notebookGrid : zineGrid}
           {/* On a phone the hint wraps, so it sits below the pages instead of over them. */}
           <div style={phone ? { marginTop: 'auto', paddingTop: 28, display: 'flex', alignItems: 'flex-end', gap: 12 } : { position: 'absolute', left: 14, right: 16, bottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ flex: 1, fontSize: 12, color: 'var(--text2)' }}>{readOnly ? 'Done · read-only' : `Click a ${word} to edit it · drag a photo onto another to swap`}</span>
@@ -509,7 +553,7 @@ export function ZineEditor() {
           <button className="btn outline" style={pill} disabled={readOnly || !unplaced} onClick={fill}>Fill in order</button>
           <button className="btn outline" style={pill} disabled={readOnly} title={readOnly ? 'Choose Progress or Review to add photos' : undefined} onClick={() => setAdding(true)}>Add photos…</button>
         </div>
-        {!z.candidates.length && <p className="muted" style={{ margin: 0, fontSize: 13 }}>No candidates yet. Add photos here, or from the Library with Add to composition…, then {carousel ? 'Instagram carousel' : 'Zine'}.</p>}
+        {!z.candidates.length && <p className="muted" style={{ margin: 0, fontSize: 13 }}>No candidates yet. Add photos here, or from the Library with Add to composition…, then {carousel ? 'Instagram carousel' : What}.</p>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 12 }}>
           {z.candidates.map((cid) => (
             <div key={cid} className="zine-cand" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

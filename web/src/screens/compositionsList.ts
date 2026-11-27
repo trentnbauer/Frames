@@ -2,11 +2,11 @@ import { useSearchParams } from 'react-router-dom';
 import type { CompositionStageName } from '../components/CompositionStage';
 
 /** What the Compositions list shows, on a computer and a phone alike. */
-export const KINDS = [['frames', 'Frames'], ['zines', 'Zines'], ['carousels', 'Carousels']] as const;
+export const KINDS = [['frames', 'Frames'], ['zines', 'Zines'], ['carousels', 'Carousels'], ['notebooks', 'Notebooks']] as const;
 export const STAGES = [['progress', 'Progress'], ['review', 'Review'], ['done', 'Done']] as const;
 export type ListKind = (typeof KINDS)[number][0];
 /** The zine kind a list kind stands for (Frames is not a zine). */
-export const zineKindOf = (k: ListKind) => (k === 'zines' ? 'zine' : 'carousel');
+export const zineKindOf = (k: ListKind) => (k === 'zines' ? 'zine' : k === 'notebooks' ? 'notebook' : 'carousel');
 
 /** Created (by id: ids grow in creation order, and compositions keep no creation date) or Updated, newest first unless `asc`. */
 export const listOrder = (created: boolean, asc: boolean) => (a: { id: number; updatedAt?: string }, b: { id: number; updatedAt?: string }) =>

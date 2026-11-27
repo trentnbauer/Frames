@@ -20,6 +20,7 @@
 - [Compositions](Compositions)
 - [Zines](Zines)
 - [Instagram carousels](Instagram-carousels)
+- [Notebooks](Notebooks)
 - [Places, camera details and search](Places-and-camera)
 - [Share links](Share-links)
 - [Notifications, community and gear](Notifications-community-and-gear)

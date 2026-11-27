@@ -10,10 +10,10 @@ import { useNavigate } from 'react-router-dom';
  * Existing: search a long list; with no search, the compositions these photographs are already in (ticked) come first, then the 5 most
  * recently edited. Printed ones are hidden. Ticking adds the photographs as candidates (never straight into a print); unticking removes them.
  * New: a name, then New composition opens with the photographs loaded.
- * It first asks what is being made: a composition (this picker), an Instagram carousel or a zine.
+ * It first asks what is being made: a composition (this picker), an Instagram carousel, a zine or a notebook.
  */
 export function CompPicker({ ids, onClose, onDone, fresh, wall }: { ids: number[]; onClose: () => void; onDone: (msg: string) => void; fresh?: NewCompositionStart; wall?: () => ReactNode }) {
-  type Kind = 'wall' | 'carousel' | 'zine';
+  type Kind = 'wall' | 'carousel' | 'zine' | 'notebook';
   const [kind, setKind] = useState<Kind | null>(null);
   const [err, setErr] = useState('');
   const { openComposition } = useUi();
@@ -31,9 +31,9 @@ export function CompPicker({ ids, onClose, onDone, fresh, wall }: { ids: number[
   };
   if (kind === 'wall') return wall ? <>{wall()}</> : <WallPicker ids={ids} onClose={onClose} onDone={onDone} onBack={back} />;
   if (kind === 'carousel') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind="carousel" name={fresh?.name} />;
-  if (kind === 'zine') return <ZinePicker ids={ids} onClose={onClose} onBack={back} name={fresh?.name} />;
+  if (kind === 'zine' || kind === 'notebook') return <ZinePicker ids={ids} onClose={onClose} onBack={back} kind={kind} name={fresh?.name} />;
   // First, what is being made: the same photographs can go on a wall, into a carousel or into a zine.
-  const kinds: [Kind, string, string][] = [['wall', 'Frames', 'Framed prints of your artwork, arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet']];
+  const kinds: [Kind, string, string][] = [['wall', 'Frames', 'Framed prints of your artwork, arranged on a wall'], ['carousel', 'Instagram carousel', 'Bordered slides to post'], ['zine', 'Zine', 'A printable booklet'], ['notebook', 'Notebook', 'A photograph a page, its number and a note facing it']];
   return (
     <Modal title={fresh ? 'What are you making?' : `Add ${what} to…`} sub={fresh && ids.length ? `With ${what}` : undefined} width={560} onClose={onClose}>
       <div role="group" aria-label="What to make" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -52,7 +52,7 @@ export function CompPicker({ ids, onClose, onDone, fresh, wall }: { ids: number[
 const BackRow = ({ onBack }: { onBack: () => void }) => <div style={{ paddingTop: 10 }}><button className="btn" onClick={onBack}>← Back</button></div>;
 
 /** Add the photographs to a zine or carousel as candidates, or start a new one with them; then open it to lay them out. */
-function ZinePicker({ ids, onClose, onBack, kind = 'zine', name }: { ids: number[]; onClose: () => void; onBack: () => void; kind?: 'zine' | 'carousel'; name?: string }) {
+function ZinePicker({ ids, onClose, onBack, kind = 'zine', name }: { ids: number[]; onClose: () => void; onBack: () => void; kind?: 'zine' | 'carousel' | 'notebook'; name?: string }) {
   type Zine = { id: number; kind?: string; name: string; printedCount: number; coverId: number | null };
   const carousel = kind === 'carousel';
   const zines = useApi<Zine[]>('/zines');
@@ -67,7 +67,7 @@ function ZinePicker({ ids, onClose, onBack, kind = 'zine', name }: { ids: number
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   return (
-    <Modal title={carousel ? 'Add to a carousel' : 'Add to a zine'} sub={carousel ? 'A new carousel starts with a slide a photo, in the order you picked them' : 'They become candidates, ready to drag onto the pages'} width={560} onClose={onClose}>
+    <Modal title={`Add to a ${kind}`} sub={carousel ? 'A new carousel starts with a slide a photo, in the order you picked them' : kind === 'notebook' ? 'A new notebook starts with a page a photo, in the order you picked them' : 'They become candidates, ready to drag onto the pages'} width={560} onClose={onClose}>
       <div role="group" aria-label="Zines" style={{ display: 'flex', flexDirection: 'column', maxHeight: 320, overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minHeight: 60, padding: '0 8px', flexWrap: 'wrap' }}>
           <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 4, boxShadow: 'inset 0 0 0 1px var(--outline)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--muted)' }}>+</span>
